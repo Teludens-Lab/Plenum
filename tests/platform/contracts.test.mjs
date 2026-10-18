@@ -7,10 +7,16 @@ import {
   DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
   EVENT_ENVELOPE_CONTRACT_ID,
+  RUNTIME_SSE_CONTRACT_ID,
+  SYNC_DELTAS_CONTRACT_ID,
+  SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
   commandReceiptV1Schema,
   canonicalizeJson,
   eventEnvelopeV1Schema,
+  runtimeSseV1Schema,
+  syncDeltasV1Schema,
+  syncSnapshotV1Schema,
   isCommandOperationType,
   isPastTenseEventType
 } from "@plenum/event-contracts";
@@ -23,7 +29,7 @@ import {
   authorizeCommandRole,
   requireTrustedSessionContext
 } from "@plenum/server";
-import { releaseIdentity } from "@plenum/runtime-web";
+import { isServerAcceptedCommand, releaseIdentity } from "@plenum/runtime-web";
 
 const ids = {
   commandId: "10000000-0000-4000-8000-000000000001",
@@ -54,6 +60,13 @@ test("PS-100-T01: versioned contracts are shared by server and frontend consumer
   assert.equal(commandEnvelopeV1Schema.additionalProperties, false);
   assert.equal(eventEnvelopeV1Schema.properties.eventVersion.const, 1);
   assert.equal(commandReceiptV1Schema.additionalProperties, false);
+  assert.deepEqual(
+    [RUNTIME_SSE_CONTRACT_ID, SYNC_DELTAS_CONTRACT_ID, SYNC_SNAPSHOT_CONTRACT_ID],
+    ["runtime-sse-v1", "sync-deltas-v1", "sync-snapshot-v1"]
+  );
+  assert.equal(runtimeSseV1Schema.additionalProperties, false);
+  assert.equal(syncDeltasV1Schema.additionalProperties, false);
+  assert.equal(syncSnapshotV1Schema.additionalProperties, false);
   assert.equal(canonicalizeJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
   assert.equal(isCommandOperationType(command.operationType), true);
   assert.equal(isCommandOperationType("artifact.submitted"), false);
@@ -100,6 +113,16 @@ test("PS-100-T01: versioned contracts are shared by server and frontend consumer
     inputMappings: [],
     timeoutSeconds: 5,
     enabledInProfiles: ["institutional"]
+  }), true);
+  assert.equal(isServerAcceptedCommand({ status: "local_pending", command }), false);
+  assert.equal(isServerAcceptedCommand({
+    commandId: ids.commandId,
+    status: "accepted",
+    aggregateVersion: 2,
+    evidenceSequence: 1,
+    errorCode: null,
+    message: null,
+    replayed: false
   }), true);
 });
 

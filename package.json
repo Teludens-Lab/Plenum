@@ -14,7 +14,7 @@
   "scripts": {
     "lint": "npm run build --silent && node scripts/contract-lint.mjs",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit --pretty false",
-    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs packages/policy-engine/test/policy.test.mjs packages/release-compiler/test/compiler.test.mjs apps/server/test/identity.unit.test.mjs",
+    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs packages/policy-engine/test/policy.test.mjs packages/release-compiler/test/compiler.test.mjs packages/sync-client/test/sync-client.test.mjs apps/server/test/identity.unit.test.mjs",
     "test:integration": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs apps/server/test/object-store.integration.test.mjs",
     "test:db": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs",
     "test:s3": "npm run build --silent && node --test apps/server/test/object-store.integration.test.mjs",

@@ -9,6 +9,7 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../../packages/event-contracts" },
-    { "path": "../../packages/simulation-schema" }
+    { "path": "../../packages/simulation-schema" },
+    { "path": "../../packages/sync-client" }
   ]
 }

@@ -10,6 +10,7 @@ export * from "./identity/login.js";
 export * from "./identity/context.js";
 export * from "./access/reassignment.js";
 export * from "./runtime/commands/processor.js";
+export * from "./sync/runtime-sync.js";
 export * from "./registry/object-store.js";
 export * from "./registry/publication.js";
 

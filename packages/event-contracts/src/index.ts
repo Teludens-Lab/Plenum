@@ -24,6 +24,9 @@ export const ERROR_ENVELOPE_CONTRACT_ID = "error-envelope-v1";
 export const ERROR_ENVELOPE_VERSION = 1;
 export const COMMAND_RECEIPT_CONTRACT_ID = "command-receipt-v1";
 export const DOMAIN_EVENT_CONTRACT_ID = "domain-event-v1";
+export const RUNTIME_SSE_CONTRACT_ID = "runtime-sse-v1";
+export const SYNC_DELTAS_CONTRACT_ID = "sync-deltas-v1";
+export const SYNC_SNAPSHOT_CONTRACT_ID = "sync-snapshot-v1";
 
 export interface CommandEnvelopeV1 {
   commandId: string;
@@ -66,6 +69,41 @@ export interface CommandReceiptV1 {
 }
 
 export type DomainEventV1 = EventEnvelopeV1;
+
+export interface RuntimeDeltaV1 {
+  deltaId: string;
+  cursor: string;
+  eventType: string;
+  aggregateId: string;
+  aggregateVersion: number | null;
+  occurredAt: string;
+  payload: JsonObject;
+}
+
+export interface SyncDeltasV1 {
+  projectionVersion: string;
+  policyVersion: string;
+  deltas: RuntimeDeltaV1[];
+  nextCursor: string;
+}
+
+export interface SyncSnapshotV1 {
+  projectionVersion: string;
+  policyVersion: string;
+  cursor: string;
+  state: JsonObject;
+  aggregateVersions: Record<string, number>;
+}
+
+export type RuntimeSseEventV1 =
+  | { kind: "delta"; cursor: string; delta: RuntimeDeltaV1 }
+  | { kind: "cursor"; cursor: string; delta: null };
+
+export interface RuntimeSseV1 {
+  projectionVersion: string;
+  policyVersion: string;
+  events: RuntimeSseEventV1[];
+}
 
 export const canonicalErrorCodes = [
   "UNAUTHENTICATED",
@@ -238,6 +276,86 @@ export const domainEventV1Schema = {
   $id: DOMAIN_EVENT_CONTRACT_ID,
   title: "Domain Event v1"
 } as const satisfies ContractSchema<DomainEventV1>;
+
+const runtimeDeltaProperties = {
+  deltaId: uuidProperty,
+  cursor: uuidProperty,
+  eventType: { type: "string", pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" },
+  aggregateId: uuidProperty,
+  aggregateVersion: { type: ["integer", "null"], minimum: 0 },
+  occurredAt: utcInstantProperty,
+  payload: jsonObjectProperty
+} as const;
+
+export const syncDeltasV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: SYNC_DELTAS_CONTRACT_ID,
+  title: "Runtime sync deltas v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["projectionVersion", "policyVersion", "deltas", "nextCursor"],
+  properties: {
+    projectionVersion: { type: "string", minLength: 1 },
+    policyVersion: { type: "string", minLength: 1 },
+    deltas: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["deltaId", "cursor", "eventType", "aggregateId", "aggregateVersion", "occurredAt", "payload"],
+        properties: runtimeDeltaProperties
+      }
+    },
+    nextCursor: uuidProperty
+  }
+} as const satisfies ContractSchema<SyncDeltasV1>;
+
+export const syncSnapshotV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: SYNC_SNAPSHOT_CONTRACT_ID,
+  title: "Runtime sync snapshot v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["projectionVersion", "policyVersion", "cursor", "state", "aggregateVersions"],
+  properties: {
+    projectionVersion: { type: "string", minLength: 1 },
+    policyVersion: { type: "string", minLength: 1 },
+    cursor: uuidProperty,
+    state: jsonObjectProperty,
+    aggregateVersions: { type: "object", additionalProperties: { type: "integer", minimum: 0 } }
+  }
+} as const satisfies ContractSchema<SyncSnapshotV1>;
+
+export const runtimeSseV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: RUNTIME_SSE_CONTRACT_ID,
+  title: "Runtime SSE batch v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["projectionVersion", "policyVersion", "events"],
+  properties: {
+    projectionVersion: { type: "string", minLength: 1 },
+    policyVersion: { type: "string", minLength: 1 },
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "cursor", "delta"],
+        properties: {
+          kind: { type: "string", enum: ["delta", "cursor"] },
+          cursor: uuidProperty,
+          delta: { anyOf: [{ type: "null" }, {
+            type: "object",
+            additionalProperties: false,
+            required: ["deltaId", "cursor", "eventType", "aggregateId", "aggregateVersion", "occurredAt", "payload"],
+            properties: runtimeDeltaProperties
+          }] }
+        }
+      }
+    }
+  }
+} as const satisfies ContractSchema<RuntimeSseV1>;
 
 export function canonicalizeJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);

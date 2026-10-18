@@ -87,6 +87,72 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CommandReceiptV1" }
         "503": { description: Deployment or Authority Epoch is not authoritative; no receipt is written. }
+  /v1/sessions/{sessionId}/sync/stream:
+    get:
+      operationId: streamRuntimeDeltas
+      x-contract-id: runtime-sse-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Last-Event-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Authorized at-least-once Runtime deltas; each SSE ID is an opaque Projection Cursor.
+          headers:
+            Cache-Control: { schema: { const: no-store } }
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { description: Authentication Session expired or was revoked. }
+        "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+        "409": { description: Projection Cursor expired or its access policy changed; fetch a snapshot. }
+  /v1/sessions/{sessionId}/sync/deltas:
+    get:
+      operationId: getRuntimeDeltas
+      x-contract-id: sync-deltas-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: cursor
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Bounded ordered authorized deltas for restrictive-network polling fallback.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncDeltasV1" }
+        "401": { description: Authentication Session expired or was revoked. }
+        "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+        "409": { description: Projection Cursor expired or its access policy changed; fetch a snapshot. }
+  /v1/sessions/{sessionId}/sync/snapshot:
+    get:
+      operationId: getRuntimeSnapshot
+      x-contract-id: sync-snapshot-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Fresh authorized Runtime Projection with policy and projection versions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncSnapshotV1" }
+        "401": { description: Authentication Session expired or was revoked. }
+        "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
   /v1/auth/oidc/{providerKey}/begin:
     post:
       operationId: beginOidcLogin
@@ -196,6 +262,39 @@ components:
         errorCode: { type: [string, "null"] }
         message: { type: [string, "null"] }
         replayed: { type: boolean }
+    RuntimeDeltaV1:
+      type: object
+      additionalProperties: false
+      required: [deltaId, cursor, eventType, aggregateId, aggregateVersion, occurredAt, payload]
+      properties:
+        deltaId: { type: string, format: uuid }
+        cursor: { type: string, format: uuid }
+        eventType: { type: string, pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" }
+        aggregateId: { type: string, format: uuid }
+        aggregateVersion: { type: [integer, "null"], minimum: 0 }
+        occurredAt: { type: string, format: date-time }
+        payload: { type: object }
+    SyncDeltasV1:
+      type: object
+      additionalProperties: false
+      required: [projectionVersion, policyVersion, deltas, nextCursor]
+      properties:
+        projectionVersion: { const: runtime-projection-v1 }
+        policyVersion: { type: string, minLength: 1 }
+        deltas: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/RuntimeDeltaV1" } }
+        nextCursor: { type: string, format: uuid }
+    SyncSnapshotV1:
+      type: object
+      additionalProperties: false
+      required: [projectionVersion, policyVersion, cursor, state, aggregateVersions]
+      properties:
+        projectionVersion: { const: runtime-projection-v1 }
+        policyVersion: { type: string, minLength: 1 }
+        cursor: { type: string, format: uuid }
+        state: { type: object }
+        aggregateVersions:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
   securitySchemes:
     InstitutionalOidc:
       type: openIdConnect

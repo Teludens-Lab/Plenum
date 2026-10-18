@@ -11,9 +11,13 @@ import {
   completeOidcLogin,
   createDatabasePool,
   exportReleasePackage,
+  getRuntimeDeltas,
+  getRuntimeSnapshot,
+  getRuntimeSse,
   importReleasePackage,
   LocalObjectStore,
   publishRelease,
+  publishPendingRuntimeDeltas,
   reassignParticipant,
   resolveSessionAccessContext,
   revokeAuthenticationSession,
@@ -29,6 +33,7 @@ const ids = {
   orgB: "10000000-0000-4000-8000-000000000002",
   personA: "20000000-0000-4000-8000-000000000001",
   personB: "20000000-0000-4000-8000-000000000002",
+  personC: "20000000-0000-4000-8000-000000000003",
   projectA: "30000000-0000-4000-8000-000000000001",
   projectB: "30000000-0000-4000-8000-000000000002",
   revisionA: "40000000-0000-4000-8000-000000000001",
@@ -39,9 +44,12 @@ const ids = {
   sessionB: "60000000-0000-4000-8000-000000000002",
   participantA: "70000000-0000-4000-8000-000000000001",
   participantB: "70000000-0000-4000-8000-000000000002",
+  participantC: "70000000-0000-4000-8000-000000000003",
   assignmentA: "80000000-0000-4000-8000-000000000001",
   assignmentB: "80000000-0000-4000-8000-000000000002",
+  assignmentC: "80000000-0000-4000-8000-000000000003",
   deviceA: "90000000-0000-4000-8000-000000000001",
+  deviceC: "90000000-0000-4000-8000-000000000003",
   deploymentA: "a0000000-0000-4000-8000-000000000001",
   deploymentB: "a0000000-0000-4000-8000-000000000002"
 };
@@ -51,6 +59,16 @@ const app = createDatabasePool(databaseUrl);
 let principal;
 let objectRoot;
 let objectStore;
+let oldRoleCursor;
+
+const principalC = {
+  authenticationSessionId: "e1000000-0000-4000-8000-000000000003",
+  principalId: ids.personC,
+  organizationId: ids.orgA,
+  organizationRoles: [],
+  authenticationStrength: "mfa",
+  expiresAt: new Date("2026-10-19T00:00:00.000Z")
+};
 
 const releaseMaterialization = {
   coreDesign: {
@@ -87,7 +105,8 @@ async function applyMigrations() {
     "references/plenum-runtime-slice/migrations/004_security.sql",
     "apps/server/migrations/005_identity_oidc_context.sql",
     "apps/server/migrations/006_command_kernel.sql",
-    "apps/server/migrations/007_release_packages.sql"
+    "apps/server/migrations/007_release_packages.sql",
+    "apps/server/migrations/008_projection_cursors.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -98,7 +117,7 @@ async function seed() {
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
-    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B')", [ids.personA, ids.personB]);
+    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C')", [ids.personA, ids.personB, ids.personC]);
     await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher')", [ids.orgA, ids.personA, ids.orgB, ids.personB]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
     await client.query(
@@ -119,12 +138,13 @@ async function seed() {
       (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
       VALUES ('b0000000-0000-4000-8000-000000000001',$1,$2,$3,$4,1,'{}',$5),('b0000000-0000-4000-8000-000000000002',$6,$7,$8,$9,1,'{}',$10)`,
       [ids.orgA, ids.projectA, ids.sessionA, ids.releaseA, ids.personA, ids.orgB, ids.projectB, ids.sessionB, ids.releaseB, ids.personB]);
-    await client.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4),($5,$6,$7,$8)", [ids.participantA, ids.orgA, ids.sessionA, ids.personA, ids.participantB, ids.orgB, ids.sessionB, ids.personB]);
-    await client.query("INSERT INTO runtime.seat_assignments(id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by) VALUES ($1,$2,$3,$4,'role-a','seat-a',$5),($6,$7,$8,$9,'role-b','seat-b',$10)", [ids.assignmentA, ids.orgA, ids.sessionA, ids.participantA, ids.personA, ids.assignmentB, ids.orgB, ids.sessionB, ids.participantB, ids.personB]);
-    await client.query("INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3),($4,$5,$6)", [ids.orgA, ids.sessionA, ids.participantA, ids.orgB, ids.sessionB, ids.participantB]);
-    await client.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3)", [ids.deviceA, ids.orgA, ids.personA]);
+    await client.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4),($5,$6,$7,$8),($9,$10,$11,$12)", [ids.participantA, ids.orgA, ids.sessionA, ids.personA, ids.participantB, ids.orgB, ids.sessionB, ids.personB, ids.participantC, ids.orgA, ids.sessionA, ids.personC]);
+    await client.query("INSERT INTO runtime.seat_assignments(id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by) VALUES ($1,$2,$3,$4,'role-a','seat-a',$5),($6,$7,$8,$9,'role-b','seat-b',$10),($11,$12,$13,$14,'role-c-viewer','seat-c-viewer',$15)", [ids.assignmentA, ids.orgA, ids.sessionA, ids.participantA, ids.personA, ids.assignmentB, ids.orgB, ids.sessionB, ids.participantB, ids.personB, ids.assignmentC, ids.orgA, ids.sessionA, ids.participantC, ids.personA]);
+    await client.query("INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3),($4,$5,$6),($7,$8,$9)", [ids.orgA, ids.sessionA, ids.participantA, ids.orgB, ids.sessionB, ids.participantB, ids.orgA, ids.sessionA, ids.participantC]);
+    await client.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3),($4,$5,$6)", [ids.deviceA, ids.orgA, ids.personA, ids.deviceC, ids.orgA, ids.personC]);
     await client.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2),($3,$4)", [ids.sessionA, ids.orgA, ids.sessionB, ids.orgB]);
     await client.query("INSERT INTO identity.federated_identities(id,organization_id,person_id,issuer,subject,provider_type) VALUES ('c0000000-0000-4000-8000-000000000001',$1,$2,'https://issuer.example','operator-a','oidc')", [ids.orgA, ids.personA]);
+    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2026-10-19T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
     await client.query("INSERT INTO sync.projection_grants(id,organization_id,session_id,participant_id,policy_revision,access_revision,expires_at) VALUES ('d0000000-0000-4000-8000-000000000001',$1,$2,$3,'policy-decision-v1',1,now()+interval '1 hour')", [ids.orgA, ids.sessionA, ids.participantA]);
     await client.query("COMMIT");
   } catch (error) {
@@ -213,6 +233,14 @@ test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async
     }));
   assert.equal(context.organizationId, ids.orgA);
   assert.equal(context.activeSessionRoleId, "role-a");
+  oldRoleCursor = (await getRuntimeSnapshot({
+    pool: app,
+    principal,
+    sessionId: ids.sessionA,
+    deviceId: ids.deviceA,
+    activeSessionRoleId: "role-a",
+    correlationId: "e0000000-0000-4000-8000-000000000008"
+  })).cursor;
 
   const command = {
     commandId: "f0000000-0000-4000-8000-000000000001",
@@ -339,6 +367,119 @@ test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async
   await owner.query("DROP TRIGGER fail_test_receipt ON sync.command_receipts; DROP FUNCTION sync.fail_test_receipt() ");
 });
 
+test("SYNC-08/10/11 Runtime reconnect is scoped, replayable and gap-free", async () => {
+  const request = {
+    pool: app,
+    principal,
+    sessionId: ids.sessionA,
+    deviceId: ids.deviceA,
+    activeSessionRoleId: "role-c",
+    correlationId: "e0000000-0000-4000-8000-000000000009"
+  };
+  await assert.rejects(
+    getRuntimeDeltas({ ...request, cursor: oldRoleCursor }),
+    (error) => error?.envelope?.error?.code === "SYNC_CURSOR_EXPIRED"
+  );
+  await assert.rejects(
+    getRuntimeDeltas({ ...request, cursor: "4" }),
+    (error) => error?.envelope?.error?.code === "SYNC_CURSOR_EXPIRED"
+  );
+  await assert.rejects(
+    getRuntimeSnapshot({ ...request, deviceId: "invalid" }),
+    (error) => error?.envelope?.error?.code === "INVALID_ID"
+  );
+
+  const snapshot = await getRuntimeSnapshot(request);
+  assert.deepEqual(
+    [snapshot.state.activeSessionRoleId, snapshot.state.accessRevision, snapshot.aggregateVersions[ids.participantA]],
+    ["role-c", 2, 2]
+  );
+  const beforePublish = await getRuntimeDeltas({ ...request, cursor: snapshot.cursor });
+  assert.deepEqual(beforePublish.deltas, []);
+  await assert.rejects(publishPendingRuntimeDeltas(app, ids.orgA, 101), /between 1 and 100/);
+  assert.equal(await publishPendingRuntimeDeltas(app, ids.orgA), 3);
+
+  const polled = await getRuntimeDeltas({ ...request, cursor: snapshot.cursor });
+  assert.deepEqual(polled.deltas.map((delta) => delta.eventType), [
+    "seat_assignment.changed",
+    "command.reconciliation_required",
+    "command.rejected"
+  ]);
+  assert.equal(JSON.stringify(polled).includes("evidenceSequence"), false);
+  assert.equal(JSON.stringify(polled).includes("Operational reassignment"), false);
+  const replayed = await getRuntimeDeltas({ ...request, cursor: snapshot.cursor });
+  assert.deepEqual(replayed.deltas.map((delta) => delta.deltaId), polled.deltas.map((delta) => delta.deltaId));
+  const sse = await getRuntimeSse({ ...request, cursor: snapshot.cursor });
+  assert.equal(sse.contentType, "text/event-stream");
+  assert.equal((sse.body.match(/^event: delta$/gmu) ?? []).length, 3);
+  assert.match(sse.body, /^event: cursor$/mu);
+
+  const viewerRequest = {
+    pool: app,
+    principal: principalC,
+    sessionId: ids.sessionA,
+    deviceId: ids.deviceC,
+    activeSessionRoleId: "role-c-viewer",
+    correlationId: "e0000000-0000-4000-8000-000000000010"
+  };
+  const viewerSnapshot = await getRuntimeSnapshot(viewerRequest);
+  await owner.query("BEGIN");
+  try {
+    await owner.query(
+      `INSERT INTO evidence.events
+         (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,
+          actor_participant_id,governing_release_id,authority_epoch,body,aggregate_id,aggregate_version)
+       VALUES ('e2000000-0000-4000-8000-000000000004',$1,$2,4,'seat_assignment.changed',1,$3,$4,$5,1,$6::jsonb,$4,3)`,
+      [ids.orgA, ids.sessionA, ids.personA, ids.participantA, ids.releaseA,
+        JSON.stringify({ participantId: ids.participantA, newSessionRoleId: "role-hidden", accessRevision: 3 })]
+    );
+    await owner.query(
+      "INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id) VALUES ('e3000000-0000-4000-8000-000000000004',$1,$2,'e2000000-0000-4000-8000-000000000004')",
+      [ids.orgA, ids.sessionA]
+    );
+    await owner.query("UPDATE evidence.session_sequences SET next_sequence=5 WHERE session_id=$1", [ids.sessionA]);
+    await owner.query("COMMIT");
+  } catch (error) {
+    await owner.query("ROLLBACK");
+    throw error;
+  }
+  assert.equal(await publishPendingRuntimeDeltas(app, ids.orgA), 1);
+  const omitted = await getRuntimeDeltas({ ...viewerRequest, cursor: viewerSnapshot.cursor });
+  assert.deepEqual(omitted.deltas, []);
+  assert.equal(JSON.stringify(omitted).includes("role-hidden"), false);
+  assert.match(omitted.nextCursor, /^[0-9a-f-]{36}$/u);
+
+  await owner.query("BEGIN");
+  try {
+    await owner.query(
+      `WITH inserted AS (
+         INSERT INTO evidence.events
+           (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,
+            actor_participant_id,governing_release_id,authority_epoch,body,aggregate_id,aggregate_version)
+         SELECT gen_random_uuid(),$1::uuid,$2::uuid,value,'seat_assignment.changed',1,$3::uuid,$4::uuid,$5::uuid,1,
+                jsonb_build_object('participantId',$4::uuid::text,'newSessionRoleId','role-c-viewer','accessRevision',value),
+                $4::uuid,value
+           FROM generate_series(5,105) value
+         RETURNING organization_id,session_id,id
+       )
+       INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id)
+       SELECT gen_random_uuid(),organization_id,session_id,id FROM inserted`,
+      [ids.orgA, ids.sessionA, ids.personC, ids.participantC, ids.releaseA]
+    );
+    await owner.query("UPDATE evidence.session_sequences SET next_sequence=106 WHERE session_id=$1", [ids.sessionA]);
+    await owner.query("COMMIT");
+  } catch (error) {
+    await owner.query("ROLLBACK");
+    throw error;
+  }
+  assert.equal(await publishPendingRuntimeDeltas(app, ids.orgA), 100);
+  assert.equal(await publishPendingRuntimeDeltas(app, ids.orgA), 1);
+  const bounded = await getRuntimeDeltas({ ...viewerRequest, cursor: omitted.nextCursor });
+  assert.equal(bounded.deltas.length, 100);
+  const remainder = await getRuntimeDeltas({ ...viewerRequest, cursor: bounded.nextCursor });
+  assert.equal(remainder.deltas.length, 1);
+});
+
 test("revocation invalidates Authentication Sessions and active projections", async () => {
   await owner.query(
     `INSERT INTO sync.projection_grants
@@ -354,6 +495,17 @@ test("revocation invalidates Authentication Sessions and active projections", as
     [principal.authenticationSessionId, ids.participantA]
   );
   assert.deepEqual(result.rows[0], { sessions: "1", grants: "0" });
+  await assert.rejects(
+    getRuntimeSnapshot({
+      pool: app,
+      principal,
+      sessionId: ids.sessionA,
+      deviceId: ids.deviceA,
+      activeSessionRoleId: "role-c",
+      correlationId: "e0000000-0000-4000-8000-000000000011"
+    }),
+    (error) => error?.envelope?.error?.code === "AUTH_EXPIRED"
+  );
 });
 
 test("AC-02/AC-06 PS-130-T01 publication is immutable, deterministic and concurrency safe", async () => {

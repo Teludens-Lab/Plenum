@@ -9,11 +9,17 @@ import {
   DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
   EVENT_ENVELOPE_CONTRACT_ID,
+  RUNTIME_SSE_CONTRACT_ID,
+  SYNC_DELTAS_CONTRACT_ID,
+  SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
   commandReceiptV1Schema,
   domainEventV1Schema,
   errorEnvelopeV1Schema,
   eventEnvelopeV1Schema,
+  runtimeSseV1Schema,
+  syncDeltasV1Schema,
+  syncSnapshotV1Schema,
   isCommandOperationType,
   isPastTenseEventType
 } from "../packages/event-contracts/dist/index.js";
@@ -69,8 +75,13 @@ assert.equal(commandReceiptV1Schema.$id, COMMAND_RECEIPT_CONTRACT_ID);
 assert.equal(domainEventV1Schema.$id, DOMAIN_EVENT_CONTRACT_ID);
 assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
 assert.equal(errorEnvelopeV1Schema.$id, ERROR_ENVELOPE_CONTRACT_ID);
+assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
+assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
+assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 
-for (const schema of [commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema, eventEnvelopeV1Schema, errorEnvelopeV1Schema]) {
+const contractSchemas = [commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
+  eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeSseV1Schema, syncDeltasV1Schema, syncSnapshotV1Schema];
+for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }
 
@@ -111,4 +122,4 @@ const workspaceLockfiles = (await Promise.all(
 )).flat().filter((file) => path.basename(file) === "package-lock.json");
 assert.deepEqual(workspaceLockfiles, [], "apps and packages must use the root lockfile");
 
-console.log(`Contract lint PASS: ${sourceFiles.length} sources, 5 versioned contracts, canonical naming, acyclic workspaces.`);
+console.log(`Contract lint PASS: ${sourceFiles.length} sources, ${contractSchemas.length} versioned contracts, canonical naming, acyclic workspaces.`);

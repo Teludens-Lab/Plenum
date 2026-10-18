@@ -2,7 +2,7 @@
 
 Plenum is being developed as a configuration-driven simulation platform. This repository contains the governing product corpus, generated development promptbook, immutable and executable reference material, shared TypeScript contracts, and the standards that apply to application code.
 
-PS-100 established the minimum npm workspace: shared event and simulation contracts, a trusted server boundary, and a contract-only Runtime frontend consumer. It does not yet provide an HTTP server, database integration, or rendered UI.
+The implemented platform kernel now includes shared contracts, OIDC and tenant isolation, transactional Commands and Evidence Events, immutable Release Packages, S3-compatible storage, and authorized Runtime SSE/polling reconnect services. It does not yet provide an HTTP composition root or rendered UI.
 
 ## Repository authorities
 

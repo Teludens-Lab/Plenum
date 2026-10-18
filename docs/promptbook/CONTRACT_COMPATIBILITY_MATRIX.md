@@ -9,7 +9,7 @@ Compatibility policy remains unresolved by OPEN-012. The matrix defines what tas
 | HTTP API | Server | Web clients/integrations | `/v1` + schema | New API version or compatible extension | Commands/receipts retained | PS-100 onward |
 | Command envelope | Client | Session Authority | v1 schema | Required-field/semantic break needs new version | Stored payload digest must remain interpretable | PS-120 |
 | Event envelope/type | Feature owner | Projections, reports, integrations | type + integer version | New type version; one producer | Evidence keeps original version | PS-120 |
-| Projection cursor | Sync service | Runtime clients | opaque cursor + policy/projection revision | Expiry/reset, never reinterpret | Client cursor disposable | PS-140 |
+| Runtime sync (`runtime-sse-v1`, `sync-deltas-v1`, `sync-snapshot-v1`) | Sync service | `@plenum/sync-client`, Runtime web | opaque UUID cursor + `policy-decision-v1` + `runtime-projection-v1` | Expiry or policy/access/version change requires authorized snapshot; never reinterpret | Server cursor and client cursor are disposable; authoritative state and outbox remain | PS-140 |
 | Package | Registry | Other Deployments | `package-import-v1` + schema/compiler/digests | Exact-version rejection until OPEN-012 defines a support window | Import preserves Release and Definition Revision identity | PS-130, PS-530 |
 | Plugin host API | Extension Host | Plugin Artifact | semver range + digest | Reject incompatible artifact | Runs keep artifact digest | PS-220 |
 | Model Composition | Compiler | Extension Host | graph version + digest | Explicit graph migration | In-flight run stays pinned | PS-330 |

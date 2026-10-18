@@ -11,12 +11,13 @@ Plenum/
   tsconfig*.json               # shared strict TypeScript configuration
   apps/
     runtime-web/               # contract-only frontend consumer; no UI yet
-    server/                    # identity, Command kernel, Release registry and object-store boundary
+    server/                    # identity, Command/Release kernels and Runtime sync boundary
   packages/
     event-contracts/           # versioned Command, Event and error envelopes
     policy-engine/             # default-deny server projection policy
     release-compiler/          # deterministic Release and portable Package compiler
     simulation-schema/         # versioned Release manifest and Plugin binding types
+    sync-client/               # Runtime convergence, persistence ordering and fallback state
   scripts/
     contract-lint.mjs          # terminology, naming and workspace-boundary checks
   tests/platform/              # PS-100 contract and authorization evidence
@@ -32,7 +33,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`. PS-130 adds deterministic compilation under `packages/release-compiler/`, immutable publication/import/export and an AWS SDK S3-compatible adapter under `apps/server/src/registry/`. There is still no HTTP transport, production object-store deployment/configuration, outbox publisher, or rendered frontend.
+PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`. PS-130 adds deterministic Release Packages and S3-compatible storage. PS-140 adds the transactional outbox publisher and authorized cursor/snapshot/SSE/polling boundary under `apps/server/src/sync/`, with convergence and persistence ordering in `packages/sync-client/`. There is still no HTTP composition root, production deployment/configuration, or rendered frontend.
 
 ## Target code topology
 

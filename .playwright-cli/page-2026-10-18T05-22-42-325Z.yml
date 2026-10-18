@@ -1,0 +1,100 @@
+- generic [active] [ref=e1]:
+  - heading "Plenum Studio → Release → Runtime" [level=1] [ref=e2]
+  - paragraph [ref=e3]:
+    - text: Local-only reference workstation for the Fractured Order reference slice. Use the identities printed by
+    - code [ref=e4]: npm run seed
+    - text: . This is not an enterprise authentication interface, a no-code Studio, or an offline client.
+  - region [ref=e5]:
+    - heading "1. Demo identity" [level=2] [ref=e6]
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: Organization UUID
+        - textbox "Organization UUID" [ref=e10]
+      - generic [ref=e11]:
+        - generic [ref=e12]: Acting person UUID
+        - textbox "Acting person UUID" [ref=e13]
+    - text: "Switch the person for each step: designer, publisher, operator, then the people staffed into the session. Every request is authorized on the server."
+  - region [ref=e14]:
+    - heading "2. Studio — design, validate and publish" [level=2] [ref=e15]
+    - generic [ref=e16]: Simulation title
+    - textbox "Simulation title" [ref=e17]: Fractured Order reference slice
+    - generic [ref=e18]: Definition (JSON — the product Studio replaces this with visual editors)
+    - textbox "Definition (JSON — the product Studio replaces this with visual editors)" [ref=e19]: "{ \"sessionRoles\": [ { \"id\": \"scribe\", \"name\": \"Scribe\" }, { \"id\": \"facilitator\", \"name\": \"Facilitator\" }, { \"id\": \"white_cell\", \"name\": \"White Cell\" } ], \"forms\": [ { \"id\": \"form-request\", \"name\": \"Request\", \"formVersion\": \"1\", \"fields\": [ { \"key\": \"summary\", \"label\": \"Summary\", \"type\": \"long_text\", \"required\": true }, { \"key\": \"rationale\", \"label\": \"Rationale\", \"type\": \"long_text\", \"required\": false } ] } ], \"artifactTypes\": [ { \"key\": \"request\", \"name\": \"Request\", \"formId\": \"form-request\", \"workflowId\": \"wf-request\", \"decisionBearing\": true } ], \"workflows\": [ { \"id\": \"wf-request\", \"key\": \"request_review\", \"name\": \"Request review\", \"initialState\": \"draft\", \"states\": [ { \"key\": \"draft\", \"label\": \"Draft\", \"kind\": \"draft\", \"holderRelation\": \"creator\" }, { \"key\": \"submitted\", \"label\": \"With Facilitator\", \"kind\": \"review\", \"holderSessionRoleIds\": [ \"facilitator\" ] }, { \"key\": \"in_review\", \"label\": \"With White Cell\", \"kind\": \"review\", \"holderSessionRoleIds\": [ \"white_cell\" ] }, { \"key\": \"returned\", \"label\": \"Returned\", \"kind\": \"draft\", \"holderRelation\": \"creator\" }, { \"key\": \"accepted\", \"label\": \"Accepted\", \"kind\": \"terminal\" } ], \"transitions\": [ { \"id\": \"t1\", \"from\": null, \"command\": \"artifact.create\", \"to\": \"draft\", \"allowedSessionRoleIds\": [ \"scribe\" ] }, { \"id\": \"t2\", \"from\": \"draft\", \"command\": \"artifact.edit\", \"to\": \"draft\", \"allowedSessionRoleIds\": [ \"scribe\" ], \"contentOnly\": true }, { \"id\": \"t3\", \"from\": \"draft\", \"command\": \"artifact.submit\", \"to\": \"submitted\", \"allowedSessionRoleIds\": [ \"scribe\" ], \"notifySessionRoleIds\": [ \"facilitator\" ] }, { \"id\": \"t4\", \"from\": \"submitted\", \"command\": \"artifact.forward\", \"to\": \"in_review\", \"allowedSessionRoleIds\": [ \"facilitator\" ], \"notifySessionRoleIds\": [ \"white_cell\" ] }, { \"id\": \"t5\", \"from\": \"submitted\", \"command\": \"artifact.return\", \"to\": \"returned\", \"allowedSessionRoleIds\": [ \"facilitator\" ], \"notifyCreator\": true }, { \"id\": \"t6\", \"from\": \"in_review\", \"command\": \"artifact.accept\", \"to\": \"accepted\", \"allowedSessionRoleIds\": [ \"white_cell\" ], \"notifySessionRoleIds\": [ \"facilitator\" ], \"notifyCreator\": true }, { \"id\": \"t7\", \"from\": \"in_review\", \"command\": \"artifact.return\", \"to\": \"returned\", \"allowedSessionRoleIds\": [ \"white_cell\" ], \"notifySessionRoleIds\": [ \"facilitator\" ], \"notifyCreator\": true }, { \"id\": \"t8\", \"from\": \"returned\", \"command\": \"artifact.edit\", \"to\": \"returned\", \"allowedSessionRoleIds\": [ \"scribe\" ], \"contentOnly\": true }, { \"id\": \"t9\", \"from\": \"returned\", \"command\": \"artifact.submit\", \"to\": \"submitted\", \"allowedSessionRoleIds\": [ \"scribe\" ], \"notifySessionRoleIds\": [ \"facilitator\" ] } ] } ] }"
+    - button "Create project" [ref=e20] [cursor=pointer]
+    - button "Save draft" [ref=e21] [cursor=pointer]
+    - button "Validate" [ref=e22] [cursor=pointer]
+    - button "Publish release" [ref=e23] [cursor=pointer]
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]: Project UUID
+        - textbox "Project UUID" [ref=e27]
+      - generic [ref=e28]:
+        - generic [ref=e29]: Draft version
+        - spinbutton "Draft version" [ref=e30]: "1"
+      - generic [ref=e31]:
+        - generic [ref=e32]: Release UUID
+        - textbox "Release UUID" [ref=e33]
+  - region [ref=e34]:
+    - heading "3. Runtime — start and staff a session" [level=2] [ref=e35]
+    - button "Create session (operator)" [ref=e36] [cursor=pointer]
+    - generic [ref=e37]: Session UUID
+    - textbox "Session UUID" [ref=e38]
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]: Session status
+        - combobox "Session status" [ref=e42]:
+          - option "active" [selected]
+          - option "paused"
+          - option "completed"
+      - generic [ref=e43]:
+        - generic [ref=e44]: Reason (optional)
+        - textbox "Reason (optional)" [ref=e45]
+    - button "Change session status (operator)" [ref=e46] [cursor=pointer]
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]: Person UUID to staff
+        - textbox "Person UUID to staff" [ref=e50]
+      - generic [ref=e51]:
+        - generic [ref=e52]: Session role (from the release)
+        - combobox "Session role (from the release)" [ref=e53]: scribe
+    - button "Assign to session role (operator)" [ref=e54] [cursor=pointer]
+    - button "Register this person's device" [ref=e55] [cursor=pointer]
+    - generic [ref=e56]: Device UUID
+    - textbox "Device UUID" [ref=e57]
+  - region [ref=e58]:
+    - heading "4. Artifact workflow" [level=2] [ref=e59]
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]: Artifact UUID
+        - textbox "Artifact UUID" [ref=e63]: cd7d11c7-3eb5-463a-88ea-78a985247bb4
+      - generic [ref=e64]:
+        - generic [ref=e65]: Artifact type key (create only)
+        - textbox "Artifact type key (create only)" [ref=e66]: request
+      - generic [ref=e67]:
+        - generic [ref=e68]: Expected aggregate version
+        - spinbutton "Expected aggregate version" [ref=e69]: "0"
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - generic [ref=e72]: Command
+        - combobox "Command" [ref=e73]:
+          - option "artifact.create" [selected]
+          - option "artifact.edit"
+          - option "artifact.submit"
+          - option "artifact.forward"
+          - option "artifact.return"
+          - option "artifact.accept"
+      - generic [ref=e74]:
+        - generic [ref=e75]: Active session role (only if you hold several)
+        - textbox "Active session role (only if you hold several)" [ref=e76]
+    - generic [ref=e77]: Content (create and edit)
+    - textbox "Content (create and edit)" [ref=e78]: "{\"summary\":\"Reference request\",\"rationale\":\"Initial draft\"}"
+    - button "New artifact UUID" [ref=e79] [cursor=pointer]
+    - button "Send command" [ref=e80] [cursor=pointer]
+    - button "Resend last command (same ID)" [ref=e81] [cursor=pointer]
+    - button "Look up last receipt" [ref=e82] [cursor=pointer]
+    - button "Read visible artifacts" [ref=e83] [cursor=pointer]
+    - button "Evidence export (operator)" [ref=e84] [cursor=pointer]
+    - paragraph [ref=e85]: "Each new command gets a fresh command UUID. Resending the same command demonstrates idempotent replay: the original receipt comes back and nothing is applied twice."
+  - region [ref=e86]:
+    - heading "Server response" [level=2] [ref=e87]
+    - status [ref=e89]: Ready.

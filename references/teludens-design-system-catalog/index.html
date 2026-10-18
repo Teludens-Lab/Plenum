@@ -179,6 +179,78 @@
             <div class="mini-inspector" id="motionInspector"><b>P-142</b><small>Context preserved</small><div class="mini-field"></div><div class="mini-field short"></div></div>
           </div>
         </div>
+
+        <div class="motion-catalog-grid">
+          <article class="motion-catalog-panel">
+            <div class="motion-panel-head">
+              <div><span class="eyebrow">TRANSITION CHOREOGRAPHY</span><h3>Movement follows the relationship.</h3></div>
+              <button class="button secondary motion-replay" id="transitionReplay">Replay</button>
+            </div>
+            <p class="motion-panel-copy">Selection changes in place. Panels enter from their owning edge. Dialogs rise only a few pixels. Related views crossfade with restrained directional continuity.</p>
+            <div class="transition-switch" role="group" aria-label="Transition demo">
+              <button class="selected" data-transition-demo="selection">Selection</button>
+              <button data-transition-demo="panel">Panel</button>
+              <button data-transition-demo="modal">Dialog</button>
+              <button data-transition-demo="view">View</button>
+            </div>
+            <div class="transition-demo" id="transitionDemo" data-mode="selection">
+              <div class="td-canvas">
+                <div class="td-view td-view-a">
+                  <div class="td-row"><span>P-142</span><b>Port access guarantees</b></div>
+                  <div class="td-row demo-selection"><span>P-143</span><b>Tariff relief</b></div>
+                  <div class="td-row"><span>P-144</span><b>Fuel allocation</b></div>
+                </div>
+                <div class="td-view td-view-b"><span class="eyebrow">RELATED VIEW</span><strong>Proposal P-143</strong><small>Context preserved across navigation</small></div>
+                <div class="td-inspector"><span class="eyebrow">INSPECTOR</span><strong>P-143</strong><small>Selection becomes context</small><i></i><i></i></div>
+                <div class="td-scrim"></div>
+                <div class="td-dialog"><span class="eyebrow">CONFIRM</span><strong>Forward proposal?</strong><small>Consequential transition</small></div>
+              </div>
+              <div class="transition-caption"><span id="transitionCaption">Selection · 140 ms · state changes in place</span><code id="transitionTiming">selection / fast ease-out</code></div>
+            </div>
+            <div class="motion-rule-strip">
+              <span><b>ENTER</b> ease-out</span><span><b>EXIT</b> shorter ease-in</span><span><b>INTERRUPT</b> newest state wins</span><span><b>REDUCE</b> remove travel</span>
+            </div>
+          </article>
+
+          <article class="motion-catalog-panel loading-language">
+            <div class="motion-panel-head">
+              <div><span class="eyebrow">LOADING & LATENCY</span><h3>Never make waiting feel theatrical.</h3></div>
+              <button class="button secondary" id="runLoadingDemo">Run demo</button>
+            </div>
+            <p class="motion-panel-copy">Loading feedback is local, geometry-preserving, and proportional to actual latency. Teludens avoids page-level spinners and fake percentages.</p>
+            <div class="latency-ladder">
+              <div><span>&lt;180 ms</span><b>Immediate</b><small>No loader. Show input acknowledgment only.</small></div>
+              <div><span>180–500 ms</span><b>Pending</b><small>Stable control + Trace Loader if needed.</small></div>
+              <div><span>0.5–2 s</span><b>Local load</b><small>Progress rail or geometry-matched skeleton.</small></div>
+              <div><span>&gt;2 s</span><b>Named task</b><small>Real progress, task identity, cancel/background.</small></div>
+            </div>
+            <div class="loading-demo" id="loadingDemo" data-state="idle" aria-live="polite">
+              <div class="loading-demo-bar">
+                <div class="trace-loader" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+                <div><strong id="loadingStatus">Ready</strong><small id="loadingSubstatus">Run the sequence to inspect the loading grammar.</small></div>
+                <span class="loading-time" id="loadingTime">—</span>
+              </div>
+              <div class="progress-rail" aria-hidden="true"><i id="loadingProgress"></i></div>
+              <div class="loading-surface">
+                <div class="loading-skeleton" aria-hidden="true">
+                  <div class="skeleton-line wide"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div>
+                  <div class="skeleton-row"><span></span><span></span><span></span></div>
+                </div>
+                <div class="loading-result">
+                  <span class="eyebrow">MODEL RUN / COMPLETE</span>
+                  <div class="loaded-record"><span>Economic output</span><strong>−0.04</strong></div>
+                  <div class="loaded-record"><span>Effect proposal</span><strong>Staged for review</strong></div>
+                  <small>Completion means computation finished; no consequential effect is implied as approved.</small>
+                </div>
+              </div>
+            </div>
+            <div class="loading-patterns">
+              <div><div class="trace-loader static-example" aria-hidden="true"><i></i><i></i><i></i><b></b></div><b>Trace Loader</b><small>Indeterminate, compact, local.</small></div>
+              <div><div class="mini-progress"><i></i></div><b>Progress Rail</b><small>Use real measurable progress only.</small></div>
+              <div><div class="mini-skeleton"><i></i><i></i></div><b>Skeleton</b><small>Only when final geometry is known.</small></div>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section id="grammar" class="catalog-section searchable" data-search="node branch path gate state decision topology visual grammar actors decisions options dependencies consequences time">
@@ -263,7 +335,7 @@
         </div>
         <div class="overlay-catalog">
           <div class="overlay-demo inspector-demo"><div class="overlay-label">INSPECTOR</div><h3>P-142</h3><p>Port access guarantees and emergency logistics corridor</p><hr><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Submitted</dt><dd>14:08</dd></div><div><dt>Dependency</dt><dd>Port authority response</dd></div></dl></div>
-          <div class="overlay-demo command-demo"><div class="overlay-label">COMMAND PALETTE</div><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div></div>
+          <div class="overlay-demo command-demo"><div class="overlay-label">COMMAND PALETTE</div><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>S</kbd> Open Scribe workspace</div><div class="command-row"><kbd>M</kbd> Open SME assessment</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div></div>
           <div class="overlay-demo dialog-demo"><div class="overlay-label">DIALOG</div><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary">Cancel</button><button class="button decision">Forward</button></div></div>
         </div>
       </section>
@@ -281,28 +353,261 @@
         </div>
       </section>
 
-      <section id="plenum" class="catalog-section searchable" data-search="plenum reference slice canonical proposal queue decision workspace inspector modal command palette industry facilitator white cell">
+      <section id="plenum" class="catalog-section searchable" data-search="plenum reference slice canonical landing login authentication admin administration organization control plane proposal queue decision workspace inspector modal command palette industry scribe facilitator notetaker white cell sme subject matter expert macro national interests escalation diplomacy information adjudication extensions plugins model composition effect proposal approval polling voting ballot certification secrecy voice radio push to talk ptt floor consent recording transcription media provider adapter">
         <div class="section-heading">
           <div><p class="section-kicker">11 · PLENUM REFERENCE SLICE</p><h2>The canonical baseline.</h2></div>
           <p>This slice defines how the system behaves when multiple Teludens patterns coexist. Shared Plenum patterns should reconcile against this baseline before propagation.</p>
         </div>
         <div class="reference-toolbar">
-          <div class="segmented"><button class="selected" data-ref-state="base">Base</button><button data-ref-state="dialog">Dialog open</button><button data-ref-state="command">Command palette</button></div>
-          <span class="reference-note">Interactive reference · 1440 × 900 concept</span>
+          <div class="reference-toolbar-primary">
+            <div class="segmented reference-options" aria-label="Plenum slice option">
+              <button data-ref-state="landing">Landing</button>
+              <button data-ref-state="login">Login</button>
+              <button class="selected" data-ref-state="base">Workspace</button>
+              <button data-ref-state="dialog">Dialog open</button>
+              <button data-ref-state="command">Command palette</button>
+              <button data-ref-state="admin">Admin</button>
+              <button data-ref-state="extension">Extensions</button>
+              <button data-ref-state="vote">Poll / Vote</button>
+              <button data-ref-state="voice">Voice / Radio</button>
+            </div>
+            <span class="reference-note" id="referenceNote">Facilitator workspace · review, RFI, submit</span>
+          </div>
+          <div class="reference-rolebar" id="referenceRolebar">
+            <span>ROLE SURFACE</span>
+            <div class="segmented compact role-options" aria-label="Plenum role surface">
+              <button data-role-view="scribe">Scribe</button>
+              <button class="selected" data-role-view="facilitator">Facilitator</button>
+              <button data-role-view="notetaker">Notetaker</button>
+              <button data-role-view="whitecell">White Cell</button>
+              <button data-role-view="sme">SME</button>
+            </div>
+          </div>
         </div>
         <div class="plenum-frame" id="plenumFrame">
-          <div class="p-top"><b>PLENUM</b><span>ARES PASSAGE / LIVE</span><strong>MOVE 02 · ACTION</strong><span>14:32</span><span>BLUE · INDUSTRY</span></div>
-          <div class="p-nav"><small>SIMULATION</small><button>Overview</button><button>Teams & actors</button><button class="selected">Proposals & actions</button><button>RFIs & observations</button><button>Timeline & activity</button><button>Analysis</button><small class="sync">SYNCED · 14:08:12</small></div>
+          <div class="p-top"><b>PLENUM</b><span>ARES PASSAGE / LIVE</span><strong id="pContextState">MOVE 02 · ACTION</strong><span>14:32</span><span id="pRole">BLUE · INDUSTRY</span></div>
+          <div class="p-nav"><small>SIMULATION</small><button>Overview</button><button>Teams & actors</button><button class="selected" data-ref-nav="base">Proposals & actions</button><button>RFIs & observations</button><button data-ref-nav="extension">Models & extensions</button><button data-ref-nav="vote">Polling & voting</button><button data-ref-nav="voice">Voice & radio</button><button>Timeline & activity</button><button>Analysis</button><small class="sync">SYNCED · 14:08:12</small></div>
           <div class="p-main">
             <div class="p-rail"><div class="complete"><i></i><span>ORIENT</span></div><div class="current"><i></i><span>ACTION</span></div><div><i></i><span>ADJUDICATE</span></div><div><i></i><span>RESOLVE</span></div></div>
             <div class="p-toolbar"><h3>Proposal queue</h3><span>12 open · 3 require attention</span><button class="button primary">Create proposal</button></div>
             <div class="p-list" id="pList"></div>
-            <div class="p-flow"><div><b>P-142 · Proposal flow</b><span>One proposal identity persists across ownership and adjudication.</span></div><div class="p-flow-row"><span>INDUSTRY<br><b>Submitted</b></span><i>→</i><span class="active">FACILITATOR<br><b>Review</b></span><i>→</i><span>WHITE CELL<br><b>Next</b></span><i>→</i><span>ADJUDICATION<br><b>Pending</b></span></div></div>
+            <div class="p-flow"><div><b>P-142 · Proposal flow</b><span>One proposal identity persists across ownership and adjudication.</span></div><div class="p-flow-row"><span>SCRIBE<br><b>Forwarded</b></span><i>→</i><span class="active">FACILITATOR<br><b>Review</b></span><i>→</i><span>WHITE CELL<br><b>Completeness</b></span><i>→</i><span>SME<br><b>Assessment</b></span><i>→</i><span>WHITE CELL<br><b>Ruling</b></span></div></div>
           </div>
           <aside class="p-inspector"><span class="signal-label">P-142</span><h3>Port access guarantees and emergency logistics corridor</h3><span class="eyebrow">FACILITATOR REVIEW</span><div class="inspector-section"><b>Proposal context</b><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Move</dt><dd>02</dd></div><div><dt>Submitted</dt><dd>14:08</dd></div><div><dt>Dependency</dt><dd>Port authority response</dd></div></dl></div><div class="inspector-body"><span>Objective</span><p>Secure predictable access and logistics continuity while preserving room for White Cell adjudication.</p><span>Dependencies</span><ul><li>Port authority response</li><li>Fuel allocation decision</li><li>Regional customs position</li></ul></div><div class="inspector-actions"><button class="button secondary">Return for revision</button><button class="button decision" id="pForward">Forward to White Cell</button></div></aside>
+
+          <section class="p-role-view" id="scribeView" aria-label="Scribe role workspace reference slice">
+            <div class="role-main">
+              <div class="role-rail"><div class="complete"><i></i><span>ORIENT</span></div><div class="current"><i></i><span>AUTHOR</span></div><div><i></i><span>FORWARD</span></div><div><i></i><span>FACILITATOR REVIEW</span></div></div>
+              <div class="role-toolbar"><div><span class="eyebrow">INDUSTRY SCRIBE · MOVE 02</span><h3>Industry Turn Sheet / Proposal</h3></div><div class="role-toolbar-state"><span class="cap-state success" id="scribeSaveState">AUTOSAVED</span><button class="button primary" id="scribeForwardDemo">Forward to Facilitator</button></div></div>
+              <div class="scribe-layout">
+                <div class="scribe-editor">
+                  <section class="turnsheet-section"><header><span>01</span><div><b>Environment read</b><small>Move-level context · captured on the first Industry proposal</small></div><em>COMPLETE</em></header><div class="turnsheet-grid"><label><span>Blue forecast</span><strong>Coordinated resilience · financing support</strong></label><label><span>Green forecast</span><strong>Conditional alignment · burden sharing</strong></label><label><span>Red forecast</span><strong>Discounted supply + financing pressure</strong></label><label><span>Industry posture</span><strong>Diversify where risk is reduced</strong></label></div></section>
+                  <section class="turnsheet-section"><header><span>02</span><div><b>Supply-chain position</b><small>Industry context and constraints</small></div><em>COMPLETE</em></header><div class="turnsheet-grid"><label><span>Primary constraint</span><strong>Processing finance and permitting certainty</strong></label><label><span>Commercial priority</span><strong>Supply continuity without exclusive lock-in</strong></label><label class="wide"><span>Evidence / rationale</span><strong>Capital shifts only where guarantees, procurement demand, and permitting reduce downside risk.</strong></label></div></section>
+                  <section class="turnsheet-section proposal-authoring"><header><span>03</span><div><b>Commercial proposal</b><small>This Turn Sheet becomes the proposal record</small></div><em>DRAFT</em></header><div class="turnsheet-grid"><label class="wide"><span>Title</span><strong>Secure Supply and Processing Partnership</strong></label><label><span>Recipient</span><strong>Red</strong></label><label><span>Partners</span><strong>Industry consortium · Red-linked suppliers</strong></label><label class="wide"><span>Commercial choice</span><strong>Commit downstream-processing capital if supply and export continuity are secured.</strong></label><label class="wide"><span>Terms requested</span><strong>Seven-year non-exclusive contract · ±5% benchmark pricing corridor.</strong></label></div></section>
+                </div>
+                <div class="role-handoff"><span class="active">SCRIBE<b>Authors</b></span><i>→</i><span>FACILITATOR<b>Reviews / submits</b></span><i>→</i><span>WHITE CELL<b>Completeness</b></span><i>→</i><span>SME<b>Assesses</b></span><i>→</i><span>WHITE CELL<b>Rules</b></span></div>
+              </div>
+            </div>
+            <aside class="role-inspector"><span class="signal-label">INDUSTRY SCRIBE</span><h3>Authoring authority</h3><span class="eyebrow">TEAM ARTIFACT OWNER · NOT FINAL SUBMITTER</span><div class="inspector-section"><b>Owns</b><dl><div><dt>Orientation</dt><dd>Author</dd></div><div><dt>Action / proposal</dt><dd>Author</dd></div><div><dt>RFI history</dt><dd>Read-only</dd></div><div><dt>Timeline</dt><dd>Read</dd></div><div><dt>Final submit</dt><dd>Facilitator</dd></div></dl></div><div class="inspector-body"><span>Role boundary</span><p>The Scribe creates the official team artifact and forwards it to the Facilitator. The Scribe does not bypass the Facilitator or submit directly to White Cell.</p><span>Continuity</span><p>The completed Turn Sheet is the proposal object. Ownership changes; object identity does not.</p></div></aside>
+          </section>
+
+          <section class="p-role-view" id="notetakerView" aria-label="Notetaker role workspace reference slice">
+            <div class="role-main">
+              <div class="role-rail evidence"><div class="complete"><i></i><span>OBSERVE</span></div><div class="current"><i></i><span>CAPTURE</span></div><div><i></i><span>ATTRIBUTE</span></div><div><i></i><span>PRESERVE</span></div></div>
+              <div class="role-toolbar"><div><span class="eyebrow">INDUSTRY NOTETAKER · MOVE 02</span><h3>Observation record</h3></div><div class="role-toolbar-state"><span class="cap-state info">EVIDENCE ROLE</span><button class="button primary" id="noteCaptureDemo">Add observation</button></div></div>
+              <div class="notetaker-workspace">
+                <div class="observation-stream"><article><span>14:06:22</span><b>Reasoning</b><p>Financing remains the dominant constraint; the team rejects exclusive sourcing despite short-term price advantage.</p></article><article><span>14:09:41</span><b>Key moment</b><p>Facilitator narrows the proposal from general supply assurance to a bounded processing partnership.</p></article><article><span>14:11:08</span><b>Quote</b><p>“Security of supply is useful only if it does not become a lock-in.”</p></article><article><span>14:12:30</span><b>Relationship</b><p>Red engagement remains active but bounded by non-exclusive terms.</p></article></div>
+                <aside class="evidence-context"><span class="eyebrow">READ-ONLY ARTIFACT CONTEXT</span><h4>P-142 · Secure Supply and Processing Partnership</h4><p>Notetaker context follows the team artifact and timeline but does not mutate proposal fields.</p><dl><div><dt>Artifact owner</dt><dd>Scribe → Facilitator</dd></div><div><dt>Current state</dt><dd>Facilitator Review</dd></div><div><dt>Observation scope</dt><dd>Industry team</dd></div></dl></aside>
+              </div>
+            </div>
+            <aside class="role-inspector"><span class="signal-label info-label">NOTETAKER</span><h3>Evidence authority</h3><span class="eyebrow">OBSERVE · ATTRIBUTE · PRESERVE</span><div class="inspector-section"><b>Capture types</b><dl><div><dt>Reasoning</dt><dd>Yes</dd></div><div><dt>Quotes</dt><dd>Yes</dd></div><div><dt>Dynamics</dt><dd>Yes</dd></div><div><dt>Relationships</dt><dd>Yes</dd></div><div><dt>Mutate artifact</dt><dd>No</dd></div></dl></div><div class="inspector-body"><span>Role boundary</span><p>Notetakers preserve evidence that structured proposal fields do not capture. They do not author official team artifacts or change authoritative proposal state.</p></div></aside>
+          </section>
+
+          <section class="p-role-view" id="whitecellView" aria-label="White Cell role workspace reference slice">
+            <div class="role-main">
+              <div class="role-rail"><div class="complete"><i></i><span>RECEIVED</span></div><div class="current"><i></i><span>COMPLETENESS</span></div><div><i></i><span>SME REVIEW</span></div><div><i></i><span>RULING</span></div></div>
+              <div class="role-toolbar"><div><span class="eyebrow">WHITE CELL · MOVE 02</span><h3>Completeness & adjudication queue</h3></div><div class="role-toolbar-state"><span class="cap-state">3 READY</span><button class="button primary" id="whiteSendSmeDemo">Send selected to SME lanes</button></div></div>
+              <div class="whitecell-workspace"><div class="wc-queue"><div class="wc-row header"><span>Artifact</span><span>Team</span><span>Completeness</span><span>RFI</span><span>Next</span></div><div class="wc-row selected"><b>Critical Minerals Resilience Package</b><span>Blue</span><span class="cap-state success">COMPLETE</span><span>Answered</span><strong>SME review</strong></div><div class="wc-row"><b>Allied Co-Financing Compact</b><span>Green</span><span class="cap-state success">COMPLETE</span><span>None</span><strong>Route</strong></div><div class="wc-row"><b>Supply Assurance Initiative</b><span>Red</span><span class="cap-state caution">CHECK</span><span>Open</span><strong>Hold</strong></div><div class="wc-row"><b>Secure Supply Partnership</b><span>Industry</span><span class="cap-state success">COMPLETE</span><span>None</span><strong>Route</strong></div></div><div class="wc-sequence"><span class="active">COMPLETENESS<b>White Cell</b></span><i>→</i><span>ASSESSMENT<b>SME lanes</b></span><i>→</i><span>INTEGRATION<b>White Cell</b></span><i>→</i><span>RULING<b>Publish</b></span></div></div>
+            </div>
+            <aside class="role-inspector"><span class="signal-label">BLUE ACTION</span><h3>Completeness review</h3><span class="eyebrow">WHITE CELL AUTHORITY</span><div class="inspector-section"><b>Checks</b><dl><div><dt>Required fields</dt><dd>Complete</dd></div><div><dt>Observable outcome</dt><dd>Corrected</dd></div><div><dt>RFI</dt><dd>Answered</dd></div><div><dt>Related proposals</dt><dd>2</dd></div></dl></div><div class="inspector-body"><span>Authority boundary</span><p>White Cell controls completeness, returns, clarifications, and the final ruling. SME recommendations inform the ruling but do not replace White Cell authority.</p></div><div class="inspector-actions"><button class="button secondary">Return</button><button class="button primary">Send to SME</button></div></aside>
+          </section>
+
+          <section class="p-role-view" id="smeView" aria-label="SME role workspace reference slice">
+            <div class="role-main">
+              <div class="role-rail sme"><div class="complete"><i></i><span>RECEIVED</span></div><div class="current"><i></i><span>ASSESS</span></div><div><i></i><span>SEND</span></div><div><i></i><span>WHITE CELL RULING</span></div></div>
+              <div class="role-toolbar"><div><span class="eyebrow">PLI / SME · BLUE MOVE 1 ACTION</span><h3 id="smeLaneTitle">Macro assessment</h3></div><div class="role-toolbar-state"><div class="segmented compact sme-lanes" aria-label="SME assessment lane"><button class="selected" data-sme-lane="macro">Macro</button><button data-sme-lane="ni">NI & Escalation</button><button data-sme-lane="diplo">Diplomacy & Info</button></div><button class="button primary" id="smeSendDemo">Send to White Cell</button></div></div>
+              <div class="sme-workspace">
+                <article class="sme-artifact"><span class="eyebrow">READ-ONLY ACTION</span><h4>Critical Minerals Resilience Package</h4><dl><div><dt>Objective</dt><dd>Reduce dependence on Red-linked graphite and gallium.</dd></div><div><dt>Instruments</dt><dd>Economic + Diplomatic</dd></div><div><dt>Detail</dt><dd>$2B loan-guarantee and procurement support for allied processing.</dd></div><div><dt>Expected outcome</dt><dd>Advance one credible alternative-processing investment.</dd></div></dl></article>
+                <article class="sme-assessment"><div class="sme-assessment-head"><span class="eyebrow" id="smeLaneEyebrow">MACRO REVIEW CONSOLE</span><span class="cap-state" id="smeAssessmentState">DRAFT ASSESSMENT</span></div><div id="smeAssessmentFields" class="sme-fields"></div><div class="outcome-bias"><span>Recommended outcome bias</span><strong id="smeOutcomeBias">PARTIAL_SUCCESS</strong><small>Recommendation only · White Cell rules</small></div></article>
+              </div>
+            </div>
+            <aside class="role-inspector"><span class="signal-label">SME</span><h3>Analytic assessment</h3><span class="eyebrow">ADVISORY · NON-AUTHORITATIVE</span><div class="inspector-section"><b>Three lanes</b><dl><div><dt>Macro</dt><dd>Economic effects</dd></div><div><dt>NI & escalation</dt><dd>Interests / risk</dd></div><div><dt>Diplomacy & info</dt><dd>Political / narrative</dd></div></dl></div><div class="inspector-body"><span>Role boundary</span><p>SMEs assess an already-submitted artifact in their assigned lane and recommend an outcome bias. They do not edit the team artifact and do not publish the ruling.</p><span>Authority</span><p>All SME assessments return to White Cell, which integrates them and retains final adjudication authority.</p></div></aside>
+          </section>
+
+          <section class="p-surface-view p-landing-view" id="landingView" aria-label="Plenum landing page reference slice">
+            <header class="planding-header">
+              <div class="planding-brand"><b>PLENUM</b><span>TELUDENS LAB</span></div>
+              <div class="planding-meta"><span>Platform</span><span>Method</span><span>Security</span></div>
+              <button class="button secondary planding-signin" id="landingSignIn">Sign in</button>
+            </header>
+            <div class="planding-hero">
+              <div class="planding-copy">
+                <span class="eyebrow">SIMULATION ENGINEERING PLATFORM</span>
+                <h3>Build the decision environment. Run the consequence.</h3>
+                <p>Plenum is the operating environment for designing, running, and reviewing complex strategic simulations with explicit state, provenance, and human authority.</p>
+                <div class="planding-actions"><button class="button primary" id="landingEnter">Enter Plenum</button><button class="button secondary" id="landingExplore">Explore workspace</button></div>
+                <div class="planding-proof"><span>RELEASE-BOUND</span><span>ROLE-AWARE</span><span>OFFLINE-CAPABLE</span><span>EVIDENCE-TRACEABLE</span></div>
+              </div>
+              <div class="planding-topology" aria-label="Decision architecture specimen">
+                <div class="planding-grid"></div>
+                <div class="lt-node n1 active"><i></i><span>Orient</span></div>
+                <div class="lt-node n2"><i></i><span>Action</span></div>
+                <div class="lt-node n3"><i></i><span>Adjudicate</span></div>
+                <div class="lt-node n4"><i></i><span>Resolve</span></div>
+                <div class="lt-node n5 gate"><i></i><span>Approval gate</span></div>
+                <div class="lt-path p1 active"></div><div class="lt-path p2"></div><div class="lt-path p3"></div><div class="lt-path p4"></div>
+                <div class="topology-readout"><span>ACTIVE PATH</span><b>Action → Approval gate</b><small>Current state is explicit; consequences remain provisional until authorized.</small></div>
+              </div>
+            </div>
+            <div class="planding-capabilities">
+              <div><span>01</span><b>Design</b><small>Scenario architecture, roles, rules, releases, models and channels.</small></div>
+              <div><span>02</span><b>Operate</b><small>Live state, proposals, polling, radio, adjudication and evidence.</small></div>
+              <div><span>03</span><b>Review</b><small>Decision paths, provenance, outcomes, after-action and research export.</small></div>
+            </div>
+          </section>
+
+          <section class="p-surface-view p-login-view" id="loginView" aria-label="Plenum login reference slice">
+            <div class="plogin-context">
+              <div class="plogin-brand"><b>PLENUM</b><span>SECURE ACCESS</span></div>
+              <div class="plogin-context-copy"><span class="eyebrow">INSTITUTIONAL SIMULATION ENVIRONMENT</span><h3>Enter the active decision environment.</h3><p>Authentication establishes organization, deployment, participant identity, and the role context used by the Runtime. No simulation authority is inferred from the client.</p></div>
+              <div class="plogin-trace" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
+              <dl class="plogin-facts"><div><dt>Deployment</dt><dd>Institutional Cloud</dd></div><div><dt>Region</dt><dd>US East</dd></div><div><dt>Status</dt><dd><span class="status-dot small"></span> Operational</dd></div></dl>
+            </div>
+            <div class="plogin-panel">
+              <div class="plogin-form-head"><span class="eyebrow">SIGN IN</span><h3>Continue to Plenum</h3><p>Use your organization-issued account.</p></div>
+              <form id="plenumLoginForm" novalidate>
+                <label class="plogin-field"><span>Work email</span><input id="plenumLoginEmail" type="email" autocomplete="username" placeholder="name@organization.org"></label>
+                <label class="plogin-field"><span>Password</span><input id="plenumLoginPassword" type="password" autocomplete="current-password" placeholder="Password"></label>
+                <div class="plogin-state" id="plenumLoginState" data-state="idle" aria-live="polite"><div class="trace-loader" aria-hidden="true"><i></i><i></i><i></i><b></b></div><span>Ready</span></div>
+                <button class="button primary plogin-submit" type="submit">Sign in</button>
+                <div class="plogin-divider"><span>or</span></div>
+                <button class="button secondary plogin-submit" type="button" id="plenumLoginSSO">Continue with institutional SSO</button>
+              </form>
+              <p class="plogin-help">Prototype reference only · credentials are never stored or transmitted by this catalog.</p>
+            </div>
+          </section>
+
+          <section class="p-surface-view p-admin-view" id="adminView" aria-label="Plenum administration reference slice">
+            <div class="padmin-top"><div><b>PLENUM ADMIN</b><span>Northstar Policy Institute</span></div><strong>ORGANIZATION CONTROL PLANE</strong><span>Organization Administrator</span></div>
+            <nav class="padmin-nav" aria-label="Administration navigation">
+              <small>ORGANIZATION</small>
+              <button class="selected" data-admin-section="overview">Overview</button>
+              <button data-admin-section="sessions">Sessions</button>
+              <button data-admin-section="access">Users & roles</button>
+              <button data-admin-section="releases">Releases</button>
+              <small>CAPABILITIES</small>
+              <button data-admin-section="extensions">Extensions</button>
+              <button data-admin-section="voting">Voting methods</button>
+              <button data-admin-section="media">Media providers</button>
+              <small>GOVERNANCE</small>
+              <button data-admin-section="security">Security & audit</button>
+              <span class="padmin-sync">POLICY SYNC · CURRENT</span>
+            </nav>
+            <main class="padmin-main">
+              <header class="padmin-heading"><div><span class="eyebrow" id="adminSectionEyebrow">ORGANIZATION OVERVIEW</span><h3 id="adminSectionTitle">Control plane</h3><p id="adminSectionDescription">Deployment health, active simulation workload, capability posture, and governance queues.</p></div><span class="cap-state success">NO CRITICAL INCIDENTS</span></header>
+              <div class="padmin-metrics"><div><span>DEPLOYMENTS</span><b>3</b><small>2 production · 1 staging</small></div><div><span>ACTIVE SESSIONS</span><b>14</b><small>Across 4 organizations</small></div><div><span>INSTALLED EXTENSIONS</span><b>7</b><small>All approved digests pinned</small></div><div><span>ATTENTION</span><b>2</b><small>1 review · 1 expiring credential</small></div></div>
+              <section class="padmin-table-block">
+                <div class="padmin-table-head"><div><span class="eyebrow">DEPLOYMENT HEALTH</span><b>Runtime environments</b></div><span>Updated 14:08</span></div>
+                <div class="padmin-table">
+                  <div class="padmin-row header"><span>Deployment</span><span>Profile</span><span>Authority</span><span>Sessions</span><span>Status</span></div>
+                  <button class="padmin-row selected" type="button"><span>East Coast Exercise Cluster</span><span>Institutional cloud</span><span>Healthy</span><span>8</span><span class="cap-state success">OPERATIONAL</span></button>
+                  <button class="padmin-row" type="button"><span>Secure LAN Runtime</span><span>Air-gapped</span><span>Healthy</span><span>4</span><span class="cap-state success">OPERATIONAL</span></button>
+                  <button class="padmin-row" type="button"><span>Staging / Validation</span><span>Connected</span><span>Standby</span><span>2</span><span class="cap-state">STAGING</span></button>
+                </div>
+              </section>
+              <section class="padmin-queue">
+                <div class="padmin-table-head"><div><span class="eyebrow">GOVERNANCE QUEUES</span><b>Requires administrator attention</b></div><button class="button secondary admin-audit-button" type="button" id="adminAuditDemo">Open audit view</button></div>
+                <div class="padmin-queue-row"><span class="cap-state caution">REVIEW</span><b>Extension publisher key rotation</b><small>1 signing key expires in 12 days</small><strong>Security</strong></div>
+                <div class="padmin-queue-row"><span class="cap-state">PENDING</span><b>New facilitator role grant</b><small>Requested for Session ASI-26-014</small><strong>Access</strong></div>
+              </section>
+            </main>
+            <aside class="padmin-inspector">
+              <span class="signal-label">DEPLOYMENT</span><h3>East Coast Exercise Cluster</h3><span class="eyebrow">INSTITUTIONAL CLOUD · PRODUCTION</span>
+              <div class="inspector-section"><b>Runtime posture</b><dl><div><dt>Authority epoch</dt><dd>Current</dd></div><div><dt>Release policy</dt><dd>Enforced</dd></div><div><dt>Public egress</dt><dd>Controlled</dd></div><div><dt>Last checkpoint</dt><dd>14:07:52</dd></div></dl></div>
+              <div class="inspector-body"><span>Capability posture</span><p>7 approved extensions · 2 voting methods · 1 media provider. All runtime bindings are pinned by digest.</p><span>Current workload</span><ul><li>8 active Sessions</li><li>126 connected Seats</li><li>0 authority conflicts</li></ul><span>Admin principle</span><p>Administration governs installation, access, policy, release, and deployment posture. It never bypasses Session authority.</p></div>
+            </aside>
+          </section>
+
+          <section class="p-capability-view" id="extensionView" aria-label="Extension framework reference slice">
+            <div class="cap-main">
+              <div class="cap-rail"><div class="complete"><i></i><span>SNAPSHOT</span></div><div class="complete"><i></i><span>MODEL RUNS</span></div><div class="current"><i></i><span>EFFECT PROPOSAL</span></div><div><i></i><span>APPROVAL</span></div></div>
+              <div class="cap-toolbar"><div><span class="eyebrow">MODEL COMPOSITION · SPECIMEN</span><h3>Sanctions → stability</h3></div><div class="cap-tags"><span>PINNED RELEASE</span><span>2 MODELS</span><span>DETERMINISTIC FIXTURE</span></div></div>
+              <div class="cap-content extension-content">
+                <div class="composition-canvas">
+                  <div class="composition-node complete"><span>MODEL</span><b>Fixture economy model</b><small>completed · validated output</small></div><i>→</i>
+                  <div class="composition-node complete"><span>MODEL</span><b>Fixture stability model</b><small>completed · effect proposed</small></div><i>→</i>
+                  <div class="composition-node current"><span>APPROVAL GATE</span><b>White Cell review</b><small>state unchanged</small></div><i>→</i>
+                  <div class="composition-node"><span>OUTPUT</span><b>Committed state</b><small>pending approval</small></div>
+                </div>
+                <div class="cap-grid two">
+                  <article class="cap-card"><span class="eyebrow">RUN PROVENANCE</span><dl><div><dt>Input snapshot</dt><dd>SNAP-2048</dd></div><div><dt>Seed</dt><dd>42</dd></div><div><dt>Graph</dt><dd>sanctions-to-stability</dd></div><div><dt>Connectivity</dt><dd>offline capable</dd></div></dl></article>
+                  <article class="cap-card effect-card"><span class="eyebrow">STAGED EFFECT PROPOSAL</span><div class="effect-value"><b>economic_output</b><strong>−0.04</strong></div><p>Operation: adjust · Provisional output. No authoritative Session state has changed.</p><span class="cap-state caution" id="effectStatus">IN REVIEW · NOT APPLIED</span></article>
+                </div>
+                <div class="cap-note"><b>Authority boundary</b><span>Plugins compute and propose. Consequential effects enter authoritative state only after an authorized human approval and normal Command processing.</span></div>
+              </div>
+            </div>
+            <aside class="cap-inspector">
+              <span class="signal-label">EFFECT PROPOSAL</span><h3>Review proposed economic adjustment</h3><span class="eyebrow">WHITE CELL · AUTHORIZED REVIEW</span>
+              <div class="inspector-section"><b>Provenance</b><dl><div><dt>Model run</dt><dd>2 validated nodes</dd></div><div><dt>Target</dt><dd>state_value:economic_output</dd></div><div><dt>Operation</dt><dd>adjust</dd></div><div><dt>Expected version</dt><dd>current</dd></div></dl></div>
+              <div class="inspector-body"><span>Approval contract</span><p>Approval binds the proposal, model runs, input snapshot, governing release, authority epoch and expected state version.</p><span>Platform adapters</span><p>Voting methods and media providers extend core capabilities; they are not model plugins and never hold Session authority.</p></div>
+              <div class="inspector-actions"><button class="button secondary">Return</button><button class="button secondary">Reject</button><button class="button decision" id="approveEffectDemo">Approve & apply</button></div>
+            </aside>
+          </section>
+
+          <section class="p-capability-view" id="voteView" aria-label="Live polling and voting reference slice">
+            <div class="cap-main">
+              <div class="cap-rail"><div class="complete"><i></i><span>CONFIGURED</span></div><div class="current"><i></i><span>OPEN</span></div><div><i></i><span>TALLY</span></div><div><i></i><span>CERTIFY</span></div></div>
+              <div class="cap-toolbar"><div><span class="eyebrow">LIVE POLL · POLL-03</span><h3>Authorize emergency port access agreement?</h3></div><div class="cap-tags"><span>SECRET BALLOT</span><span>YES / NO / ABSTAIN</span><span>SERVER DEADLINE</span></div></div>
+              <div class="cap-content vote-content">
+                <div class="ballot-layout">
+                  <article class="ballot-panel"><span class="eyebrow">YOUR BALLOT · PROTOTYPE STATE DEMO</span><h4>Choose one option</h4><label class="ballot-option"><input type="radio" name="demoBallot" value="yes"><span><b>Yes</b><small>Authorize the agreement</small></span></label><label class="ballot-option"><input type="radio" name="demoBallot" value="no"><span><b>No</b><small>Do not authorize</small></span></label><label class="ballot-option"><input type="radio" name="demoBallot" value="abstain"><span><b>Abstain</b><small>Count participation according to the Poll Definition</small></span></label><div class="ballot-submit"><span id="ballotState" class="cap-state">READY TO CAST</span><button class="button decision" id="castDemoBallot">Cast ballot</button></div></article>
+                  <article class="result-panel"><span class="eyebrow">RESULT VISIBILITY</span><div class="result-lock"><b>Result hidden</b><p>Live counters do not reveal confidential votes before the configured release condition.</p></div><dl><div><dt>Poll state</dt><dd>Open</dd></div><div><dt>Tally</dt><dd>Not yet authoritative</dd></div><div><dt>Certification</dt><dd>Required after tally</dd></div></dl></article>
+                </div>
+                <div class="ballot-state-strip"><span>pending on device</span><i>→</i><span>submitted</span><i>→</i><span class="active">accepted</span><i>→</i><span>tallied</span><i>→</i><span>certified result</span></div>
+                <div class="cap-note"><b>Frozen at open</b><span>Options, electorate, secrecy, weights, deadline, tally method, quorum and threshold rules cannot change after the Poll opens. Change requires void and reissue.</span></div>
+              </div>
+            </div>
+            <aside class="cap-inspector">
+              <span class="signal-label">POLL-03</span><h3>Poll definition</h3><span class="eyebrow">RUNTIME AUTHORITY</span>
+              <div class="inspector-section"><b>Frozen definition</b><dl><div><dt>Type</dt><dd>Yes / No / Abstain</dd></div><div><dt>Secrecy</dt><dd>Secret ballot</dd></div><div><dt>Ballot identity</dt><dd>Seat assignment</dd></div><div><dt>Revote</dt><dd>Off</dd></div><div><dt>Quorum</dt><dd>Explicit definition</dd></div><div><dt>Threshold</dt><dd>Explicit definition</dd></div></dl></div>
+              <div class="inspector-body"><span>Receipt semantics</span><p>The interface distinguishes pending on device, submitted, accepted, rejected, tally and certified result. A client timestamp never makes a late ballot timely.</p><span>Adapter boundary</span><p>A Voting Method Adapter may calculate a pinned deterministic tally method. It cannot certify a result or change Session state.</p></div>
+            </aside>
+          </section>
+
+          <section class="p-capability-view" id="voiceView" aria-label="Voice and radio reference slice">
+            <div class="cap-main">
+              <div class="cap-rail media"><div class="complete"><i></i><span>AUTHORIZED</span></div><div class="complete"><i></i><span>JOINED</span></div><div class="current media-current"><i></i><span>FLOOR</span></div><div><i></i><span>RELEASE</span></div></div>
+              <div class="cap-toolbar"><div><span class="eyebrow">VOICE CHANNEL · RADIO PTT</span><h3>Blue Command Net</h3></div><div class="cap-tags"><span>LOCAL MEDIA</span><span>5 CONNECTED</span><span>RECORDING OFF</span></div></div>
+              <div class="cap-content voice-content">
+                <div class="voice-grid">
+                  <article class="radio-console"><div class="radio-top"><span class="cap-state info">FLOOR BUSY</span><small>Media provider healthy · LAN-local</small></div><div class="floor-holder"><span>TRANSMITTING</span><b>Blue Lead</b><small>Floor lease active · provider transmit grant scoped to holder</small></div><div class="floor-queue"><span>Queue</span><ol><li>Industry Scribe</li><li>Logistics Lead</li></ol></div><div class="radio-actions"><button class="button info" id="requestFloorDemo">Request floor</button><span id="floorDemoState">Your microphone is listen-only until a Floor is granted.</span></div></article>
+                  <article class="channel-list"><span class="eyebrow">CHANNEL MODES</span><div class="channel-row selected"><span><b>Blue Command Net</b><small>radio_ptt</small></span><strong>JOINED</strong></div><div class="channel-row"><span><b>Industry Room</b><small>open_room</small></span><strong>AVAILABLE</strong></div><div class="channel-row"><span><b>Bilateral Link</b><small>private_call</small></span><strong>INVITE</strong></div><div class="channel-row"><span><b>Exercise Broadcast</b><small>broadcast</small></span><strong>LISTEN</strong></div></article>
+                </div>
+                <div class="media-policy-row"><div><span>RECORDING</span><b>Off by default</b></div><div><span>TRANSCRIPTION</span><b>Off by default</b></div><div><span>CONSENT</span><b>Required when configured</b></div><div><span>ACCESSIBILITY</span><b>Keyboard PTT · visible mic state</b></div></div>
+                <div class="cap-note"><b>Control-plane rule</b><span>Floor requests are latency-sensitive, never placed in the Offline Outbox, and never replayed after reconnection. Loss of control fails closed and leases expire.</span></div>
+              </div>
+            </div>
+            <aside class="cap-inspector">
+              <span class="signal-label info-label">BLUE COMMAND NET</span><h3>Channel policy</h3><span class="eyebrow">RUNTIME GRANT · MEDIA PROVIDER TRANSPORT</span>
+              <div class="inspector-section"><b>Channel definition</b><dl><div><dt>Mode</dt><dd>radio_ptt</dd></div><div><dt>Stage</dt><dd>Action</dd></div><div><dt>Listen</dt><dd>Authorized</dd></div><div><dt>Transmit</dt><dd>Floor controlled</dd></div><div><dt>Recording</dt><dd>Off</dd></div><div><dt>Transcription</dt><dd>Off</dd></div></dl></div>
+              <div class="inspector-body"><span>Authority boundary</span><p>The Runtime grants channel access and transmission rights. The Media Provider Adapter transports packets and exposes health/moderation operations; it never becomes a second authority.</p><span>Accessible operation</span><p>Keyboard push-to-talk, visible microphone state, optional captions under consent, and a non-audio path for every essential instruction.</p></div>
+              <div class="inspector-actions"><button class="button secondary">Leave channel</button><button class="button info" data-floor-request>Request floor</button></div>
+            </aside>
+          </section>
+
           <div class="p-scrim" id="pScrim"></div>
           <div class="p-dialog" id="pDialog"><span class="eyebrow">STATE TRANSITION</span><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review. Proposal history remains unchanged.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary" data-close-overlay>Cancel</button><button class="button decision" data-close-overlay>Forward</button></div></div>
-          <div class="p-command" id="pCommand"><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div><div class="command-row"><kbd>R</kbd> Show unresolved RFIs</div><div class="command-row"><kbd>L</kbd> Open activity log</div></div>
+          <div class="p-command" id="pCommand"><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>S</kbd> Open Scribe workspace</div><div class="command-row"><kbd>M</kbd> Open SME assessment</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div><div class="command-row"><kbd>X</kbd> Open model runs</div><div class="command-row"><kbd>V</kbd> Open active poll</div><div class="command-row"><kbd>C</kbd> Open voice channels</div><div class="command-row"><kbd>R</kbd> Show unresolved RFIs</div><div class="command-row"><kbd>L</kbd> Open activity log</div></div>
         </div>
       </section>
 
@@ -326,6 +631,9 @@
             <a href="docs/TELUDENS_TOKENS.json">Tokens <span>↗</span></a>
             <a href="docs/PLENUM_REFERENCE_SLICE.md">Plenum Reference Slice <span>↗</span></a>
             <a href="docs/FIGMA_LIBRARY_SPEC.md">Figma Library Spec <span>↗</span></a>
+            <a href="docs/10_EXTENSION_FRAMEWORK_v1.1.md">Plenum Extension Framework <span>↗</span></a>
+            <a href="docs/11_LIVE_POLLING_AND_VOTING_v1.1.md">Live Polling & Voting <span>↗</span></a>
+            <a href="docs/12_VOICE_AND_RADIO_v1.1.md">Voice & Radio <span>↗</span></a>
             <a href="https://www.figma.com/design/aKoNDxJc9KUo9WQhmHtA9m" target="_blank" rel="noreferrer">Figma Library <span>↗</span></a>
           </div>
         </div>

@@ -2,14 +2,14 @@
 
 ## Status and authority
 
-Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. Parity itself is **NOT RUN**: PS-000 must classify the snapshot and create the inventory; PS-200 then performs extraction and AC-09 comparison. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
+Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. PS-000 inventory implementation is **COMPLETE**: `docs/reference-audit/PS-000_REFERENCE_AUDIT.md` and `definitions/fractured-order/reference-inventory.json` classify every capability in the two pinned fail-closed source manifests and define source-backed parity targets. Methodology approval is **BLOCKED** on the rows marked for Methodology Lead review under `OPEN-026`. Behavioral parity remains **NOT RUN** until PS-200 performs extraction and AC-09 comparison. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
 
 ## Pinning protocol
 
 1. **PASS:** Product Owner supplied and approved the exact immutable commit SHA.
 2. **PASS:** `references/fractured-order.snapshot.json` records retrieval method, commit, tree, archive digest, file count, size, exclusions, and verification.
 3. **PASS:** `references/fractured-order/` preserves the clean tracked-file snapshot without Git metadata, secrets, dependencies, build output, coverage, or caches.
-4. **PENDING PS-000:** classify observed behavior, define intentional differences, and route ambiguous rows or waivers for approval.
+4. **IMPLEMENTED; APPROVAL BLOCKED:** PS-000 classified observed behavior, defined intentional differences and routed the Strategic Orientation/game-control/decision-trace rows to the Methodology Lead under `OPEN-026`.
 5. **PENDING PS-200:** run old and new implementations from clean, version-pinned environments against the same deterministic scenarios.
 
 ## Parity dimensions
@@ -24,6 +24,13 @@ Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a
 | Extensions | Inputs, output validation, effect review, approval/denial, isolation | `EXT-*` evidence and reproducibility manifest |
 | Database | Migration, constraints, tenant isolation, transaction atomicity | `DB-*` evidence on PostgreSQL 18 |
 | Reports | Stable definitions, counts, provenance, captured/reconstructed labels | Reconciled export and evidence-package hashes |
+
+## Inventory and fixture authority
+
+- `docs/reference-audit/PS-000_REFERENCE_AUDIT.md` is the readable route, service, data, realtime, hard-coding and coverage audit.
+- `definitions/fractured-order/reference-inventory.json` is the machine-readable classification inventory keyed by commit, tree and archive digest.
+- `tests/parity/fractured-order-fixture-plan.json` defines 17 deterministic parity targets, including unauthorized, disconnected, stale and partial-failure cases.
+- `node tests/parity/validate-reference-inventory.mjs` validates the pin, exact capability-manifest coverage, source evidence anchors, Canon categories, review blocks and fixture targets. It does not execute AC-09 behavior.
 
 ## Required scenarios
 

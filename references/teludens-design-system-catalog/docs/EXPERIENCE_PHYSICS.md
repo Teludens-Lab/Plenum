@@ -254,26 +254,51 @@ Behavior:
 
 ---
 
-## 9. Loading and skeletons
+## 9. Loading, progress, and asynchronous waiting
 
-### Fast operations
+Loading is part of interaction physics. It must communicate **what is waiting, where the work is happening, whether progress is known, and what remains usable**. It must never be used to make latency feel theatrical.
 
-Do not show a spinner for operations that resolve almost immediately; prefer direct transition or subtle pending state.
+### 9.1 Latency thresholds
 
-### Medium operations
+| Observed wait | Default treatment |
+|---|---|
+| **< 180 ms** | No loading indicator. Preserve immediate press/selection acknowledgment. |
+| **180–500 ms** | Local pending state. Use the compact Trace Loader only when the wait would otherwise look inert. |
+| **500 ms–2 s** | Local indeterminate progress rail and/or geometry-matched skeleton when content structure is not yet available. |
+| **> 2 s** | Name the task. Show real progress if measurable, cancellation when supported, and what remains usable. |
+| **Long/background work** | Convert to a persistent job state rather than holding a blocking overlay open. |
 
-Use local pending feedback that preserves geometry.
+These thresholds are calibration defaults, not guarantees. Product teams must validate them against actual latency distributions and user context.
 
-### Long operations
+### 9.2 Teludens loading primitives
 
-Show:
+**Trace Loader** — the preferred compact indeterminate indicator. Three nodes connected by a path with one signal traversing the path. It is used for local pending states, not as page decoration. In reduced-motion mode the traveling signal becomes a static active node.
 
-- progress if measurable
-- task identity
-- cancellation if supported
-- what remains usable while the operation proceeds
+**Progress Rail** — a 2 px local progress track. Use determinate progress only when the system has a truthful measurable denominator. Unknown progress uses an indeterminate traversal and never displays a fabricated percentage.
 
-Skeletons must match final geometry closely enough to avoid visible reflow.
+**Skeleton** — geometry-preserving placeholders used only when the final structure is known. Skeletons match final dimensions closely enough to avoid layout shift. A very low-contrast luminance sweep may communicate liveness; reduced-motion mode uses static placeholders.
+
+**Background Job State** — for work that can outlive the initiating view. The operation becomes a named persistent status with started/pending/completed/failed/cancelled states instead of keeping a modal, spinner, or full-screen blocker open.
+
+### 9.3 Loading rules
+
+- Do not show a spinner for operations that resolve almost immediately.
+- Prefer local feedback over blocking the whole application.
+- Keep the initiating control's geometry stable while busy; replace or augment its label without changing width.
+- Never imply success while a high-consequence action is merely pending.
+- Never invent percentages, ETAs, completed steps, or progress.
+- Preserve existing content when refreshing unless the old content would become misleading.
+- Skeletons must not reshuffle when real content arrives.
+- If data is stale but usable, label it stale rather than replacing it with a loader.
+- If one region is loading, unrelated regions stay interactive.
+- Long operations identify the task, current stage where known, and recovery/cancellation options.
+
+### 9.4 Domain-specific examples
+
+- **Plugin / Model Run:** show the current model/composition node and provisional output state. `completed` means computation finished; it does not imply any consequential Effect Proposal was approved.
+- **Ballot cast:** acknowledge submission immediately, distinguish `submitted` from server-confirmed `accepted`, and show the receipt only after acceptance.
+- **Voice / radio:** distinguish `connecting`, `authorized`, `joined`, `floor queued`, and `floor granted`. Never animate a live-transmission state until the authoritative grant exists.
+- **Proposal handoff:** keep the proposal visible while the transfer is pending; ownership/status changes only after the authoritative transition succeeds.
 
 ---
 

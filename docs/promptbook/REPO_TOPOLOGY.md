@@ -6,6 +6,18 @@
 Plenum/
   README.md
   AGENTS.md
+  package.json                 # npm workspaces and platform commands
+  package-lock.json            # single lockfile for production workspaces
+  tsconfig*.json               # shared strict TypeScript configuration
+  apps/
+    runtime-web/               # contract-only frontend consumer; no UI yet
+    server/                    # trusted Session context boundary
+  packages/
+    event-contracts/           # versioned Command, Event and error envelopes
+    simulation-schema/         # versioned Release manifest and Plugin binding types
+  scripts/
+    contract-lint.mjs          # terminology, naming and workspace-boundary checks
+  tests/platform/              # PS-100 contract and authorization evidence
   docs/
     corpus/                      # governing product documents and archive
     promptbook/                  # generated planning artifact and source
@@ -18,7 +30,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-There is no live application implementation yet. Any application path beyond the observed tree is a planned output and must be created only by its owning task.
+PS-100 has started the application implementation with a contract-only skeleton. There is no HTTP server, database adapter, or rendered frontend yet; those remain owned by later slices.
 
 ## Target code topology
 
@@ -48,9 +60,9 @@ Feature modules use public application functions and contracts. Shared infrastru
 
 | Environment | Purpose | Data | Network | Status |
 |---|---|---|---|---|
-| Local disposable | Unit/integration/browser work | Synthetic only | Developer LAN | Slice exists; platform absent |
-| CI disposable | Repeatable gates | Seed fixtures | Deny unexpected egress | Planned by PS-100 |
+| Local disposable | Unit/integration/browser work | Synthetic only | Developer LAN | Slice and PS-100 contract kernel exist |
+| CI disposable | Repeatable platform gates | Synthetic contract fixtures | Deny unexpected egress | PS-100 commands verified locally; CI provider not configured |
 | Institutional test | LAN, media, backup/restore | Synthetic representative | No public egress lane | Planned by PS-530 |
 | Production profiles | Cloud, self-hosted, air-gapped | Governed | Per profile | Not approved |
 
-Versions are pinned in one lockfile and deployment manifest. Node 26 target / 24 floor and PostgreSQL 18 are Proposed. Plugin, Platform Adapter, image, Release, schema, compiler, and contract versions are digest-pinned where applicable.
+Production workspaces use the root npm lockfile. The retained reference slice keeps its independent historical lockfile and is not part of the workspace. Node 26 target / 24 floor and PostgreSQL 18 are Proposed; PS-100 is verified on Node 24.22.0 with npm 11.19.1 and TypeScript 5.9.3. Plugin, Platform Adapter, image, Release, schema, compiler, and contract versions are digest-pinned where applicable.

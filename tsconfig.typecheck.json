@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@plenum/event-contracts": ["packages/event-contracts/src/index.ts"],
+      "@plenum/simulation-schema": ["packages/simulation-schema/src/index.ts"],
+      "@plenum/server": ["apps/server/src/index.ts"],
+      "@plenum/runtime-web": ["apps/runtime-web/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/*/src/**/*.ts",
+    "packages/*/src/**/*.ts"
+  ]
+}

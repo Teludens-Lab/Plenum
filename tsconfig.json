@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/event-contracts" },
+    { "path": "packages/simulation-schema" },
+    { "path": "apps/server" },
+    { "path": "apps/runtime-web" }
+  ]
+}

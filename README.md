@@ -1,8 +1,8 @@
 # Plenum
 
-Plenum is being developed as a configuration-driven simulation platform. This repository currently contains the governing product corpus, the generated development promptbook, immutable and executable reference material, and the standards that apply to future application code.
+Plenum is being developed as a configuration-driven simulation platform. This repository contains the governing product corpus, generated development promptbook, immutable and executable reference material, shared TypeScript contracts, and the standards that apply to application code.
 
-Application scaffolding has not started. `apps/`, `packages/`, `definitions/`, `tests/`, and `deploy/` will be introduced by the implementation tasks that need them, beginning with PS-100.
+PS-100 established the minimum npm workspace: shared event and simulation contracts, a trusted server boundary, and a contract-only Runtime frontend consumer. It does not yet provide an HTTP server, database integration, or rendered UI.
 
 ## Repository authorities
 
@@ -11,7 +11,7 @@ Application scaffolding has not started. `apps/`, `packages/`, `definitions/`, `
 | Product corpus | `docs/corpus/` | Governing requirements, decisions, terminology, architecture, contracts, and roadmap. The Decision Register controls decision status. |
 | Development promptbook | `docs/promptbook/` | Dependency-ordered implementation tasks and generated execution prompts. It schedules work but does not override the corpus or prove implementation. |
 | References | `references/` | Read-only comparison material and executable spikes. The Fractured Order manifest identifies the official golden snapshot. Reference code is not production application code. |
-| Application code | `apps/`, `packages/`, `definitions/`, `tests/`, `deploy/` | Future implementation owned by the applicable promptbook tasks. These paths are intentionally absent until needed. |
+| Application code | `apps/`, `packages/`, `definitions/`, `tests/`, `deploy/` | Incremental implementation owned by the applicable promptbook tasks; absent paths remain uncreated until needed. |
 
 Engineering and QA instructions are in `AGENTS.md` and `rules/`.
 
@@ -30,7 +30,21 @@ node scripts/render-promptbook.mjs
 node scripts/validate-promptbook.mjs
 ```
 
-These commands validate the planning artifact only. Application build and test commands will be established by PS-100.
+These commands validate the planning artifact only. The application commands established by PS-100 are listed below.
+
+## Platform checks
+
+With Node 24 or newer:
+
+```powershell
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+All production workspaces install from the root `package-lock.json`. The retained reference slice is intentionally outside the workspace and keeps its historical lockfile.
 
 ## Change boundaries
 

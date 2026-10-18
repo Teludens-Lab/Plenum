@@ -4,8 +4,8 @@ This consolidates pointers and implementation consequences. It is not a parallel
 
 | Concern | Current choice | Authority | Status | Pinning task | Exit implication |
 |---|---|---|---|---|---|
-| Frontend | React + TypeScript; retain vanilla reference slice | ADR-007 | Approved | PS-100 | May implement |
-| Backend | Node 26 target, 24 floor; TypeScript monorepo | ADR-008 | Proposed | PS-001, PS-100 | Label dependency; do not ratify locally |
+| Frontend | React + TypeScript; retain vanilla reference slice; TypeScript 5.9.3 pinned for the contract-only Runtime consumer | ADR-007 | Approved; React not yet installed | PS-100, PS-150 | May implement UI when its owning slice needs React |
+| Backend | Node 26 target, 24 floor; npm 11.19.1 workspace monorepo; TypeScript 5.9.3 | ADR-008 | Proposed; PS-100 verified on Node 24.22.0 | PS-001, PS-100 | Technical Lead must ratify; Node 26 remains untested |
 | Topology | Modular monolith and Pg-backed jobs | ADR-005 | Proposed | PS-100, PS-120 | No broker/cache/service split without measurements |
 | Database | PostgreSQL 18 minimum | ADR-009 | Proposed | PS-001 | Phase 1 exit needs Pg18 evidence and approval |
 | Object storage | S3 API; self-host candidate pending evaluation | ADR-011 | Proposed | PS-130, PS-530 | Pin adapter after evaluation |
@@ -18,13 +18,13 @@ This consolidates pointers and implementation consequences. It is not a parallel
 | Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Proposed | PS-530 | Kubernetes optional only |
 | Persistence | Relational current state + append-only evidence | ADR-014 | Proposed | PS-120 | No full event sourcing |
 | Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Proposed | PS-110 | Real app-role denial tests required |
-| Router/query/state/forms | React Router, TanStack Query, Zustand, React Hook Form | Platform section 23 | Candidates | PS-100/150/310 | Use only when slice needs them; pin in lockfile |
-| Validation | Zod and JSON Schema compatibility | Platform section 23; OPEN-022 | Candidate / Open | PS-100/310 | Do not duplicate schema authority |
+| Router/query/state/forms | React Router, TanStack Query, Zustand, React Hook Form | Platform section 23 | Candidates | PS-150/310 | Use only when slice needs them; pin in lockfile |
+| Validation | Dependency-free JSON Schema 2020-12 objects coupled to TypeScript property keys; Zod compatibility remains open | Platform section 23; OPEN-022 | Implemented kernel / Open product policy | PS-100/310 | Do not add a second schema authority |
 | Interaction editors | dnd-kit, React Flow | Platform section 23 | Candidates | PS-310/330 | Prefer native/simple controls until needed |
-| Unit/browser tests | Vitest, Playwright | Platform section 23 | Candidates | PS-100/150 | Pin after verifying runtime compatibility |
+| Unit/browser tests | Node 24 built-in test runner for the contract kernel; Vitest and Playwright remain candidates | Platform section 23 | Implemented kernel / Candidates | PS-100/150 | Add another runner only when its owning slice needs it |
 | Build/UI candidates | Vite, Radix, Tailwind, Tiptap | Remaining v1.2 proposals | Candidates | Owning UI task | No blanket adoption |
 | SQL/client storage | Kysely, IndexedDB/Dexie | Remaining v1.2 proposals | Candidates | PS-110/500 | Existing `pg` and platform storage win until need proven |
-| Contracts | OpenAPI 3.1 and JSON Schema | Slice observed; OPEN-022 for compatibility | Implemented slice / Open product policy | PS-100 | Preserve slice contract; version product contracts |
+| Contracts | OpenAPI 3.1 retained in the slice; JSON Schema 2020-12 + TypeScript in `@plenum/event-contracts` and `@plenum/simulation-schema` | Slice observed; OPEN-022 for compatibility | PS-100 kernel implemented / compatibility policy Open | PS-100 | Preserve slice contract; breaking compatibility rules await OPEN-012 |
 | Observability | Structured logging, OpenTelemetry | Remaining proposals | Candidates | PS-120/540 | Add only to diagnose critical journeys |
 
 Every dependency or layer must answer the repository complexity test. The lockfile, not this matrix, is the exact implementation version record.

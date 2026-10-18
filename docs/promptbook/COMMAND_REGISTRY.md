@@ -14,15 +14,15 @@ Commands are executable only when status is **Verified**. A Proposed entry is a 
 | `CMD-SLICE-SMOKE` | `npm run smoke` from `package.json` | Slice | Running server, migrated/seeded DB, `DEMO_*`, `PLENUM_LOCAL_DEMO=1`, `PLENUM_DEPLOYMENT_ID` | <3m | 31 HTTP checks | Verified; PASS 31/31 on Node 24.22.0/PostgreSQL 18.6 in PS-001 |
 | `CMD-SLICE-DB` | `npm run dbtest` from `package.json` | Slice | Same as smoke; `DATABASE_URL` is migration owner | <3m | 7 DB tests | Verified; PASS 7/7 on Node 24.22.0/PostgreSQL 18.6 after PS-001 suite-lifecycle fix |
 | `CMD-SLICE-BROWSER` | `npx --yes --package @playwright/cli@0.1.22 playwright-cli -s=ps001 open "$API_URL"`; use `snapshot`, exercise the seeded Designer `Create project` flow, then `screenshot --filename output/playwright/ps-001-browser.png --full-page` and `close` | Slice | Running loopback-only slice; seeded synthetic identity; Chromium; `API_URL` | <5m | HTTP result, snapshot, console log, and screenshot | Verified; PASS in Chromium 155 in PS-001; `/favicon.ico` returned nonfunctional 401 |
-| `CMD-PLATFORM-LINT` | Exact script created by PS-100 | Repo root | Clean install from platform lockfile | <5m | Lint report | Proposed by PS-100 |
-| `CMD-PLATFORM-TYPECHECK` | Exact script created by PS-100 | Repo root | Clean install | <5m | Typecheck output | Proposed by PS-100 |
-| `CMD-PLATFORM-TEST` | Exact script created by PS-100 | Repo root | Clean install | <10m | Unit/contract report | Proposed by PS-100 |
-| `CMD-PLATFORM-BUILD` | Exact script created by PS-100 | Repo root | Clean install | <10m | Build artifacts | Proposed by PS-100 |
-| `CMD-PLATFORM-INTEGRATION` | Exact script created by PS-100 | Repo root | Disposable Pg18 and service fixtures | <15m | Integration report | Proposed by PS-100 |
-| `CMD-PLATFORM-DB` | Exact script created by PS-100 | Repo root | Disposable Pg18 under real app role | <15m | DB/RLS/migration report | Proposed by PS-100 |
+| `CMD-PLATFORM-LINT` | `npm run lint` | Repo root | Node >=24; `npm ci` from root lockfile | <5m | Contract IDs, Glossary aliases, DEC-38 naming, package graph, tenant/demo leakage | Verified; PASS on Node 24.22.0 in PS-100 |
+| `CMD-PLATFORM-TYPECHECK` | `npm run typecheck` | Repo root | Node >=24; `npm ci` from root lockfile | <5m | TypeScript diagnostics | Verified; PASS on Node 24.22.0 in PS-100 |
+| `CMD-PLATFORM-TEST` | `npm test` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | Node test report with evidence IDs | Verified; PASS 2/2 on Node 24.22.0 in PS-100 |
+| `CMD-PLATFORM-BUILD` | `npm run build` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | `dist/` JavaScript, declarations and source maps for four workspaces | Verified; PASS on Node 24.22.0 in PS-100 |
+| `CMD-PLATFORM-INTEGRATION` | Exact script created by PS-110 | Repo root | Disposable Pg18 and service fixtures | <15m | Integration report | Proposed by PS-110 |
+| `CMD-PLATFORM-DB` | Exact script created by PS-120 | Repo root | Disposable Pg18 under real app role | <15m | DB/RLS/migration report | Proposed by PS-120 |
 | `CMD-PLATFORM-E2E` | Exact script created by PS-150 | Repo root | Built apps, Pg18, browser | <20m | Browser evidence | Proposed by PS-150 |
 | `CMD-PLATFORM-A11Y` | Exact script created by PS-150 | Repo root | Reference screens and browser | <15m | Accessibility evidence | Proposed by PS-150 |
-| `CMD-PARITY` | Exact script created by PS-000/PS-200 | Repo root | Official snapshot manifest and parity fixtures | <20m | AC-09 matrix | Proposed by PS-000 |
+| `CMD-PARITY` | `node tests/parity/validate-reference-inventory.mjs` | Repo root | Official snapshot manifest, classified inventory and parity fixture plan; no network | <10s | Pin, capability coverage, source-anchor and fixture-target summary on stdout | Verified by PS-000 for inventory validation; behavioral AC-09 execution remains PS-200 |
 | `CMD-AIRGAP` | Exact script created by PS-220/PS-530 | Repo root | Offline bundle; network deny | <30m | Egress and workflow evidence | Proposed by PS-530 |
 | `CMD-GENERALIZATION` | Exact script created by PS-430 | Repo root | Two validation Releases | <30m | Source hash and Session results | Proposed by PS-430 |
 | `CMD-OFFLINE` | Exact script created by PS-500 | Repo root | Browser/device partition harness | <20m | SYNC evidence | Proposed by PS-500 |

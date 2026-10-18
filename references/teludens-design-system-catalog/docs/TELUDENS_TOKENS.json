@@ -229,5 +229,17 @@
     "panel": 220,
     "view": 260,
     "majorCausal": 340
+  },
+  "loading": {
+    "indicatorDelayMs": 180,
+    "minimumVisibleMs": 400,
+    "skeletonCycleMs": 1200,
+    "progressRailHeightPx": 2,
+    "principles": [
+      "local-first",
+      "geometry-preserving",
+      "truthful-progress",
+      "no-fake-percentage"
+    ]
   }
 }

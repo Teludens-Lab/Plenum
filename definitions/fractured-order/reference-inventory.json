@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "taskId": "PS-000",
+  "reference": {
+    "name": "Fractured Order",
+    "commit": "ae5d5065bc04a53631815b1b1715a54e21e3ef5b",
+    "tree": "771510b6180bd4826dc5688789d131f2109eeb62",
+    "releaseDigest": "sha256:E9B0E4E2797087F7CC04B0EA4A3DB8E04A12287AC4224ED5C5FAD95995146060",
+    "snapshot": "references/fractured-order.snapshot.json"
+  },
+  "canonCategories": [
+    "METHODOLOGY-CORE",
+    "FO-CONFIGURATION",
+    "PLATFORM-SERVICE",
+    "PLUGIN",
+    "SCENARIO-CONTENT",
+    "PARITY-UI",
+    "LEGACY-DEFECT"
+  ],
+  "classifications": {
+    "roleCapabilityMatrix": {
+      "entry.public": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ENTRY-01", "reviewState": "classified" },
+      "entry.game_master": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ENTRY-01", "reviewState": "classified" },
+      "entry.white_cell_lead": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ENTRY-01", "reviewState": "classified" },
+      "entry.sme": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "scribe.orientation": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ORIENTATION-01", "reviewState": "blocked", "reviewOwner": "Methodology Lead", "dependency": "OPEN-026" },
+      "scribe.blue_action": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "scribe.red_action": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "scribe.green_proposal": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "scribe.industry_proposal": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "scribe.shared_surfaces": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-COMMS-01", "reviewState": "classified" },
+      "facilitator.workspaces": { "category": "PARITY-UI", "parityTarget": "PARITY-UI-01", "reviewState": "classified" },
+      "facilitator.finalization": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "facilitator.rfi_communications": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-RFI-01", "reviewState": "classified" },
+      "facilitator.proposal_threads": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-PROPOSAL-01", "reviewState": "classified" },
+      "facilitator.alerts": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-COMMS-01", "reviewState": "classified" },
+      "notetaker.notes": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-NOTES-01", "reviewState": "classified" },
+      "notetaker.capture_review": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-NOTES-01", "reviewState": "classified" },
+      "game_master.session_admin": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ADMIN-01", "reviewState": "classified" },
+      "game_master.participants": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ADMIN-01", "reviewState": "classified" },
+      "game_master.exports_plugins": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-EXPORT-01", "reviewState": "classified" },
+      "white_cell.controls": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-CONTROL-01", "reviewState": "blocked", "reviewOwner": "Methodology Lead", "dependency": "OPEN-026" },
+      "white_cell.review": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-REVIEW-01", "reviewState": "classified" },
+      "white_cell.rfi_communications": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-RFI-01", "reviewState": "classified" },
+      "white_cell.admin_exports": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ADMIN-01", "reviewState": "classified" },
+      "white_cell.pli_readonly": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "sme.macro": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "sme.ni_escalation": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "sme.diplomacy_information": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "sme.tsj": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" },
+      "sme.verba": { "category": "PLUGIN", "parityTarget": "PARITY-PLI-01", "reviewState": "classified" }
+    },
+    "operationalFeatureManifest": {
+      "identity.session_topology": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ENTRY-01", "reviewState": "classified" },
+      "team.strategic_orientation": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ORIENTATION-01", "reviewState": "blocked", "reviewOwner": "Methodology Lead", "dependency": "OPEN-026" },
+      "team.artifact_authoring": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-ARTIFACT-01", "reviewState": "classified" },
+      "facilitator.presentation_decks": { "category": "PARITY-UI", "parityTarget": "PARITY-UI-01", "reviewState": "classified" },
+      "white_cell.artifact_review": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-REVIEW-01", "reviewState": "classified" },
+      "proposals.recipient_threads": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-PROPOSAL-01", "reviewState": "classified" },
+      "rfi.lifecycle": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-RFI-01", "reviewState": "classified" },
+      "communications.notifications_realtime": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-COMMS-01", "reviewState": "classified" },
+      "notetaker.operational_record": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-NOTES-01", "reviewState": "classified" },
+      "white_cell.game_controls": { "category": "FO-CONFIGURATION", "parityTarget": "PARITY-CONTROL-01", "reviewState": "blocked", "reviewOwner": "Methodology Lead", "dependency": "OPEN-026" },
+      "plugins.intercom_recorder": { "category": "PLUGIN", "parityTarget": "PARITY-PLUGIN-01", "reviewState": "classified" },
+      "operator.participant_session_admin": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-ADMIN-01", "reviewState": "classified" },
+      "exports.evidence_bundle": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-EXPORT-01", "reviewState": "classified" },
+      "resilience.scale_degraded_sync": { "category": "PLATFORM-SERVICE", "parityTarget": "PARITY-SYNC-01", "reviewState": "classified" },
+      "quality.accessibility_mobile_ui": { "category": "PARITY-UI", "parityTarget": "PARITY-UI-01", "reviewState": "classified" }
+    }
+  },
+  "additionalObservedItems": [
+    {
+      "id": "methodology.decision_record_trace",
+      "label": "Decision-bearing artifacts preserve owner, trigger, information, timing, review and outcome evidence.",
+      "category": "METHODOLOGY-CORE",
+      "sourceLocation": "references/fractured-order/src/features/export/researchExport.js",
+      "parityTarget": "PARITY-EXPORT-01",
+      "reviewState": "blocked",
+      "reviewOwner": "Methodology Lead",
+      "dependency": "OPEN-026"
+    },
+    {
+      "id": "scenario.briefs_decks_media",
+      "label": "Fractured Order briefing text, facilitator decks, images, audio and video.",
+      "category": "SCENARIO-CONTENT",
+      "sourceLocation": "references/fractured-order/Plenum Briefing",
+      "parityTarget": "PARITY-SCENARIO-01",
+      "reviewState": "classified"
+    },
+    {
+      "id": "legacy.role_route_inversion",
+      "label": "Legacy facilitator paths host the Scribe workspace and legacy scribe paths host Facilitator support.",
+      "category": "LEGACY-DEFECT",
+      "sourceLocation": "references/fractured-order/src/core/teamContext.js",
+      "parityTarget": "PARITY-LEGACY-01",
+      "reviewState": "classified"
+    },
+    {
+      "id": "legacy.noncanonical_event_names",
+      "label": "Upper-snake timeline types and role-specific event names do not follow the canonical past-tense dot-case event convention.",
+      "category": "LEGACY-DEFECT",
+      "sourceLocation": "references/fractured-order/src/core/enums.js",
+      "parityTarget": "PARITY-LEGACY-01",
+      "reviewState": "classified"
+    }
+  ],
+  "hardCodingRegister": [
+    { "id": "HC-001", "subject": "Teams: Blue, Red, Green and Industry", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/core/teamContext.js::TEAM_OPTIONS", "migrationTarget": "Team Definitions in the Fractured Order Release" },
+    { "id": "HC-002", "subject": "Role and SME labels", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/core/teamContext.js::ROLE_SURFACES/SME_ROLES", "migrationTarget": "Session Roles and Seats in the Fractured Order Release" },
+    { "id": "HC-003", "subject": "Named per-team HTML routes", "category": "LEGACY-DEFECT", "sourceLocation": "references/fractured-order/teams", "migrationTarget": "Generic role surfaces resolved by Interface Profiles" },
+    { "id": "HC-004", "subject": "Scribe/Facilitator route-semantic inversion", "category": "LEGACY-DEFECT", "sourceLocation": "references/fractured-order/src/core/teamContext.js::ROLE_SURFACE_SEMANTICS", "migrationTarget": "Compatibility adapter only; canonical semantic role IDs for new data" },
+    { "id": "HC-005", "subject": "Five named phases and three named moves", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/core/enums.js::PHASES/MOVES", "migrationTarget": "Stages and Stage Types in the Fractured Order Release" },
+    { "id": "HC-006", "subject": "Strategic Orientation forms, choices and pre-Move 1 gate", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/roles/facilitator.js::STRATEGIC_ORIENTATION_TEAM_IDS", "migrationTarget": "Artifact Types, Forms, Workflow Definitions and Gates", "reviewState": "blocked", "reviewOwner": "Methodology Lead", "dependency": "OPEN-026" },
+    { "id": "HC-007", "subject": "Blue/Red actions and Green/Industry proposal forms", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/roles/facilitator.js", "migrationTarget": "Artifact Types and Forms in the Fractured Order Release" },
+    { "id": "HC-008", "subject": "Economic mechanisms, sectors, targets, RFI categories and outcome labels", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/core/enums.js", "migrationTarget": "Release-owned catalogs and Terminology Profile" },
+    { "id": "HC-009", "subject": "Green regional and shared-facilitator topology", "category": "FO-CONFIGURATION", "sourceLocation": "references/fractured-order/src/core/teamContext.js::GREEN_DELEGATIONS", "migrationTarget": "Release-owned Team Definitions, Seats and topology policy" },
+    { "id": "HC-010", "subject": "PLI and five SME procedures", "category": "PLUGIN", "sourceLocation": "references/fractured-order/src/features/pli", "migrationTarget": "Pinned Plugin Binding and approved Plugin Artifact" },
+    { "id": "HC-011", "subject": "Intercom and session recorder", "category": "PLUGIN", "sourceLocation": "references/fractured-order/src/features/plugins", "migrationTarget": "Plugin catalog and Release bindings" },
+    { "id": "HC-012", "subject": "Facilitator decks and briefing media", "category": "SCENARIO-CONTENT", "sourceLocation": "references/fractured-order/decks", "migrationTarget": "Scenario assets and display Interface Profiles" },
+    { "id": "HC-013", "subject": "Static workspace composition and mobile presentation details", "category": "PARITY-UI", "sourceLocation": "references/fractured-order/teams", "migrationTarget": "Interface Profiles using curated platform modules" },
+    { "id": "HC-014", "subject": "Upper-snake timeline/event type catalog", "category": "LEGACY-DEFECT", "sourceLocation": "references/fractured-order/src/core/enums.js::TIMELINE_TYPES", "migrationTarget": "Canonical past-tense dot-case Domain Event catalog" },
+    { "id": "HC-015", "subject": "Viewer and White Cell Support compatibility states without shipped entry paths", "category": "LEGACY-DEFECT", "sourceLocation": "references/fractured-order/docs/role-capability-test-matrix.md", "migrationTarget": "Explicit Release roles or retired compatibility adapter" }
+  ]
+}

@@ -5,6 +5,7 @@
     "paths": {
       "@plenum/event-contracts": ["packages/event-contracts/src/index.ts"],
       "@plenum/policy-engine": ["packages/policy-engine/src/index.ts"],
+      "@plenum/release-compiler": ["packages/release-compiler/src/index.ts"],
       "@plenum/simulation-schema": ["packages/simulation-schema/src/index.ts"],
       "@plenum/server": ["apps/server/src/index.ts"],
       "@plenum/runtime-web": ["apps/runtime-web/src/index.ts"]

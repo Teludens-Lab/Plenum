@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test, { after, before } from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
@@ -8,9 +10,14 @@ import {
   beginOidcLogin,
   completeOidcLogin,
   createDatabasePool,
+  exportReleasePackage,
+  importReleasePackage,
+  LocalObjectStore,
+  publishRelease,
   reassignParticipant,
   resolveSessionAccessContext,
   revokeAuthenticationSession,
+  verifyImportedPackage,
   withOrganizationTransaction
 } from "../dist/index.js";
 
@@ -42,6 +49,35 @@ const ids = {
 const owner = new Pool({ connectionString: databaseUrl, max: 1 });
 const app = createDatabasePool(databaseUrl);
 let principal;
+let objectRoot;
+let objectStore;
+
+const releaseMaterialization = {
+  coreDesign: {
+    pluginBindings: [{
+      id: "binding-1",
+      pluginId: "plugin-1",
+      pluginVersion: "1.0.0",
+      pluginDigest: "c".repeat(64),
+      installationId: "installation-1",
+      categories: [],
+      connectivity: "offline_capable",
+      configuration: {},
+      configurationDigest: "d".repeat(64),
+      inputMappings: [],
+      timeoutSeconds: 5,
+      enabledInProfiles: ["institutional"]
+    }],
+    platformAdapters: [{ id: "adapter-1", digest: "e".repeat(64) }]
+  },
+  scenario: {
+    id: "scenario-1",
+    name: "Synthetic publication fixture",
+    description: "Portable, non-personal test content",
+    deliveryModes: ["in_person"],
+    tags: []
+  }
+};
 
 async function applyMigrations() {
   for (const path of [
@@ -50,7 +86,8 @@ async function applyMigrations() {
     "references/plenum-runtime-slice/migrations/003_collaboration.sql",
     "references/plenum-runtime-slice/migrations/004_security.sql",
     "apps/server/migrations/005_identity_oidc_context.sql",
-    "apps/server/migrations/006_command_kernel.sql"
+    "apps/server/migrations/006_command_kernel.sql",
+    "apps/server/migrations/007_release_packages.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -62,8 +99,12 @@ async function seed() {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
     await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B')", [ids.personA, ids.personB]);
-    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator')", [ids.orgA, ids.personA, ids.orgB, ids.personB]);
+    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher')", [ids.orgA, ids.personA, ids.orgB, ids.personB]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
+    await client.query(
+      "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
+      [ids.orgB, ids.projectB, JSON.stringify(releaseMaterialization), ids.personB]
+    );
     await client.query(`INSERT INTO studio.definition_revisions
       (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
       VALUES ($1,$2,$3,'{}',repeat('a',64),'v1',$4),($5,$6,$7,'{}',repeat('b',64),'v1',$8)`,
@@ -97,11 +138,14 @@ async function seed() {
 before(async () => {
   await applyMigrations();
   await seed();
+  objectRoot = await mkdtemp(join(tmpdir(), "plenum-release-"));
+  objectStore = new LocalObjectStore(objectRoot);
 });
 
 after(async () => {
   await app.end();
   await owner.end();
+  await rm(objectRoot, { recursive: true, force: true });
 });
 
 test("PS-110-T01 maps a verified OIDC subject through server configuration", async () => {
@@ -310,4 +354,103 @@ test("revocation invalidates Authentication Sessions and active projections", as
     [principal.authenticationSessionId, ids.participantA]
   );
   assert.deepEqual(result.rows[0], { sessions: "1", grants: "0" });
+});
+
+test("AC-02/AC-06 PS-130-T01 publication is immutable, deterministic and concurrency safe", async () => {
+  const publisher = {
+    authenticationSessionId: "f1000000-0000-4000-8000-000000000001",
+    principalId: ids.personB,
+    organizationId: ids.orgB,
+    organizationRoles: ["publisher"],
+    authenticationStrength: "mfa",
+    expiresAt: new Date("2026-10-19T00:00:00.000Z")
+  };
+  const input = {
+    projectId: ids.projectB,
+    releaseLabel: "Release 2",
+    semanticVersion: "2.0.0",
+    methodologyVersion: "1.3.1",
+    releaseNotes: "Immutable publication fixture",
+    controls: {
+      validationReportId: "f2000000-0000-4000-8000-000000000001",
+      validationPassed: true,
+      warningsAcknowledged: true,
+      classificationReviewId: "classification-review-1",
+      accessibilityReviewStatus: "passed",
+      retentionPolicyId: "retention-policy-1",
+      approvedBy: [ids.personB],
+      approvalNotes: "Approved"
+    },
+    policy: { requireDistinctApprover: false, requireTestSession: false },
+    correlationId: "f3000000-0000-4000-8000-000000000001"
+  };
+
+  await assert.rejects(
+    publishRelease(app, objectStore, { ...publisher, organizationRoles: ["operator"] }, input),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await assert.rejects(
+    publishRelease(app, objectStore, publisher, {
+      ...input,
+      controls: { ...input.controls, approvedBy: ["f4000000-0000-4000-8000-000000000001"] }
+    }),
+    (error) => error?.envelope?.error?.code === "REFERENCE_INVALID"
+  );
+  assert.equal((await readdir(objectRoot, { recursive: true })).filter((path) => path.endsWith(".json")).length, 0);
+
+  const attempts = await Promise.allSettled([
+    publishRelease(app, objectStore, publisher, input, new Date("2026-10-18T12:00:00.000Z")),
+    publishRelease(app, objectStore, publisher, input, new Date("2026-10-18T12:00:00.000Z"))
+  ]);
+  const fulfilled = attempts.filter((attempt) => attempt.status === "fulfilled");
+  const rejected = attempts.filter((attempt) => attempt.status === "rejected");
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason?.envelope?.error?.code, "ALREADY_PUBLISHED");
+  const published = fulfilled[0].value;
+
+  const firstRead = await exportReleasePackage(app, objectStore, publisher, published.releaseId, input.correlationId);
+  const secondRead = await exportReleasePackage(app, objectStore, publisher, published.releaseId, input.correlationId);
+  assert.deepEqual(firstRead, secondRead);
+  await assert.rejects(
+    exportReleasePackage(app, objectStore, { ...publisher, principalId: ids.personA }, published.releaseId, input.correlationId),
+    (error) => error?.envelope?.error?.code === "ACCESS_REVOKED"
+  );
+  assert.equal(verifyImportedPackage(firstRead, published.packageDigest).release.manifest.releaseId, published.releaseId);
+  assert.equal(new TextDecoder().decode(firstRead).includes("do-not-package"), false);
+  assert.equal(new TextDecoder().decode(firstRead).toLowerCase().includes("participants"), false);
+  assert.equal((await importReleasePackage(app, objectStore, publisher, firstRead, published.packageDigest, input.correlationId)).imported, false);
+
+  const counts = await owner.query(
+    `SELECT
+       (SELECT count(*) FROM registry.releases WHERE organization_id=$1 AND project_id=$2) releases,
+       (SELECT count(*) FROM registry.package_manifests WHERE organization_id=$1) manifests,
+       (SELECT count(*) FROM registry.release_approvals WHERE organization_id=$1) approvals`,
+    [ids.orgB, ids.projectB]
+  );
+  assert.deepEqual(counts.rows[0], { releases: "2", manifests: "1", approvals: "1" });
+  await assert.rejects(owner.query("UPDATE registry.releases SET release_label='changed' WHERE id=$1", [published.releaseId]), /append-only/);
+  await assert.rejects(owner.query("UPDATE registry.package_manifests SET manifest='{}' WHERE release_id=$1", [published.releaseId]), /append-only/);
+});
+
+test("PS-130-T02 rejects a tampered portable Package before import", async () => {
+  const manifest = await owner.query(
+    "SELECT release_id,package_sha256 FROM registry.package_manifests WHERE organization_id=$1",
+    [ids.orgB]
+  );
+  const publisher = {
+    authenticationSessionId: "f1000000-0000-4000-8000-000000000001",
+    principalId: ids.personB,
+    organizationId: ids.orgB,
+    organizationRoles: ["publisher"],
+    authenticationStrength: "mfa",
+    expiresAt: new Date("2026-10-19T00:00:00.000Z")
+  };
+  const bytes = await exportReleasePackage(app, objectStore, publisher, manifest.rows[0].release_id, "f3000000-0000-4000-8000-000000000002");
+  const tampered = Uint8Array.from(bytes);
+  tampered[tampered.length - 2] ^= 1;
+  await assert.rejects(
+    importReleasePackage(app, objectStore, publisher, tampered, manifest.rows[0].package_sha256, "f3000000-0000-4000-8000-000000000002"),
+    (error) => error?.envelope?.error?.code === "VALIDATION_FAILED"
+  );
 });

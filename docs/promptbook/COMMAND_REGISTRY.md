@@ -16,10 +16,11 @@ Commands are executable only when status is **Verified**. A Proposed entry is a 
 | `CMD-SLICE-BROWSER` | `npx --yes --package @playwright/cli@0.1.22 playwright-cli -s=ps001 open "$API_URL"`; use `snapshot`, exercise the seeded Designer `Create project` flow, then `screenshot --filename output/playwright/ps-001-browser.png --full-page` and `close` | Slice | Running loopback-only slice; seeded synthetic identity; Chromium; `API_URL` | <5m | HTTP result, snapshot, console log, and screenshot | Verified; PASS in Chromium 155 in PS-001; `/favicon.ico` returned nonfunctional 401 |
 | `CMD-PLATFORM-LINT` | `npm run lint` | Repo root | Node >=24; `npm ci` from root lockfile | <5m | Contract IDs, Glossary aliases, DEC-38 naming, package graph, tenant/demo leakage | Verified; PASS on Node 24.22.0 in PS-100 |
 | `CMD-PLATFORM-TYPECHECK` | `npm run typecheck` | Repo root | Node >=24; `npm ci` from root lockfile | <5m | TypeScript diagnostics | Verified; PASS on Node 24.22.0 in PS-100 |
-| `CMD-PLATFORM-TEST` | `npm test` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | Node test report with evidence IDs | Verified; PASS 2/2 on Node 24.22.0 in PS-100 |
-| `CMD-PLATFORM-BUILD` | `npm run build` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | `dist/` JavaScript, declarations and source maps for four workspaces | Verified; PASS on Node 24.22.0 in PS-100 |
-| `CMD-PLATFORM-INTEGRATION` | `npm run test:integration` | Repo root | Node >=24; root lockfile installed; `DATABASE_URL` targets an empty disposable Pg18 database owned by the migration role | <15m | OIDC mapping, pooled real-app-role RLS, atomic reassignment/rollback, revocation | Verified; PASS 4/4 on Node 24.22.0/PostgreSQL 18.6 in PS-110 |
-| `CMD-PLATFORM-DB` | `npm run test:db` | Repo root | Node >=24; root lockfile; empty disposable Pg18; `DATABASE_URL` uses migration owner while requests switch to `plenum_app` | <15m | Concurrency, rejection, fencing, rollback and RLS evidence | Verified; PASS 4/4 on Node 24.22.0/PostgreSQL 18.6 in PS-120 |
+| `CMD-PLATFORM-TEST` | `npm test` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | Node test report with evidence IDs | Verified; PASS 7/7 on Node 24.22.0 in PS-130 |
+| `CMD-PLATFORM-BUILD` | `npm run build` | Repo root | Node >=24; `npm ci` from root lockfile | <10m | `dist/` JavaScript, declarations and source maps for six workspaces | Verified; PASS on Node 24.22.0 in PS-130 |
+| `CMD-PLATFORM-INTEGRATION` | `npm run test:integration` | Repo root | Node >=24; root lockfile installed; `DATABASE_URL` targets an empty disposable Pg18 database owned by the migration role; `S3_ENDPOINT` targets a disposable S3-compatible service | <15m | OIDC/RLS/Command regressions plus Release publication, export/import, tamper and real object-store checks | Verified; PASS 7/7 on Node 24.22.0/PostgreSQL 18.6/SeaweedFS 4.48 in PS-130 |
+| `CMD-PLATFORM-DB` | `npm run test:db` | Repo root | Node >=24; root lockfile; empty disposable Pg18; `DATABASE_URL` uses migration owner while requests switch to `plenum_app` | <15m | Command atomicity plus Release concurrency, immutability, cleanup and tenant controls | Verified; PASS 6/6 on Node 24.22.0/PostgreSQL 18.6 in PS-130 |
+| `CMD-PLATFORM-S3` | `npm run test:s3` | Repo root | Node >=24; root lockfile; `S3_ENDPOINT` targets a disposable S3-compatible service; optional test-only S3 region and credentials | <5m | Conditional immutable put/get/delete, collision and concurrent first-writer behavior | Verified; PASS 1/1 on Node 24.22.0/SeaweedFS 4.48 in PS-130 |
 | `CMD-PLATFORM-E2E` | Exact script created by PS-150 | Repo root | Built apps, Pg18, browser | <20m | Browser evidence | Proposed by PS-150 |
 | `CMD-PLATFORM-A11Y` | Exact script created by PS-150 | Repo root | Reference screens and browser | <15m | Accessibility evidence | Proposed by PS-150 |
 | `CMD-PARITY` | `node tests/parity/validate-reference-inventory.mjs` | Repo root | Official snapshot manifest, classified inventory and parity fixture plan; no network | <10s | Pin, capability coverage, source-anchor and fixture-target summary on stdout | Verified by PS-000 for inventory validation; behavioral AC-09 execution remains PS-200 |
@@ -44,5 +45,11 @@ Commands are executable only when status is **Verified**. A Proposed entry is a 
 - `PLENUM_DEPLOYMENT_ID`: server-side authority UUID.
 - `PLENUM_DB_ROLE`: optional local role override; defaults to `plenum_app`.
 - `API_URL`, `PORT`: optional local endpoints.
+
+## Environment variables observed in the platform
+
+- `S3_ENDPOINT`: S3-compatible service URL for the object-store integration test.
+- `S3_REGION`: optional test region; defaults to `us-east-1`.
+- `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`: optional disposable-test credentials. Production credential values belong in the configured `S3Client` credential chain and are never recorded here.
 
 Never put secrets in this registry. Future tasks must record exact script sources and change Proposed to Verified only after a PASS on the declared environment.

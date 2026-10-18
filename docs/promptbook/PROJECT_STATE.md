@@ -8,7 +8,7 @@ Updated: 2026-10-18.
 - The corpus is under `docs/corpus/`; reference implementations are under `references/`.
 - The official Fractured Order golden reference is the verified snapshot under `references/`, pinned to commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b`.
 - PS-000 has produced the classified reference inventory, hard-coding register, route/service/data/realtime maps and parity fixture plan under `docs/reference-audit/`, `definitions/fractured-order/` and `tests/parity/`.
-- Application implementation includes the PS-100 contract kernel and PS-110 OIDC, trusted Session context, policy, PostgreSQL and reassignment slice. No HTTP transport or rendered frontend exists yet.
+- Application implementation includes the contract kernel, OIDC/trusted Session context, transactional Command handling, and PS-130 immutable Release publication and Package portability. No HTTP transport or rendered frontend exists yet.
 - Promptbook generation changes only `docs/promptbook/`.
 
 ## Observed maturity
@@ -21,6 +21,7 @@ Updated: 2026-10-18.
 | PS-000 reference audit | Yes, with OPEN-026 review blocks | Yes | PASS: pin/tree, 30 role capabilities, 15 operational capabilities, 15 hard-coding rows and 17 parity targets | Documentation/definition inventory only | No | n/a | n/a | No |
 | First-release application | Specified | PS-100 contract kernel | PASS: clean install, lint, typecheck, build and 2/2 contract tests on Node 24.22.0 | Shared contracts compile in server and Runtime consumer | Partial: negative trusted-context tests only; no formal review | No | No | No |
 | PS-110 identity/policy slice | Specified with OPEN-007/025 limits | Yes | PASS: typecheck, unit 5/5 and integration 4/4 on Node 24.22.0/Pg18.6 | OIDC mapping, forced RLS, context, reassignment and revocation integrated | Control tests pass; Security Owner approval pending | No | Disposable Docker only | No |
+| PS-130 Release/Package slice | Specified with OPEN-012/013/020 and ADR-011/014 limits | Yes | PASS: unit 7/7, integration 7/7, DB 6/6 and S3 1/1 on Node 24.22.0/Pg18.6/SeaweedFS 4.48 | Compiler, registry, real S3 and local development adapters, export/import and immutable records integrated | Negative Publisher, tenant, digest, prohibited-data and object-collision checks pass; formal review pending | No | Disposable Docker only | No |
 
 ## Current command evidence
 
@@ -40,7 +41,8 @@ Updated: 2026-10-18.
 - `CMD-PLATFORM-TEST`: PASS 2/2 (`PS-100-T01`, `PS-100-T02`) on Node 24.22.0. The retained slice domain regression also passed 12/12 without source or OpenAPI changes. Full evidence is in `docs/ps-100-verification.md`.
 - PS-110 `CMD-PLATFORM-TYPECHECK`: PASS; `CMD-PLATFORM-TEST`: PASS 5/5; `CMD-PLATFORM-INTEGRATION`: PASS 4/4 on Node 24.22.0/PostgreSQL 18.6. DB-01 used a reused pool connection under `plenum_app`; PS-110-T03 included forced transactional rollback. Full evidence is in `docs/ps-110-verification.md`.
 - PS-120 `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, and `CMD-PLATFORM-DB`: PASS on Node 24.22.0/PostgreSQL 18.6. Six concurrent retries produced one commit; recorded rejection/reconciliation, authority refusal, collision, and rollback-without-sequence-gap passed. Full evidence is in `docs/ps-120-verification.md`.
+- PS-130 `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-BUILD`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-PLATFORM-DB`, and `CMD-PLATFORM-S3`: PASS on Node 24.22.0/PostgreSQL 18.6/SeaweedFS 4.48. Concurrent identical publication created one Release and one explicit conflict; rereads were byte-identical; unauthorized and incomplete approvals, unsafe payloads, mutation, stale object cleanup, tampered import and S3 object collisions were rejected. Full evidence is in `docs/ps-130-verification.md`.
 
 ## Next eligible work
 
-`PS-120` is implementation-complete on Node 24.22.0/PostgreSQL 18.6. Milestone exit remains blocked on confirmation of ADR-001/ADR-003; authority transfer and evidence custody remain OPEN-016/OPEN-017. `PS-130 — Build the Release package compiler and registry` is the exact next task.
+`PS-130` is implementation-complete on Node 24.22.0/PostgreSQL 18.6/SeaweedFS 4.48 but not production-approved: signing remains blocked by OPEN-020 and compatibility policy by OPEN-012. ADR-011's S3-compatible direction is owner-accepted for the build; PS-530 still owns deployment-profile selection and operations. `PS-140 — Deliver authorized Runtime deltas and reconnect` is the exact next task.

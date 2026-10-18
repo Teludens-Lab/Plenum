@@ -1,8 +1,71 @@
 openapi: 3.1.0
 info:
-  title: Plenum identity and Session context API
+  title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/projects/{projectId}/releases:
+    post:
+      operationId: publishRelease
+      x-contract-id: release-manifest-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishReleaseRequestV1" }
+      responses:
+        "201":
+          description: Immutable Definition Revision, Release, and portable Package created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedReleaseV1" }
+        "403": { description: Publisher authority is absent or revoked. }
+        "409": { description: Draft changed or identical content was already published. }
+  /v1/releases/{releaseId}/package:
+    get:
+      operationId: exportReleasePackage
+      x-contract-id: package-import-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: releaseId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Canonical Package bytes verified against the stored digest.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { description: Release is absent from the authenticated Organization. }
+  /v1/packages/import:
+    post:
+      operationId: importReleasePackage
+      x-contract-id: package-import-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: header
+          name: X-Package-SHA256
+          required: true
+          schema: { type: string, pattern: "^sha-256=[0-9a-f]{64}$" }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Verified Package imported or matched idempotently to its existing Release.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedReleaseV1" }
+        "400": { description: Package digest or compatibility verification failed. }
+        "403": { description: Publisher authority is absent or revoked. }
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
@@ -72,6 +135,41 @@ paths:
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
   schemas:
+    PublishReleaseRequestV1:
+      type: object
+      additionalProperties: false
+      required: [releaseLabel, semanticVersion, methodologyVersion, releaseNotes, controls]
+      properties:
+        releaseLabel: { type: string, minLength: 1 }
+        semanticVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        methodologyVersion: { type: string, minLength: 1 }
+        releaseNotes: { type: string }
+        controls:
+          type: object
+          additionalProperties: false
+          required: [validationReportId, validationPassed, warningsAcknowledged, classificationReviewId, accessibilityReviewStatus, retentionPolicyId, approvedBy, approvalNotes]
+          properties:
+            validationReportId: { type: string, format: uuid }
+            validationPassed: { const: true }
+            warningsAcknowledged: { const: true }
+            classificationReviewId: { type: string, minLength: 1 }
+            accessibilityReviewStatus: { type: string, minLength: 1 }
+            retentionPolicyId: { type: string, minLength: 1 }
+            approvedBy: { type: array, minItems: 1, items: { type: string, format: uuid } }
+            approvalNotes: { type: string }
+            testSessionPassed: { type: boolean }
+    PublishedReleaseV1:
+      type: object
+      additionalProperties: false
+      required: [releaseId, definitionRevisionId, releaseLabel, contentDigest, manifestDigest, packageDigest]
+      properties:
+        releaseId: { type: string, format: uuid }
+        definitionRevisionId: { type: string, format: uuid }
+        releaseLabel: { type: string }
+        contentDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        manifestDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        packageDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        imported: { type: boolean }
     CommandEnvelopeV1:
       type: object
       additionalProperties: false

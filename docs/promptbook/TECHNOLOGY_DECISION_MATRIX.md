@@ -8,7 +8,7 @@ This consolidates pointers and implementation consequences. It is not a parallel
 | Backend | Node 26 target, 24 floor; npm 11.19.1 workspace monorepo; TypeScript 5.9.3 | ADR-008 | Proposed; PS-100 verified on Node 24.22.0 | PS-001, PS-100 | Technical Lead must ratify; Node 26 remains untested |
 | Topology | Modular monolith and Pg-backed jobs | ADR-005 | Proposed | PS-100, PS-120 | No broker/cache/service split without measurements |
 | Database | PostgreSQL 18 minimum | ADR-009 | Proposed | PS-001 | Phase 1 exit needs Pg18 evidence and approval |
-| Object storage | S3 API; self-host candidate pending evaluation | ADR-011 | Proposed | PS-130, PS-530 | Pin adapter after evaluation |
+| Object storage | AWS SDK 3.1152.0 S3 adapter plus local-filesystem development adapter; SeaweedFS 4.48 interoperability verified | ADR-011 | S3-compatible direction owner-accepted for build; source ADR remains Proposed | PS-130, PS-530 | PS-530 selects and validates the deployment-profile product and operations; no multi-cloud layer |
 | Identity | OIDC relying party implemented with `jose` 6.2.12; Keycloak remains the local-profile candidate | ADR-006, ADR-012 | Implemented local-issuer contract; Proposed product | PS-110, PS-530 | No Supabase; remote issuer/production use needs security approval |
 | Runtime realtime | HTTPS Commands + SSE deltas; polling fallback | ADR-010 | Proposed | PS-140 | WebSocket is not Runtime transport |
 | Studio collaboration | Authenticated WebSocket + CRDT | ADR-002, ADR-010 | Proposed | PS-300 | CRDT never merges Runtime Commands |
@@ -24,7 +24,7 @@ This consolidates pointers and implementation consequences. It is not a parallel
 | Unit/browser tests | Node 24 built-in test runner for the contract kernel; Vitest and Playwright remain candidates | Platform section 23 | Implemented kernel / Candidates | PS-100/150 | Add another runner only when its owning slice needs it |
 | Build/UI candidates | Vite, Radix, Tailwind, Tiptap | Remaining v1.2 proposals | Candidates | Owning UI task | No blanket adoption |
 | SQL/client storage | `pg` 8.23.1 for server transactions; Kysely and IndexedDB/Dexie remain candidates | Remaining v1.2 proposals | `pg` implemented / others Candidates | PS-110/500 | Direct parameterized SQL is the current server path; no second query layer without demonstrated need |
-| Contracts | OpenAPI 3.1 retained in the slice; JSON Schema 2020-12 + TypeScript in `@plenum/event-contracts` and `@plenum/simulation-schema` | Slice observed; OPEN-022 for compatibility | PS-100 kernel implemented / compatibility policy Open | PS-100 | Preserve slice contract; breaking compatibility rules await OPEN-012 |
+| Contracts | OpenAPI 3.1; JSON Schema 2020-12 + TypeScript in `@plenum/event-contracts`, `@plenum/simulation-schema`, and `@plenum/release-compiler` | Slice observed; OPEN-022 for compatibility | Kernel and Release Package contracts implemented / compatibility policy Open | PS-100, PS-130 | Preserve historical pins; breaking compatibility rules await OPEN-012 |
 | Observability | Structured logging, OpenTelemetry | Remaining proposals | Candidates | PS-120/540 | Add only to diagnose critical journeys |
 
 Every dependency or layer must answer the repository complexity test. The lockfile, not this matrix, is the exact implementation version record.

@@ -1,7 +1,8 @@
 /** Canonical release types owned by Simulation Schema v1.3.1. */
 
 export const SIMULATION_SCHEMA_VERSION = "1.3.1";
-export const RELEASE_MANIFEST_SCHEMA_ID = "release-manifest-v1.3.1";
+export const RELEASE_MANIFEST_CONTRACT_ID = "release-manifest-v1";
+export const RELEASE_MANIFEST_SCHEMA_ID = RELEASE_MANIFEST_CONTRACT_ID;
 
 export interface ReleaseManifestV1 {
   schemaVersion: string;

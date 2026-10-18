@@ -4,6 +4,7 @@
     { "path": "packages/event-contracts" },
     { "path": "packages/simulation-schema" },
     { "path": "packages/policy-engine" },
+    { "path": "packages/release-compiler" },
     { "path": "apps/server" },
     { "path": "apps/runtime-web" }
   ]

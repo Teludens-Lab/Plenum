@@ -11,10 +11,11 @@ Plenum/
   tsconfig*.json               # shared strict TypeScript configuration
   apps/
     runtime-web/               # contract-only frontend consumer; no UI yet
-    server/                    # OIDC, trusted context, transactional Command/evidence kernel
+    server/                    # identity, Command kernel, Release registry and object-store boundary
   packages/
     event-contracts/           # versioned Command, Event and error envelopes
     policy-engine/             # default-deny server projection policy
+    release-compiler/          # deterministic Release and portable Package compiler
     simulation-schema/         # versioned Release manifest and Plugin binding types
   scripts/
     contract-lint.mjs          # terminology, naming and workspace-boundary checks
@@ -31,7 +32,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`: Authority fencing, idempotency, receipts, Evidence Events and the transactional outbox. There is still no HTTP transport, outbox publisher, or rendered frontend.
+PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`. PS-130 adds deterministic compilation under `packages/release-compiler/`, immutable publication/import/export and an AWS SDK S3-compatible adapter under `apps/server/src/registry/`. There is still no HTTP transport, production object-store deployment/configuration, outbox publisher, or rendered frontend.
 
 ## Target code topology
 

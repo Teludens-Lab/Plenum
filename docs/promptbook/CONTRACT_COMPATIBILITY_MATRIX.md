@@ -4,13 +4,13 @@ Compatibility policy remains unresolved by OPEN-012. The matrix defines what tas
 
 | Contract | Producer | Consumers | Pin | Breaking-change rule | Persistence impact | Test owner |
 |---|---|---|---|---|---|---|
-| Simulation Release schema | Release compiler | Runtime, Studio preview, import | `schemaVersion` + digest | New version or explicit migration | Historical Sessions keep original | PS-100, PS-130 |
-| Compiler output | Release compiler | Registry, import | `compilerVersion` + digest | Deterministic fixture comparison | Definition Revision immutable | PS-130 |
+| Simulation Release schema (`release-manifest-v1`) | `@plenum/simulation-schema` / Release compiler | Runtime, Studio preview, import | schema `1.3.1` + digest | New version or explicit migration | Historical Sessions keep original | PS-100, PS-130 |
+| Compiler output (`package-import-v1`) | `@plenum/release-compiler` | Registry, import | compiler `0.1.0` + manifest/content/package digests | Exact-version compatibility and deterministic fixture comparison while OPEN-012 remains unresolved | Definition Revision, Release and Package manifest are immutable | PS-130 |
 | HTTP API | Server | Web clients/integrations | `/v1` + schema | New API version or compatible extension | Commands/receipts retained | PS-100 onward |
 | Command envelope | Client | Session Authority | v1 schema | Required-field/semantic break needs new version | Stored payload digest must remain interpretable | PS-120 |
 | Event envelope/type | Feature owner | Projections, reports, integrations | type + integer version | New type version; one producer | Evidence keeps original version | PS-120 |
 | Projection cursor | Sync service | Runtime clients | opaque cursor + policy/projection revision | Expiry/reset, never reinterpret | Client cursor disposable | PS-140 |
-| Package | Registry | Other Deployments | manifest/schema/compiler/digest | Compatibility report before import | Preserve Release identity | PS-130, PS-530 |
+| Package | Registry | Other Deployments | `package-import-v1` + schema/compiler/digests | Exact-version rejection until OPEN-012 defines a support window | Import preserves Release and Definition Revision identity | PS-130, PS-530 |
 | Plugin host API | Extension Host | Plugin Artifact | semver range + digest | Reject incompatible artifact | Runs keep artifact digest | PS-220 |
 | Model Composition | Compiler | Extension Host | graph version + digest | Explicit graph migration | In-flight run stays pinned | PS-330 |
 | Voting Method Adapter | Voting service | Adapter | algorithm version + digest | Deterministic vectors required | Tally and Certification retain method | PS-240 |

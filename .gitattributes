@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.ps1 text eol=crlf
+
+# Preserve the approved golden-reference export byte for byte.
+/references/fractured-order/** -text -eol

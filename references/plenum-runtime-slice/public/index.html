@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plenum Reference Workstation</title>
+<style>
+:root{color-scheme:light dark;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px}
+body{max-width:1080px;margin:auto;padding:24px;line-height:1.45}
+h1{font-size:1.65rem;letter-spacing:-.03em}
+h2{font-size:1.12rem;margin-top:0}
+section{padding:18px;border:1px solid color-mix(in srgb,currentColor 19%,transparent);border-radius:11px;margin:15px 0}
+label{display:block;margin:8px 0 4px;font-weight:600;font-size:.85rem}
+input,textarea,select{box-sizing:border-box;width:100%;padding:10px;border:1px solid gray;border-radius:6px;background:transparent;color:inherit}
+textarea{font-family:ui-monospace,monospace;min-height:100px}
+#definition{min-height:220px}
+button{padding:10px 13px;border-radius:6px;border:1px solid #536781;background:#244969;color:white;cursor:pointer;margin:7px 7px 4px 0}
+button.secondary{background:transparent;color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #df8d2d;outline-offset:2px}
+small{color:color-mix(in srgb,currentColor 67%,transparent)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px}
+.result{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,monospace;font-size:.8rem;padding:14px;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:8px;max-height:360px;overflow:auto}
+.status{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid currentColor;font-size:.75rem;font-weight:600;margin-left:6px}
+@media(max-width:700px){.grid,.grid3{grid-template-columns:1fr}body{padding:12px}}
+</style>
+</head>
+<body>
+<h1>Plenum Studio → Release → Runtime</h1>
+<p>Local-only reference workstation for the Fractured Order reference slice. Use the identities printed by <code>npm run seed</code>. This is not an enterprise authentication interface, a no-code Studio, or an offline client.</p>
+
+<section aria-labelledby="h-identity">
+  <h2 id="h-identity">1. Demo identity</h2>
+  <div class="grid">
+    <div><label for="org">Organization UUID</label><input id="org" autocomplete="off"></div>
+    <div><label for="user">Acting person UUID</label><input id="user" autocomplete="off"></div>
+  </div>
+  <small>Switch the person for each step: designer, publisher, operator, then the people staffed into the session. Every request is authorized on the server.</small>
+</section>
+
+<section aria-labelledby="h-studio">
+  <h2 id="h-studio">2. Studio — design, validate and publish</h2>
+  <label for="title">Simulation title</label>
+  <input id="title" value="Fractured Order reference slice">
+  <label for="definition">Definition (JSON — the product Studio replaces this with visual editors)</label>
+  <textarea id="definition" spellcheck="false">Loading reference definition...</textarea>
+  <button id="create" type="button">Create project</button>
+  <button id="save" type="button" class="secondary">Save draft</button>
+  <button id="validate" type="button" class="secondary">Validate</button>
+  <button id="publish" type="button">Publish release</button>
+  <div class="grid3">
+    <div><label for="project">Project UUID</label><input id="project"></div>
+    <div><label for="draftVersion">Draft version</label><input id="draftVersion" type="number" min="1" value="1"></div>
+    <div><label for="release">Release UUID</label><input id="release"></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-runtime">
+  <h2 id="h-runtime">3. Runtime — start and staff a session</h2>
+  <button id="start" type="button">Create session (operator)</button>
+  <label for="session">Session UUID</label><input id="session">
+  <div class="grid">
+    <div>
+      <label for="sessionStatus">Session status</label>
+      <select id="sessionStatus"><option value="active">active</option><option value="paused">paused</option><option value="completed">completed</option></select>
+    </div>
+    <div><label for="statusReason">Reason (optional)</label><input id="statusReason"></div>
+  </div>
+  <button id="setStatus" type="button" class="secondary">Change session status (operator)</button>
+  <div class="grid">
+    <div><label for="assigned">Person UUID to staff</label><input id="assigned"></div>
+    <div><label for="role">Session role (from the release)</label><input id="role" list="roleList" value="scribe"><datalist id="roleList"></datalist></div>
+  </div>
+  <button id="assign" type="button" class="secondary">Assign to session role (operator)</button>
+  <button id="deviceBtn" type="button" class="secondary">Register this person's device</button>
+  <label for="device">Device UUID</label><input id="device">
+</section>
+
+<section aria-labelledby="h-artifact">
+  <h2 id="h-artifact">4. Artifact workflow</h2>
+  <div class="grid3">
+    <div><label for="artifact">Artifact UUID</label><input id="artifact"></div>
+    <div><label for="artifactType">Artifact type key (create only)</label><input id="artifactType" value="request"></div>
+    <div><label for="version">Expected aggregate version</label><input id="version" type="number" min="0" value="0"></div>
+  </div>
+  <div class="grid">
+    <div>
+      <label for="op">Command</label>
+      <select id="op">
+        <option>artifact.create</option><option>artifact.edit</option><option>artifact.submit</option>
+        <option>artifact.forward</option><option>artifact.return</option><option>artifact.accept</option>
+      </select>
+    </div>
+    <div><label for="activeRole">Active session role (only if you hold several)</label><input id="activeRole"></div>
+  </div>
+  <label for="content">Content (create and edit)</label>
+  <textarea id="content" spellcheck="false">{"summary":"Reference request","rationale":"Initial draft"}</textarea>
+  <button id="newArtifact" type="button" class="secondary">New artifact UUID</button>
+  <button id="send" type="button">Send command</button>
+  <button id="retry" type="button" class="secondary">Resend last command (same ID)</button>
+  <button id="receipt" type="button" class="secondary">Look up last receipt</button>
+  <button id="list" type="button" class="secondary">Read visible artifacts</button>
+  <button id="evidence" type="button" class="secondary">Evidence export (operator)</button>
+  <p><small>Each new command gets a fresh command UUID. Resending the same command demonstrates idempotent replay: the original receipt comes back and nothing is applied twice.</small></p>
+</section>
+
+<section aria-labelledby="h-result">
+  <h2 id="h-result">Server response <span id="httpStatus" class="status" hidden></span></h2>
+  <div class="result" id="result" role="status" aria-live="polite">Ready.</div>
+</section>
+
+<script>
+const el = (x) => document.getElementById(x);
+const val = (x) => el(x).value.trim();
+const uuid = () => crypto.randomUUID();
+let lastCommand = null;
+
+function show(status, data) {
+  const badge = el('httpStatus');
+  badge.hidden = status === null;
+  badge.textContent = status === null ? '' : 'HTTP ' + status;
+  el('result').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+}
+
+function parseJson(id, label) {
+  try { return JSON.parse(val(id)); } catch { show(null, label + ' is not valid JSON.'); return null; }
+}
+
+async function api(path, method = 'GET', data) {
+  try {
+    const resp = await fetch(path, {
+      method,
+      headers: {'Content-Type': 'application/json', 'x-org-id': val('org'), 'x-demo-user': val('user')},
+      body: data ? JSON.stringify(data) : undefined
+    });
+    const json = await resp.json();
+    show(resp.status, json);
+    return {ok: resp.ok, status: resp.status, body: json};
+  } catch (e) {
+    show(null, 'Request failed: ' + e.message);
+    return {ok: false, status: 0, body: null};
+  }
+}
+
+function refreshRoles() {
+  try {
+    const d = JSON.parse(val('definition'));
+    el('roleList').replaceChildren(...(d.sessionRoles || []).map((r) => Object.assign(document.createElement('option'), {value: r.id, label: r.name || r.id})));
+  } catch { /* definition is being edited */ }
+}
+
+el('create').onclick = async () => {
+  const definition = parseJson('definition', 'The definition'); if (!definition) return;
+  const r = await api('/v1/projects', 'POST', {title: val('title'), definition});
+  if (r.ok) { el('project').value = r.body.projectId; el('draftVersion').value = r.body.version; }
+};
+el('save').onclick = async () => {
+  const definition = parseJson('definition', 'The definition'); if (!definition) return;
+  const r = await api(`/v1/projects/${val('project')}/draft`, 'PUT', {definition, expectedVersion: Number(val('draftVersion'))});
+  if (r.ok) el('draftVersion').value = r.body.version;
+};
+el('validate').onclick = () => api(`/v1/projects/${val('project')}/validate`, 'POST', {});
+el('publish').onclick = async () => {
+  const r = await api(`/v1/projects/${val('project')}/publish`, 'POST', {});
+  if (r.ok) el('release').value = r.body.releaseId;
+};
+el('start').onclick = async () => {
+  const r = await api('/v1/sessions', 'POST', {releaseId: val('release')});
+  if (r.ok) el('session').value = r.body.sessionId;
+};
+el('setStatus').onclick = () => api(`/v1/sessions/${val('session')}/status`, 'POST', {status: val('sessionStatus'), reason: val('statusReason') || undefined});
+el('assign').onclick = () => api(`/v1/sessions/${val('session')}/participants`, 'POST', {personId: val('assigned'), sessionRoleId: val('role')});
+el('deviceBtn').onclick = async () => {
+  const r = await api('/v1/devices', 'POST', {});
+  if (r.ok) el('device').value = r.body.deviceId;
+};
+el('newArtifact').onclick = () => { el('artifact').value = uuid(); el('version').value = 0; el('op').value = 'artifact.create'; };
+
+async function sendCommand(cmd) {
+  lastCommand = cmd;
+  const r = await api(`/v1/sessions/${val('session')}/commands`, 'POST', cmd);
+  if (r.body && r.body.status === 'accepted' && r.body.aggregateVersion !== null) el('version').value = r.body.aggregateVersion;
+}
+el('send').onclick = () => {
+  const op = val('op');
+  const payload = {};
+  if (op === 'artifact.create' || op === 'artifact.edit') {
+    const content = parseJson('content', 'The content'); if (!content) return;
+    payload.content = content;
+    if (op === 'artifact.create') payload.artifactTypeKey = val('artifactType');
+  }
+  const cmd = {
+    commandId: uuid(), deviceId: val('device'), operationType: op, aggregateId: val('artifact'),
+    governingReleaseId: val('release'), expectedAggregateVersion: Number(val('version')), payload
+  };
+  if (val('activeRole')) cmd.activeSessionRoleId = val('activeRole');
+  sendCommand(cmd);
+};
+el('retry').onclick = () => lastCommand ? sendCommand(lastCommand) : show(null, 'No command sent yet.');
+el('receipt').onclick = () => lastCommand ? api(`/v1/sessions/${val('session')}/commands/${lastCommand.commandId}`) : show(null, 'No command sent yet.');
+el('list').onclick = () => api(`/v1/sessions/${val('session')}/artifacts`);
+el('evidence').onclick = () => api(`/v1/sessions/${val('session')}/evidence`);
+el('definition').addEventListener('input', refreshRoles);
+
+el('artifact').value = uuid();
+fetch('/reference-definition.json')
+  .then((r) => r.text())
+  .then((text) => { el('definition').value = JSON.stringify(JSON.parse(text), null, 2); refreshRoles(); })
+  .catch(() => { el('definition').value = '{}'; });
+</script>
+</body>
+</html>

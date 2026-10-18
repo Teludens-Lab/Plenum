@@ -1,0 +1,71 @@
+import { existsSync } from 'node:fs';
+
+import { describe, expect, it } from 'vitest';
+
+import viteConfig, { resolveStartHereReviewAsset } from './vite.config.js';
+
+const EXPECTED_INPUTS = Object.freeze({
+    main: 'index.html',
+    master: 'master.html',
+    whitecell: 'whitecell.html',
+    sme: 'sme.html',
+    blueFacilitatorDeck: 'decks/blue/fractured-order-facilitator-deck.html',
+    blueFacilitator: 'teams/blue/facilitator.html',
+    blueScribe: 'teams/blue/scribe.html',
+    blueNotetaker: 'teams/blue/notetaker.html',
+    redFacilitatorDeck: 'decks/red/fractured-order-facilitator-deck.html',
+    redFacilitator: 'teams/red/facilitator.html',
+    redScribe: 'teams/red/scribe.html',
+    redNotetaker: 'teams/red/notetaker.html',
+    greenFacilitatorDeck: 'decks/green/fractured-order-facilitator-deck.html',
+    greenFacilitator: 'teams/green/facilitator.html',
+    greenScribe: 'teams/green/scribe.html',
+    greenNotetaker: 'teams/green/notetaker.html',
+    industryFacilitatorDeck: 'decks/industry/fractured-order-facilitator-deck.html',
+    industryFacilitator: 'teams/industry/facilitator.html',
+    industryScribe: 'teams/industry/scribe.html',
+    industryNotetaker: 'teams/industry/notetaker.html'
+});
+
+describe('vite multi-page entries', () => {
+    it('includes every shipped Plenum role surface and deck in the build graph', async () => {
+        const config = await viteConfig({ mode: 'test' });
+        const inputs = config.build?.rollupOptions?.input || {};
+
+        expect(Object.keys(inputs).sort()).toEqual(Object.keys(EXPECTED_INPUTS).sort());
+
+        for (const [entryName, relativePath] of Object.entries(EXPECTED_INPUTS)) {
+            expect(inputs[entryName].replace(/\\/g, '/')).toMatch(new RegExp(`/${relativePath.replace(/\//g, '\\/')}$`));
+            expect(existsSync(inputs[entryName])).toBe(true);
+        }
+    });
+
+    it('does not publish source maps in production Pages builds', async () => {
+        const productionConfig = await viteConfig({ mode: 'production' });
+        const testConfig = await viteConfig({ mode: 'test' });
+
+        expect(productionConfig.build?.sourcemap).toBe(false);
+        expect(testConfig.build?.sourcemap).toBe(true);
+    });
+
+    it('serves only content-addressed Start Here review media during development', async () => {
+        const config = await viteConfig({ mode: 'test' });
+        expect(config.plugins.map((plugin) => plugin.name)).toContain('start-here-audio-review');
+        expect(resolveStartHereReviewAsset('/onboarding/start-here/audio/clips/0123456789abcdef.mp3'))
+            .toMatch(/[\\/]scripts[\\/]start-here-audio[\\/]work[\\/]review[\\/]clips[\\/]0123456789abcdef\.mp3$/);
+        expect(resolveStartHereReviewAsset('/onboarding/start-here/audio/captions/0123456789abcdef.en.vtt'))
+            .toMatch(/[\\/]captions[\\/]0123456789abcdef\.en\.vtt$/);
+        expect(resolveStartHereReviewAsset(
+            '/Fractured-Order/onboarding/start-here/audio/clips/0123456789abcdef.mp3',
+            undefined,
+            '/Fractured-Order/'
+        )).toMatch(/[\\/]clips[\\/]0123456789abcdef\.mp3$/);
+        expect(resolveStartHereReviewAsset(
+            '/onboarding/start-here/audio/clips/0123456789abcdef.mp3',
+            undefined,
+            '/Fractured-Order/'
+        )).toBeNull();
+        expect(resolveStartHereReviewAsset('/onboarding/start-here/audio/clips/..%2Fsecrets.mp3')).toBeNull();
+        expect(resolveStartHereReviewAsset('/onboarding/start-here/audio/clips/not-a-content-hash.mp3')).toBeNull();
+    });
+});

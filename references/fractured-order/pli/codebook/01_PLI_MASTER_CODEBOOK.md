@@ -1,0 +1,731 @@
+# Fractured Order 2.0 — PLI Master Codebook
+
+**Statecraft Simulations Group · William & Mary**  
+**Scope:** Macroeconomic adjudication + National Interest + Glasl escalation + Diplomacy indexing + Information SME brief
+
+**Annotated bibliography:** `PLI_Annotated_Bibliography.md`
+
+---
+
+# Part I — Macroeconomic Adjudication
+
+## Architecture: three layers, one hierarchy
+
+```
+Layer 1 — PRIMARY LEVER (exactly one)      What economic domain are you operating in?
+Layer 2 — POLICY INSTRUMENT (one primary)  What specific tool executes the action?
+Layer 3 — IMPLEMENTATION (1-10)            Can it be executed, and on what timeline?
+
+Facets (tie-breaks & context only)         Direction, Sector, Target, Coalition, Orientation
+```
+
+- Levers answer **"where in economic statecraft?"**
+- Instruments answer **"how, specifically?"**
+- Implementation answers **"can it be done, and when do effects arrive?"**
+- Declared orientation is scored on the **National Interest** track (Source 12 primary domains + alignment class), not as a macroeconomic Fit 1–10.
+
+**Operating principle — PLI adjudicates, the SME approves.** Scores and trend lines are produced from documented rules; White Cell approve/override is the adjudication of record.
+
+**Track routing (Instrument of Power is the default lane, not the sole authority).** Plenum `actions.mechanism` (Diplomatic | Informational | Military | Economic) sets the *starting* track map: Economic filings run Layers 1–3 and macroeconomic adjudication; all actions receive National Interest and Glasl; Diplomatic filings receive Diplomacy indexing; Informational filings receive an unscored Information brief. That label is **not** decisive by itself. Actions often bundle multiple tools, carry a secondary DIME lane, or are mislabeled at intake. The agent and White Cell must read the action text, UI levers, and bundled authorities against the stated Instrument of Power. If the label and content diverge — or a second lane is clearly present — do **not** force the wrong track: set `needs_human=true` with an explanation, and/or open a **secondary facet** only with a cited dual-lane rationale (`secondary_facet_citation`).
+
+![Plenum adjudication workflow](PLENUM_Adjudication_Workflow.png)
+
+*Plenum adjudication workflow — White Cell completeness, Instrument of Power routing, parallel tracks, and SME approve/override.*
+
+## Layer 1 — The ten economic levers
+
+Ten levers cover the full Blue/Red/Green economic action corpus with minimal overlap. No undifferentiated catch-all bucket — each lever has a defined domain and instrument table.
+
+| Code | Lever | Definition | Boundary |
+|------|-------|------------|----------|
+| **L1** | Trade & Customs | Tariffs, quotas, trade remedies (Section 301, Section 232, anti-dumping and countervailing duties), import/export bans on ordinary goods and services | Dual-use technology denial → **L2** |
+| **L2** | Export Controls & Entity Lists | Entity lists, license denials, information and communications technology and services restrictions, deemed-export, strategic technology access denial | Generic tariffs → **L1** |
+| **L3** | Investment & Capital Controls | Foreign investment screening, outbound investment rules, ownership caps, investment bans, **reciprocal FDI / investment-access packages** | Asset freeze → **L4**. Ordinary FDI / land investment without sovereignty or exclusive basing rights stays **L3**. Named reciprocal FDI packages → **I3.05** (not `needs_human` for inbound/outbound ambiguity) |
+| **L4** | Financial Sanctions & Coercion | Targeted/secondary sanctions, asset freezes, payment-system denial, financial-market access bans, **legal-economic asset remedies** | Non-punitive regulation → **L5**. Sovereignty or basing-access transfer between states → **L10** (not I4.06) |
+| **L5** | Financial Regulation & Digital Policy | Prudential and anti-money-laundering rules, digital asset policy, market-structure regulation, **domestic foreign-exchange intervention / rate-check coordination** without country-specific punishment | Bilateral partner-support swaps → **L6** (rule 4). Any sanction element → **L4** |
+| **L6** | Development & Infrastructure Finance | Development finance institutions, foreign aid, export credit, overseas infrastructure/connectivity financing, **bilateral currency swaps for partner support**, **sovereign bond purchase/guarantee for partner states**, **resource-backed lending / long-term offtake and guaranteed-purchase commitments to partner producers**, **partner supply-chain capacity finance (extraction / refining / processing abroad for supply diversification)** | Domestic-only capacity → **L7**. Domestic foreign-exchange operations (not partner swap) → **L5**. Overseas infra finance whose *object* is territory/basing rights → **L10**. Loans-for-minerals, premium-price or volume-share offtake pledges, and bloc-accession economic inducement packages → **I6.08** (not L1 tariff preference, not L8 unless the sponsor stockpiles the volumes). Financing a partner's mines, refineries, or processing plants to diversify away from a dominant supplier → **I6.09** (not L7 because the plant is abroad; not L8 because no stockpile is built) |
+| **L7** | Industrial Policy & Domestic Capacity | Subsidies, tax incentives, deregulation, procurement preferences, domestic research and development / industrial funding | Foreign deployment → **L6** |
+| **L8** | Strategic Reserves & Supply Security | Stockpiling, reserve mandates, supply contingency authorities, **official reserve / commodity sales to move market prices** | New production → **L7**. Gold/commodity sell-offs for price intervention → **I8.04** (not L5 FX rate-check; not L4 unless sanctions/asset remedies named) |
+| **L9** | Standards, Regulation & Data Governance | Technical standards, regulatory harmonization, data governance, certification/trust regimes | Access bans → **L1/L2** |
+| **L10** | Territorial Acquisition, Basing & Strategic Access | Negotiated acquisition, cession, long-term lease, or compensatory transfer of **sovereign territory, exclusive basing rights, or strategic geographic access** (including SLOC-critical islands/ports) where the economic bargain (payment, lease, offset package) is the operative instrument | Pure Military force posture, alliance messaging, or diplomacy with no purchase/lease/concession bargain → **NE**. Asset/IP/fund seizure inside a jurisdiction → **L4 / I4.06**. Ordinary FDI without sovereignty or exclusive basing → **L3**. Overseas infra finance without territorial/basing rights as the deal object → **L6** |
+
+| Code | Special | Use |
+|------|---------|-----|
+| **NE** | Non-Economic | Default when Instrument of Power is Diplomatic, Informational, or Military — or when an Economic filing has no economic lever vector (mislabel / needs_human). No macro lever vector. Always routed to National Interest + Glasl; Diplomacy Index and Information brief follow default lanes or cited secondary facets (see Architecture / track routing). |
+
+**Design notes:**
+- Legal-economic coercion (intellectual-property seizure, eminent domain, retroactive compensation) is coercive financial punishment — it belongs under **L4** as instrument **I4.06**, not as its own lever.
+- **L10 is not the retired legal-coercion lever.** The 2026-06-15 consolidation moved former legal-coercion L10 into I4.06. The current **L10** is a distinct domain for sovereignty / basing / strategic-access *transactions* between states.
+
+---
+## Layer 2 — Policy instruments (by lever)
+
+Each action gets **one primary instrument**. Secondary instruments optional when bundled authorities are distinct.
+
+### L1 — Trade & Customs
+| Code | Instrument |
+|------|------------|
+| I1.01 | Tariffs / ad valorem duties |
+| I1.02 | Quotas / quantitative restrictions |
+| I1.03 | Trade investigations (Section 301 / Section 232 / anti-dumping and countervailing duties) |
+| I1.04 | Import/export bans (non-dual-use goods) |
+| I1.05 | Preferential trade access / free trade agreement expansion |
+
+### L2 — Export Controls
+| Code | Instrument |
+|------|------------|
+| I2.01 | Entity List designation |
+| I2.02 | Export license denial / licensing regime |
+| I2.03 | Information and communications technology and services / technology-transfer restriction |
+| I2.04 | Market exclusion of foreign-affiliated technology systems |
+
+### L3 — Investment & Capital
+| Code | Instrument |
+|------|------------|
+| I3.01 | Inbound investment screening |
+| I3.02 | Outbound investment restriction |
+| I3.03 | Foreign ownership cap / divestment order |
+| I3.04 | Investment ban (sector- or country-specific) |
+| I3.05 | Reciprocal FDI / investment-access package (coupled screening, outbound rules, and/or market-access reciprocity) |
+
+**Default direction for I3.05:** Mixed (security restriction + reciprocal access bargain). Use Coercive when the filing is framed only as denial/decoupling; Inducement when framed only as opening access conditional on partner reciprocity.
+
+**Instrument selection — Reciprocal FDI Package:** When the action title, objective, or UI lever names a **Reciprocal FDI Package** (or equivalent security-restricted reciprocal investment package) and no single inbound/outbound/ban instrument clearly dominates, assign **L3 / I3.05**. Do **not** set `needs_human` solely because UI levers are empty, Implementation/Legislative fields are blank, or the package could be read as I3.01 vs I3.02 vs I3.04. Prefer a discrete I3.01–I3.04 code only when the operative act is clearly one of those alone.
+
+**Worked example — Reciprocal FDI Package:** Economic Instrument of Power; objective cites alliance cohesion and security-restricted investment (biotech/telecom) without specifying inbound-only or outbound-only → **L3 / I3.05**, direction Mixed. National Interest and Glasl still run in parallel.
+
+### L4 — Financial Sanctions & Coercion
+| Code | Instrument |
+|------|------------|
+| I4.01 | Targeted sanctions (specially designated national / sectoral) |
+| I4.02 | Secondary sanctions |
+| I4.03 | Asset freeze / seizure |
+| I4.04 | Payment-system / correspondent-banking restriction |
+| I4.05 | Financial-market access ban |
+| I4.06 | Legal-economic asset remedies (intellectual-property seizure, eminent domain, retroactive compensation, sovereign-fund confiscation) |
+
+### L5 — Financial Regulation
+| Code | Instrument |
+|------|------------|
+| I5.01 | Prudential / anti-money-laundering regulation |
+| I5.02 | Digital asset / central bank digital currency policy |
+| I5.03 | Market-structure / systemic-risk rule |
+| I5.04 | Foreign-exchange market intervention / rate-check coordination (Treasury–central-bank signaling; not punitive) |
+
+### L6 — Development & Infrastructure Finance
+| Code | Instrument |
+|------|------------|
+| I6.01 | Bilateral development finance / aid |
+| I6.02 | Multilateral development finance institution commitment |
+| I6.03 | Export credit / loan guarantee |
+| I6.04 | Overseas infrastructure / connectivity investment |
+| I6.05 | Joint purchasing / allied finance facility |
+| I6.06 | Bilateral currency swap / central-bank liquidity line (partner support) |
+| I6.07 | Sovereign bond purchase or guarantee for partner state (inducement stabilization) |
+| I6.08 | Resource-backed finance / long-term offtake and guaranteed-purchase commitment (loans-for-minerals, premium-price or volume-share purchase pledges, bloc-accession economic inducement packages) |
+| I6.09 | Partner supply-chain capacity finance (project finance, equity, grants, or guarantees for a partner state's extraction, refining, or processing capacity to diversify supply away from a dominant or adversary supplier) |
+
+**Default direction for I6.09:** Inducement toward the financed partner. Record Mixed when the filing names an adversary supplier it intends to displace ("disrupt Red" / "steer away from BRI") in addition to building partner capacity; the displacement intent is context for National Interest and does not re-route to L1–L4 unless a tariff, ban, sanction, or screening act is also named.
+
+**Instrument selection — partner supply-chain capacity finance:** When an Economic filing's operative act is the sponsor state (Treasury, DFC, EXIM, MCC, or a newly legislated fund) financing **extraction, refinement, or processing capacity located in a partner state** so that the sponsor or its allies rely less on a dominant supplier (e.g. "provide additional finances for the extracting and refinement of phosphate in Morocco ... disrupt global reliance on Chinese phosphate"), assign **L6 / I6.09**. Prefer I6.01 only for untied development aid with no supply-chain or sector-capacity objective; I6.03 only when the act is export credit or a loan guarantee for the sponsor's own exporters; I6.04 only when the financed object is connectivity infrastructure (ports, rail, grid, telecoms) rather than productive capacity; I6.05 when allies pool purchasing or capital in a joint facility. Do **not** route to L7 (domestic capacity) because the plant is abroad, to L8 because supply security is the motive (no stockpile is built), or to L3 because capital crosses a border (no screening or equity-control act). Do **not** set `needs_human` solely because UI levers are "None selected", the legislative pathway is new, or the filing mixes resilience and disruption angles.
+
+**Worked example — Morocco phosphate Supply Chain Security Agreement:** Economic Instrument of Power; the United States legislates additional finance for phosphate extraction and refinement in Morocco to cut reliance on PRC phosphate, build African self-reliance, and pull producers away from BRI → **L6 / I6.09**, direction Mixed (partner inducement with named adversary displacement). National Interest and Glasl still run in parallel.
+
+**Default direction for I6.08:** Inducement. Use Mixed when the offtake or loan terms carry an exclusivity, collateral-seizure, or supply-denial clause aimed at a third party; Coercive only when the operative act is withdrawal or threatened withdrawal of an existing offtake/loan.
+
+**Instrument selection — resource-backed finance and offtake commitments:** When an Economic filing's operative act is a sponsor state (or its policy banks / state-owned enterprises) offering a producer state concessional loans **coupled with**, or in exchange for, a long-term purchase commitment over the producer's extracted output (e.g. "50% of extracts sold to BRICS+ countries at 2% above market value"), or a guaranteed-purchase / premium-price offtake pledge standing alone, assign **L6 / I6.08**. Prefer I6.04 only when a named infrastructure build is the operative act and no offtake, purchase share, or price premium is specified; cite I6.04 as the secondary instrument when both are present. Prefer I6.01/I6.03 only for untied aid or export credit with no purchase commitment. Do **not** set `needs_human` solely because the package is framed as bloc membership (BRICS+ / plurilateral accession), because UI levers are "None selected", because Implementation/Legislative fields are blank, or because Diplomacy appears in the Instruments list without a cited dual-lane diplomatic act. Not L1/I1.05 (no tariff or customs preference is the instrument), not L8 unless the sponsor explicitly stockpiles the purchased volumes (then I8.01 secondary), not L3 unless equity ownership or investment screening is the operative act.
+
+**Worked example — Peru/Chile BRICS+ loans-for-minerals package:** Economic Instrument of Power; PRC offers Peru and Chile infrastructure loans at reduced rates plus a pledge that half of their mineral extracts are sold to BRICS+ members at 2% above market as the incentive to join BRICS+ → **L6 / I6.08**, direction Inducement, secondary I6.04 for the infrastructure lending. National Interest and Glasl still run in parallel.
+
+### L7 — Industrial Policy
+| Code | Instrument |
+|------|------------|
+| I7.01 | Subsidies / tax incentives |
+| I7.02 | Deregulation for capacity expansion |
+| I7.03 | Government procurement / domestic content requirement |
+| I7.04 | Domestic research and development / industrial funding program |
+
+### L8 — Strategic Reserves
+| Code | Instrument |
+|------|------------|
+| I8.01 | Strategic stockpile build |
+| I8.02 | Reserve mandate / release authority |
+| I8.03 | Supply-security emergency authority |
+| I8.04 | Official reserve / commodity sales for market-price intervention (e.g. gold sell-off to move the topline price) |
+
+**Default direction for I8.04:** Coercive when framed as price fixing / market manipulation; Mixed when framed as routine reserve management with a price effect; Inducement only when sales are explicitly partner-support or liquidity support.
+
+**Instrument selection — gold / commodity price intervention sales:** When the action title or objective is selling official gold (or another strategic commodity) to manipulate, fix, or move the market price, assign **L8 / I8.04**. Prefer I8.02 only when the operative act is supply-security reserve release without a price-manipulation objective. Do **not** set `needs_human` solely because UI levers are empty, Implementation/Legislative fields are blank, or the Instruments list includes non-DIME junk (e.g. "Magic") or Diplomacy without a cited dual-lane diplomatic act. Not L5/I5.04 (FX rate-check) and not L4 unless sanctions or asset remedies are named.
+
+**Worked example — Selling off gold to manipulate the price:** Economic Instrument of Power; objective is fixing the topline gold price via official sell-off → **L8 / I8.04**, direction Coercive. National Interest and Glasl still run in parallel.
+
+### L9 — Standards & Data Governance
+| Code | Instrument |
+|------|------------|
+| I9.01 | Technical standards-setting / adoption mandate |
+| I9.02 | Regulatory harmonization / mutual recognition |
+| I9.03 | Data localization / cross-border data rule |
+| I9.04 | Certification / trusted-vendor regime |
+
+### L10 — Territorial Acquisition, Basing & Strategic Access
+| Code | Instrument |
+|------|------------|
+| I10.01 | Sovereign territory purchase or cession (treaty / legislative transfer) |
+| I10.02 | Long-term basing / Status of Forces Agreement / exclusive facility rights package |
+| I10.03 | Strategic port, canal, or sea-lane-of-communication access concession |
+| I10.04 | Compensatory economic package tied to territorial or basing settlement |
+
+**Default direction:** Inducement (purchase/lease packages). Use Coercive or Mixed when the deal is framed as compelled cession or dual carrot-stick.
+
+**Worked example — Purchase Chagos Archipelago:** Economic Instrument of Power; operative act is UK–US sovereign territory purchase/cession for Indian Ocean basing and SLOC protection → **L10 / I10.01**, direction Inducement. National Interest (NI-1 / NI-4) and Glasl still run in parallel. Do **not** force-fit L1–L9 or route to `needs_human` solely because no prior L-code existed.
+
+---
+## Layer 3a — Implementation score (1–10)
+
+PLI produces the Implementation score **after** lever and instrument are assigned, by applying the precedent test and modifiers below. Implementation measures whether the action can actually be executed as proposed, and on what timeline its economic effects arrive. It absorbs what the old rubric split between Feasibility and Implementation Fit. The tier selected, each modifier applied, and the resulting arithmetic are written to the adjudication record for SME approval.
+
+### The precedent test (sets the base score)
+
+Existing precedent is the main consideration. Work down the tree and take the first tier that applies:
+
+| Tier | Precedent condition | Base score |
+|------|--------------------|------------|
+| **Tier 1 — Proven authority** | Enacted statute or standing executive authority exists **and has been used for this instrument class before**; funding and administrative machinery in place (e.g., a new Section 301 investigation) | 8–10 |
+| **Tier 2 — Existing but untested authority** | Authority exists but has not been used for this purpose or target, or requires rulemaking before use; funding identified but not yet committed | 6–7 |
+| **Tier 3 — New authority required** | No existing authority: requires new legislation, new appropriations, or a new international agreement. Score within band on game-state feasibility — congressional composition, coalition posture, closest historical analog | 3–5 |
+| **Tier 4 — No plausible pathway** | Legal dead-end, constitutional or treaty bar, or a prerequisite that cannot be obtained in-game (e.g., retroactive intellectual-property seizure with no legal basis) | 1–2 |
+
+**Why precedent anchors the score:** an instrument with a proven statutory track record has known machinery, known legal survivability, and a known timeline. Absence of precedent is not disqualifying — Tier 3 exists for novel actions — but it must cost points, because novel authority is exactly where wargame proposals historically overestimate executability.
+
+### Modifiers (applied to the base score)
+
+Start at the midpoint of the tier band, then apply each modifier that holds. The final score may cross a band edge by at most one point and is clamped to 1–10; Tier 4 is capped at 2.
+
+| Modifier | Adjustment |
+|----------|------------|
+| Funding appropriated or otherwise available in-round | +1 |
+| Required partners or allies already committed on the record | +1 |
+| Timeline mismatch: declared objective expects effects sooner than the instrument can deliver (see indicator onset in Section 6) | -1 |
+| Requires simultaneous action by multiple independent authorities (e.g., Congress plus two allied governments) | -1 |
+
+### The timeline consideration
+
+Implementation is where timing realism lives. Every lever has a characteristic **onset** — the number of game years before its macroeconomic effects appear (Section 6 matrix). A supply-chain investment program does not show favorable indicator movement in the round it is announced; a tariff does. Teams cannot claim faster effects than the matrix onset; a plan built on effects arriving faster than the onset takes the timeline-mismatch modifier.
+
+### Scoring anchors
+
+| Score | Reading |
+|-------|---------|
+| 9–10 | Proven authority, funded, sequenced correctly; effects arrive on the matrix timeline |
+| 7–8 | Proven or near-proven authority with minor gaps (rulemaking pending, funding identified but not committed) |
+| 5–6 | Untested authority or a plausible new-authority path with favorable game state |
+| 3–4 | New authority required against an unfavorable game state (e.g., partisan bill, divided Congress) |
+| 1–2 | Not executable: legal dead-end or missing prerequisite that cannot be obtained |
+
+---
+## Macroeconomic adjudication
+
+### Purpose and output
+
+PLI's primary output is directional: for each scored action, PLI produces the **new quarterly trend line of each of five macroeconomic indicators**, plotted against the pre-action baseline in a color-coded chart (baseline navy solid; post-action gold dashed; divergence shaded green where favorable to the acting team, red where unfavorable). PLI adjudicates **directionality, not point forecasts** — across the six institutional forecasters reviewed, point estimates for the same indicator-year differ by up to 1.4 percentage points, but direction and shape are unanimous. Direction is the empirically defensible layer. The trend lines are computed from the tables in this section, not judged case-by-case; the SME's role is to review the recorded chain and approve the adjudication.
+
+### The five indicators and the quarterly adjudication grid (2026Q1–2034Q4)
+
+Baseline trend lines are anchored to the IMF United States 2026 Article IV projections, corroborated by CBO, Fed SEP, WTO, and OECD. Institutions publish annual or Q4/Q4 rates; PLI expands them to a **quarterly adjudication grid** by **within-year hold** through 2034Q4 (discretization for month anchors — not higher-frequency forecasts). See *PLI_Annotated_Bibliography.md* (“Quarterly adjudication grid and month anchors”).
+
+| Indicator | 2026 | 2027 | 2028 | 2029 | 2030 | 2031 | 2032* |
+|-----------|------|------|------|------|------|------|-------|
+| Real GDP growth (%) | 2.5 | 2.2 | 2.1 | 1.9 | 1.8 | 1.8 | 1.8 |
+| PCE inflation (Q4/Q4, %) | 2.8 | 2.0 | 2.0 | 2.0 | 2.0 | 2.0 | 2.0 |
+| Unemployment rate (%) | 4.3 | 4.2 | 4.0 | 3.9 | 3.9 | 3.9 | 3.9 |
+| Trade volume growth (%) | 1.0 | 3.6 | 1.4 | 1.4 | 1.7 | 1.5 | 1.5 |
+| Fixed investment growth (%) | 4.0 | 3.3 | 2.1 | 1.8 | 1.8 | 1.8 | 1.8 |
+
+\*2032 holds the 2031 annual anchor. FO 2.0 worksheets require `submission_month` (`YYYY-MM`).
+
+### Multi-action stacking (FO 2.0)
+
+Single-action adjudication is unchanged. Multi-action stacking uses `stack_action_deltas` with codebook default **`uncapped`** (profiled quarterly deltas sum without a cumulative ±S clamp so higher-order effects remain visible). Alternate modes: **`same_quarter`** (clamp cumulative per quarter to ±S after each add) and **`per_move`** (uncapped within a move; clamp each move’s contribution to ±S before adding to the running total). See Master Codebook for the full table. Annual display is Q4 aggregate only; `same_year_cap_class` is legacy.
+
+### Lever × indicator directionality matrix (static)
+
+Each lever carries a static directional impulse per indicator, with magnitude class and timing in **quarters** (`onset_quarters`, `ramp_in_quarters`, `decay_quarters`; optional `duration_quarters`). Default directions and sign-flip rules are unchanged from the Master Codebook; machine-readable values live in `codebook_data.json` (`trial-2026-08-13-quarterly`).
+
+| Lever | GDP | Inflation | Unemployment | Trade | Investment | Timing (bib) |
+|-------|-----|-----------|--------------|-------|------------|--------------|
+| L1 Trade & Customs | -s | +M | +tr | -S | -s | Fast (Source 7) |
+| L2 Export Controls | -tr | 0 | 0 | -M | -s | Prompt/slow macro (Source 8) |
+| L3 Investment & Capital | -tr | 0 | 0 | -s | -M | Medium lag |
+| L4 Financial Sanctions | -tr | +s | 0 | -M | -s | Completeness (Source 9) |
+| L5 Financial Regulation | +tr | -s | 0 | 0 | +tr | Medium lag |
+| L6 Development Finance | +tr | 0 | 0 | +M | +s | Long ramp (Source 10) |
+| L7 Industrial Policy | +M | +s (transitory) | -s | -s | +S | Long onset/ramp (Source 10) |
+| L8 Strategic Reserves | 0 | -s | 0 | +s | +s | Medium lag |
+| L9 Standards & Data | +tr | 0 | 0 | +s | +tr | Slow (Source 10) |
+
+**Magnitude classes:** **S** = 0.8, **M** = 0.5, **s** = 0.2, **tr** = 0.1, **0** = no effect.
+
+### How Implementation modulates the trend line (magnitude and onset)
+
+| Implementation | Magnitude | Onset delay |
+|----------------|-----------|-------------|
+| 9–10 | Full matrix class | Matrix onset |
+| 7–8 | Full matrix class | Matrix + 4 quarters |
+| 5–6 | One class down | Matrix + 4 quarters |
+| 3–4 | Two classes down | Matrix + 8 quarters |
+| 1–2 | No macroeconomic effect | — |
+
+### How the trend line persists (matrix, not Fit)
+
+Persistence is matrix-native (Sources 7–10). After Implementation delay, each indicator follows ramp → **horizon hold**, unless the cell sets `duration_quarters` (for example L7 inflation is transitory). Fit does not shorten, extend, or zero the path. A strategically misaligned action that still executes still moves the indicators.
+
+### Traceability chain and SME approval
+
+Every adjudicated trend line must be reproducible from four recorded facts: **(1)** lever and instrument → matrix row; **(2)** Direction facet → sign check; **(3)** Implementation score → magnitude/onset-delay band; **(4)** `submission_month` → start quarter + profiled weights.
+
+The adjudication record carries this chain plus the Implementation worksheet (tier, modifiers). The SME reviews the record after PLI produces it and marks it **Approved** or **Overridden**; an override records the changed value and a one-line rationale, and the override — not the mechanical output — becomes the adjudication of record. The approval loop validates the rules themselves: repeated overrides of the same table entry are the signal to revise the table, not the scores.
+
+### Worked example — L7 / I7.01 domestic supply-chain investment
+
+Blue submits a domestic semiconductor supply-chain investment program in **2026-01**. Lever L7, instrument I7.01, Direction Inducement (default — no sign flip), Orientation Reframing.
+
+- **Implementation 6:** Tier 2 midpoint 6.5 → 6. Band 5–6: magnitudes one class down, onset delay +4 quarters.
+- Path persistence: matrix horizon hold after ramp; L7 inflation remains duration-capped (transitory).
+
+Illustrative path shape (not annual bricks): fixed investment starts **2028Q1** and ramps; GDP starts **2029Q1** and rises across multiple quarters (Source 10); inflation is duration-capped and transitory. Exact quarter weights are in `codebook_data.json` / `engine.py`.
+
+![PLI adjudication output example](PLI_Trend_Example.png)
+
+Reading the chart: investment leads, GDP and jobs follow with multi-quarter ramps, the build-phase inflation bump is transitory, and the trade drag reflects import substitution. Green shading marks favorable divergence for the acting team, red unfavorable. This is the standard adjudication output for every scored action.
+
+---
+## Facets — tie-breaks and context only
+
+| Facet | Values | Primary use |
+|-------|--------|-------------|
+| **Direction** | Coercive / Inducement / Mixed | Tie-break between adjacent levers; sign check for the directionality matrix |
+| **Sector** | Telecommunications, Biotech, Agriculture, Minerals, Semiconductors, Finance, Energy, Digital, General | Routes to sector-growth tracker; exposure weight |
+| **Target** | United States, People's Republic of China, All actors, Third countries, Mixed | People's Republic of China exposure for economic model |
+| **Coalition** | Unilateral, Bilateral, Plurilateral, Multilateral | Implementation modifier input — not a lever |
+| **Orientation** | Pressure, Stabilization, Reframing | **Required** — National Interest scores Source 12 priors; Macro does not |
+
+**Not required for intake:** Implementation Tier (captured by the precedent test), Horizon (captured by matrix onset).
+
+---
+## Tie-break hierarchy (lever assignment)
+
+1. Asset seizure / retroactive compensation / payment denial → **L4**
+2. Export license / entity list / technology-system exclusion → **L2**
+3. Investment screening / capital-flow ban → **L3**
+4. **Bilateral currency swap / central-bank liquidity line for partner support → L6**
+5. Tariff / quota / trade remedy → **L1**
+6. Stockpiling / reserves → **L8**
+7. Overseas infrastructure / development finance → **L6**
+8. Domestic subsidy / deregulation / procurement → **L7**
+9. Standards / harmonization → **L9**
+10. Non-sanctions financial rule → **L5**
+11. **Sovereign territory purchase/cession, exclusive basing rights, or strategic geographic access concession (payment, lease, or compensatory package) → L10**
+
+**Rule 4 scope:** Partner-support swaps only. Domestic/prudential foreign-exchange management stays **L5** (rule 10). Punitive denial of swap or bond market access stays **L4** (rule 1). Swap used as capital-control enforcement stays **L3** (rule 3).
+
+**Rule 7 scope:** Covers resource-backed lending and offtake / guaranteed-purchase commitments to partner producers (**I6.08**) and partner supply-chain capacity finance for extraction, refining, or processing abroad (**I6.09**), as well as infrastructure and development finance proper (I6.01–I6.05). A purchase pledge at a stated volume share or price premium is a finance inducement, not a trade-customs act: it stays **L6** (rule 7) rather than **L1** (rule 5). Financing productive capacity in a partner state stays **L6** (rule 7) rather than **L7** (rule 8), which is reserved for capacity inside the sponsor's own jurisdiction. Either moves to **L8** (rule 6) only when the sponsor's own stockpile is the stated destination of the volumes.
+
+**Rule 11 scope:** The object of the bargain must be sovereignty, exclusive basing, or strategic geographic access. Ordinary overseas infrastructure without those rights stays **L6** (rule 7). Intra-jurisdiction asset seizure stays **L4 / I4.06** (rule 1). Pure Military/Diplomatic acts without a transactional access deal stay **NE**.
+
+If Direction is Inducement and two levers fit, prefer L6/L7/L8/L10 over L1–L4.  
+If Direction is Coercive, prefer L1–L4 over L6–L10 unless rule 11 (territory/basing) clearly dominates.
+
+---
+## Currency, bond, and foreign exchange operations
+
+| Example | Lever | Instrument | Notes |
+|---------|-------|------------|-------|
+| Argentina–United Arab Emirates currency swap | **L6** | **I6.06** | Rule 4 (partner-support swap); Inducement |
+| People's Republic of China swap line to Global South partner | **L6** | **I6.06** | Rule 4 (partner-support swap); same mechanism |
+| United States Treasury rate-check response to Bank of Japan | **L5** | **I5.04** | Rule 10 (non-sanctions financial rule); foreign-exchange coordination, not punitive |
+| Ban on adversary sovereign bond access | **L4** | **I4.05** | Rule 1; coercive market access denial |
+| United States purchase of partner sovereign bonds (inducement) | **L6** | **I6.07** | Rule 7 if infrastructure-framed; I6.07 when bond support dominates |
+| Outbound ban on buying adversary sovereign debt | **L3** or **L4** | I3.04 or I4.05 | Dominance rule; both covered |
+| United States purchase of Chagos Archipelago from the United Kingdom | **L10** | **I10.01** | Rule 11; sovereignty transfer for basing / SLOC |
+| Long-term exclusive basing rights package with host-nation offsets | **L10** | **I10.02** | Rule 11; not L6 overseas infra alone |
+| Strategic port access concession tied to lease payments | **L10** | **I10.03** | Rule 11 |
+| Reciprocal FDI Package (security-restricted investment + access bargain; inbound/outbound not specified) | **L3** | **I3.05** | Rule 3; package instrument when I3.01–I3.04 do not uniquely dominate |
+| Selling off gold to manipulate / fix the market price | **L8** | **I8.04** | Rule 6; official commodity sales for price intervention (not I8.02 supply-security release alone) |
+| PRC loans-for-minerals plus 50% offtake at 2% above market to bring Peru/Chile into BRICS+ | **L6** | **I6.08** | Rule 7; resource-backed finance / offtake commitment, Inducement; I6.04 secondary for the infrastructure lending |
+| United States finances phosphate extraction and refinement in Morocco to cut reliance on PRC phosphate and pull producers off BRI | **L6** | **I6.09** | Rule 7; partner supply-chain capacity finance, Mixed (partner inducement + named adversary displacement); not L7 (plant abroad), not L8 (no stockpile) |
+
+---
+## Intake and adjudication record
+
+```
+ActionID:           M1-A7
+Cell:               Blue
+Title:              Probiotic Act
+PrimaryLever:       L7
+PrimaryInstrument:  I7.01
+SecondaryInstrument: -
+Direction:          Inducement
+Sector:             Biotech
+Target:             United States
+Coalition:          Unilateral
+Orientation:        Reframing
+Implementation:     6      (Tier 2: authority exists, appropriations new)
+NIAlignment:        advances (Reframing primary domains NI-2 / NI-5 / NI-4)
+EscalationDelta:    0
+MacroAdjudication:  L7 row; Impl band 5-6; matrix persistence; executed 2026
+Notes:              Effects onset 2028-2029 per matrix + Implementation delay
+SMEReview:          Approved   (or: Overridden - new value + rationale)
+```
+
+`DesignScore` remains outside PLI. No adjudication is final until `SMEReview` carries an SME approval or a documented override.
+
+---
+## Fractured Order 1.0 Blue corpus reference
+
+Reference Implementation scores and historical Fit labels for the eleven Blue actions (Blue orientation: Reframing). Live scoring uses NI alignment classes, not Macro Fit.
+
+| Action | Lever | Instr. | Implementation | Fit |
+|--------|-------|--------|----------------|-----|
+| M1-A1 Wedges & Incentive | NE | — | — | — |
+| M1-A2 No BRICS+ in America | L2 | I2.04 | 5 — untested exclusion authority | 4 — coercive exclusion under Reframing |
+| M1-A3 Minerals for All | L7 | I7.02 | 7 — deregulation, existing authority | 8 — capacity-building |
+| M1-A4 Trade Investigations | L1 | I1.03 | 9 — deep Section 301/232 precedent | 6 — coercive tool, neutral to Reframing |
+| M1-A5 Intellectual-Property Enforced Remuneration | L4 | I4.06 | 2 — no legal pathway (Tier 4) | 3 — coercive seizure cuts against Reframing |
+| M1-A6 Stockpiling | L8 | I8.01 | 8 — standing reserve authority | 8 — resilience-building |
+| M1-A7 Probiotic Act | L7 | I7.01 | 6 — authority exists, appropriations new | 8 — capacity-building |
+| M2-A1 European Union Critical Minerals (withdrawn) | L6 | I6.05 | 4 — new plurilateral facility required | 7 — coalition-building |
+| M2-A2 Global Telecommunications | L6 | I6.04 | 3 — funding source does not exist | 9 — textbook Reframing |
+| M2-A3 Global Strategic Futures | L7 | I7.04 | 6 — research funding, authority exists | 8 — capacity-building |
+| M2-A4 Sanctions & Critical Minerals | L4 | I4.02 | 6 — authority exists, untested scope | 4 — coercive escalation under Reframing |
+
+
+# Part II — National Interest
+
+**Track:** National Interest  
+**Evidence:** `evidence/ni/US_National_Interest_Assessment_Methodology.md`, `evidence/ni/NSS_Interest_Matrix.xlsx`, National War College primer (`evidence/ni/2025 NWC NSS Primer copy.pdf`)  
+**Bibliography:** Sources 11–14 in `PLI_Annotated_Bibliography.md` `(National Interest)`
+
+**Operating principle — PLI proposes, the SME approves.** The agent assigns per-domain tier deltas with cited rationale; `tracks/ni_engine.py` validates grammar and cross-checks; White Cell approves or overrides.
+
+---
+
+## Scope
+
+- **All actions** (Economic, Diplomatic, Informational, Military) receive an NI adjudication.
+- Output is a **U.S.-centric six-domain vector**, not FO 1.0’s US/PRC scalar (−5…+5).
+- Tier movement uses **National War College** vital / important / peripheral grammar against NSS-derived domains.
+- Economic actions may use macro PLI trend summaries as context; they do not replace domain judgment.
+
+---
+
+## Six interest domains
+
+| ID | Domain | Definition |
+|----|--------|------------|
+| **NI-1** | Homeland & Strategic Access | Protection of people, territory, critical infrastructure; energy/strategic supply access; force posture to deny catastrophic harm |
+| **NI-2** | Economic Prosperity & Tech Leadership | Competitiveness, jobs, innovation, industrial capacity, leadership in power-defining sectors |
+| **NI-3** | Alliance / Partner Credibility | Ally/partner willingness to align, share burden, resist hedging toward adversaries or alternative blocs |
+| **NI-4** | Indo-Pacific Stability & Deterrence | Regional balance preventing PRC coercion, preserving Taiwan-related supply chains, avoiding uncontrolled escalation |
+| **NI-5** | Rules / Market Integrity / Reciprocity | Ability to shape standards, trade rules, financial architecture, nonproliferation norms; enforce reciprocity |
+| **NI-6** | Domestic Political Sustainability | Congressional/public support; industry acceptance; avoidance of self-inflicted economic shock undermining policy continuity |
+
+---
+
+## Orientation priors (scoring grammar — Source 12)
+
+Declared strategic orientation is a **required NI scoring input**. Priors are engine-enforced; the agent may not invent a domain list.
+
+| Orientation | Primary domains | Effect horizon |
+|-------------|-----------------|----------------|
+| **Pressure** | NI-4, NI-3, NI-5 | Immediate |
+| **Stabilization** | NI-3, NI-1, NI-6 | Medium (1–2 years) |
+| **Reframing** | NI-2, NI-5, NI-4 | Long (2–4 years) |
+
+**Definitions (Fractured Order 1.0):** Pressure — impose costs to coerce or degrade adversary capacity. Stabilization — reduce volatility and escalation risk; reassure partners, markets, and domestic constituencies. Reframing — change the structure of the competition (alternative capacity, institutions, standards, or coalitions).
+
+### Alignment class (relocated Macro Fit diagnostic)
+
+| Alignment | Meaning | Engine coherence |
+|-----------|---------|------------------|
+| **advances** | Primary mechanism serves the declared orientation | At least one primary-domain delta ≥ +1 |
+| **mixed** | Orientation-agnostic, or advancing and contradicting elements roughly balance | Allowed; rationale required |
+| **contradicts** | Primary mechanism cuts against the declared orientation | At least one primary-domain delta ≤ −1 |
+
+Retired Macro Fit bands map as: 9–10 / 7–8 → `advances`; 5–6 → `mixed`; 3–4 / 1–2 → `contradicts`. Alignment is **not** a 1–10 and does **not** scale NWC intensity (Source 11 / Source 13: type vs intensity stay separate).
+
+### `orientation_net`
+
+Headline NI score = sum of **primary-domain** deltas only. All six domains remain on the record (Source 13: every interest type can carry intensity). Non-primary domains do not enter `orientation_net`.
+
+Effect horizon is SME context (expected lag). It does not time-discount tier deltas.
+
+---
+
+## National War College tier rubric
+
+| Tier | Use | Delta |
+|------|-----|-------|
+| Vital | Nearly any cost/risk, including significant war risk | **+2 / −2** (sparingly; requires `vital_justification`) |
+| Important / Major | State weakened if it did not act; costs weighed | **+1 / −1** (default) |
+| Peripheral | Desirable only if costs/risks extremely limited | **0** |
+
+Allowed delta set per domain: `{+2, +1, 0, −1, −2}`.
+
+---
+
+## Threat cross-check
+
+Required when **any** domain delta ≤ −1:
+
+```
+Threat = Capability (adversary) × Will (adversary) × Vulnerability (U.S.)
+```
+
+Record a short narrative for each factor. High Glasl stage with negative NI-3 often signals alliance-credibility damage even when NI-2 is positive (cross-domain alert).
+
+---
+
+## Agent worksheet contract
+
+The NI agent returns JSON matching `schemas/ni_worksheet_schema.json`:
+
+- `orientation` echo (must match intake)
+- `orientation_assessment`: `alignment` (`advances` / `mixed` / `contradicts`), `primary_domains` (must equal the Source 12 prior), `effect_horizon` (must equal the prior row), `rationale`
+- `domain_deltas`: NI-1…NI-6 each with `delta`, `rationale`, optional `vital_justification`
+- `threat_cross_check`: required if any delta ≤ −1; else null
+- `evidence_refs`: NSS era / matrix / National War College / Source 12 citations
+- `needs_human` / reason when judgment is unclean
+
+### Actor attribution (team field)
+
+- The authoritative actor is `actions.team` (blue / red / green / industry).
+- Plenum action details often use the shared form header **"Blue Team Action Details"** even for Red (and other) filings. That label is a **form prefix**, not an actor claim.
+- Do **not** set `needs_human` solely because the details block says "Blue Team Action Details" while `team` is red/green/industry, or because objective vs expected-outcomes tone differs across teams.
+- Score NI from the Red/Blue/Green actor in `team`, using title, objective, expected outcomes, and macro summary. Note form-prefix quirks in a rationale only if useful; they are not attribution blockers.
+
+---
+
+## Engine validation rules
+
+1. Every domain present with delta ∈ {−2…+2}.
+2. ±2 without non-empty `vital_justification` → `needs_human` or reject.
+3. Any delta ≤ −1 without threat cross-check → reject.
+4. `orientation` must match intake. `primary_domains` and `effect_horizon` must match the Source 12 prior for that orientation.
+5. Alignment coherence: `advances` requires a primary-domain delta ≥ +1; `contradicts` requires a primary-domain delta ≤ −1.
+6. Emit `orientation_net` (sum of primary-domain deltas). Do not auto-write or scale domain deltas from orientation.
+7. If Glasl stage_after ≥ 6 and NI-3 ≤ −1 and NI-2 ≥ +1 → set `cross_domain_alert` true.
+8. Emit full trace for SME audit and per-action reports.
+
+
+# Part III — Glasl Escalation
+
+**Track:** Escalation (Glasl)  
+**Bibliography:** Sources 15–17 in `PLI_Annotated_Bibliography.md` `(Escalation / Glasl)`
+
+**Operating principle — PLI proposes, the SME approves.** The agent matches the action to Glasl stage criteria and proposes a stage delta; `tracks/glasl_engine.py` applies the transition against session state.
+
+---
+
+## Scope
+
+- **All actions** receive a Glasl adjudication (Economic and non-economic).
+- Session maintains a current escalation **stage** (integer 1–9).
+- FO 1.0 operating range was typically stages **4–7**; default session start = **4**.
+- Offline Glasl stage is stored in `adjudications/_session_state.json` for local replay (global file). **Live Plenum will scope escalation state per `session_id`.**
+
+---
+
+## Nine stages (Glasl)
+
+| Stage | Label (short) | Adjudication cue |
+|-------|---------------|------------------|
+| 1 | Hardening | Positions stiffen; debate still possible |
+| 2 | Debate & polemics | Polarized argument; win/lose framing |
+| 3 | Actions, not words | Unilateral faits accomplis; talking stalls |
+| 4 | Images & coalitions | Coalition/reputation competition; image campaigns |
+| 5 | Loss of face | Public humiliation / prestige attacks |
+| 6 | Strategies of power & ultimata | Explicit strategic threats and ultimatums |
+| 7 | Limited destructive blows | Materially destructive limited strikes on vital capabilities (incl. severe economic coercion that destroys capacity) |
+| 8 | Fragmentation | Systematic destruction of systems/coalitions |
+| 9 | Together into the abyss | Mutual destruction logic |
+
+FO operating notes (Interim Report): Stage 4 = coalition/reputation competition; 5 = public loss of face; 6 = strategic threats/ultimatums; 7 = limited destructive blows.
+
+---
+
+## Per-action delta rules
+
+| Rule | Detail |
+|------|--------|
+| Allowed delta | {-2, -1, 0, +1, +2} without needs_human |
+| Abs(delta) > 2 | Requires needs_human=true and SME confirmation |
+| Stage bounds | After application, clamp to [1, 9] |
+| Rationale | Must cite the Glasl stage definition that matches the **resulting** stage |
+| De-escalation | Negative Δ only when the action credibly reduces confrontation (reassurance, off-ramps, confidence-building) — not merely because it is “economic” |
+
+Escalation and National Interest are **related but not identical**: pain on an adversary ≠ U.S. interest gain; high escalation can coincide with positive NI-2 and negative NI-3.
+
+---
+
+## Agent worksheet contract
+
+JSON matching `schemas/glasl_worksheet_schema.json`:
+
+- `stage_before` (from session state; agent may echo)
+- `delta` (−2…+2, or larger only with needs_human)
+- `stage_after` (must equal clamp(stage_before + delta))
+- `rationale` citing stage criteria
+- `needs_human` / reason
+
+---
+
+## Engine validation rules
+
+1. `stage_before` ∈ 1…9; `delta` integer.
+2. If abs(delta) > 2 and not needs_human → reject.
+3. `stage_after` must equal `max(1, min(9, stage_before + delta))`.
+4. Emit trace: before, delta, after, rationale, citations.
+
+
+# Part IV — Diplomacy Index
+
+**Track:** Diplomacy (indexing — not a numeric score)  
+**Bibliography:** Sources 18–20 in `PLI_Annotated_Bibliography.md` `(Diplomacy)`
+
+**Operating principle — PLI indexes, the SME approves.** Output is a four-field taxonomy code. There is **no** diplomacy score.
+
+---
+
+## When this track runs
+
+**Default lane:** Plenum **Instrument of Power** (`actions.mechanism`) — starting map only, not the sole authority. Bundled tools and mislabeled filings must be caught by the agent/SME (see Architecture / track routing).
+
+| Instrument of Power | Diplomacy track |
+|---------------------|-----------------|
+| Diplomatic | **Required** |
+| Informational / Economic / Military | Off by default; open as a **secondary facet** only with cited dual-lane evidence (`secondary_facet_citation`), or flag `needs_human` if the Diplomatic label is wrong |
+
+---
+
+## Four-field coding format
+
+```
+TopLayer | DiplomaticCategory | DiplomaticBand | PolicyStyle
+```
+
+Example: `D/E | Coalition-Building / Partner Alignment | Pressure | Agenda-Shaping / Norm-Setting`
+
+### 1. Top layer (DIME)
+
+Allowed: `D`, `D/E`, `D/I`, `D/M`, `D/E/I`, `D/I/M`, `D/E/M` (must start with Diplomatic primary).
+
+### 2. Diplomatic category (hierarchy, pressure → cooperative)
+
+**Pressure band categories**
+- Signaling / Strategic Communication
+- Consular / Societal Diplomacy
+- Coalition-Building / Partner Alignment
+
+**Positioning band categories**
+- Multilateral / Institutional Diplomacy
+- Bilateral Diplomacy
+- Digital Diplomacy
+
+**Relationship-Building band categories**
+- Public Diplomacy → Information / Media / Narrative Engagement
+- Public Diplomacy → Outreach / Audience Engagement
+- Public Diplomacy → Platform-Based Engagement
+- Public Diplomacy → Exchanges
+
+### 3. Diplomatic band
+
+Exactly one of: `Pressure` | `Positioning` | `Relationship-Building`
+
+Category must belong to the selected band (engine validates).
+
+### 4. Policy style
+
+Exactly one of:
+- Directive / Exclusionary
+- Structured Alignment
+- Targeted Strategic Coordination
+- Agenda-Shaping / Norm-Setting
+- Internal Coordination
+- Consultative / Exploratory
+- Facilitative / Capacity-Building
+
+---
+
+## Tie-break rules
+
+1. Code by **main delivery mechanism**, not only intended effect.
+2. If instruments mix, use a combined top layer (e.g., `D/E`).
+3. If diplomacy and economics mix, keep the diplomatic category focused on the diplomatic delivery element.
+4. Band shows relative coerciveness: Pressure hardest, Relationship-Building softest.
+5. Subcategories are grounded in State FAM/FAH materials; the coercive-to-cooperative **ordering** is an analytic synthesis for the game (see bibliography Source 18 note).
+
+---
+
+## Agent worksheet contract
+
+JSON matching `schemas/diplomacy_worksheet_schema.json`:
+
+- `top_layer`, `category`, `band`, `policy_style`
+- `code_string` (normalized display)
+- `rationale`, `needs_human` / reason
+
+---
+
+## Engine validation
+
+Validate enum membership; ensure category ∈ band; normalize `code_string`; no numeric fields allowed.
+
+
+# Part V — Information Brief Specification
+
+**Track:** Information (explanatory only — **no scoring**)  
+**Bibliography:** Sources 21–22 in `PLI_Annotated_Bibliography.md` `(Information)`
+
+**Operating principle — PLI briefs, the SME edits/approves text.** There is no information score, band, or delta.
+
+---
+
+## When this track runs
+
+**Default lane:** Plenum **Instrument of Power** (`actions.mechanism`) — starting map only, not the sole authority. Bundled tools and mislabeled filings must be caught by the agent/SME (see Architecture / track routing).
+
+| Instrument of Power | Information track |
+|---------------------|-------------------|
+| Informational | **Required** |
+| Diplomatic / Economic / Military | Off by default; open as a **secondary facet** only with cited dual-lane evidence (`secondary_facet_citation`), or flag `needs_human` if the Informational label is wrong |
+
+---
+
+## Brief structure (required sections)
+
+The agent returns JSON matching `schemas/info_brief_schema.json` with these text sections:
+
+1. **summary** — 1–2 paragraph plain-language overview of the information environment implications of the action.
+2. **audiences** — primary/secondary audiences (domestic, allied, adversary, Global South, sectoral, etc.).
+3. **narratives** — frames the action creates, reinforces, or contests (Blue / Red / Green perspectives as relevant).
+4. **second_order_effects** — likely second- and third-order information effects (credibility, mobilization, propaganda value, ally messaging friction).
+5. **sme_questions** — concrete questions the SME should answer before finalizing White Cell notes.
+6. **suggested_sme_edits** — optional bullets the SME might tighten or correct.
+
+Optional: `evidence_notes` citing open-source analogs (no fabricated classified claims).
+
+**Forbidden:** numeric scores, Likert bands, “effectiveness 1–10,” or any field that could be mistaken for adjudication arithmetic.
+
+---
+
+## SME workflow
+
+1. Agent produces brief → status `pending`.
+2. SME edits text **in Plenum** (Diplomacy & Information review). After that seat is approved or overridden, TSJ and Verba copy the finalized packet from the SME console into their tools in another window.
+3. SME marks `approved` / `overridden` with rationale; approved text is the Information output of record for reports.
+
+---
+
+## Engine / validator role
+
+`tracks/info_brief.py` only checks that required text sections exist and that no numeric score keys are present. It does not alter wording.

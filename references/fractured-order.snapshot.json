@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "Fractured Order",
+  "status": "official-golden-reference",
+  "origin": "https://github.com/ssgwm25/Fractured-Order.git",
+  "sourceBranchObserved": "main",
+  "sourceCommit": "ae5d5065bc04a53631815b1b1715a54e21e3ef5b",
+  "sourceTree": "771510b6180bd4826dc5688789d131f2109eeb62",
+  "exportedOn": "2026-10-17",
+  "exportMethod": "git -c core.autocrlf=false archive, extracted with bsdtar",
+  "archiveSha256": "E9B0E4E2797087F7CC04B0EA4A3DB8E04A12287AC4224ED5C5FAD95995146060",
+  "trackedFileCount": 1111,
+  "exportedBytes": 151409464,
+  "verification": {
+    "method": "Re-index exported files with core.autocrlf=false and compare Git tree IDs",
+    "expectedTree": "771510b6180bd4826dc5688789d131f2109eeb62",
+    "actualTree": "771510b6180bd4826dc5688789d131f2109eeb62",
+    "result": "PASS"
+  },
+  "authoritativeFor": [
+    "official behavioral parity baseline",
+    "source extraction inventory"
+  ],
+  "confirmedBy": "Product Owner",
+  "confirmedOn": "2026-10-17",
+  "excludedLocalState": [
+    ".git",
+    ".env.local",
+    ".venv",
+    "node_modules",
+    "dist",
+    "coverage",
+    "test-results",
+    "playwright-report",
+    "local caches"
+  ],
+  "immutable": true,
+  "governanceNote": "OPEN-003 was resolved on 2026-10-17 by Product Owner confirmation of the pinned commit."
+}

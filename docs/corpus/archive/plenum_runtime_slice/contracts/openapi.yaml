@@ -1,0 +1,160 @@
+openapi: 3.1.0
+info:
+  title: Plenum Studio–Package–Runtime Reference API
+  version: 0.1.0
+  description: >
+    Executable reference surface only. Uses local-only demo identity headers;
+    authentication, CRDT transport, tenant-safe projections, signing and enterprise operations remain future integration work.
+servers:
+  - url: http://127.0.0.1:3000
+components:
+  securitySchemes:
+    DemoHeaders:
+      type: apiKey
+      in: header
+      name: x-demo-user
+  schemas:
+    Definition:
+      type: object
+      required: [roles, artifactType, workflow]
+      properties:
+        roles:
+          type: array
+          items: {type: string}
+        artifactType: {type: string}
+        workflow:
+          type: array
+          items: {type: string}
+    Command:
+      type: object
+      required: [commandId, deviceId, operationType, aggregateId, governingReleaseId, expectedAggregateVersion]
+      properties:
+        commandId: {type: string, format: uuid}
+        deviceId: {type: string, format: uuid}
+        operationType: {type: string, enum: ['artifact.create','artifact.submit','artifact.forward','artifact.accept','artifact.return','artifact.resubmit','artifact.edit']}
+        aggregateId: {type: string, format: uuid}
+        governingReleaseId: {type: string, format: uuid}
+        expectedAggregateVersion: {type: integer, minimum: 0}
+        payload: {type: object, additionalProperties: true}
+    Receipt:
+      type: object
+      properties:
+        commandId: {type: string, format: uuid}
+        status: {type: string, enum: [accepted,rejected,needs_reconciliation]}
+        aggregateVersion: {type: [integer, 'null']}
+        evidenceSequence: {type: [integer, 'null']}
+        errorCode: {type: [string, 'null']}
+security:
+  - DemoHeaders: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        '200': {description: Process alive; database not checked}
+  /v1/projects:
+    post:
+      summary: Create a project and mutable draft
+      parameters:
+        - {in: header, name: x-org-id, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title,definition]
+              properties:
+                title: {type: string}
+                definition: {$ref: '#/components/schemas/Definition'}
+      responses:
+        '201': {description: Project and draft created}
+  /v1/projects/{projectId}/draft:
+    put:
+      summary: Optimistic edit of mutable draft
+      parameters:
+        - {in: path, name: projectId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [definition,expectedVersion]
+              properties:
+                definition: {$ref: '#/components/schemas/Definition'}
+                expectedVersion: {type: integer, minimum: 0}
+      responses:
+        '200': {description: New version}
+        '409': {description: Optimistic concurrency conflict}
+  /v1/projects/{projectId}/publish:
+    post:
+      summary: Validate and publish immutable definition revision and release
+      parameters:
+        - {in: path, name: projectId, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '201': {description: Published release}
+        '422': {description: Invalid definition}
+  /v1/sessions:
+    post:
+      summary: Instantiate a session from a published release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [releaseId,deploymentId]
+              properties:
+                releaseId: {type: string, format: uuid}
+                deploymentId: {type: string, format: uuid}
+      responses:
+        '201': {description: Created session}
+  /v1/sessions/{sessionId}/participants:
+    post:
+      summary: Assign a participant
+      parameters:
+        - {in: path, name: sessionId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId,role]
+              properties:
+                userId: {type: string,format: uuid}
+                role: {type: string,enum: [scribe,facilitator,white_cell,operator]}
+      responses:
+        '201': {description: Participant assigned}
+  /v1/devices:
+    post:
+      summary: Register demo user's device
+      responses:
+        '201': {description: Registered}
+  /v1/sessions/{sessionId}/commands:
+    post:
+      summary: Authoritative idempotent artifact command
+      parameters:
+        - {in: path, name: sessionId, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Command'}
+      responses:
+        '200':
+          description: Receipt; status distinguishes committed and needs-reconciliation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Receipt'}
+        '403': {description: Permission denied}
+        '409': {description: Idempotency collision}
+        '503': {description: Authority unavailable}
+  /v1/sessions/{sessionId}/artifacts:
+    get:
+      summary: Limited reference artifact projection (not production information policy)
+      parameters:
+        - {in: path,name: sessionId,required: true,schema: {type: string,format: uuid}}
+      responses:
+        '200': {description: Artifact list}

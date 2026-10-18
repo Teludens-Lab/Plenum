@@ -1,0 +1,47 @@
+{
+  "sessionRoles": [
+    { "id": "scribe", "name": "Scribe" },
+    { "id": "facilitator", "name": "Facilitator" },
+    { "id": "white_cell", "name": "White Cell" }
+  ],
+  "forms": [
+    {
+      "id": "form-request",
+      "name": "Request",
+      "formVersion": "1",
+      "fields": [
+        { "key": "summary", "label": "Summary", "type": "long_text", "required": true },
+        { "key": "rationale", "label": "Rationale", "type": "long_text", "required": false }
+      ]
+    }
+  ],
+  "artifactTypes": [
+    { "key": "request", "name": "Request", "formId": "form-request", "workflowId": "wf-request", "decisionBearing": true }
+  ],
+  "workflows": [
+    {
+      "id": "wf-request",
+      "key": "request_review",
+      "name": "Request review",
+      "initialState": "draft",
+      "states": [
+        { "key": "draft", "label": "Draft", "kind": "draft", "holderRelation": "creator" },
+        { "key": "submitted", "label": "With Facilitator", "kind": "review", "holderSessionRoleIds": ["facilitator"] },
+        { "key": "in_review", "label": "With White Cell", "kind": "review", "holderSessionRoleIds": ["white_cell"] },
+        { "key": "returned", "label": "Returned", "kind": "draft", "holderRelation": "creator" },
+        { "key": "accepted", "label": "Accepted", "kind": "terminal" }
+      ],
+      "transitions": [
+        { "id": "t1", "from": null, "command": "artifact.create", "to": "draft", "allowedSessionRoleIds": ["scribe"] },
+        { "id": "t2", "from": "draft", "command": "artifact.edit", "to": "draft", "allowedSessionRoleIds": ["scribe"], "contentOnly": true },
+        { "id": "t3", "from": "draft", "command": "artifact.submit", "to": "submitted", "allowedSessionRoleIds": ["scribe"], "notifySessionRoleIds": ["facilitator"] },
+        { "id": "t4", "from": "submitted", "command": "artifact.forward", "to": "in_review", "allowedSessionRoleIds": ["facilitator"], "notifySessionRoleIds": ["white_cell"] },
+        { "id": "t5", "from": "submitted", "command": "artifact.return", "to": "returned", "allowedSessionRoleIds": ["facilitator"], "notifyCreator": true },
+        { "id": "t6", "from": "in_review", "command": "artifact.accept", "to": "accepted", "allowedSessionRoleIds": ["white_cell"], "notifySessionRoleIds": ["facilitator"], "notifyCreator": true },
+        { "id": "t7", "from": "in_review", "command": "artifact.return", "to": "returned", "allowedSessionRoleIds": ["white_cell"], "notifySessionRoleIds": ["facilitator"], "notifyCreator": true },
+        { "id": "t8", "from": "returned", "command": "artifact.edit", "to": "returned", "allowedSessionRoleIds": ["scribe"], "contentOnly": true },
+        { "id": "t9", "from": "returned", "command": "artifact.submit", "to": "submitted", "allowedSessionRoleIds": ["scribe"], "notifySessionRoleIds": ["facilitator"] }
+      ]
+    }
+  ]
+}

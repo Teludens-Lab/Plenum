@@ -1,0 +1,329 @@
+# Fractured Order 2.0 — Economic Lever & Instrument Master Codebook
+
+## Architecture: three layers, one hierarchy
+
+```
+Layer 1 — PRIMARY LEVER (exactly one)     What economic domain are you operating in?
+Layer 2 — POLICY INSTRUMENT (exactly one primary)   What specific tool executes the action?
+Layer 3 — IMPLEMENTATION FIT (0–4)        Right lever, but wrong action plan?
+
+Facets (tie-breaks & context only)        Direction, Sector, Target, Coalition
+```
+
+PLI separates three distinct layers — levers, instruments, and Implementation Fit — with a strict hierarchy and no overlapping names between layers:
+
+- Levers answer **"where in economic statecraft?"**
+- Instruments answer **"how, specifically?"**
+- Implementation Fit answers **"is this the right plan for that lever?"**
+
+A team can land in the correct lever (L4 Sanctions) with the wrong instrument (I4.06 Asset Remedies when a targeted specially designated national listing would suffice) or an implausible action plan (retroactive intellectual-property seizure with no legal pathway). That is an **implementation failure**, not a classification failure.
+
+---
+
+## Layer 1 — The ten economic levers
+
+Ten levers cover the full Blue/Red/Green economic action corpus with minimal overlap. No undifferentiated catch-all bucket — each lever has a defined domain and instrument table.
+
+| Code | Lever | Definition | Boundary |
+|------|-------|------------|----------|
+| **L1** | Trade & Customs | Tariffs, quotas, trade remedies (Section 301, Section 232, anti-dumping and countervailing duties), import/export bans on ordinary goods and services | Dual-use technology denial → **L2** |
+| **L2** | Export Controls & Entity Lists | Entity lists, license denials, information and communications technology and services restrictions, deemed-export, strategic technology access denial | Generic tariffs → **L1** |
+| **L3** | Investment & Capital Controls | Foreign investment screening, outbound investment rules, ownership caps, investment bans, **reciprocal FDI / investment-access packages** | Asset freeze → **L4**. Ordinary FDI / land investment without sovereignty or exclusive basing rights stays **L3**. Named reciprocal FDI packages → **I3.05** (not `needs_human` for inbound/outbound ambiguity) |
+| **L4** | Financial Sanctions & Coercion | Targeted/secondary sanctions, asset freezes, payment-system denial, financial-market access bans, **legal-economic asset remedies** | Non-punitive regulation → **L5**. Sovereignty or basing-access transfer between states → **L10** (not I4.06) |
+| **L5** | Financial Regulation & Digital Policy | Prudential and anti-money-laundering rules, digital asset policy, market-structure regulation, **domestic foreign-exchange intervention / rate-check coordination** without country-specific punishment | Bilateral partner-support swaps → **L6** (rule 4). Any sanction element → **L4** |
+| **L6** | Development & Infrastructure Finance | Development finance institutions, foreign aid, export credit, overseas infrastructure/connectivity financing, **bilateral currency swaps for partner support**, **sovereign bond purchase/guarantee for partner states**, **resource-backed lending / long-term offtake and guaranteed-purchase commitments to partner producers**, **partner supply-chain capacity finance (extraction / refining / processing abroad for supply diversification)** | Domestic-only capacity → **L7**. Domestic foreign-exchange operations (not partner swap) → **L5**. Overseas infra finance whose *object* is territory/basing rights → **L10**. Loans-for-minerals, premium-price or volume-share offtake pledges, and bloc-accession economic inducement packages → **I6.08** (not L1 tariff preference, not L8 unless the sponsor stockpiles the volumes). Financing a partner's mines, refineries, or processing plants to diversify away from a dominant supplier → **I6.09** (not L7 because the plant is abroad; not L8 because no stockpile is built) |
+| **L7** | Industrial Policy & Domestic Capacity | Subsidies, tax incentives, deregulation, procurement preferences, domestic research and development / industrial funding | Foreign deployment → **L6** |
+| **L8** | Strategic Reserves & Supply Security | Stockpiling, reserve mandates, supply contingency authorities, **official reserve / commodity sales to move market prices** | New production → **L7**. Gold/commodity sell-offs for price intervention → **I8.04** (not L5 FX rate-check; not L4 unless sanctions/asset remedies named) |
+| **L9** | Standards, Regulation & Data Governance | Technical standards, regulatory harmonization, data governance, certification/trust regimes | Access bans → **L1/L2** |
+| **L10** | Territorial Acquisition, Basing & Strategic Access | Negotiated acquisition, cession, long-term lease, or compensatory transfer of **sovereign territory, exclusive basing rights, or strategic geographic access** (including SLOC-critical islands/ports) where the economic bargain (payment, lease, offset package) is the operative instrument | Pure Military force posture, alliance messaging, or diplomacy with no purchase/lease/concession bargain → **NE**. Asset/IP/fund seizure inside a jurisdiction → **L4 / I4.06**. Ordinary FDI without sovereignty or exclusive basing → **L3**. Overseas infra finance without territorial/basing rights as the deal object → **L6** |
+
+| Code | Special | Use |
+|------|---------|-----|
+| **NE** | Non-Economic | Default when Instrument of Power is Diplomatic, Informational, or Military — or when an Economic filing has no economic lever vector (mislabel / needs_human). No macro lever vector. Always routed to National Interest + Glasl; Diplomacy Index and Information brief follow default lanes or cited secondary facets (see Architecture / track routing). |
+
+**Design notes:**
+- Legal-economic coercion (intellectual-property seizure, eminent domain, retroactive compensation) is coercive financial punishment — it belongs under **L4** as instrument **I4.06**, not as its own lever.
+- **L10 is not the retired legal-coercion lever.** The 2026-06-15 consolidation moved former legal-coercion L10 into I4.06. The current **L10** is a distinct domain for sovereignty / basing / strategic-access *transactions* between states.
+
+---
+
+## Layer 2 — Policy instruments (by lever)
+
+Each action gets **one primary instrument**. Secondary instruments optional when bundled authorities are distinct.
+
+### L1 — Trade & Customs
+| Code | Instrument |
+|------|------------|
+| I1.01 | Tariffs / ad valorem duties |
+| I1.02 | Quotas / quantitative restrictions |
+| I1.03 | Trade investigations (Section 301 / Section 232 / anti-dumping and countervailing duties) |
+| I1.04 | Import/export bans (non-dual-use goods) |
+| I1.05 | Preferential trade access / free trade agreement expansion |
+
+### L2 — Export Controls
+| Code | Instrument |
+|------|------------|
+| I2.01 | Entity List designation |
+| I2.02 | Export license denial / licensing regime |
+| I2.03 | Information and communications technology and services / technology-transfer restriction |
+| I2.04 | Market exclusion of foreign-affiliated technology systems |
+
+### L3 — Investment & Capital
+| Code | Instrument |
+|------|------------|
+| I3.01 | Inbound investment screening |
+| I3.02 | Outbound investment restriction |
+| I3.03 | Foreign ownership cap / divestment order |
+| I3.04 | Investment ban (sector- or country-specific) |
+| I3.05 | Reciprocal FDI / investment-access package (coupled screening, outbound rules, and/or market-access reciprocity) |
+
+**Default direction for I3.05:** Mixed (security restriction + reciprocal access bargain). Use Coercive when the filing is framed only as denial/decoupling; Inducement when framed only as opening access conditional on partner reciprocity.
+
+**Instrument selection — Reciprocal FDI Package:** When the action title, objective, or UI lever names a **Reciprocal FDI Package** (or equivalent security-restricted reciprocal investment package) and no single inbound/outbound/ban instrument clearly dominates, assign **L3 / I3.05**. Do **not** set `needs_human` solely because UI levers are empty, Implementation/Legislative fields are blank, or the package could be read as I3.01 vs I3.02 vs I3.04. Prefer a discrete I3.01–I3.04 code only when the operative act is clearly one of those alone.
+
+**Worked example — Reciprocal FDI Package:** Economic Instrument of Power; objective cites alliance cohesion and security-restricted investment (biotech/telecom) without specifying inbound-only or outbound-only → **L3 / I3.05**, direction Mixed. National Interest and Glasl still run in parallel.
+
+### L4 — Financial Sanctions & Coercion
+| Code | Instrument |
+|------|------------|
+| I4.01 | Targeted sanctions (specially designated national / sectoral) |
+| I4.02 | Secondary sanctions |
+| I4.03 | Asset freeze / seizure |
+| I4.04 | Payment-system / correspondent-banking restriction |
+| I4.05 | Financial-market access ban |
+| I4.06 | Legal-economic asset remedies (intellectual-property seizure, eminent domain, retroactive compensation, sovereign-fund confiscation) |
+
+### L5 — Financial Regulation
+| Code | Instrument |
+|------|------------|
+| I5.01 | Prudential / anti-money-laundering regulation |
+| I5.02 | Digital asset / central bank digital currency policy |
+| I5.03 | Market-structure / systemic-risk rule |
+| I5.04 | Foreign-exchange market intervention / rate-check coordination (Treasury–central-bank signaling; not punitive) |
+
+### L6 — Development & Infrastructure Finance
+| Code | Instrument |
+|------|------------|
+| I6.01 | Bilateral development finance / aid |
+| I6.02 | Multilateral development finance institution commitment |
+| I6.03 | Export credit / loan guarantee |
+| I6.04 | Overseas infrastructure / connectivity investment |
+| I6.05 | Joint purchasing / allied finance facility |
+| I6.06 | Bilateral currency swap / central-bank liquidity line (partner support) |
+| I6.07 | Sovereign bond purchase or guarantee for partner state (inducement stabilization) |
+| I6.08 | Resource-backed finance / long-term offtake and guaranteed-purchase commitment (loans-for-minerals, premium-price or volume-share purchase pledges, bloc-accession economic inducement packages) |
+| I6.09 | Partner supply-chain capacity finance (project finance, equity, grants, or guarantees for a partner state's extraction, refining, or processing capacity to diversify supply away from a dominant or adversary supplier) |
+
+**Default direction for I6.09:** Inducement toward the financed partner. Record Mixed when the filing names an adversary supplier it intends to displace ("disrupt Red" / "steer away from BRI") in addition to building partner capacity; the displacement intent is context for National Interest and does not re-route to L1–L4 unless a tariff, ban, sanction, or screening act is also named.
+
+**Instrument selection — partner supply-chain capacity finance:** When an Economic filing's operative act is the sponsor state (Treasury, DFC, EXIM, MCC, or a newly legislated fund) financing **extraction, refinement, or processing capacity located in a partner state** so that the sponsor or its allies rely less on a dominant supplier (e.g. "provide additional finances for the extracting and refinement of phosphate in Morocco ... disrupt global reliance on Chinese phosphate"), assign **L6 / I6.09**. Prefer I6.01 only for untied development aid with no supply-chain or sector-capacity objective; I6.03 only when the act is export credit or a loan guarantee for the sponsor's own exporters; I6.04 only when the financed object is connectivity infrastructure (ports, rail, grid, telecoms) rather than productive capacity; I6.05 when allies pool purchasing or capital in a joint facility. Do **not** route to L7 (domestic capacity) because the plant is abroad, to L8 because supply security is the motive (no stockpile is built), or to L3 because capital crosses a border (no screening or equity-control act). Do **not** set `needs_human` solely because UI levers are "None selected", the legislative pathway is new, or the filing mixes resilience and disruption angles.
+
+**Worked example — Morocco phosphate Supply Chain Security Agreement:** Economic Instrument of Power; the United States legislates additional finance for phosphate extraction and refinement in Morocco to cut reliance on PRC phosphate, build African self-reliance, and pull producers away from BRI → **L6 / I6.09**, direction Mixed (partner inducement with named adversary displacement). National Interest and Glasl still run in parallel.
+
+**Default direction for I6.08:** Inducement. Use Mixed when the offtake or loan terms carry an exclusivity, collateral-seizure, or supply-denial clause aimed at a third party; Coercive only when the operative act is withdrawal or threatened withdrawal of an existing offtake/loan.
+
+**Instrument selection — resource-backed finance and offtake commitments:** When an Economic filing's operative act is a sponsor state (or its policy banks / state-owned enterprises) offering a producer state concessional loans **coupled with**, or in exchange for, a long-term purchase commitment over the producer's extracted output (e.g. "50% of extracts sold to BRICS+ countries at 2% above market value"), or a guaranteed-purchase / premium-price offtake pledge standing alone, assign **L6 / I6.08**. Prefer I6.04 only when a named infrastructure build is the operative act and no offtake, purchase share, or price premium is specified; cite I6.04 as the secondary instrument when both are present. Prefer I6.01/I6.03 only for untied aid or export credit with no purchase commitment. Do **not** set `needs_human` solely because the package is framed as bloc membership (BRICS+ / plurilateral accession), because UI levers are "None selected", because Implementation/Legislative fields are blank, or because Diplomacy appears in the Instruments list without a cited dual-lane diplomatic act. Not L1/I1.05 (no tariff or customs preference is the instrument), not L8 unless the sponsor explicitly stockpiles the purchased volumes (then I8.01 secondary), not L3 unless equity ownership or investment screening is the operative act.
+
+**Worked example — Peru/Chile BRICS+ loans-for-minerals package:** Economic Instrument of Power; PRC offers Peru and Chile infrastructure loans at reduced rates plus a pledge that half of their mineral extracts are sold to BRICS+ members at 2% above market as the incentive to join BRICS+ → **L6 / I6.08**, direction Inducement, secondary I6.04 for the infrastructure lending. National Interest and Glasl still run in parallel.
+
+### L7 — Industrial Policy
+| Code | Instrument |
+|------|------------|
+| I7.01 | Subsidies / tax incentives |
+| I7.02 | Deregulation for capacity expansion |
+| I7.03 | Government procurement / domestic content requirement |
+| I7.04 | Domestic research and development / industrial funding program |
+
+### L8 — Strategic Reserves
+| Code | Instrument |
+|------|------------|
+| I8.01 | Strategic stockpile build |
+| I8.02 | Reserve mandate / release authority |
+| I8.03 | Supply-security emergency authority |
+| I8.04 | Official reserve / commodity sales for market-price intervention (e.g. gold sell-off to move the topline price) |
+
+**Default direction for I8.04:** Coercive when framed as price fixing / market manipulation; Mixed when framed as routine reserve management with a price effect; Inducement only when sales are explicitly partner-support or liquidity support.
+
+**Instrument selection — gold / commodity price intervention sales:** When the action title or objective is selling official gold (or another strategic commodity) to manipulate, fix, or move the market price, assign **L8 / I8.04**. Prefer I8.02 only when the operative act is supply-security reserve release without a price-manipulation objective. Do **not** set `needs_human` solely because UI levers are empty, Implementation/Legislative fields are blank, or the Instruments list includes non-DIME junk (e.g. "Magic") or Diplomacy without a cited dual-lane diplomatic act. Not L5/I5.04 (FX rate-check) and not L4 unless sanctions or asset remedies are named.
+
+**Worked example — Selling off gold to manipulate the price:** Economic Instrument of Power; objective is fixing the topline gold price via official sell-off → **L8 / I8.04**, direction Coercive. National Interest and Glasl still run in parallel.
+
+### L9 — Standards & Data Governance
+| Code | Instrument |
+|------|------------|
+| I9.01 | Technical standards-setting / adoption mandate |
+| I9.02 | Regulatory harmonization / mutual recognition |
+| I9.03 | Data localization / cross-border data rule |
+| I9.04 | Certification / trusted-vendor regime |
+
+### L10 — Territorial Acquisition, Basing & Strategic Access
+| Code | Instrument |
+|------|------------|
+| I10.01 | Sovereign territory purchase or cession (treaty / legislative transfer) |
+| I10.02 | Long-term basing / Status of Forces Agreement / exclusive facility rights package |
+| I10.03 | Strategic port, canal, or sea-lane-of-communication access concession |
+| I10.04 | Compensatory economic package tied to territorial or basing settlement |
+
+**Default direction:** Inducement (purchase/lease packages). Use Coercive or Mixed when the deal is framed as compelled cession or dual carrot-stick.
+
+**Worked example — Purchase Chagos Archipelago:** Economic Instrument of Power; operative act is UK–US sovereign territory purchase/cession for Indian Ocean basing and SLOC protection → **L10 / I10.01**, direction Inducement. National Interest (NI-1 / NI-4) and Glasl still run in parallel. Do **not** force-fit L1–L9 or route to `needs_human` solely because no prior L-code existed.
+
+---
+
+## Layer 3 — Implementation Fit score (0–4)
+
+Scored by White Cell **after** lever and instrument are assigned. This is where "right lever, wrong action plan" lives.
+
+| Score | Label | Criteria |
+|-------|-------|----------|
+| **4** | Well-fit | Primary instrument matches lever and objective; authority/pathway plausible; sequencing sound |
+| **3** | Acceptable | Correct instrument class; minor gaps in authority, funding, or timeline |
+| **2** | Misfit | Correct lever domain, but **wrong instrument choice** for the objective (e.g., broad secondary sanctions when a targeted specially designated national listing would suffice; development finance promised without funding source) |
+| **1** | Implausible | Instrument identified correctly, but action plan is **not executable** in-round (legal dead-end, missing allied prerequisite, incoherent bundling) |
+| **0** | Incoherent | Lever-instrument mismatch, or action plan contradicts stated objective |
+
+### Implementation Fit is separate from the existing Design/Feasibility/Alignment rubric
+
+| Rubric dimension | What it measures |
+|------------------|------------------|
+| Action Design | Specificity, clarity, internal logic |
+| Feasibility | Can it actually be executed given scenario constraints? |
+| Alignment | Fit with team orientation and scenario logic |
+| **Implementation Fit (new)** | Given the lever, is this the **right instrument and action plan**? |
+
+Example — M1-A5 Intellectual-Property Enforced Remuneration:
+- Lever: **L4** (correct domain — coercive financial/legal)
+- Instrument: **I4.06** (correct identification of what they proposed)
+- Implementation Fit: **1** (instrument class recognized, plan implausible — matches adjudication Feasibility 0–1/4)
+- The team did not fail classification; they failed execution design.
+
+Example — M2-A2 Global Telecommunications Initiative:
+- Lever: **L6** (correct)
+- Instrument: **I6.04** (overseas connectivity investment)
+- Implementation Fit: **2** (right domain, wrong plan — assumes allied funding and intellectual-property-enforcement revenue that does not exist)
+
+### Model hook
+
+```
+EffectiveDesign = DesignScore × (ImplementationFit / 4)
+```
+
+Or additive: Implementation Fit feeds Feasibility cap. White Cell choice at build time — document records both options.
+
+---
+
+## Facets — tie-breaks and context only
+
+Facets do **not** compete with levers or instruments. Use when:
+
+| Facet | Values | Primary use |
+|-------|--------|-------------|
+| **Direction** | Coercive / Inducement / Mixed | Tie-break between adjacent levers (L1 vs L4 when both restrictive) |
+| **Sector** | Telecommunications, Biotech, Agriculture, Minerals, Semiconductors, Finance, Energy, Digital, General | Routes to sector-growth tracker; exposure weight |
+| **Target** | United States, People's Republic of China, All actors, Third countries, Mixed | People's Republic of China exposure for economic model |
+| **Coalition** | Unilateral, Bilateral, Plurilateral, Multilateral | Feasibility modifier — not a lever |
+
+**Not required for intake:** Orientation (captured in rubric Alignment), Implementation Tier (captured by instrument and feasibility), Horizon (White Cell adjudication note, not a coding field).
+
+---
+
+## Tie-break hierarchy (lever assignment)
+
+1. Asset seizure / retroactive compensation / payment denial → **L4**
+2. Export license / entity list / technology-system exclusion → **L2**
+3. Investment screening / capital-flow ban → **L3**
+4. **Bilateral currency swap / central-bank liquidity line for partner support → L6**
+5. Tariff / quota / trade remedy → **L1**
+6. Stockpiling / reserves → **L8**
+7. Overseas infrastructure / development finance → **L6**
+8. Domestic subsidy / deregulation / procurement → **L7**
+9. Standards / harmonization → **L9**
+10. Non-sanctions financial rule → **L5**
+11. **Sovereign territory purchase/cession, exclusive basing rights, or strategic geographic access concession (payment, lease, or compensatory package) → L10**
+
+**Rule 4 scope:** Partner-support swaps only. Domestic/prudential foreign-exchange management stays **L5** (rule 10). Punitive denial of swap or bond market access stays **L4** (rule 1). Swap used as capital-control enforcement stays **L3** (rule 3).
+
+**Rule 7 scope:** Covers resource-backed lending and offtake / guaranteed-purchase commitments to partner producers (**I6.08**) and partner supply-chain capacity finance for extraction, refining, or processing abroad (**I6.09**), as well as infrastructure and development finance proper (I6.01–I6.05). A purchase pledge at a stated volume share or price premium is a finance inducement, not a trade-customs act: it stays **L6** (rule 7) rather than **L1** (rule 5). Financing productive capacity in a partner state stays **L6** (rule 7) rather than **L7** (rule 8), which is reserved for capacity inside the sponsor's own jurisdiction. Either moves to **L8** (rule 6) only when the sponsor's own stockpile is the stated destination of the volumes.
+
+**Rule 11 scope:** The object of the bargain must be sovereignty, exclusive basing, or strategic geographic access. Ordinary overseas infrastructure without those rights stays **L6** (rule 7). Intra-jurisdiction asset seizure stays **L4 / I4.06** (rule 1). Pure Military/Diplomatic acts without a transactional access deal stay **NE**.
+
+If Direction is Inducement and two levers fit, prefer L6/L7/L8/L10 over L1–L4.  
+If Direction is Coercive, prefer L1–L4 over L6–L10 unless rule 11 (territory/basing) clearly dominates.
+
+---
+
+## Currency, bond, and foreign exchange operations
+
+| Example | Lever | Instrument | Notes |
+|---------|-------|------------|-------|
+| Argentina–United Arab Emirates currency swap | **L6** | **I6.06** | Rule 4 (partner-support swap); Inducement |
+| People's Republic of China swap line to Global South partner | **L6** | **I6.06** | Rule 4 (partner-support swap); same mechanism |
+| United States Treasury rate-check response to Bank of Japan | **L5** | **I5.04** | Rule 10 (non-sanctions financial rule); foreign-exchange coordination, not punitive |
+| Ban on adversary sovereign bond access | **L4** | **I4.05** | Rule 1; coercive market access denial |
+| United States purchase of partner sovereign bonds (inducement) | **L6** | **I6.07** | Rule 7 if infrastructure-framed; I6.07 when bond support dominates |
+| Outbound ban on buying adversary sovereign debt | **L3** or **L4** | I3.04 or I4.05 | Dominance rule; both covered |
+| United States purchase of Chagos Archipelago from the United Kingdom | **L10** | **I10.01** | Rule 11; sovereignty transfer for basing / SLOC |
+| Long-term exclusive basing rights package with host-nation offsets | **L10** | **I10.02** | Rule 11; not L6 overseas infra alone |
+| Strategic port access concession tied to lease payments | **L10** | **I10.03** | Rule 11 |
+| Reciprocal FDI Package (security-restricted investment + access bargain; inbound/outbound not specified) | **L3** | **I3.05** | Rule 3; package instrument when I3.01–I3.04 do not uniquely dominate |
+| Selling off gold to manipulate / fix the market price | **L8** | **I8.04** | Rule 6; official commodity sales for price intervention (not I8.02 supply-security release alone) |
+| PRC loans-for-minerals plus 50% offtake at 2% above market to bring Peru/Chile into BRICS+ | **L6** | **I6.08** | Rule 7; resource-backed finance / offtake commitment, Inducement; I6.04 secondary for the infrastructure lending |
+| United States finances phosphate extraction and refinement in Morocco to cut reliance on PRC phosphate and pull producers off BRI | **L6** | **I6.09** | Rule 7; partner supply-chain capacity finance, Mixed (partner inducement + named adversary displacement); not L7 (plant abroad), not L8 (no stockpile) |
+
+---
+
+## White Cell intake form
+
+```
+ActionID:           M1-A5
+Cell:               Blue
+Title:              Intellectual-Property Enforced Remuneration
+PrimaryLever:       L4
+PrimaryInstrument:  I4.06
+SecondaryInstrument: I3.04
+Direction:          Coercive
+Sector:             Digital
+Target:             People's Republic of China
+Coalition:          Plurilateral
+ImplementationFit:  1
+DesignScore:        1/4
+Feasibility:        0/4
+Alignment:          1/4
+EscalationDelta:    +2
+Notes:              Right lever; wrong action plan
+```
+
+---
+
+## Fractured Order 1.0 Blue corpus quick reference
+
+Reference classifications for the eleven economic actions submitted by the Blue team in Fractured Order 1.0.
+
+| Action | Lever | Instrument | Implementation Fit |
+|--------|-------|------------|-------------------|
+| M1-A1 Wedges & Incentive | NE | — | — |
+| M1-A2 No BRICS+ in America | L2 | I2.04 | 2 |
+| M1-A3 Minerals for All | L7 | I7.02 | 3 |
+| M1-A4 Trade Investigations | L1 | I1.03 | 4 |
+| M1-A5 Intellectual-Property Enforced Remuneration | L4 | I4.06 | 1 |
+| M1-A6 Stockpiling | L8 | I8.01 | 3 |
+| M1-A7 Probiotic Act | L7 | I7.01 | 3 |
+| M2-A1 European Union Critical Minerals (withdrawn) | L6 | I6.05 | 2 |
+| M2-A2 Global Telecommunications | L6 | I6.04 | 2 |
+| M2-A3 Global Strategic Futures | L7 | I7.04 | 3 |
+| M2-A4 Sanctions & Critical Minerals | L4 | I4.02 | 2 |
+
+---
+
+## Change log
+
+| Date | Change |
+|------|--------|
+| 2026-06-15 | Initial 10-lever + facet model (superseded) |
+| 2026-06-15 | Nine-lever architecture; instrument layer; Implementation Fit; former L10 consolidated into I4.06; facets simplified |
+| 2026-06-30 | Master codebook: I5.04, I6.06, I6.07; tie-break rule 4 (partner-support swaps); currency/bond/foreign-exchange guidance |
+| 2026-07-29 | Add **L10 Territorial Acquisition, Basing & Strategic Access** (I10.01–I10.04) and tie-break rule 11. Distinct from the retired legal-coercion L10 that was merged into I4.06. Covers Chagos-style sovereignty / basing transactions so they classify under Macro instead of `needs_human`. |
+| 2026-07-30 | Add **I3.05 Reciprocal FDI / investment-access package** under L3. Named reciprocal FDI / security-restricted investment packages classify as L3/I3.05 instead of `needs_human` when inbound vs outbound vs ban cannot be uniquely assigned. |
+| 2026-07-30 | Add **I8.04 Official reserve / commodity sales for market-price intervention** under L8. Gold/commodity sell-offs to manipulate or fix market prices classify as L8/I8.04 instead of `needs_human` when UI levers/implementation are empty or Instruments lists include non-DIME noise. |
+| 2026-10-16 | Add **I6.08 Resource-backed finance / long-term offtake and guaranteed-purchase commitment** under L6 with rule 7 scope note. Loans-for-minerals, premium-price or volume-share offtake pledges, and bloc-accession (BRICS+) economic inducement packages classify as L6/I6.08 (I6.04 secondary) instead of collapsing to I6.04 or `needs_human`. Triggered by MAGE2026 Red M1 "Peru Chile BRICS+". UI lever "Resource-Backed Finance & Offtake" → L6. |
+| 2026-10-16 | Add **I6.09 Partner supply-chain capacity finance** under L6. Sponsor finance for a partner state's extraction, refining, or processing capacity to diversify away from a dominant/adversary supplier classifies as L6/I6.09 (direction Mixed when adversary displacement is named) instead of generic I6.01 aid or `needs_human`. Triggered by MAGE2026 Blue M1 "Supply Chain Security Agreement" (Morocco phosphate). UI lever "Partner Supply-Chain Capacity Finance" → L6. |

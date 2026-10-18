@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plenum Playthrough Guides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --bg-alt: #f4f5f4;
+            --text-main: #222222;
+            --text-muted: #555555;
+            --accent-green: #115740; /* W&M Green */
+            --accent-green-glow: rgba(17, 87, 64, 0.3);
+            --accent-gold: #B9975B; /* W&M Gold */
+            --accent-gold-glow: rgba(185, 151, 91, 0.4);
+            --card-bg: #ffffff;
+            --border-color: #e0e3e1;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% -10%, var(--bg-color), var(--bg-alt) 60%);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .logo {
+            width: 120px;
+            height: auto;
+            margin: 0 auto 20px auto;
+            display: block;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem;
+            margin-bottom: 10px;
+            color: var(--accent-green);
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .guide-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .guide-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.08);
+        }
+
+        .guide-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 6px; height: 100%;
+            background: var(--accent-gold);
+        }
+
+        .guide-header {
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .guide-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            margin: 0 0 10px 0;
+            color: var(--text-main);
+        }
+
+        .guide-focus {
+            display: inline-block;
+            background: rgba(90, 125, 86, 0.1);
+            color: var(--accent-green);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h3 {
+            font-family: 'Playfair Display', serif;
+            color: var(--accent-green);
+            font-size: 1.4rem;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 20px;
+            font-size: 1.05rem;
+            color: var(--text-main);
+        }
+
+        .role-action {
+            padding: 15px 20px;
+            background-color: var(--bg-alt);
+            border-left: 3px solid var(--accent-green);
+            margin-bottom: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .role-name {
+            font-weight: 700;
+            color: var(--accent-green);
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .highlight {
+            font-weight: 600;
+            color: var(--accent-gold);
+        }
+
+        .outcomes-box {
+            margin-top: 40px;
+            padding: 20px 25px;
+            background-color: var(--bg-alt);
+            border-left: 4px solid var(--accent-gold);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .outcomes-box h4 {
+            color: var(--accent-gold);
+            font-family: 'Playfair Display', serif;
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .outcomes-box h4::before {
+            content: '✓';
+            margin-right: 8px;
+            font-size: 1.1rem;
+        }
+
+        .outcomes-box ul {
+            margin: 0;
+            padding-left: 20px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+        }
+        
+        .outcomes-box li {
+            margin-bottom: 8px;
+        }
+        
+        .outcomes-box li:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="img/Gold No Background.png" alt="Plenum Logo" class="logo">
+            <h1>Plenum Playthrough Guides</h1>
+            <div class="subtitle">Step-by-Step Scenario Scripts for Undergraduate Training Sessions</div>
+        </header>
+
+        <!-- Session 1 Guide -->
+        <div class="guide-card">
+            <div class="guide-header">
+                <h2 class="guide-title">Session 1: Platform Basics & Role Surfaces</h2>
+                <div class="guide-focus">Focus: Dashboard Familiarity & Communication</div>
+            </div>
+            
+            <h3>Introduction</h3>
+            <p>Welcome to Fractured Order on Plenum. In this simulation, participants form teams consisting of a Scribe, a Facilitator, and Notetakers. They are overseen by the White Cell game masters. Our first session ensures everyone knows how to log in and find their workspace.</p>
+
+            <h3>The Playthrough Round</h3>
+            <p>To begin, the Game Master opens the session and shares the short uppercase join code. Students navigate to the Landing page.</p>
+            
+            <div class="role-action">
+                <span class="role-name">The Scribes</span>
+                Join the session using the code and select their team (Blue, Red, Green, or Industry) and the Scribe role. They verify their workspace loads and that the Strategic Orientation button is the primary green control.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">The Facilitators</span>
+                Join the session and select the Facilitator role for their team. They open the Communications workspace and send a test direct message to White Cell.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">The Notetakers</span>
+                Join and access their observation interface to practice recording team dynamics and alliance tracking.
+            </div>
+
+            <p>The session concludes once all teams confirm they can comfortably locate their starting conditions and workspace features without errors.</p>
+            
+            <div class="outcomes-box">
+                <h4>Session Outcomes</h4>
+                <ul>
+                    <li>Understanding of the Fractured Order structure and team division.</li>
+                    <li>Successful login and navigation to role-specific workspaces.</li>
+                    <li>Ability to send and receive Direct Communications within the platform.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Session 2 Guide -->
+        <div class="guide-card">
+            <div class="guide-header">
+                <h2 class="guide-title">Session 2: Strategic Orientation (Pre-Move 1)</h2>
+                <div class="guide-focus">Focus: Drafting & Submitting Pre-Game Artifacts</div>
+            </div>
+            
+            <h3>Introduction</h3>
+            <p>Before Move 1 can begin, each team must clear the Strategic Orientation gate. This requires a coordinated handoff between the Scribe and Facilitator.</p>
+
+            <h3>The Playthrough Round</h3>
+            <div class="role-action">
+                <span class="role-name">Blue Scribe</span>
+                Opens the Strategic Orientation form. They choose Blue's orientation, forecast Red's orientation, and describe what Red is expected to do. They click "Forward to Facilitator".
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Blue Facilitator</span>
+                Sees the drafted artifact appear. Before submitting, they open the RFIs workspace and submit an RFI to White Cell to clarify the prompt. Once answered, they project the artifact onto the venue screen for team alignment, and select "Forward to White Cell".
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Red, Green, & Industry Teams</span>
+                Complete their specific Strategic Orientation matrices (e.g., Red forecasts Blue, Green (Asian Pacific), and Green (Europe)). The Scribes forward to their Facilitators, who submit to White Cell.
+            </div>
+
+            <p>The timeline header on everyone's screen reads "Strategic Orientation / Pre-Move 1". Once White Cell receives all four artifacts, the header updates and Move 1 officially begins.</p>
+            
+            <div class="outcomes-box">
+                <h4>Session Outcomes</h4>
+                <ul>
+                    <li>Mastery of the Pre-Move 1 Strategic Orientation gate requirements.</li>
+                    <li>Ability for Scribes to draft and Facilitators to project and submit the artifact.</li>
+                    <li>Understanding of how to submit and monitor Requests for Information (RFIs).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Session 3 Guide -->
+        <div class="guide-card">
+            <div class="guide-header">
+                <h2 class="guide-title">Session 3: Action & Proposal Workflows</h2>
+                <div class="guide-focus">Focus: Complex Form Submission & White Cell Handoffs</div>
+            </div>
+            
+            <h3>Introduction</h3>
+            <p>It is now Move 1. Teams will practice drafting comprehensive Actions (Blue/Red) and Proposals (Green/Industry) and executing the final checks before submission.</p>
+
+            <h3>The Playthrough Round</h3>
+            <div class="role-action">
+                <span class="role-name">Blue Scribe</span>
+                Drafts a new Action. They select "Diplomacy" under Instrument of Power. They answer "Yes" to the supply chain focus question, which reveals the Supply Chain Area options, where they select "Extraction". They specify the Focus Countries and expected outcomes, then forward the draft.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Blue Facilitator</span>
+                Receives the draft in the Team Action Review. They use the fixed bottom toolbar to answer the final checks: marking "Legislative" and "Executive" under Coordinated, and marking Industry "Yes" under Informed/Engaged. They submit to White Cell.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Green Scribe</span>
+                Drafts a Proposal. They enter Intended Partners, Focus Sectors, and select Blue and Red under intended notifications with a clarifying note. They forward the draft.
+            </div>
+
+            <p>Teams successfully execute the drafts and verify that their artifacts are marked as "Submitted to White Cell" and locked for further editing.</p>
+            
+            <div class="outcomes-box">
+                <h4>Session Outcomes</h4>
+                <ul>
+                    <li>Ability to differentiate and submit Actions (Blue/Red) and Proposals (Green/Industry).</li>
+                    <li>Mastery of the internal Scribe-to-Facilitator handoff process.</li>
+                    <li>Understanding of how to execute coordination and engagement checks before final submission.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Session 4 Guide -->
+        <div class="guide-card">
+            <div class="guide-header">
+                <h2 class="guide-title">Session 4: Full Turn Integration & Feedback Loops</h2>
+                <div class="guide-focus">Focus: Handling White Cell Returns & RFIs</div>
+            </div>
+            
+            <h3>Introduction</h3>
+            <p>During the move, White Cell may require more clarity, or teams may need more information to proceed. This session covers returns, resubmissions, and Requests for Information (RFIs).</p>
+
+            <h3>The Playthrough Round</h3>
+            <div class="role-action">
+                <span class="role-name">White Cell</span>
+                Reviews Blue's action. Finding the outcome description lacking, White Cell selects "Send Back for Improvement", adds a reviewer note, and returns it.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Blue Scribe & Facilitator</span>
+                Notice their action state change to "Returned by White Cell". The Facilitator clicks Edit, reads the White Cell notes in the revision history, adds the required details, and selects "Resubmit to White Cell".
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">Industry Facilitator</span>
+                Needs clarification on a game mechanic. They open the RFIs workspace, submit a category-tagged question, and monitor the live feed.
+            </div>
+
+            <div class="role-action">
+                <span class="role-name">White Cell</span>
+                Answers the Industry RFI. The response appears in the Industry Facilitator's History tab.
+            </div>
+
+            <p>The session concludes when all teams have successfully handled a return, processed an RFI, and White Cell allocates time to advance to the next move.</p>
+            
+            <div class="outcomes-box">
+                <h4>Session Outcomes</h4>
+                <ul>
+                    <li>Ability to navigate White Cell feedback and returns efficiently.</li>
+                    <li>Confidence in editing and resubmitting returned artifacts.</li>
+                    <li>Complete readiness to operate the Scribe and Facilitator surfaces independently during a live, fast-paced exercise.</li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

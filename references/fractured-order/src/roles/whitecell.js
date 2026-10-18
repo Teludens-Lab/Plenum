@@ -1,0 +1,6994 @@
+/**
+ * White Cell Role Controller
+ * ESG Economic Statecraft Simulation Platform v2.0
+ */
+
+import { sessionStore } from '../stores/session.js';
+import { gameStateStore } from '../stores/gameState.js';
+import { actionsStore } from '../stores/actions.js';
+import { requestsStore } from '../stores/requests.js';
+import { timelineStore } from '../stores/timeline.js';
+import { participantsStore } from '../stores/participants.js';
+import { communicationsStore } from '../stores/communications.js';
+import { database } from '../services/database.js';
+import { regionalView, matchesRegionalView, regionalAttribution } from '../features/participants/regionalView.js';
+import { syncService } from '../services/sync.js';
+import { ensureSeatStartup } from '../services/seatBootstrap.js';
+import { createLogger } from '../utils/logger.js';
+import { mountFollowAlong } from '../features/onboarding/followAlong.js';
+import { showDurableNotification, showToast } from '../components/ui/Toast.js';
+import { DurableNotificationCenter } from '../components/ui/DurableNotification.js';
+import { showLoader, hideLoader } from '../components/ui/Loader.js';
+import { showModal, confirmModal } from '../components/ui/Modal.js';
+import {
+    createArtifactLifecycleBadge,
+    createBadge,
+    createRoleBadge,
+    createPriorityBadge
+} from '../components/ui/Badge.js';
+import { resolveArtifactWorkflowState } from '../features/actions/artifactLifecycle.js';
+import {
+    BLUE_ACTION_NOTIFICATION_TEAMS,
+    formatActionSequenceLabel,
+    formatBlueActionSelection,
+    getActionSequenceNumber,
+    getBlueActionViewModel,
+    parseBlueActionDetails
+} from '../features/actions/blueActionDetails.js';
+import {
+    ACTION_MARKS,
+    groupActionRecordsByMark
+} from '../features/actions/actionMarkRail.js';
+import {
+    formatStrategicOrientationSelection,
+    getStrategicOrientationArtifactLabel,
+    getStrategicOrientationCompletion,
+    getStrategicOrientationDisplayFields,
+    getStrategicOrientationViewModel,
+    isStrategicOrientationAction
+} from '../features/actions/strategicOrientationDetails.js';
+import { renderIndustryStrategicPlanPositionView } from '../features/actions/industryStrategicPlanPresentation.js';
+import {
+    PROPOSAL_RECIPIENT_APPROVAL_STATUS,
+    getProposalViewModel,
+    isProposalAction
+} from '../features/actions/proposalDetails.js';
+import {
+    buildIndustryTurnSheetDisplayModel,
+    getIndustryMoveCoverage
+} from '../features/actions/industryTurnSheet.js';
+import {
+    PROPOSAL_RECIPIENT_STATUSES,
+    PROPOSAL_THREAD_MESSAGE_TYPES,
+    getLatestProposalThreadMessage,
+    getProposalThreadForRecipient,
+    getProposalThreadMessageKey,
+    getProposalThreadMetadata,
+    getProposalThreadStatus,
+    formatProposalRecipientStatus,
+    getProposalRecipientEntry,
+    getProposalRecipientStatus,
+    getProposalResponseEntry,
+    getProposalResponseReviewMetadata,
+    getPendingProposalResponseReviews,
+    isProposalNegotiationRequest,
+    isProposalThreadMessage
+} from '../features/actions/proposalRecipientState.js';
+import {
+    buildJsonExportPayload,
+    buildResearchExportBundle,
+    downloadJsonData,
+    downloadCsv,
+    downloadResearchExportArchive,
+    exportSessionActionsCsv,
+    exportSessionRequestsCsv,
+    exportSessionTimelineCsv,
+    exportSessionParticipantsCsv,
+    openResearchPrintWindow
+} from '../features/export/index.js';
+import { formatDateTime, formatRelativeTime } from '../utils/formatting.js';
+import {
+    applyHeaderGameStateDisplay,
+    getHeaderGameStateDisplay
+} from '../utils/gameStateDisplay.js';
+import {
+    TIMER_ALLOCATION_MARKS,
+    buildDefaultTimerAllocations,
+    getTimerAllocationSeconds,
+    minutesToAllocationSeconds,
+    normalizeTimerAllocations,
+    resolveGameStateTimerMark,
+    secondsToWholeMinutes
+} from '../utils/timerAllocations.js';
+import { CONFIG } from '../core/config.js';
+import { ENUMS, canAdjudicateAction, getPhaseLabel, isAdjudicatedAction, isDraftAction } from '../core/enums.js';
+import { getUserMessage, ValidationError } from '../core/errors.js';
+import {
+    buildDirectCommunicationNotification,
+    buildProposalResponseReviewNotification,
+    buildProposalRoundNotification,
+    buildRfiWorkflowNotification,
+    buildWhiteCellArtifactNotification
+} from '../features/notifications/workflowNotifications.js';
+import { buildAppPath, navigateToApp } from '../core/navigation.js';
+import {
+    GREEN_DELEGATIONS,
+    OPERATOR_SURFACES,
+    ROLE_SURFACES,
+    TEAM_OPTIONS,
+    WHITE_CELL_OPERATOR_ROLES,
+    buildTeamRole,
+    getRoleDisplayName,
+    parseTeamRole,
+    resolveTeamContext
+} from '../core/teamContext.js';
+import {
+    WHITE_CELL_UPDATE_KINDS,
+    regionalRecipientOptions,
+    buildWhiteCellRecipientMetadata,
+    getWhiteCellCommunicationUpdateKind,
+    isTeamCaptureTimelineEvent
+} from '../features/communications/targeting.js';
+import { createPliMacroReview } from '../features/pli/PliMacroReview.js';
+import { createDiplomacyInfoReview } from '../features/pli/DiplomacyInfoReview.js';
+import { createNiEscalationReview } from '../features/pli/NiEscalationReview.js';
+import { createPliReportPanel } from '../features/pli/PliReportPanel.js';
+import { createPliSmeEfficacyPanel } from '../features/pli/PliSmeEfficacyPanel.js';
+import { bindPlenaryBoardOpener } from '../features/plenary/plenaryHandoff.js';
+import {
+    SEATS as PLI_SEATS,
+    PLI_VIEW_MODES,
+    seatNeedsReview,
+    seatIsFinalized,
+    getSeatReview
+} from '../features/pli/pliShared.js';
+import {
+    buildDefaultScribeDeckPath,
+    DEFAULT_SCRIBE_DECK_LABEL,
+    DEFAULT_SCRIBE_DECK_PATH,
+    SCRIBE_DECK_ASSIGNMENT_CONTENT_KIND,
+    getScribeDeckAssignmentDetails,
+    normalizeUploadedScribeDeckFileName,
+    normalizeUploadedScribeDeckLabel,
+    normalizeScribeDeckLabel,
+    normalizeScribeDeckPath,
+    parseScribeDeckHtml,
+    SCRIBE_DECK_SOURCE_REPO,
+    SCRIBE_DECK_SOURCE_UPLOAD
+} from '../features/scribe/deckConfig.js';
+import {
+    buildUploadedScribeDeckStorageKey,
+    getSeatDeckStorageKey,
+    saveUploadedScribeDeck
+} from '../features/scribe/deckStorage.js';
+import { greenDeckAssignmentOptions, greenDeckAssignmentRoles } from '../features/scribe/deckAssignment.js';
+import {
+    buildDefaultPluginState,
+    getRegisteredPlugins,
+    isSessionRecorderNoticeActive,
+    isPluginVisible,
+    normalizePluginState,
+    setPluginEnabledInState
+} from '../features/plugins/registry.js';
+import {
+    TRIBE_STREET_JOURNAL_EMBED_URL,
+    createTribeStreetJournalEmbedMarkup
+} from '../features/tribeStreetJournalEmbed.js';
+import {
+    getNotetakerSaveTimelineDetailItems,
+    getNotetakerTimelineScopeLabel,
+    isNotetakerSaveTimelineEvent
+} from '../features/notetaker/timelineDetails.js';
+import { SESSION_CODE_MAX_LENGTH } from '../utils/validation.js';
+
+const logger = createLogger('WhiteCell');
+const WHITE_CELL_RFI_REVIEW_STATES = new Set(['submitted_to_white_cell', 'resubmitted']);
+
+export function isRfiAwaitingWhiteCellResponse(rfi = {}) {
+    return rfi.status === 'pending'
+        && WHITE_CELL_RFI_REVIEW_STATES.has(resolveArtifactWorkflowState(rfi));
+}
+
+export function isCompletedArtifactImmutabilityError(error) {
+    return String(error?.message || '').includes('Completed artifacts are immutable.');
+}
+const WHITE_CELL_ALL_TEAMS_RECIPIENT = 'all';
+const WHITE_CELL_RED_TEAM_RECIPIENT = 'red';
+const ACTION_NOTIFICATION_COMMUNICATION_TYPE = 'ACTION_NOTIFICATION';
+const ACTION_NOTIFICATION_TEAM_IDS = new Set(
+    BLUE_ACTION_NOTIFICATION_TEAMS.map((team) => team.toLowerCase())
+);
+const WHITE_CELL_SCRIBE_DECK_ASSIGNMENT_SOURCE = 'scribe_deck_assignment';
+const WHITE_CELL_NOTIFICATIONS_MUTED_STORAGE_KEY = 'whitecell:notifications-muted';
+export const WHITE_CELL_SCRIBE_DECK_FETCH_TIMEOUT_MS = 10000;
+const WHITE_CELL_REVIEW_GROUP_RENDER_LIMIT = 40;
+const WHITE_CELL_RETURN_HISTORY_RENDER_LIMIT = 80;
+export const WHITE_CELL_RFI_RENDER_LIMIT = 50;
+const WHITE_CELL_TRIBE_STREET_JOURNAL_RENDER_LIMIT = 60;
+const WHITE_CELL_VERBA_AI_RENDER_LIMIT = 60;
+const WHITE_CELL_COMMUNICATION_RENDER_LIMIT = 60;
+const WHITE_CELL_TIMELINE_RENDER_LIMIT = 50;
+const TEAM_LABELS = Object.freeze(
+    Object.fromEntries(TEAM_OPTIONS.map((team) => [team.id, team.label]))
+);
+const SOURCE_TEAM_BADGE_CLASS_BY_ID = Object.freeze(
+    Object.fromEntries(TEAM_OPTIONS.map((team) => [team.id, `badge-source-team--${team.id}`]))
+);
+const PROPOSAL_TEAM_IDS = new Set(['green', 'industry']);
+const WHITE_CELL_FILTER_TEAM_ORDER = Object.freeze([
+    ...TEAM_OPTIONS.map((team) => team.id),
+    'white_cell',
+    'observer',
+    'system'
+]);
+const WHITE_CELL_FILTER_ROLE_ORDER = Object.freeze([
+    ROLE_SURFACES.FACILITATOR,
+    ROLE_SURFACES.SCRIBE,
+    ROLE_SURFACES.NOTETAKER,
+    ROLE_SURFACES.WHITECELL,
+    ROLE_SURFACES.VIEWER,
+    'system'
+]);
+const WHITE_CELL_TIMELINE_ACTIVITY_TYPE_ORDER = Object.freeze([
+    'PHASE_CHANGE',
+    'MOVE_CHANGE',
+    'TIMER_START',
+    'TIMER_PAUSE',
+    'TIMER_RESET',
+    'ACTION_CREATED',
+    'ACTION_SUBMITTED',
+    'ACTION_ADJUDICATED',
+    'ARTIFACT_COMPLETED',
+    'ARTIFACT_RETURNED_TO_TEAM',
+    'STRATEGIC_ORIENTATION_FORWARDED_TO_SCRIBE',
+    'STRATEGIC_ORIENTATION_SUBMITTED',
+    'PROPOSAL_SUBMITTED',
+    'PROPOSAL_FORWARDED',
+    'PROPOSAL_RESPONSE',
+    'PROPOSAL_RESPONDED',
+    'RFI_CREATED',
+    'RFI_ANSWERED',
+    'INJECT',
+    'ANNOUNCEMENT',
+    'GUIDANCE',
+    'NOTE',
+    'MOMENT',
+    'QUOTE',
+    'PARTICIPANT_JOINED',
+    'PARTICIPANT_LEFT'
+]);
+const WHITE_CELL_TIMELINE_FACILITATOR_TYPES = Object.freeze([
+    'ACTION_CREATED',
+    'ACTION_SUBMITTED',
+    'STRATEGIC_ORIENTATION_FORWARDED_TO_SCRIBE',
+    'STRATEGIC_ORIENTATION_SUBMITTED',
+    'PROPOSAL_SUBMITTED',
+    'RFI_CREATED'
+]);
+const WHITE_CELL_TIMELINE_NOTETAKER_TYPES = Object.freeze([
+    'NOTE',
+    'MOMENT',
+    'QUOTE'
+]);
+const PROPOSAL_REVIEW_DECISIONS = Object.freeze({
+    FORWARD_TO_RECIPIENT: 'forward_to_recipient',
+    REQUEST_CHANGES: 'request_changes',
+    REJECT: 'reject'
+});
+const WHITE_CELL_MOVE_CONTROL_STEPS = Object.freeze([
+    { key: 'strategic_orientation', id: 'moveProgressStrategicOrientation', label: 'Strategic Orientation' },
+    { key: 'move_1', id: 'moveProgressMove1', label: 'Move 1', move: 1 },
+    { key: 'move_2', id: 'moveProgressMove2', label: 'Move 2', move: 2 },
+    { key: 'move_3', id: 'moveProgressMove3', label: 'Move 3', move: 3 }
+]);
+
+function isProposalTeamId(teamId) {
+    return PROPOSAL_TEAM_IDS.has(teamId);
+}
+
+function readWhiteCellNotificationsMutedPreference() {
+    try {
+        return globalThis.window?.localStorage?.getItem(WHITE_CELL_NOTIFICATIONS_MUTED_STORAGE_KEY) === 'true';
+    } catch (_error) {
+        return false;
+    }
+}
+
+function writeWhiteCellNotificationsMutedPreference(isMuted = false) {
+    try {
+        globalThis.window?.localStorage?.setItem(WHITE_CELL_NOTIFICATIONS_MUTED_STORAGE_KEY, isMuted ? 'true' : 'false');
+    } catch (_error) {
+        // Notification muting is a UI preference; storage failures must not block the operator console.
+    }
+}
+
+function createScribeDeckValidationTimeoutError() {
+    return new ValidationError(
+        'Facilitator deck validation timed out. Check the deck path and try again.',
+        'deckPath'
+    );
+}
+
+async function fetchScribeDeckHtmlWithTimeout(deckPath, {
+    timeoutMs = WHITE_CELL_SCRIBE_DECK_FETCH_TIMEOUT_MS
+} = {}) {
+    const controller = typeof globalThis.AbortController === 'function'
+        ? new globalThis.AbortController()
+        : null;
+    const fetchOptions = { credentials: 'same-origin' };
+    if (controller) {
+        fetchOptions.signal = controller.signal;
+    }
+
+    let timeoutId = null;
+    let didTimeout = false;
+    const timeoutError = createScribeDeckValidationTimeoutError();
+    const timeoutPromise = new Promise((_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+            didTimeout = true;
+            try {
+                controller?.abort?.();
+            } catch (_error) {
+                // Ignore abort errors; the timeout error below is the operator-facing failure.
+            }
+            reject(timeoutError);
+        }, timeoutMs);
+    });
+
+    const fetchPromise = (async () => {
+        const response = await fetch(buildAppPath(deckPath), fetchOptions);
+        if (!response.ok) {
+            throw new Error(`Deck fetch failed with status ${response.status}.`);
+        }
+
+        return response.text();
+    })();
+
+    try {
+        return await Promise.race([fetchPromise, timeoutPromise]);
+    } catch (error) {
+        if (didTimeout || error?.name === 'AbortError') {
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+        }
+    }
+}
+
+export const WHITE_CELL_DOM_IDS = [
+    'whiteCellNotificationsMuteBtn',
+    'startTimerBtn',
+    'pauseTimerBtn',
+    'resetTimerBtn',
+    'prevPhaseBtn',
+    'nextPhaseBtn',
+    'prevMoveBtn',
+    'nextMoveBtn',
+    'nextMoveHelp',
+    'currentMove',
+    'moveControlSequence',
+    'moveProgressStrategicOrientation',
+    'moveProgressMove1',
+    'moveProgressMove2',
+    'moveProgressMove3',
+    'currentPhase',
+    'moveLabel',
+    'phaseLabel',
+    'headerMove',
+    'headerPhase',
+    'controlTimerDisplay',
+    'timerDisplay',
+    'timerStatusLabel',
+    'timerStatus',
+    'timerAllocationForm',
+    'timerAllocationFields',
+    'timerAllocationStrategicOrientation',
+    'timerAllocationMove1',
+    'timerAllocationMove2',
+    'timerAllocationMove3',
+    'timerAllocationCurrentMark',
+    'timerAllocationSaveBtn',
+    'timerAllocationResetCurrentBtn',
+    'pluginSettingsList',
+    'whiteCellPluginMounts',
+    'strategicOrientationBadge',
+    'actionsBadge',
+    'proposalsBadge',
+    'responsesBadge',
+    'participantsSummary',
+    'participantsSessionFilter',
+    'participantsTeamFilter',
+    'participantsRoleFilter',
+    'participantsList',
+    'scribeDeckSettingsSummary',
+    'scribeDeckSettingsList',
+    'strategicOrientationList',
+    'actionsList',
+    'responsesList',
+    'proposalsList',
+    'returnedRevisionHistoryList',
+    'tribeStreetJournalEmbed',
+    'rfiBadge',
+    'rfiQueue',
+    'commForm',
+    'commRecipient',
+    'commType',
+    'commContent',
+    'commHistory',
+    'tribeStreetJournalList',
+    'newVerbaAiUpdateBtn',
+    'verbaAiList',
+    'openPlenaryBoardBtn',
+    'timelineTeamFilter',
+    'timelineRoleFilter',
+    'timelineMoveFilter',
+    'timelineActivityTypeFilter',
+    'timelineList'
+];
+
+export function getWhiteCellDomContract(documentRef = document) {
+    const elements = Object.fromEntries(
+        WHITE_CELL_DOM_IDS.map((id) => [id, documentRef?.getElementById?.(id) ?? null])
+    );
+
+    return {
+        elements,
+        missing: WHITE_CELL_DOM_IDS.filter((id) => !elements[id])
+    };
+}
+
+export function getWhiteCellAdminExportButtonConfig() {
+    return [
+        {
+            action: 'actions-csv',
+            availability: 'legacy',
+            className: 'btn btn-secondary btn-sm',
+            label: 'Export Actions (CSV)',
+            successMessage: 'Export downloaded.'
+        },
+        {
+            action: 'rfis-csv',
+            availability: 'legacy',
+            className: 'btn btn-secondary btn-sm',
+            label: 'Export RFIs (CSV)',
+            successMessage: 'Export downloaded.'
+        },
+        {
+            action: 'timeline-csv',
+            availability: 'legacy',
+            className: 'btn btn-secondary btn-sm',
+            label: 'Export Timeline (CSV)',
+            successMessage: 'Export downloaded.'
+        },
+        {
+            action: 'participants-csv',
+            availability: 'legacy',
+            className: 'btn btn-secondary btn-sm',
+            label: 'Export Participants (CSV)',
+            successMessage: 'Export downloaded.'
+        },
+        {
+            action: 'session-json',
+            availability: 'legacy',
+            className: 'btn btn-primary btn-sm',
+            label: 'Export Full Session (JSON)',
+            successMessage: 'Export downloaded.'
+        },
+        {
+            action: 'research-archive',
+            availability: 'research',
+            className: 'btn btn-primary btn-sm',
+            label: 'Download Research ZIP',
+            successMessage: 'Research archive is ready.'
+        },
+        {
+            action: 'research-print',
+            availability: 'research',
+            className: 'btn btn-secondary btn-sm',
+            label: 'Print Report',
+            successMessage: 'Research report is ready.'
+        }
+    ];
+}
+
+export function buildWhiteCellExportSelectionState({
+    sessionId = null,
+    sessionName = null,
+    captureMode = 'research'
+} = {}) {
+    const sessionLabel = sessionName || 'the active session';
+
+    if (!sessionId) {
+        return {
+            disabled: true,
+            researchDisabled: true,
+            captureMode,
+            message: 'Join a session before exporting JSON, CSV, or research archive data.'
+        };
+    }
+
+    if (String(captureMode || '').trim().toLowerCase() === 'standard') {
+        return {
+            disabled: false,
+            researchDisabled: true,
+            captureMode: 'standard',
+            message: `JSON and CSV exports are ready for ${sessionLabel}. Research archive controls stay locked until research capture mode is enabled.`
+        };
+    }
+
+    return {
+        disabled: false,
+        researchDisabled: false,
+        captureMode: 'research',
+        message: `JSON, CSV, and research exports are ready for ${sessionLabel}.`
+    };
+}
+
+export function getWhiteCellAccessState(teamContext, sessionStoreRef = sessionStore) {
+    const sessionId = sessionStoreRef.getSessionId?.() || sessionStoreRef.getSessionData?.()?.id || null;
+    const role = sessionStoreRef.getRole?.() || sessionStoreRef.getSessionData?.()?.role || null;
+    const parsedRole = parseTeamRole(role);
+    const allowedRole = role === teamContext.whitecellLeadRole || role === teamContext.whitecellSupportRole;
+    const cachedOperatorAccess = Boolean(
+        sessionId &&
+        allowedRole &&
+        sessionStoreRef.hasOperatorAccess?.(OPERATOR_SURFACES.WHITE_CELL, {
+            sessionId,
+            role
+        })
+    );
+
+    return {
+        allowed: Boolean(sessionId && allowedRole),
+        cachedOperatorAccess,
+        sessionId,
+        role,
+        operatorRole: parsedRole.operatorRole || WHITE_CELL_OPERATOR_ROLES.LEAD
+    };
+}
+
+export function getWhiteCellSessionCode(session = {}) {
+    const code = session?.session_code || session?.sessionCode || session?.code || session?.metadata?.session_code || '';
+    return String(code || '').trim() || 'N/A';
+}
+
+export function getWhiteCellSessionLabel(session = null) {
+    if (!session) {
+        return '';
+    }
+
+    const name = String(session.name || 'Active session').trim() || 'Active session';
+    const code = getWhiteCellSessionCode(session);
+    return code && code !== 'N/A' ? `${name} (${code})` : name;
+}
+
+export function getWhiteCellParticipantSessionLabel(participant = {}, session = null) {
+    const participantSession = participant.sessionName || participant.session_name || null;
+    const participantCode = participant.sessionCode || participant.session_code || participant.code || null;
+
+    if (participantSession) {
+        return participantCode ? `${participantSession} (${participantCode})` : participantSession;
+    }
+
+    return getWhiteCellSessionLabel(session);
+}
+
+export function getWhiteCellParticipantSessionFilterValue(participant = {}, session = null) {
+    const explicitId = String(participant.session_id || participant.sessionId || participant.session?.id || '').trim();
+    if (explicitId) {
+        return `id:${explicitId}`;
+    }
+
+    const participantCode = String(participant.sessionCode || participant.session_code || participant.code || '').trim();
+    if (participantCode) {
+        return `code:${participantCode}`;
+    }
+
+    const participantSession = String(participant.sessionName || participant.session_name || '').trim();
+    if (participantSession) {
+        return `name:${participantSession}`;
+    }
+
+    const fallbackId = String(session?.id || '').trim();
+    if (fallbackId) {
+        return `id:${fallbackId}`;
+    }
+
+    const fallbackCode = String(session?.session_code || session?.sessionCode || session?.code || session?.metadata?.session_code || '').trim();
+    if (fallbackCode) {
+        return `code:${fallbackCode}`;
+    }
+
+    const fallbackName = String(session?.name || '').trim();
+    if (fallbackName) {
+        return `name:${fallbackName}`;
+    }
+
+    return null;
+}
+
+function getWhiteCellParticipantSessionFilterFallbackLabel(sessionValue = '') {
+    const [kind, ...rawParts] = String(sessionValue || '').split(':');
+    const rawValue = rawParts.join(':').trim();
+    if (!rawValue) {
+        return '';
+    }
+
+    if (kind === 'id') {
+        return `Session ${rawValue.slice(0, 8)}`;
+    }
+
+    if (kind === 'code') {
+        return `Code ${rawValue}`;
+    }
+
+    return rawValue;
+}
+
+export function getWhiteCellArchiveSessionConfirmationOptions(session = {}) {
+    const label = session?.name || 'this session';
+
+    return {
+        title: 'Archive session',
+        message: `Archive ${label}? Export the research archive first. Participants will no longer be able to join, and the session will leave active lists. Actions, RFIs, participant seats, timeline events, exports, and immutable audit records will be retained.`,
+        confirmLabel: 'Archive',
+        cancelLabel: 'Keep Active',
+        variant: 'warning'
+    };
+}
+
+function getParticipantTimestamp(participant = {}) {
+    return new Date(
+        participant.heartbeat_at
+        || participant.last_seen
+        || participant.joined_at
+        || 0
+    ).getTime();
+}
+
+export function isConnectedParticipant(participant = {}) {
+    if (typeof participant?.is_active === 'boolean') {
+        return participant.is_active;
+    }
+
+    return true;
+}
+
+export function isWhiteCellVisibleParticipant(participant = {}, teamId = null) {
+    if (!participant || typeof participant !== 'object') {
+        return false;
+    }
+
+    if (participant.role === 'white') {
+        return false;
+    }
+
+    const parsedRole = parseTeamRole(participant.role);
+    const participantTeam = participant.team
+        || participant.team_id
+        || (parsedRole.surface === ROLE_SURFACES.WHITECELL ? 'white_cell' : parsedRole.teamId)
+        || null;
+
+    if (!teamId) {
+        return participant.role === 'viewer' || Boolean(parsedRole.surface);
+    }
+
+    if (participant.role === 'viewer') {
+        return true;
+    }
+
+    return participantTeam === teamId;
+}
+
+export function buildWhiteCellParticipantRoster(participants = [], teamId = null) {
+    return [...participants]
+        .filter((participant) => isWhiteCellVisibleParticipant(participant, teamId))
+        .sort((left, right) => {
+            const activeDelta = Number(isConnectedParticipant(right)) - Number(isConnectedParticipant(left));
+            if (activeDelta !== 0) {
+                return activeDelta;
+            }
+
+            return getParticipantTimestamp(right) - getParticipantTimestamp(left);
+        });
+}
+
+export function formatWhiteCellParticipantSummary(participants = []) {
+    const total = participants.length;
+    const connected = participants.filter((participant) => isConnectedParticipant(participant)).length;
+
+    if (total === 0) {
+        return 'No participants have joined this session yet.';
+    }
+
+    if (connected === total) {
+        return `${connected} connected participant${connected === 1 ? '' : 's'}`;
+    }
+
+    return `${connected} connected / ${total} total participants`;
+}
+
+function sortWhiteCellFilterValues(values = [], orderedValues = []) {
+    return [...values].sort((left, right) => {
+        const leftIndex = orderedValues.indexOf(left);
+        const rightIndex = orderedValues.indexOf(right);
+
+        if (leftIndex !== -1 || rightIndex !== -1) {
+            if (leftIndex === -1) return 1;
+            if (rightIndex === -1) return -1;
+            if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+        }
+
+        return String(left).localeCompare(String(right));
+    });
+}
+
+export function buildWhiteCellCommunicationRecipientOptions(session = sessionStore.getState?.() || {}) {
+    const regional = regionalRecipientOptions(session);
+    return [
+        {
+            value: WHITE_CELL_ALL_TEAMS_RECIPIENT,
+            label: 'All Teams'
+        },
+        ...TEAM_OPTIONS.flatMap((team) => {
+            if (team.id === 'green' && regional.length) return regional;
+            const facilitatorRole = buildTeamRole(team.id, ROLE_SURFACES.FACILITATOR);
+            const scribeRole = buildTeamRole(team.id, ROLE_SURFACES.SCRIBE);
+            const notetakerRole = buildTeamRole(team.id, ROLE_SURFACES.NOTETAKER);
+
+            return [
+                {
+                    value: team.id,
+                    label: team.label
+                },
+                {
+                    value: facilitatorRole,
+                    label: getRoleDisplayName(facilitatorRole)
+                },
+                {
+                    value: scribeRole,
+                    label: getRoleDisplayName(scribeRole)
+                },
+                {
+                    value: notetakerRole,
+                    label: getRoleDisplayName(notetakerRole)
+                }
+            ];
+        })
+    ];
+}
+
+export function getWhiteCellTeamLabel(team = null) {
+    if (team === 'white_cell') {
+        return 'White Cell';
+    }
+
+    return TEAM_LABELS[team] || team || 'Unknown team';
+}
+
+export function getWhiteCellFilterTeamLabel(team = null) {
+    if (team === 'observer') {
+        return 'Observers';
+    }
+
+    if (team === 'system') {
+        return 'System';
+    }
+
+    return getWhiteCellTeamLabel(team);
+}
+
+export function getWhiteCellRoleFilterValue(role = null) {
+    if (role === 'viewer') {
+        return ROLE_SURFACES.VIEWER;
+    }
+
+    const parsedRole = parseTeamRole(role);
+    return parsedRole.surface || null;
+}
+
+export function getWhiteCellFilterRoleLabel(role = null) {
+    const labels = {
+        [ROLE_SURFACES.FACILITATOR]: 'Scribes',
+        [ROLE_SURFACES.SCRIBE]: 'Facilitators',
+        [ROLE_SURFACES.NOTETAKER]: 'Notetakers',
+        [ROLE_SURFACES.WHITECELL]: 'White Cell',
+        [ROLE_SURFACES.VIEWER]: 'Observers',
+        system: 'System'
+    };
+
+    return labels[role] || role || 'Unknown role';
+}
+
+function getWhiteCellTimelineEventType(event = {}) {
+    return event.type || event.event_type || null;
+}
+
+export function getWhiteCellTimelineMoveFilterValue(event = {}) {
+    const moveValue = Number(event.move);
+
+    if (!Number.isFinite(moveValue) || moveValue <= 0) {
+        return null;
+    }
+
+    return String(moveValue);
+}
+
+export function getWhiteCellTimelineActivityTypeFilterValue(event = {}) {
+    return getWhiteCellTimelineEventType(event);
+}
+
+function formatWhiteCellTimelineFallbackLabel(value = null) {
+    return String(value || '')
+        .split('_')
+        .filter(Boolean)
+        .map((segment) => {
+            if (segment === segment.toUpperCase() && segment.length <= 3) {
+                return segment;
+            }
+
+            return `${segment.charAt(0)}${segment.slice(1).toLowerCase()}`;
+        })
+        .join(' ')
+        || 'Unknown activity type';
+}
+
+export function getWhiteCellTimelineActivityTypeLabel(activityType = null) {
+    const labels = {
+        PHASE_CHANGE: 'Phase Change',
+        MOVE_CHANGE: 'Move Change',
+        TIMER_START: 'Timer Start',
+        TIMER_PAUSE: 'Timer Pause',
+        TIMER_RESET: 'Timer Reset',
+        ACTION_CREATED: 'Action Created',
+        ACTION_SUBMITTED: 'Action Submitted',
+        ACTION_ADJUDICATED: 'Deliberation Update',
+        ARTIFACT_COMPLETED: 'Artifact Completed',
+        ARTIFACT_RETURNED_TO_TEAM: 'Returned for Improvement',
+        ACTION_RETURNED_TO_BLUE: 'Returned to Blue',
+        PLI_SENT_BACK: 'PLI Sent Back',
+        STRATEGIC_ORIENTATION_FORWARDED_TO_SCRIBE: 'Strategic Orientation Forwarded',
+        STRATEGIC_ORIENTATION_SUBMITTED: 'Strategic Orientation Submitted',
+        PROPOSAL_SUBMITTED: 'Proposal Submitted',
+        PROPOSAL_FORWARDED: 'Proposal Forwarded',
+        PROPOSAL_RESPONSE: 'Proposal Response',
+        PROPOSAL_RESPONDED: 'Proposal Responded',
+        RFI_CREATED: 'RFI Created',
+        RFI_ANSWERED: 'RFI Answered',
+        INJECT: 'Inject',
+        ANNOUNCEMENT: 'Announcement',
+        GUIDANCE: 'Guidance',
+        NOTE: 'Note',
+        MOMENT: 'Moment',
+        QUOTE: 'Quote',
+        PARTICIPANT_JOINED: 'Participant Joined',
+        PARTICIPANT_LEFT: 'Participant Left'
+    };
+
+    return labels[activityType] || formatWhiteCellTimelineFallbackLabel(activityType);
+}
+
+export function canShareActionToRedTeam(action = {}) {
+    return action?.team === 'blue' && !isStrategicOrientationAction(action);
+}
+
+/** TSJ / Verba copy queues open for every completed team action, not only Blue. */
+export function canOpenSmeActionHandoffs(action = {}) {
+    return !isStrategicOrientationAction(action);
+}
+
+export function normalizeActionNotificationTeams(teams = []) {
+    return [...new Set((Array.isArray(teams) ? teams : [])
+        .map((team) => String(team || '').trim().toLowerCase())
+        .filter((team) => ACTION_NOTIFICATION_TEAM_IDS.has(team)))];
+}
+
+export function getActionNotificationDeliveryTeams(action = {}, communications = []) {
+    return normalizeActionNotificationTeams((communications || [])
+        .filter((communication) => (
+            String(communication?.type || '').trim().toUpperCase() === ACTION_NOTIFICATION_COMMUNICATION_TYPE
+            && communication?.metadata?.shared_action_id === action?.id
+            && communication?.metadata?.notification_delivery === 'approved'
+        ))
+        .map((communication) => communication?.metadata?.recipient_team || communication?.to_role));
+}
+
+export function getArtifactReviewKind(action = {}) {
+    return isStrategicOrientationAction(action) ? 'strategic_orientation' : 'action';
+}
+
+/** Team actions and Strategic Orientations currently awaiting White Cell review. */
+export function canReviewArtifact(action = {}) {
+    if (!action || !canAdjudicateAction(action)) return false;
+    if (isStrategicOrientationAction(action)) {
+        return ['blue', 'red', 'green', 'industry'].includes(action.team);
+    }
+
+    const artifact = String(action.artifact_type || 'action').trim().toLowerCase();
+    return ['blue', 'red'].includes(action.team)
+        && ['action', 'move_response'].includes(artifact);
+}
+
+export function buildSharedActionCommunicationContent(action = {}) {
+    const blueAction = getBlueActionViewModel(action);
+    const sourceTeamLabel = TEAM_LABELS[action?.team] || action?.team || 'Submitting Team';
+    const contentParts = [
+        `${sourceTeamLabel} action shared by White Cell`,
+        `Title: ${blueAction.title}`,
+        `Move: ${action.move || 1}`,
+        `Phase: ${action.phase || 1}`
+    ];
+
+    if (blueAction.hasBlueActionDetails) {
+        contentParts.push(...blueAction.artifactDetails.map(
+            (field) => `${field.label}: ${field.value}`
+        ));
+    } else if (action.ally_contingencies) {
+        contentParts.push(`Ally Contingencies: ${action.ally_contingencies}`);
+        contentParts.push(`Targets: ${formatBlueActionSelection(blueAction.focusCountries)}`);
+        contentParts.push(`Sector: ${action.sector || 'Not specified'}`);
+        contentParts.push(`Exposure: ${action.exposure_type || 'Not specified'}`);
+        contentParts.push(`Expected Outcomes: ${blueAction.expectedOutcomes || 'No expected outcomes recorded.'}`);
+    }
+
+    return contentParts.join(' | ');
+}
+
+export function buildActionNotificationCommunicationContent(action = {}) {
+    const blueAction = getBlueActionViewModel(action);
+    const requestedTeams = normalizeActionNotificationTeams(blueAction.notificationTeams)
+        .map((team) => TEAM_LABELS[team] || team);
+    return [
+        'Action notification approved by White Cell',
+        `Requested recipients: ${requestedTeams.join(', ') || 'None'}`,
+        buildSharedActionCommunicationContent(action)
+    ].join(' | ');
+}
+
+export function getWhiteCellParticipantTeamFilterValue(participant = {}) {
+    if (participant.role === 'viewer') {
+        return 'observer';
+    }
+
+    const parsedRole = parseTeamRole(participant.role);
+    if (parsedRole.surface === ROLE_SURFACES.WHITECELL) {
+        return 'white_cell';
+    }
+
+    return participant.team || participant.team_id || parsedRole.teamId || null;
+}
+
+export function buildWhiteCellParticipantFilterOptions(participants = [], {
+    activeSession = null
+} = {}) {
+    const sessionValues = new Map();
+    const teamValues = new Set();
+    const roleValues = new Set();
+
+    participants.forEach((participant) => {
+        const sessionValue = getWhiteCellParticipantSessionFilterValue(participant, activeSession);
+        const sessionLabel = getWhiteCellParticipantSessionLabel(participant, activeSession)
+            || getWhiteCellParticipantSessionFilterFallbackLabel(sessionValue);
+        const teamValue = getWhiteCellParticipantTeamFilterValue(participant);
+        const roleValue = getWhiteCellRoleFilterValue(participant.role);
+
+        if (sessionValue && sessionLabel && !sessionValues.has(sessionValue)) {
+            sessionValues.set(sessionValue, sessionLabel);
+        }
+
+        if (teamValue && teamValue !== 'white_cell') {
+            teamValues.add(teamValue);
+        }
+
+        if (roleValue && roleValue !== ROLE_SURFACES.WHITECELL) {
+            roleValues.add(roleValue);
+        }
+    });
+
+    return {
+        sessionOptions: [
+            { value: '', label: 'All Sessions' },
+            ...[...sessionValues.entries()]
+                .sort((left, right) => left[1].localeCompare(right[1]))
+                .map(([value, label]) => ({ value, label }))
+        ],
+        teamOptions: [
+            { value: '', label: 'All Teams' },
+            ...sortWhiteCellFilterValues(teamValues, WHITE_CELL_FILTER_TEAM_ORDER).map((value) => ({
+                value,
+                label: getWhiteCellFilterTeamLabel(value)
+            }))
+        ],
+        roleOptions: [
+            { value: '', label: 'All Roles' },
+            ...sortWhiteCellFilterValues(roleValues, WHITE_CELL_FILTER_ROLE_ORDER).map((value) => ({
+                value,
+                label: getWhiteCellFilterRoleLabel(value)
+            }))
+        ]
+    };
+}
+
+export function filterWhiteCellParticipants(participants = [], {
+    session = null,
+    team = null,
+    role = null,
+    activeSession = null
+} = {}) {
+    return participants.filter((participant) => {
+        const participantSession = getWhiteCellParticipantSessionFilterValue(participant, activeSession);
+        const participantTeam = getWhiteCellParticipantTeamFilterValue(participant);
+        const participantRole = getWhiteCellRoleFilterValue(participant.role);
+
+        if (session && participantSession !== session) {
+            return false;
+        }
+
+        if (team && participantTeam !== team) {
+            return false;
+        }
+
+        if (role && participantRole !== role) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function resolveWhiteCellTimelineMetadataRole(event = {}) {
+    const metadata = event?.metadata && typeof event.metadata === 'object'
+        ? event.metadata
+        : {};
+
+    return (
+        metadata.role
+        || metadata.operator_role
+        || metadata.answered_by_role
+        || metadata.adjudicated_by_role
+        || metadata.participant_role
+        || event.role
+        || null
+    );
+}
+
+export function getWhiteCellTimelineRoleFilterValue(event = {}) {
+    const explicitRole = getWhiteCellRoleFilterValue(resolveWhiteCellTimelineMetadataRole(event));
+    if (explicitRole) {
+        return explicitRole;
+    }
+
+    const eventType = getWhiteCellTimelineEventType(event);
+    const actor = String(event?.metadata?.actor || '').toLowerCase();
+
+    if (event.team === 'white_cell') {
+        return ROLE_SURFACES.WHITECELL;
+    }
+
+    if (WHITE_CELL_TIMELINE_FACILITATOR_TYPES.includes(eventType)) {
+        return ROLE_SURFACES.FACILITATOR;
+    }
+
+    if (WHITE_CELL_TIMELINE_NOTETAKER_TYPES.includes(eventType)) {
+        if (actor.includes('scribe')) {
+            return ROLE_SURFACES.SCRIBE;
+        }
+
+        if (actor.includes('facilitator')) {
+            return ROLE_SURFACES.FACILITATOR;
+        }
+
+        if (
+            actor.includes('notetaker')
+            || event?.metadata?.source === 'notetaker_save'
+            || event?.metadata?.note_scope
+        ) {
+            return ROLE_SURFACES.NOTETAKER;
+        }
+    }
+
+    return null;
+}
+
+export function buildWhiteCellTimelineFilterOptions(events = []) {
+    const teamValues = new Set();
+    const roleValues = new Set();
+    const moveValues = new Set();
+    const activityTypeValues = new Set();
+
+    events.forEach((event) => {
+        const teamValue = event.team || null;
+        const roleValue = getWhiteCellTimelineRoleFilterValue(event);
+        const moveValue = getWhiteCellTimelineMoveFilterValue(event);
+        const activityTypeValue = getWhiteCellTimelineActivityTypeFilterValue(event);
+
+        if (teamValue) {
+            teamValues.add(teamValue);
+        }
+
+        if (roleValue) {
+            roleValues.add(roleValue);
+        }
+
+        if (moveValue) {
+            moveValues.add(moveValue);
+        }
+
+        if (activityTypeValue) {
+            activityTypeValues.add(activityTypeValue);
+        }
+    });
+
+    return {
+        teamOptions: [
+            { value: '', label: 'All Teams' },
+            ...sortWhiteCellFilterValues(teamValues, WHITE_CELL_FILTER_TEAM_ORDER).map((value) => ({
+                value,
+                label: getWhiteCellFilterTeamLabel(value)
+            }))
+        ],
+        roleOptions: [
+            { value: '', label: 'All Roles' },
+            ...sortWhiteCellFilterValues(roleValues, WHITE_CELL_FILTER_ROLE_ORDER).map((value) => ({
+                value,
+                label: getWhiteCellFilterRoleLabel(value)
+            }))
+        ],
+        moveOptions: [
+            { value: '', label: 'All Moves' },
+            ...Array.from(moveValues)
+                .sort((left, right) => Number(left) - Number(right))
+                .map((value) => ({
+                    value,
+                    label: `Move ${value}`
+                }))
+        ],
+        activityTypeOptions: [
+            { value: '', label: 'All Activity Types' },
+            ...sortWhiteCellFilterValues(activityTypeValues, WHITE_CELL_TIMELINE_ACTIVITY_TYPE_ORDER).map((value) => ({
+                value,
+                label: getWhiteCellTimelineActivityTypeLabel(value)
+            }))
+        ]
+    };
+}
+
+export function filterWhiteCellTimelineEvents(events = [], {
+    team = null,
+    role = null,
+    move = null,
+    activityType = null
+} = {}) {
+    return events.filter((event) => {
+        const timelineRole = getWhiteCellTimelineRoleFilterValue(event);
+        const timelineMove = getWhiteCellTimelineMoveFilterValue(event);
+        const timelineActivityType = getWhiteCellTimelineActivityTypeFilterValue(event);
+
+        if (team && event.team !== team) {
+            return false;
+        }
+
+        if (role && timelineRole !== role) {
+            return false;
+        }
+
+        if (move && timelineMove !== String(move)) {
+            return false;
+        }
+
+        if (activityType && timelineActivityType !== activityType) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function buildDefaultScribeDeckAssignment(team = {}) {
+    return {
+        teamId: team.id,
+        teamLabel: team.label,
+        deckSource: SCRIBE_DECK_SOURCE_REPO,
+        deckStorageKey: null,
+        deckFileName: null,
+        deckPath: buildDefaultScribeDeckPath(team.id),
+        deckLabel: DEFAULT_SCRIBE_DECK_LABEL,
+        assignedAt: null,
+        communicationId: null
+    };
+}
+
+export function buildWhiteCellScribeDeckAssignments(communications = []) {
+    const assignmentsByTeam = Object.fromEntries(
+        TEAM_OPTIONS.map((team) => [team.id, buildDefaultScribeDeckAssignment(team)])
+    );
+
+    communications.forEach((communication) => {
+        const assignment = getScribeDeckAssignmentDetails(communication);
+        if (!assignment || !assignmentsByTeam[assignment.recipientTeam]) {
+            return;
+        }
+
+        if (assignmentsByTeam[assignment.recipientTeam].communicationId) {
+            return;
+        }
+
+        assignmentsByTeam[assignment.recipientTeam] = {
+            ...assignmentsByTeam[assignment.recipientTeam],
+            deckSource: assignment.deckSource || SCRIBE_DECK_SOURCE_REPO,
+            deckStorageKey: assignment.deckStorageKey || null,
+            deckFileName: assignment.deckFileName || null,
+            deckPath: assignment.deckPath,
+            deckLabel: assignment.deckLabel,
+            assignedAt: assignment.assignedAt,
+            communicationId: assignment.communicationId
+        };
+    });
+
+    return assignmentsByTeam;
+}
+
+function buildScribeDeckAssignmentCommunicationContent({
+    teamLabel = 'Team',
+    recipientLabel = `${teamLabel} Facilitator`,
+    deckLabel = DEFAULT_SCRIBE_DECK_LABEL,
+    deckPath = DEFAULT_SCRIBE_DECK_PATH,
+    deckSource = SCRIBE_DECK_SOURCE_REPO,
+    deckFileName = ''
+} = {}) {
+    if (deckSource === SCRIBE_DECK_SOURCE_UPLOAD) {
+        return `White Cell uploaded "${deckLabel}" to ${recipientLabel} (${deckFileName || 'browser upload'}).`;
+    }
+
+    return `White Cell loaded "${deckLabel}" into ${recipientLabel} (${deckPath}).`;
+}
+
+export class WhiteCellController {
+    constructor() {
+        this.actions = [];
+        this.blueTeamActions = [];
+        this.strategicOrientationArtifacts = [];
+        this.greenTeamProposals = [];
+        this.proposalTeamProposals = this.greenTeamProposals;
+        this.redTeamResponses = [];
+        this.returnedRevisionHistory = [];
+        this.returnedRevisionHistoryLoading = false;
+        this.returnedRevisionHistoryError = null;
+        this.reviewActiveTabs = {
+            strategicOrientation: 'pending',
+            actions: 'pending',
+            responses: 'pending',
+            proposals: 'pending'
+        };
+        this.blueActionMarkActiveKey = '';
+        this.rfis = [];
+        this.rfiHistory = [];
+        this.rfiActiveView = 'pending';
+        this.communications = [];
+        this.seenProposalThreadRoundKeys = new Set();
+        this.hasHydratedProposalThreadRounds = false;
+        this.tribeStreetJournalEntries = [];
+        this.verbaAiUpdates = [];
+        this.scribeDeckAssignments = buildWhiteCellScribeDeckAssignments();
+        this.participants = [];
+        this.selectedParticipantSeatIds = new Set();
+        this.timelineEvents = [];
+        this.adminSessions = [];
+        this.storeUnsubscribers = [];
+        this.currentTimerSeconds = CONFIG.DEFAULT_TIMER_SECONDS;
+        this.timerAllocations = buildDefaultTimerAllocations();
+        this.timerAllocationFormDirty = false;
+        this.pluginState = buildDefaultPluginState();
+        this.mountedPlugins = new Map();
+        this.timerRunning = false;
+        this.participantFilters = {
+            session: null,
+            team: null,
+            role: null
+        };
+        this.timelineFilters = {
+            team: null,
+            role: null,
+            move: null,
+            activityType: null
+        };
+        this.teamContext = resolveTeamContext();
+        this.teamId = null;
+        this.operatorRole = WHITE_CELL_OPERATOR_ROLES.LEAD;
+        this.researchCaptureMode = 'research';
+        this.researchBuildHash = null;
+        this.notificationsMuted = readWhiteCellNotificationsMutedPreference();
+        this.seenBlueActionIds = new Set();
+        this.newBlueActionIds = new Set();
+        this.seenStrategicOrientationIds = new Set();
+        this.newStrategicOrientationIds = new Set();
+        this.seenGreenProposalIds = new Set();
+        this.newGreenProposalIds = new Set();
+        this.seenRedResponseIds = new Set();
+        this.newRedResponseIds = new Set();
+        this.pendingQueueArrivalSummary = {
+            strategicOrientation: new Set(),
+            actions: new Set(),
+            proposals: new Set(),
+            responses: new Set()
+        };
+        this.hasHydratedStrategicOrientationQueue = false;
+        this.hasHydratedBlueActionQueue = false;
+        this.hasHydratedGreenProposalQueue = false;
+        this.hasHydratedRedResponseQueue = false;
+        this.durableNotifications = null;
+        this.seenRfiNotificationIds = new Set();
+        this.newRfiIds = new Set();
+        this.hasHydratedRfiNotifications = false;
+        this.seenInboundCommunicationIds = new Set();
+        this.newCommunicationIds = new Set();
+        this.hasHydratedInboundCommunications = false;
+        this.pliMacroReview = null;
+        this.pliDiplomacyInfoReview = null;
+        this.pliNiEscalationReview = null;
+        this.pliReportPanel = null;
+        this.pliSmeEfficacyPanel = null;
+    }
+
+    async init() {
+        logger.info('Initializing White Cell interface');
+        // main.js and this controller start independently; both must await the
+        // same server restore before any heartbeat or protected workspace read.
+        if (!await ensureSeatStartup()) return;
+
+        const accessState = getWhiteCellAccessState(this.teamContext, sessionStore);
+        if (!accessState.allowed) {
+            showToast({
+                message: `${this.teamContext.whitecellLabel} requires operator authorization from the landing page.`,
+                type: 'error'
+            });
+            navigateToApp('index.html#operatorAccessSection', { replace: true });
+            return;
+        }
+
+        try {
+            const grant = await database.requireOperatorGrant(OPERATOR_SURFACES.WHITE_CELL, {
+                sessionId: accessState.sessionId,
+                role: accessState.role
+            });
+            sessionStore.setOperatorAuth({
+                ...grant,
+                sessionId: grant?.sessionId || accessState.sessionId,
+                teamId: grant?.teamId || null,
+                role: grant?.role || accessState.role
+            });
+        } catch (error) {
+            logger.warn('Blocked White Cell access after failed server verification', error);
+            sessionStore.clearOperatorAuth();
+            showToast({
+                message: `${this.teamContext.whitecellLabel} requires a valid server-side operator grant.`,
+                type: 'error'
+            });
+            navigateToApp('index.html#operatorAccessSection', { replace: true });
+            return;
+        }
+
+        this.operatorRole = accessState.operatorRole || WHITE_CELL_OPERATOR_ROLES.LEAD;
+        const sessionId = accessState.sessionId;
+        this.durableNotifications = new DurableNotificationCenter({
+            scope: `${sessionId}:whitecell:${this.operatorRole}`,
+            render: (config) => this.notificationsMuted ? null : showDurableNotification(config)
+        });
+
+        this.renderScribeDeckSettings();
+        this.renderPluginSettings();
+
+        await syncService.initialize(sessionId, {
+            participantId: sessionStore.getSessionParticipantId?.() || null
+        });
+        await this.loadReturnedRevisionHistory();
+        this.configureTeamLabels();
+        await this.loadResearchExportRuntime();
+        this.renderNotificationsMuteControl();
+        this.bindEventListeners();
+        this.subscribeToLiveData();
+        this.syncGameStateFromStore(gameStateStore.getState() || sessionStore.getSessionData()?.gameState || null);
+        this.syncActionsFromStore();
+        this.syncRfisFromStore();
+        this.syncCommunicationsFromStore();
+        this.syncTimelineFromStore();
+        this.syncParticipantsFromStore();
+        this.restoreDurableNotifications();
+        this.updateTimerDisplay();
+        this.updateTimerStatusDisplay();
+        this.loadSessionsAdmin().catch((err) => {
+            logger.error('Failed to load sessions for admin panel:', err);
+        });
+
+        this.mountFollowAlongOnboarding();
+        this.mountPliSmePanels();
+
+        logger.info('White Cell interface initialized');
+    }
+
+    mountPliSmePanels() {
+        const sessionId = () => sessionStore.getSessionId?.() || sessionStore.getSessionData?.()?.id || null;
+        const reviewerName = () => {
+            const auth = sessionStore.getOperatorAuth?.() || {};
+            return auth.displayName || auth.role || this.operatorRole || 'White Cell';
+        };
+        // White Cell Lead/Support view finalized SME outputs only (read-only).
+        const canReview = () => false;
+        const viewMode = PLI_VIEW_MODES.LEAD_READONLY;
+
+        const macroHost = document.getElementById('pliAdjudicationPanel');
+        const dipHost = document.getElementById('pliDiplomacyInfoPanel');
+        const niHost = document.getElementById('pliNiEscalationPanel');
+
+        if (macroHost && !this.pliMacroReview) {
+            this.pliMacroReview = createPliMacroReview({
+                container: macroHost,
+                getSessionId: sessionId,
+                getReviewerName: reviewerName,
+                canReview,
+                viewMode
+            });
+        }
+        if (dipHost && !this.pliDiplomacyInfoReview) {
+            this.pliDiplomacyInfoReview = createDiplomacyInfoReview({
+                container: dipHost,
+                getSessionId: sessionId,
+                getReviewerName: reviewerName,
+                canReview,
+                viewMode
+            });
+        }
+        if (niHost && !this.pliNiEscalationReview) {
+            this.pliNiEscalationReview = createNiEscalationReview({
+                container: niHost,
+                getSessionId: sessionId,
+                getReviewerName: reviewerName,
+                canReview,
+                viewMode
+            });
+        }
+
+        const reportHost = document.getElementById('pliReportsPanel');
+        if (reportHost && !this.pliReportPanel) {
+            this.pliReportPanel = createPliReportPanel({
+                container: reportHost,
+                getSessionId: sessionId,
+                getSessionMeta: () => {
+                    const sessionData = sessionStore.getSessionData?.() || {};
+                    const auth = sessionStore.getOperatorAuth?.() || {};
+                    return {
+                        sessionName: sessionData.name || auth.sessionName || '',
+                        sessionCode: sessionData.code || auth.sessionCode || ''
+                    };
+                }
+            });
+        }
+
+        const efficacyHost = document.getElementById('pliSmeEfficacyPanel');
+        if (efficacyHost && !this.pliSmeEfficacyPanel) {
+            this.pliSmeEfficacyPanel = createPliSmeEfficacyPanel({
+                container: efficacyHost,
+                getSessionId: sessionId
+            });
+        }
+
+        this.refreshPliSmePanels();
+    }
+
+    refreshPliSmePanels() {
+        this.pliMacroReview?.refresh?.();
+        this.pliDiplomacyInfoReview?.refresh?.();
+        this.pliNiEscalationReview?.refresh?.();
+        this.pliReportPanel?.refresh?.();
+        this.pliSmeEfficacyPanel?.refresh?.();
+        this.syncPliBadges().catch((err) => {
+            logger.warn('Failed to sync PLI badges', err);
+        });
+    }
+
+    async syncPliBadges() {
+        const sessionId = sessionStore.getSessionId?.() || sessionStore.getSessionData?.()?.id;
+        if (!sessionId) return;
+
+        let rows = [];
+        try {
+            rows = await database.fetchPliAdjudications(sessionId);
+        } catch (err) {
+            logger.warn('PLI badge fetch skipped (migration may be pending)', err);
+            return;
+        }
+
+        // Badge shows finalized (ready-to-view) count. Title surfaces awaiting-SME count.
+        const countFinalized = (seatId) => rows.filter((row) => seatIsFinalized(getSeatReview(row, seatId))).length;
+        const countAwaiting = (seatId) => rows.filter((row) => seatNeedsReview(getSeatReview(row, seatId))).length;
+        const setBadge = (elementId, finalizedCount, awaitingCount, awaitingLabel) => {
+            const badge = document.getElementById(elementId);
+            if (!badge) return;
+            badge.textContent = String(finalizedCount);
+            badge.hidden = finalizedCount <= 0 && awaitingCount <= 0;
+            if (finalizedCount <= 0 && awaitingCount > 0) {
+                badge.textContent = String(awaitingCount);
+                badge.title = awaitingLabel;
+                badge.classList.add('sidebar-badge--awaiting');
+            } else {
+                badge.title = finalizedCount > 0
+                    ? `${finalizedCount} finalized (read-only)`
+                    : '';
+                badge.classList.remove('sidebar-badge--awaiting');
+            }
+        };
+
+        setBadge(
+            'pliMacroBadge',
+            countFinalized(PLI_SEATS.MACRO),
+            countAwaiting(PLI_SEATS.MACRO),
+            'Awaiting Econ'
+        );
+        setBadge(
+            'pliDipInfoBadge',
+            countFinalized(PLI_SEATS.DIPLOMACY_INFORMATION),
+            countAwaiting(PLI_SEATS.DIPLOMACY_INFORMATION),
+            'Awaiting Dip & Info'
+        );
+        setBadge(
+            'pliNiEscBadge',
+            countFinalized(PLI_SEATS.NATIONAL_INTEREST_ESCALATION),
+            countAwaiting(PLI_SEATS.NATIONAL_INTEREST_ESCALATION),
+            'Awaiting NI/Escalation'
+        );
+    }
+
+    mountFollowAlongOnboarding() {
+        const navTarget = (section) => `.sidebar-link[data-section="${section}"]`;
+        const liveTrackerHighlights = ['#header-game-state', '#header-timer'];
+        const operatorLabel = this.isLeadOperator()
+            ? 'White Cell Lead'
+            : 'White Cell Support';
+        const surfaceStep = (title, section, body, narrative) => ({
+            title,
+            body,
+            narrative,
+            targetLabel: title,
+            highlight: navTarget(section),
+            action: { label: `Open ${title}`, selector: navTarget(section) }
+        });
+        this.onboarding = mountFollowAlong({
+            storageKey: `followalong:whitecell:${this.isLeadOperator() ? 'lead' : 'support'}`,
+            title: `${operatorLabel} guide`,
+            roleLabel: operatorLabel,
+            summary: 'Maintain the authoritative exercise clock, review queues, communications, specialist workflow, and auditable session record without weakening role boundaries.',
+            steps: [
+                {
+                    title: 'Your role in the exercise',
+                    body: `As ${operatorLabel}, you operate the control-cell boundary across timing, review, information, and session evidence.`,
+                    narrative: 'Keep deterministic exercise state in the platform, make every review outcome explicit, and leave a chronological record another operator can audit.',
+                    details: ['The Lead owns privileged run and review decisions.', 'Support follows the permissions actually exposed to that seat.', 'Participant visibility never substitutes for White Cell review.']
+                },
+                {
+                    title: 'Watch the live tracker',
+                    body: 'The header mirrors the current state every team sees: Strategic Orientation before Move 1, then move, phase, countdown timer, and paused or running state.',
+                    narrative: 'Announce material state changes to the room and verify the shared display before moving the exercise forward.',
+                    targetLabel: 'Live tracker',
+                    highlight: liveTrackerHighlights
+                },
+                surfaceStep('Simulation Settings', 'controls', 'Advance or reverse moves and phases, start or pause the timer, and reset the clock.', 'Treat every control as a room-level state change. Confirm intent before acting and verify the tracker afterward.'),
+                {
+                    title: 'Manage session operations',
+                    body: 'The Simulation Settings tabs also cover live sessions, participant rosters, facilitator deck assignments, plugins, and export controls.',
+                    narrative: 'Use the correct tab for the operational task and preserve the current session selection before changing participants, decks, plugins, or exports.',
+                    details: ['Sessions establish the active run.', 'Participants and decks determine who can act and what is projected.', 'Plugins and exports remain session-scoped.'],
+                    targetLabel: 'Settings tabs',
+                    highlight: '#settingsTabs .tab-list'
+                },
+                surfaceStep('Strategic Orientation', 'strategicOrientation', 'Review each team’s submitted opening orientation, target forecasts, and required narrative.', 'Confirm the team, completeness, and handoff state before accepting or returning the record.'),
+                surfaceStep('Blue Actions', 'actions', 'Review Blue Team submissions, accept complete work, or return it with actionable improvement notes.', 'A completed review changes workflow state explicitly; sharing forward is a separate, deliberate action.'),
+                surfaceStep('Green and Industry Proposals', 'proposals', 'Review proposals, forward them to named recipients, request changes, or reject them with White Cell notes.', 'Recipient threads remain isolated and append-only so negotiation can be reconstructed.'),
+                surfaceStep('Red Actions', 'responses', 'Review submitted Red Team actions before they affect the shared exercise record.', 'Check the active move, narrative, and action details before recording the review outcome.'),
+                surfaceStep('Review History', 'reviewHistory', 'Inspect completed, returned, rejected, and superseded review records across queues.', 'Use history to audit what White Cell decided and why; do not reopen a closed decision by editing the historical row.'),
+                surfaceStep('Macro PLI', 'pliAdjudication', 'Monitor finalized Macro specialist outputs in read-only form.', 'The specialist seat owns approval or override. White Cell consumes finalized evidence and must not impersonate the SME decision.'),
+                surfaceStep('Diplomacy & Information PLI', 'pliDiplomacyInfo', 'Review the paired finalized diplomacy and information outputs.', 'Both tracks clear together at the specialist boundary; White Cell sees the result after that boundary is satisfied.'),
+                surfaceStep('NI & Escalation PLI', 'pliNiEscalation', 'Review finalized National Interest domains and escalation trajectory.', 'Downstream review remains locked until Macro is finalized or explicitly skipped under the workflow contract.'),
+                surfaceStep('PLI Reports', 'pliReports', 'Generate session-, move-, or action-scoped reports from finalized specialist outputs.', 'Reports summarize finalized evidence; they do not create or change an adjudication.'),
+                surfaceStep('PLI SME Efficacy', 'pliSmeEfficacy', 'Review session-level approve and override counts plus the fields specialists change most often.', 'Use the aggregate as a codebook revision signal; it describes specialist outcomes and never changes an individual adjudication.'),
+                surfaceStep('Tribe Street Journal', 'tribeStreetJournal', 'Review captures and prepare selected field intelligence for publication.', 'Publish deliberately and preserve the source context so teams can distinguish observation from White Cell inject.'),
+                surfaceStep('Population Sentiments', 'verbaAi', 'Compose and review team-specific population sentiment updates.', 'Publish the intended audience and narrative explicitly; the update is context, not a hidden score change.'),
+                surfaceStep('RFIs', 'requests', 'Answer participant questions or return them with required clarification notes.', 'Keep the answer on the originating RFI so the ruling, revision, and history remain connected.'),
+                surfaceStep('Communications', 'communications', 'Send injects, announcements, and guidance to all teams, one team, or a specific role.', 'Verify the recipient before sending; broad visibility is an operator choice, not a default.'),
+                surfaceStep('Session Timeline', 'timeline', 'Audit actions, RFIs, communications, captures, seat changes, and game-state events.', 'Use filters to reconstruct the run and verify sequence before export or after-action review.'),
+                {
+                    title: 'Control arrival noise',
+                    body: 'Mute notifications suppresses durable arrival notices only. Badges and NEW labels remain visible until each destination item is opened.',
+                    narrative: 'Mute presentation noise without hiding unread work or changing queue state.',
+                    targetLabel: 'Notification control',
+                    highlight: '#whiteCellNotificationsMuteBtn',
+                    action: { label: 'Focus notification control', selector: '#whiteCellNotificationsMuteBtn', activate: false }
+                },
+                {
+                    title: 'Complete the operator loop',
+                    body: 'Before handoff or export, reconcile the live tracker, pending queues, participant state, specialist outputs, and timeline.',
+                    narrative: 'White Cell owns explicit control and review decisions; specialist seats own their approvals; Game Master owns session administration and evidence export.',
+                    details: ['Do not infer completion from visibility.', 'Leave actionable notes when returning work.', 'Start Here remains available above the session label.'],
+                    targetLabel: 'Session reference',
+                    highlight: '.sidebar-session'
+                }
+            ]
+        });
+    }
+
+    configureTeamLabels() {
+        const headerTitle = document.querySelector('.header-title');
+        const recipientSelect = document.getElementById('commRecipient');
+        if (headerTitle) {
+            headerTitle.textContent = this.isLeadOperator()
+                ? 'White Cell Lead'
+                : 'White Cell Support';
+        }
+        if (recipientSelect) {
+            this.configureCommunicationRecipients(recipientSelect);
+        }
+    }
+
+    renderNotificationsMuteControl() {
+        const button = document.getElementById('whiteCellNotificationsMuteBtn');
+        if (!button) {
+            return;
+        }
+
+        const isMuted = this.notificationsMuted === true;
+        button.textContent = isMuted ? 'Notifications muted' : 'Mute notifications';
+        button.title = isMuted
+            ? 'Durable arrival notices are muted. Click to restore unread notices.'
+            : 'Mute White Cell durable arrival notices.';
+        button.setAttribute?.('aria-pressed', String(isMuted));
+        button.setAttribute?.(
+            'aria-label',
+            isMuted
+                ? 'Unmute White Cell queue notifications'
+                : 'Mute White Cell queue notifications'
+        );
+    }
+
+    setNotificationsMuted(isMuted = false, {
+        persist = true
+    } = {}) {
+        this.notificationsMuted = isMuted === true;
+        if (persist) {
+            writeWhiteCellNotificationsMutedPreference(this.notificationsMuted);
+        }
+        this.renderNotificationsMuteControl();
+    }
+
+    toggleNotificationsMuted() {
+        this.setNotificationsMuted(!this.notificationsMuted);
+        if (!this.notificationsMuted) {
+            this.durableNotifications?.restore({
+                onOpen: (notification) => this.openDurableDestination(notification)
+            });
+        }
+    }
+
+    configureCommunicationRecipients(recipientSelect) {
+        const currentValue = recipientSelect.value || WHITE_CELL_ALL_TEAMS_RECIPIENT;
+        const options = buildWhiteCellCommunicationRecipientOptions();
+
+        recipientSelect.innerHTML = options.map((option) => (
+            `<option value="${option.value}">${this.escapeHtml(option.label)}</option>`
+        )).join('');
+
+        const resolvedValue = options.some((option) => option.value === currentValue)
+            ? currentValue
+            : WHITE_CELL_ALL_TEAMS_RECIPIENT;
+
+        recipientSelect.value = resolvedValue;
+    }
+
+    isLeadOperator() {
+        return this.operatorRole !== WHITE_CELL_OPERATOR_ROLES.SUPPORT;
+    }
+
+    getTimelineActorRole() {
+        return (
+            sessionStore.getRole()
+            || sessionStore.getSessionData()?.role
+            || (this.isLeadOperator()
+                ? this.teamContext.whitecellLeadRole
+                : this.teamContext.whitecellSupportRole)
+        );
+    }
+
+    bindPlenaryBoardLink() {
+        const button = document.getElementById('openPlenaryBoardBtn');
+        if (!button) return;
+        bindPlenaryBoardOpener(button);
+    }
+
+    bindEventListeners() {
+        this.bindPlenaryBoardLink();
+        const startTimerBtn = document.getElementById('startTimerBtn');
+        const pauseTimerBtn = document.getElementById('pauseTimerBtn');
+        const resetTimerBtn = document.getElementById('resetTimerBtn');
+        const timerAllocationForm = document.getElementById('timerAllocationForm');
+        const timerAllocationResetCurrentBtn = document.getElementById('timerAllocationResetCurrentBtn');
+        const prevPhaseBtn = document.getElementById('prevPhaseBtn');
+        const nextPhaseBtn = document.getElementById('nextPhaseBtn');
+        const prevMoveBtn = document.getElementById('prevMoveBtn');
+        const nextMoveBtn = document.getElementById('nextMoveBtn');
+        const commForm = document.getElementById('commForm');
+        const participantsSessionFilter = document.getElementById('participantsSessionFilter');
+        const participantsTeamFilter = document.getElementById('participantsTeamFilter');
+        const participantsRoleFilter = document.getElementById('participantsRoleFilter');
+        const scribeDeckSettingsList = document.getElementById('scribeDeckSettingsList');
+        const pluginSettingsList = document.getElementById('pluginSettingsList');
+        const notificationsMuteBtn = document.getElementById('whiteCellNotificationsMuteBtn');
+        const timelineTeamFilter = document.getElementById('timelineTeamFilter');
+        const timelineRoleFilter = document.getElementById('timelineRoleFilter');
+        const timelineMoveFilter = document.getElementById('timelineMoveFilter');
+        const timelineActivityTypeFilter = document.getElementById('timelineActivityTypeFilter');
+        const tribeStreetJournalList = document.getElementById('tribeStreetJournalList');
+        const verbaAiComposeButton = document.getElementById('newVerbaAiUpdateBtn');
+        const returnedRevisionHistoryList = document.getElementById('returnedRevisionHistoryList');
+
+        if (this.isLeadOperator()) {
+            startTimerBtn?.addEventListener('click', () => this.startTimer());
+            pauseTimerBtn?.addEventListener('click', () => this.pauseTimer());
+            resetTimerBtn?.addEventListener('click', () => this.resetTimer());
+            timerAllocationForm?.addEventListener('input', (event) => {
+                if (event.target?.closest?.('[data-timer-allocation-mark]')) {
+                    this.timerAllocationFormDirty = true;
+                }
+            });
+            timerAllocationForm?.addEventListener('submit', (event) => this.handleTimerAllocationSubmit(event));
+            timerAllocationResetCurrentBtn?.addEventListener('click', () => this.resetTimerToCurrentAllocation());
+            prevPhaseBtn?.addEventListener('click', () => this.regressPhase());
+            nextPhaseBtn?.addEventListener('click', () => this.advancePhase());
+            prevMoveBtn?.addEventListener('click', () => this.regressMove());
+            nextMoveBtn?.addEventListener('click', () => this.advanceMove());
+        } else {
+            [
+                startTimerBtn,
+                pauseTimerBtn,
+                resetTimerBtn,
+                document.getElementById('timerAllocationSaveBtn'),
+                timerAllocationResetCurrentBtn,
+                prevPhaseBtn,
+                nextPhaseBtn,
+                prevMoveBtn,
+                nextMoveBtn
+            ].forEach((button) => {
+                if (!button) return;
+                button.disabled = true;
+                button.setAttribute?.('aria-disabled', 'true');
+                button.title = 'White Cell support is read-only for game controls.';
+            });
+        }
+
+        commForm?.addEventListener('submit', (event) => this.handleCommunicationSubmit(event));
+        notificationsMuteBtn?.addEventListener('click', () => this.toggleNotificationsMuted());
+        pluginSettingsList?.addEventListener('change', (event) => {
+            const toggle = event.target.closest('input[data-plugin-toggle]');
+            if (!toggle || !pluginSettingsList.contains(toggle)) return;
+            this.handlePluginToggle(toggle).catch((err) => {
+                logger.error('Failed to handle plugin toggle:', err);
+            });
+        });
+        participantsSessionFilter?.addEventListener('change', (event) => {
+            this.participantFilters.session = event.currentTarget.value || null;
+            this.selectedParticipantSeatIds.clear();
+            this.renderParticipants();
+        });
+        participantsTeamFilter?.addEventListener('change', (event) => {
+            this.participantFilters.team = event.currentTarget.value || null;
+            this.selectedParticipantSeatIds.clear();
+            this.renderParticipants();
+        });
+        participantsRoleFilter?.addEventListener('change', (event) => {
+            this.participantFilters.role = event.currentTarget.value || null;
+            this.selectedParticipantSeatIds.clear();
+            this.renderParticipants();
+        });
+        timelineTeamFilter?.addEventListener('change', (event) => {
+            this.timelineFilters.team = event.currentTarget.value || null;
+            this.renderTimeline();
+        });
+        timelineRoleFilter?.addEventListener('change', (event) => {
+            this.timelineFilters.role = event.currentTarget.value || null;
+            this.renderTimeline();
+        });
+        timelineMoveFilter?.addEventListener('change', (event) => {
+            this.timelineFilters.move = event.currentTarget.value || null;
+            this.renderTimeline();
+        });
+        timelineActivityTypeFilter?.addEventListener('change', (event) => {
+            this.timelineFilters.activityType = event.currentTarget.value || null;
+            this.renderTimeline();
+        });
+
+        const settingsTabs = document.getElementById('settingsTabs');
+        if (settingsTabs) {
+            settingsTabs.addEventListener('click', (event) => {
+                const button = event.target.closest('.tab-button[data-settings-tab]');
+                if (!button || !settingsTabs.contains(button)) return;
+
+                const targetTab = button.dataset.settingsTab;
+                settingsTabs.querySelectorAll('.tab-button[data-settings-tab]').forEach((tabButton) => {
+                    const isActive = tabButton.dataset.settingsTab === targetTab;
+                    tabButton.classList.toggle('tab-button-active', isActive);
+                    tabButton.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+                settingsTabs.querySelectorAll('.tab-panel[data-settings-panel]').forEach((panel) => {
+                    panel.hidden = panel.dataset.settingsPanel !== targetTab;
+                });
+            });
+        }
+
+        [
+            ['strategicOrientationList', 'strategicOrientation'],
+            ['actionsList', 'actions'],
+            ['responsesList', 'responses'],
+            ['proposalsList', 'proposals']
+        ].forEach(([elementId, section]) => {
+            const queueEl = document.getElementById(elementId);
+            queueEl?.addEventListener('click', (event) => {
+                const markButton = event.target.closest('[data-action-mark-tab]');
+                if (markButton && queueEl.contains(markButton)) {
+                    this.setBlueActionMark(markButton.dataset.actionMarkTab, queueEl);
+                    return;
+                }
+                const proposalResponseButton = event.target.closest('.proposal-response-review-btn');
+                if (proposalResponseButton && queueEl.contains(proposalResponseButton)) {
+                    this.openProposalResponseReviewById(
+                        proposalResponseButton.dataset.actionId,
+                        proposalResponseButton.dataset.responseReviewId
+                    );
+                    return;
+                }
+                const tabButton = event.target.closest('.tab-button[data-review-tab]');
+                if (!tabButton || !queueEl.contains(tabButton)) return;
+                this.setReviewActiveTab(section, tabButton.dataset.reviewTab, queueEl);
+            });
+            if (elementId === 'actionsList') {
+                queueEl?.addEventListener('keydown', (event) => {
+                    this.handleBlueActionMarkKeydown(event, queueEl);
+                });
+            }
+        });
+
+        const participantsList = document.getElementById('participantsList');
+        participantsList?.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-participant-action]');
+            if (!button) return;
+            if (button.dataset.participantAction === 'remove-selected') {
+                const selectedSeatIds = [...this.selectedParticipantSeatIds];
+                this.handleRemoveParticipantSeats(selectedSeatIds).catch((err) => {
+                    logger.error('Failed to handle participant removals:', err);
+                });
+                return;
+            }
+            const seatId = button.dataset.participantSeatId;
+            if (!seatId) return;
+            this.handleRemoveParticipantSeat(seatId).catch((err) => {
+                logger.error('Failed to handle participant removal:', err);
+            });
+        });
+        participantsList?.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('input[data-participant-select-seat-id]');
+            if (!checkbox) return;
+            const seatId = String(checkbox.dataset.participantSelectSeatId || '');
+            if (checkbox.checked) {
+                this.selectedParticipantSeatIds.add(seatId);
+            } else {
+                this.selectedParticipantSeatIds.delete(seatId);
+            }
+            this.updateParticipantSelectionControls();
+        });
+
+        const sessionsList = document.getElementById('sessionsList');
+        sessionsList?.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-session-action]');
+            if (!button) return;
+            const action = button.dataset.sessionAction;
+            const sessionId = button.dataset.sessionId;
+            if (action === 'create') {
+                this.showCreateSessionAdminModal();
+            } else if (action === 'archive' && sessionId) {
+                this.handleArchiveSessionAdmin(sessionId).catch((err) => {
+                    logger.error('Failed to archive session:', err);
+                });
+            } else if (action === 'refresh') {
+                this.loadSessionsAdmin().catch((err) => {
+                    logger.error('Failed to refresh sessions:', err);
+                });
+            }
+        });
+
+        const exportDataList = document.getElementById('exportDataList');
+        exportDataList?.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-export-type]');
+            if (!button) return;
+            const exportType = button.dataset.exportType;
+            this.handleExportAdmin(exportType).catch((err) => {
+                logger.error('Failed to export:', err);
+            });
+        });
+
+        scribeDeckSettingsList?.addEventListener('click', (event) => {
+            // Segmented source toggle: reveal that method's input, no submit.
+            const methodButton = event.target.closest('button[data-scribe-deck-method]');
+            if (methodButton) {
+                const card = methodButton.closest('.scribe-deck-card');
+                if (card) {
+                    const method = methodButton.dataset.scribeDeckMethod;
+                    card.dataset.deckMethod = method;
+                    card.querySelectorAll('button[data-scribe-deck-method]').forEach((btn) => {
+                        btn.setAttribute('aria-pressed', String(btn.dataset.scribeDeckMethod === method));
+                    });
+                }
+                return;
+            }
+
+            const button = event.target.closest('button[data-scribe-deck-action][data-scribe-deck-team]');
+            if (!button) return;
+
+            const teamId = button.dataset.scribeDeckTeam;
+            const action = button.dataset.scribeDeckAction;
+            if (!teamId) return;
+
+            this.handleScribeDeckAssignmentSubmit(teamId, {
+                useDefault: action === 'reset',
+                useUpload: action === 'upload'
+            }).catch((err) => {
+                logger.error('Failed to assign facilitator deck:', err);
+            });
+        });
+
+        tribeStreetJournalList?.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-journal-action="send-update"]');
+            if (!button) return;
+            const eventId = button.dataset.sourceEventId;
+            const sourceEvent = this.tribeStreetJournalEntries.find((entry) => entry.id === eventId);
+            if (!sourceEvent) return;
+            this.showSectionUpdateComposer({
+                title: 'Send Tribe Street Journal Update',
+                contentKind: WHITE_CELL_UPDATE_KINDS.TRIBE_STREET_JOURNAL,
+                initialContent: sourceEvent.content || sourceEvent.description || '',
+                sourceMetadata: {
+                    source_event_id: sourceEvent.id,
+                    source_team: sourceEvent.team,
+                    source_event_type: sourceEvent.type || sourceEvent.event_type || 'NOTE'
+                }
+            });
+        });
+
+        verbaAiComposeButton?.addEventListener('click', () => {
+            this.showSectionUpdateComposer({
+                title: 'Send Verba AI Population Sentiment',
+                contentKind: WHITE_CELL_UPDATE_KINDS.VERBA_AI_POPULATION_SENTIMENT,
+                initialContent: '',
+                sourceMetadata: {}
+            });
+        });
+
+        returnedRevisionHistoryList?.addEventListener('click', (event) => {
+            const retryButton = event.target.closest?.('[data-review-history-retry]');
+            if (!retryButton || !returnedRevisionHistoryList.contains?.(retryButton)) return;
+            this.loadReturnedRevisionHistory({ announceError: true });
+        });
+
+        document.querySelectorAll?.('.sidebar-link[data-section]')?.forEach((link) => {
+            link.addEventListener('click', () => {
+                if (link.dataset.section === 'pliAdjudication') {
+                    this.pliMacroReview?.refresh?.();
+                    this.syncPliBadges().catch(() => {});
+                }
+                if (link.dataset.section === 'pliDiplomacyInfo') {
+                    this.pliDiplomacyInfoReview?.refresh?.();
+                    this.syncPliBadges().catch(() => {});
+                }
+                if (link.dataset.section === 'pliNiEscalation') {
+                    this.pliNiEscalationReview?.refresh?.();
+                    this.syncPliBadges().catch(() => {});
+                }
+                if (link.dataset.section === 'pliReports') {
+                    this.pliReportPanel?.refresh?.();
+                }
+                if (link.dataset.section === 'pliSmeEfficacy') {
+                    this.pliSmeEfficacyPanel?.refresh?.();
+                }
+            });
+        });
+    }
+
+    subscribeToLiveData() {
+        this.storeUnsubscribers.push(
+            gameStateStore.subscribe((_event, state) => {
+                this.syncGameStateFromStore(state);
+            })
+        );
+
+        this.storeUnsubscribers.push(
+            actionsStore.subscribe((event) => {
+                gameStateStore.refreshOrientationCompletion?.().catch((error) => logger.warn('Orientation completion unavailable', error));
+                this.syncActionsFromStore({
+                    announce: event === 'created' || event === 'updated' || event === 'reconciled'
+                });
+                if (event === 'updated') {
+                    this.loadReturnedRevisionHistory().catch(() => {});
+                }
+                this.flushQueueArrivalAnnouncement();
+            })
+        );
+
+        this.storeUnsubscribers.push(
+            requestsStore.subscribe((event, payload) => {
+                this.syncRfisFromStore({ event, data: payload });
+                if (['updated', 'resubmitted', 'responded', 'reconciled'].includes(event)) {
+                    this.loadReturnedRevisionHistory().catch(() => {});
+                }
+            })
+        );
+
+        this.storeUnsubscribers.push(
+            communicationsStore.subscribe((event, payload) => {
+                this.syncActionsFromStore();
+                this.syncCommunicationsFromStore({
+                    announceThreadRounds: event === 'created' || event === 'reconciled',
+                    changedCommunications: Array.isArray(payload) ? payload : [payload],
+                    event
+                });
+            })
+        );
+
+        this.storeUnsubscribers.push(
+            participantsStore.subscribe(() => {
+                this.syncParticipantsFromStore();
+            })
+        );
+
+        this.storeUnsubscribers.push(
+            timelineStore.subscribe(() => {
+                this.syncTimelineFromStore();
+            })
+        );
+    }
+
+    getCurrentGameState() {
+        return gameStateStore.getState() || sessionStore.getSessionData()?.gameState || {
+            move: 1,
+            phase: 1,
+            timer_seconds: this.currentTimerSeconds,
+            timer_running: this.timerRunning
+        };
+    }
+
+    syncGameStateFromStore(gameState) {
+        const safeGameState = gameState || {};
+        this.currentTimerSeconds = gameState?.timer_seconds ?? CONFIG.DEFAULT_TIMER_SECONDS;
+        this.timerAllocations = normalizeTimerAllocations(gameState?.timer_allocations);
+        this.pluginState = normalizePluginState(gameState?.plugin_state);
+        this.timerRunning = Boolean(gameState?.timer_running && this.currentTimerSeconds > 0);
+        this.updateGameStateDisplay({
+            ...safeGameState,
+            timer_allocations: this.timerAllocations,
+            plugin_state: this.pluginState,
+            timer_seconds: this.currentTimerSeconds,
+            timer_running: this.timerRunning
+        });
+        this.updateTimerDisplay();
+        this.updateTimerStatusDisplay();
+        this.updateTimerAllocationControls();
+        this.updateTimerControlButtons();
+        this.renderPluginSettings();
+        this.reconcilePluginMounts();
+    }
+
+    getCurrentTimerMark() {
+        return resolveGameStateTimerMark(this.getCurrentGameState(), actionsStore.getAll());
+    }
+
+    getCurrentTimerAllocationSeconds() {
+        return getTimerAllocationSeconds(this.timerAllocations, this.getCurrentTimerMark().key);
+    }
+
+    updateTimerAllocationControls() {
+        const canControl = this.isLeadOperator();
+        const currentMark = this.getCurrentTimerMark();
+        const currentMinutes = secondsToWholeMinutes(
+            getTimerAllocationSeconds(this.timerAllocations, currentMark.key)
+        );
+        const currentMarkEl = document.getElementById('timerAllocationCurrentMark');
+        const resetTimerBtn = document.getElementById('resetTimerBtn');
+        const saveBtn = document.getElementById('timerAllocationSaveBtn');
+        const resetCurrentBtn = document.getElementById('timerAllocationResetCurrentBtn');
+        const fields = Array.from(
+            document.querySelectorAll?.('[data-timer-allocation-mark]') || []
+        );
+
+        fields.forEach((field) => {
+            const markKey = field.dataset?.timerAllocationMark;
+            if (!markKey) return;
+
+            if (!this.timerAllocationFormDirty) {
+                field.value = String(secondsToWholeMinutes(
+                    getTimerAllocationSeconds(this.timerAllocations, markKey)
+                ));
+            }
+            field.disabled = !canControl;
+            field.setAttribute?.('aria-disabled', field.disabled ? 'true' : 'false');
+        });
+
+        if (currentMarkEl) {
+            currentMarkEl.textContent = `Current reset target: ${currentMark.label} - ${currentMinutes} minute${currentMinutes === 1 ? '' : 's'}`;
+        }
+
+        if (resetTimerBtn) {
+            resetTimerBtn.textContent = `Reset to ${currentMinutes} min`;
+        }
+
+        [resetTimerBtn, saveBtn, resetCurrentBtn].forEach((button) => {
+            if (!button) return;
+            button.disabled = !canControl;
+            button.setAttribute?.('aria-disabled', button.disabled ? 'true' : 'false');
+            button.title = canControl
+                ? ''
+                : 'White Cell support is read-only for game controls.';
+        });
+    }
+
+    applyPluginState(pluginState = {}) {
+        this.pluginState = normalizePluginState(pluginState);
+        this.renderPluginSettings();
+        this.reconcilePluginMounts();
+    }
+
+    async handlePluginToggle(toggle) {
+        const pluginId = toggle?.dataset?.pluginId;
+        const plugin = getRegisteredPlugins().find((entry) => entry.id === pluginId);
+        if (!plugin) {
+            showToast({ message: 'Unknown plugin selection.', type: 'error' });
+            return;
+        }
+
+        const previousState = normalizePluginState(this.pluginState);
+        const enabled = Boolean(toggle.checked);
+        const mountedPlugin = this.mountedPlugins.get(pluginId);
+        const sharedRecordingActive = pluginId === 'session-recorder' && isSessionRecorderNoticeActive(previousState);
+        if (!enabled && (mountedPlugin?.mountResult?.isRecordingActive?.() || sharedRecordingActive)) {
+            const confirmed = await confirmModal({
+                title: 'Stop active recording?',
+                message: `Disabling ${plugin.label} will stop the active recording and release the microphone.`,
+                confirmLabel: 'Stop And Disable',
+                cancelLabel: 'Keep Recording',
+                variant: 'warning'
+            });
+
+            if (!confirmed) {
+                toggle.checked = true;
+                return;
+            }
+        }
+
+        const nextState = setPluginEnabledInState(previousState, pluginId, enabled);
+        this.applyPluginState(nextState);
+
+        try {
+            const updatedState = await gameStateStore.setPluginEnabled(pluginId, enabled);
+            if (!updatedState) {
+                throw new Error('Game state is not available for plugin persistence.');
+            }
+
+            this.applyPluginState(updatedState.plugin_state || nextState);
+            showToast({
+                message: `${plugin.label} ${enabled ? 'enabled' : 'disabled'}.`,
+                type: 'success'
+            });
+        } catch (err) {
+            logger.error('Failed to save plugin state:', err);
+            this.applyPluginState(previousState);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: `Failed to ${enabled ? 'enable' : 'disable'} ${plugin.label}. Check the session state and try again.`
+                }),
+                type: 'error'
+            });
+        }
+    }
+
+    renderPluginSettings() {
+        const container = document.getElementById('pluginSettingsList');
+        if (!container) return;
+
+        const plugins = getRegisteredPlugins();
+        if (plugins.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">No plugins are registered for this build.</p>';
+            return;
+        }
+
+        const state = normalizePluginState(this.pluginState);
+        container.innerHTML = plugins.map((plugin) => {
+            const enabled = Boolean(state[plugin.id]?.enabled);
+            const statusText = enabled ? 'Enabled' : 'Disabled';
+            const statusVariant = enabled ? 'success' : 'default';
+            const descriptionId = `pluginDescription-${plugin.id}`;
+            const statusId = `pluginStatus-${plugin.id}`;
+            const toggleId = `pluginToggle-${plugin.id}`;
+            const tags = (plugin.capabilityTags || []).map((tag) => (
+                createBadge({
+                    text: tag,
+                    variant: 'info',
+                    size: 'sm',
+                    rounded: true
+                }).outerHTML
+            )).join('');
+
+            return `
+                <div class="plugin-card card card-bordered" data-plugin-id="${this.escapeHtml(plugin.id)}" data-plugin-enabled="${enabled ? 'true' : 'false'}">
+                    <div class="plugin-card-main">
+                        <div class="plugin-card-head">
+                            <div>
+                                <h4 class="text-base font-semibold" style="margin: 0 0 var(--space-1);">${this.escapeHtml(plugin.label)}</h4>
+                                <p class="text-sm text-gray-500" id="${this.escapeHtml(descriptionId)}" style="margin: 0;">${this.escapeHtml(plugin.description)}</p>
+                            </div>
+                            <div class="plugin-status" id="${this.escapeHtml(statusId)}">
+                                <span class="plugin-status-icon ${enabled ? 'plugin-status-icon-enabled' : 'plugin-status-icon-disabled'}" aria-hidden="true">
+                                    <svg viewBox="0 0 12 12" focusable="false">
+                                        <circle cx="6" cy="6" r="4"></circle>
+                                    </svg>
+                                </span>
+                                ${createBadge({ text: statusText, variant: statusVariant, size: 'sm', rounded: true }).outerHTML}
+                            </div>
+                        </div>
+                        ${tags ? `<div class="badge-group plugin-tags" aria-label="${this.escapeHtml(plugin.label)} capability tags">${tags}</div>` : ''}
+                    </div>
+                    <label class="switch-field plugin-toggle-field" for="${this.escapeHtml(toggleId)}">
+                        <span class="switch-field-label">Enable plugin</span>
+                        <span class="switch">
+                            <input
+                                type="checkbox"
+                                id="${this.escapeHtml(toggleId)}"
+                                data-plugin-toggle
+                                data-plugin-id="${this.escapeHtml(plugin.id)}"
+                                aria-label="${this.escapeHtml(`${enabled ? 'Disable' : 'Enable'} ${plugin.label}`)}"
+                                aria-describedby="${this.escapeHtml(`${descriptionId} ${statusId}`)}"
+                                ${enabled ? 'checked' : ''}
+                            >
+                            <span class="switch-track"></span>
+                        </span>
+                    </label>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getPluginMountHost(pluginId) {
+        const container = document.getElementById('whiteCellPluginMounts');
+        if (!container) return null;
+
+        container.hidden = false;
+        const existingHost = Array.from(container.children || [])
+            .find((child) => child?.dataset?.pluginMount === pluginId);
+        if (existingHost) {
+            return existingHost;
+        }
+
+        const host = document.createElement('div');
+        host.className = 'plugin-mount';
+        host.dataset.pluginMount = pluginId;
+        container.appendChild(host);
+        return host;
+    }
+
+    reconcilePluginMounts() {
+        const state = normalizePluginState(this.pluginState);
+        const documentRef = typeof document !== 'undefined' ? document : null;
+        if (!documentRef) return;
+
+        const context = {
+            controller: this,
+            document: documentRef,
+            gameState: this.getCurrentGameState(),
+            gameStateStore,
+            sessionStore
+        };
+
+        getRegisteredPlugins().forEach((plugin) => {
+            const shouldMount = isPluginVisible(plugin, state, context);
+            const mountedPlugin = this.mountedPlugins.get(plugin.id);
+
+            if (shouldMount && !mountedPlugin) {
+                const host = this.getPluginMountHost(plugin.id);
+                const mountResult = plugin.mount?.({
+                    ...context,
+                    host,
+                    plugin,
+                    pluginState: state[plugin.id]
+                }) ?? null;
+                this.mountedPlugins.set(plugin.id, {
+                    host,
+                    mountResult,
+                    plugin
+                });
+                return;
+            }
+
+            if (!shouldMount && mountedPlugin) {
+                mountedPlugin.plugin.unmount?.(mountedPlugin.mountResult, {
+                    ...context,
+                    host: mountedPlugin.host,
+                    plugin,
+                    pluginState: state[plugin.id]
+                });
+                if (mountedPlugin.host) {
+                    mountedPlugin.host.innerHTML = '';
+                    mountedPlugin.host.remove?.();
+                }
+                this.mountedPlugins.delete(plugin.id);
+            }
+        });
+
+        const mountContainer = document.getElementById('whiteCellPluginMounts');
+        if (mountContainer && this.mountedPlugins.size === 0) {
+            mountContainer.hidden = true;
+        }
+    }
+
+    readTimerAllocationFormValues() {
+        const nextAllocations = { ...this.timerAllocations };
+        const fields = Array.from(
+            document.querySelectorAll?.('[data-timer-allocation-mark]') || []
+        );
+        const errors = [];
+
+        fields.forEach((field) => {
+            const markKey = field.dataset?.timerAllocationMark;
+            const mark = TIMER_ALLOCATION_MARKS.find((entry) => entry.key === markKey);
+            if (!mark) return;
+
+            const minutes = Number(field.value);
+            if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+                errors.push(`${mark.label} must be between 1 and 600 minutes.`);
+                return;
+            }
+
+            nextAllocations[mark.key] = minutesToAllocationSeconds(minutes);
+        });
+
+        return {
+            allocations: normalizeTimerAllocations(nextAllocations),
+            errors
+        };
+    }
+
+    async handleTimerAllocationSubmit(event) {
+        event?.preventDefault?.();
+
+        if (!this.isLeadOperator()) {
+            showToast({ message: 'White Cell support is read-only for game controls.', type: 'warning' });
+            return;
+        }
+
+        const { allocations, errors } = this.readTimerAllocationFormValues();
+        if (errors.length > 0) {
+            showToast({ message: errors[0], type: 'error' });
+            return;
+        }
+
+        try {
+            const updatedState = await gameStateStore.setTimerAllocations(allocations);
+            this.timerAllocations = normalizeTimerAllocations(updatedState?.timer_allocations || allocations);
+            this.timerAllocationFormDirty = false;
+            this.updateTimerAllocationControls();
+            showToast({ message: 'Timer allocations saved', type: 'success' });
+        } catch (err) {
+            logger.error('Failed to save timer allocations:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to save timer allocations. Apply the timer allocation database patch and try again.'
+                }),
+                type: 'error'
+            });
+        }
+    }
+
+    async resetTimerToCurrentAllocation() {
+        if (!this.isLeadOperator()) {
+            showToast({ message: 'White Cell support is read-only for game controls.', type: 'warning' });
+            return;
+        }
+
+        const currentMark = this.getCurrentTimerMark();
+        const seconds = getTimerAllocationSeconds(this.timerAllocations, currentMark.key);
+        const minutes = secondsToWholeMinutes(seconds);
+        const confirmed = await confirmModal({
+            title: 'Reset Timer',
+            message: `Reset the timer to ${minutes} minute${minutes === 1 ? '' : 's'} for ${currentMark.label}?`,
+            confirmLabel: 'Reset',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        await gameStateStore.resetTimer(seconds);
+        showToast({ message: `${currentMark.label} timer reset`, type: 'success' });
+    }
+
+    updateTimerDisplay() {
+        const controlDisplay = document.getElementById('controlTimerDisplay');
+        const headerDisplay = document.getElementById('timerDisplay');
+        const minutes = Math.floor(this.currentTimerSeconds / 60);
+        const seconds = this.currentTimerSeconds % 60;
+        const formatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        if (controlDisplay) controlDisplay.textContent = formatted;
+        if (headerDisplay) headerDisplay.textContent = formatted;
+    }
+
+    updateTimerStatusDisplay() {
+        const statusText = this.timerRunning ? 'Running' : 'Paused';
+        const statusEls = [
+            document.getElementById('timerStatusLabel'),
+            document.getElementById('timerStatus')
+        ];
+
+        statusEls.forEach((element) => {
+            if (!element) return;
+            element.textContent = statusText;
+            element.classList.toggle('timer-running', this.timerRunning);
+        });
+    }
+
+    updateTimerControlButtons() {
+        const startTimerBtn = document.getElementById('startTimerBtn');
+        const pauseTimerBtn = document.getElementById('pauseTimerBtn');
+
+        if (!startTimerBtn && !pauseTimerBtn) {
+            return;
+        }
+
+        const canControl = this.isLeadOperator();
+        const hasRemainingTime = this.currentTimerSeconds > 0;
+        const currentAllocationSeconds = this.getCurrentTimerAllocationSeconds();
+        const shouldShowResume = !this.timerRunning
+            && hasRemainingTime
+            && this.currentTimerSeconds < currentAllocationSeconds;
+
+        if (startTimerBtn) {
+            startTimerBtn.textContent = shouldShowResume ? 'Resume' : 'Start';
+            startTimerBtn.disabled = !canControl || this.timerRunning || !hasRemainingTime;
+            startTimerBtn.setAttribute?.('aria-disabled', startTimerBtn.disabled ? 'true' : 'false');
+            startTimerBtn.title = !canControl
+                ? 'White Cell support is read-only for game controls.'
+                : (!hasRemainingTime
+                    ? 'Reset the timer before starting again.'
+                    : (this.timerRunning ? 'Timer is already running.' : 'Start the timer.'));
+        }
+
+        if (pauseTimerBtn) {
+            pauseTimerBtn.disabled = !canControl || !this.timerRunning;
+            pauseTimerBtn.setAttribute?.('aria-disabled', pauseTimerBtn.disabled ? 'true' : 'false');
+            pauseTimerBtn.title = !canControl
+                ? 'White Cell support is read-only for game controls.'
+                : (this.timerRunning ? 'Pause the timer.' : 'Timer is already paused.');
+        }
+    }
+
+    updateMoveControlStep(element, state) {
+        if (!element) {
+            return;
+        }
+
+        element.classList?.remove?.(
+            'move-control-step-active',
+            'move-control-step-complete',
+            'move-control-step-pending'
+        );
+        element.classList?.add?.(`move-control-step-${state}`);
+        element.dataset.state = state;
+        element.setAttribute?.('aria-current', state === 'active' ? 'step' : 'false');
+    }
+
+    updateMoveControlProgress({
+        move = 1,
+        orientationGateActive = false
+    } = {}) {
+        WHITE_CELL_MOVE_CONTROL_STEPS.forEach((step) => {
+            const element = document.getElementById(step.id);
+            let state = 'pending';
+
+            if (step.key === 'strategic_orientation') {
+                state = orientationGateActive ? 'active' : 'complete';
+            } else if (!orientationGateActive && step.move === move) {
+                state = 'active';
+            } else if (!orientationGateActive && step.move < move) {
+                state = 'complete';
+            }
+
+            this.updateMoveControlStep(element, state);
+        });
+    }
+
+    updateGameStateDisplay(gameState = {}) {
+        const move = gameState.move ?? 1;
+        const phase = gameState.phase ?? 1;
+        const moveLabel = ENUMS.MOVES[move] || `Move ${move}`;
+        const phaseLabel = ENUMS.PHASES[phase] || `Phase ${phase}`;
+
+        const currentMove = document.getElementById('currentMove');
+        const currentPhase = document.getElementById('currentPhase');
+        const currentMoveLabel = document.getElementById('moveLabel');
+        const currentPhaseLabel = document.getElementById('phaseLabel');
+        const headerDisplay = getHeaderGameStateDisplay(gameState, actionsStore.getAll());
+        const orientationGateActive = headerDisplay.isStrategicOrientation;
+
+        if (currentMove) {
+            currentMove.textContent = orientationGateActive ? 'SO' : move;
+            currentMove.setAttribute?.(
+                'aria-label',
+                orientationGateActive ? 'Strategic Orientation' : `Move ${move}`
+            );
+        }
+        if (currentPhase) currentPhase.textContent = phase;
+        if (currentMoveLabel) {
+            currentMoveLabel.textContent = orientationGateActive
+                ? 'Strategic Orientation (Pre-Move 1)'
+                : moveLabel;
+        }
+        if (currentPhaseLabel) currentPhaseLabel.textContent = phaseLabel;
+        applyHeaderGameStateDisplay(headerDisplay);
+
+        this.updateMoveControlProgress({ move, orientationGateActive });
+        this.updateGameControlAvailability(move, phase, {
+            orientationGateActive,
+            orientationMoveGateActive: this.shouldGateStrategicOrientation({
+                move,
+                phase,
+                phaseOneOnly: false
+            })
+        });
+    }
+
+    getStrategicOrientationGateState() {
+        return gameStateStore.getOrientationCompletion?.()
+            || getStrategicOrientationCompletion(actionsStore.getAll(), sessionStore.getSessionData?.() || {});
+    }
+
+    isStrategicOrientationPeriodComplete() {
+        return this.getStrategicOrientationGateState().complete;
+    }
+
+    shouldGateStrategicOrientation({
+        move = null,
+        phase = null,
+        phaseOneOnly = true
+    } = {}) {
+        const gameState = this.getCurrentGameState();
+        const resolvedMove = move ?? gameState.move ?? 1;
+        const resolvedPhase = phase ?? gameState.phase ?? 1;
+
+        return resolvedMove === 1
+            && (!phaseOneOnly || resolvedPhase === 1)
+            && !this.isStrategicOrientationPeriodComplete();
+    }
+
+    getStrategicOrientationGateMessage() {
+        const completion = this.getStrategicOrientationGateState();
+        const labels = {
+            blue: 'Blue selection',
+            green: 'Green forecast',
+            'green:asian_pacific': 'Green - Asia-Pacific orientation',
+            'green:europe': 'Green - Europe orientation',
+            red: 'Red forecast',
+            industry: 'Industry forecast'
+        };
+        const missingLabels = completion.missingTeams
+            .map((teamId) => labels[teamId] || teamId)
+            .join(', ');
+
+        return `Strategic Orientation must be completed before Move 1 begins. Missing: ${missingLabels || 'none'}.`;
+    }
+
+    updateGameControlAvailability(move, phase, {
+        orientationGateActive = this.shouldGateStrategicOrientation({ move, phase }),
+        orientationMoveGateActive = this.shouldGateStrategicOrientation({
+            move,
+            phase,
+            phaseOneOnly: false
+        })
+    } = {}) {
+        const prevMoveBtn = document.getElementById('prevMoveBtn');
+        const nextMoveBtn = document.getElementById('nextMoveBtn');
+        const nextMoveHelp = document.getElementById('nextMoveHelp');
+        const prevPhaseBtn = document.getElementById('prevPhaseBtn');
+        const nextPhaseBtn = document.getElementById('nextPhaseBtn');
+
+        if (!this.isLeadOperator()) {
+            if (prevMoveBtn) prevMoveBtn.disabled = true;
+            if (nextMoveBtn) nextMoveBtn.disabled = true;
+            if (prevPhaseBtn) prevPhaseBtn.disabled = true;
+            if (nextPhaseBtn) nextPhaseBtn.disabled = true;
+            if (nextMoveHelp) nextMoveHelp.textContent = 'White Cell support is read-only for move controls.';
+            return;
+        }
+
+        const orientationGateTitle = 'Strategic Orientation is still open.';
+        const industryCoverage = getIndustryMoveCoverage(actionsStore.getAll(), move);
+        const missingIndustryLabels = industryCoverage.missing.map(({ label }) => label).join(', ');
+        const industryMoveGateActive = move < 3 && !industryCoverage.complete;
+        const industryGateMessage = `Complete at least one Industry proposal for: ${missingIndustryLabels}.`;
+
+        if (prevMoveBtn) {
+            prevMoveBtn.disabled = move <= 1;
+            prevMoveBtn.setAttribute?.('aria-disabled', prevMoveBtn.disabled ? 'true' : 'false');
+            prevMoveBtn.textContent = 'Previous Move';
+            prevMoveBtn.title = move <= 1
+                ? (orientationGateActive
+                    ? 'Strategic Orientation is the first control mark.'
+                    : 'Already at Move 1.')
+                : `Return to Move ${move - 1}.`;
+        }
+
+        if (nextMoveBtn) {
+            nextMoveBtn.disabled = move >= 3 || orientationMoveGateActive || industryMoveGateActive;
+            nextMoveBtn.setAttribute?.('aria-disabled', nextMoveBtn.disabled ? 'true' : 'false');
+            nextMoveBtn.textContent = orientationMoveGateActive
+                ? 'Awaiting Orientation'
+                : (move >= 3
+                    ? 'Final Move'
+                    : (industryMoveGateActive
+                        ? `Awaiting Industry: ${missingIndustryLabels}`
+                        : `Advance to Move ${move + 1}`));
+            nextMoveBtn.title = orientationMoveGateActive
+                ? orientationGateTitle
+                : (move >= 3
+                    ? 'Already at the final move.'
+                    : (industryMoveGateActive ? industryGateMessage : `Advance to Move ${move + 1}.`));
+        }
+
+        if (nextMoveHelp) {
+            nextMoveHelp.textContent = orientationMoveGateActive
+                ? 'Complete Strategic Orientation before advancing the move.'
+                : (move >= 3
+                    ? 'Move 3 is the final move.'
+                    : (industryMoveGateActive
+                        ? industryGateMessage
+                        : `Industry proposal coverage is complete. Move ${move + 1} is available.`));
+        }
+
+        if (prevPhaseBtn) {
+            prevPhaseBtn.disabled = phase <= 1;
+            prevPhaseBtn.setAttribute?.('aria-disabled', prevPhaseBtn.disabled ? 'true' : 'false');
+            prevPhaseBtn.title = phase <= 1 ? 'Already at the first phase.' : `Return to Phase ${phase - 1}.`;
+        }
+
+        if (nextPhaseBtn) {
+            nextPhaseBtn.disabled = phase >= 5 || orientationGateActive;
+            nextPhaseBtn.setAttribute?.('aria-disabled', nextPhaseBtn.disabled ? 'true' : 'false');
+            nextPhaseBtn.title = orientationGateActive
+                ? orientationGateTitle
+                : (phase >= 5 ? 'Already at the final phase.' : `Advance to Phase ${phase + 1}.`);
+        }
+    }
+
+    async startTimer() {
+        if (this.timerRunning) return;
+
+        await gameStateStore.startTimer();
+
+        showToast({ message: 'Timer started', type: 'success' });
+        logger.info('Timer started');
+    }
+
+    async pauseTimer({ silent = false } = {}) {
+        await gameStateStore.pauseTimer();
+
+        if (!silent) {
+            showToast({ message: 'Timer paused', type: 'info' });
+        }
+
+        logger.info('Timer paused');
+    }
+
+    async resetTimer() {
+        await this.resetTimerToCurrentAllocation();
+    }
+
+    async advancePhase() {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const currentState = this.getCurrentGameState();
+        const currentPhase = currentState.phase ?? 1;
+        const currentMove = currentState.move ?? 1;
+
+        if (this.shouldGateStrategicOrientation({ move: currentMove, phase: currentPhase })) {
+            showToast({ message: this.getStrategicOrientationGateMessage(), type: 'warning' });
+            return;
+        }
+
+        if (currentPhase >= 5) {
+            showToast({ message: 'Already at the final phase for this move.', type: 'warning' });
+            return;
+        }
+
+        const confirmed = await confirmModal({
+            title: 'Advance Phase',
+            message: `Advance from Phase ${currentPhase} to Phase ${currentPhase + 1}?`,
+            confirmLabel: 'Advance',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        const loader = showLoader({ message: 'Advancing phase...' });
+
+        try {
+            const updatedState = await gameStateStore.advancePhase();
+            if (!updatedState) {
+                throw new Error('Phase advance failed');
+            }
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'PHASE_CHANGE',
+                content: `Phase advanced from ${currentPhase} to ${updatedState.phase}`,
+                metadata: { role: this.getTimelineActorRole() },
+                team: 'white_cell',
+                move: currentMove,
+                phase: updatedState.phase
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: `Advanced to Phase ${updatedState.phase}`, type: 'success' });
+            logger.info(`Phase advanced to ${updatedState.phase}`);
+        } catch (err) {
+            logger.error('Failed to advance phase:', err);
+            showToast({ message: 'Failed to advance phase', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async regressPhase() {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const currentState = this.getCurrentGameState();
+        const currentPhase = currentState.phase ?? 1;
+        const currentMove = currentState.move ?? 1;
+
+        if (currentPhase <= 1) {
+            showToast({ message: 'Already at the first phase.', type: 'warning' });
+            return;
+        }
+
+        const confirmed = await confirmModal({
+            title: 'Return to Previous Phase',
+            message: `Move back from Phase ${currentPhase} to Phase ${currentPhase - 1}?`,
+            confirmLabel: 'Return',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        const loader = showLoader({ message: 'Returning to previous phase...' });
+
+        try {
+            const updatedState = await gameStateStore.regressPhase();
+            if (!updatedState) {
+                throw new Error('Phase regression failed');
+            }
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'PHASE_CHANGE',
+                content: `Phase moved back from ${currentPhase} to ${updatedState.phase}`,
+                metadata: { role: this.getTimelineActorRole() },
+                team: 'white_cell',
+                move: currentMove,
+                phase: updatedState.phase
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: `Returned to Phase ${updatedState.phase}`, type: 'success' });
+            logger.info(`Phase regressed to ${updatedState.phase}`);
+        } catch (err) {
+            logger.error('Failed to regress phase:', err);
+            showToast({ message: 'Failed to return to previous phase', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async advanceMove() {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const currentState = this.getCurrentGameState();
+        const currentMove = currentState.move ?? 1;
+
+        if (this.shouldGateStrategicOrientation({
+            move: currentMove,
+            phase: currentState.phase ?? 1,
+            phaseOneOnly: false
+        })) {
+            showToast({ message: this.getStrategicOrientationGateMessage(), type: 'warning' });
+            return;
+        }
+
+        if (currentMove >= 3) {
+            showToast({ message: 'Already at the final move (Move 3).', type: 'warning' });
+            return;
+        }
+
+        const industryCoverage = getIndustryMoveCoverage(actionsStore.getAll(), currentMove);
+        if (!industryCoverage.complete) {
+            const missingIndustries = industryCoverage.missing.map(({ label }) => label).join(', ');
+            showToast({
+                message: `Complete at least one Industry proposal for ${missingIndustries} before advancing the move.`,
+                type: 'warning'
+            });
+            return;
+        }
+
+        const confirmed = await confirmModal({
+            title: 'Advance Move',
+            message: `Advance from Move ${currentMove} to Move ${currentMove + 1}? This resets the phase to 1.`,
+            confirmLabel: 'Advance',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        const loader = showLoader({ message: 'Advancing move...' });
+
+        try {
+            const updatedState = await gameStateStore.advanceMove();
+            if (!updatedState) {
+                throw new Error('Move advance failed');
+            }
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'MOVE_CHANGE',
+                content: `Move advanced from ${currentMove} to ${updatedState.move}`,
+                metadata: { role: this.getTimelineActorRole() },
+                team: 'white_cell',
+                move: updatedState.move,
+                phase: updatedState.phase
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: `Advanced to Move ${updatedState.move}`, type: 'success' });
+            logger.info(`Move advanced to ${updatedState.move}`);
+        } catch (err) {
+            logger.error('Failed to advance move:', err);
+            showToast({ message: 'Failed to advance move', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async regressMove() {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const currentState = this.getCurrentGameState();
+        const currentMove = currentState.move ?? 1;
+
+        if (currentMove <= 1) {
+            showToast({ message: 'Already at the first move.', type: 'warning' });
+            return;
+        }
+
+        const confirmed = await confirmModal({
+            title: 'Return to Previous Move',
+            message: `Move back from Move ${currentMove} to Move ${currentMove - 1}? This resets the phase to 1.`,
+            confirmLabel: 'Return',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        const loader = showLoader({ message: 'Returning to previous move...' });
+
+        try {
+            const updatedState = await gameStateStore.regressMove();
+            if (!updatedState) {
+                throw new Error('Move regression failed');
+            }
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'MOVE_CHANGE',
+                content: `Move returned from ${currentMove} to ${updatedState.move}`,
+                metadata: { role: this.getTimelineActorRole() },
+                team: 'white_cell',
+                move: updatedState.move,
+                phase: updatedState.phase
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: `Returned to Move ${updatedState.move}`, type: 'success' });
+            logger.info(`Move regressed to ${updatedState.move}`);
+        } catch (err) {
+            logger.error('Failed to regress move:', err);
+            showToast({ message: 'Failed to return to previous move', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    syncActionsFromStore({
+        announce = false
+    } = {}) {
+        const allActions = actionsStore.getAll();
+        this.actions = actionsStore.getPending();
+        this.strategicOrientationArtifacts = allActions.filter((action) => (
+            isStrategicOrientationAction(action) && !isDraftAction(action)
+        ));
+        // Keep both awaiting-review and completed items so each review section
+        // can split them across "Awaiting Review" / "Completed" tabs.
+        this.blueTeamActions = allActions.filter((action) => (
+            action?.team === 'blue'
+            && !isDraftAction(action)
+            && !isStrategicOrientationAction(action)
+        ));
+        this.proposalTeamProposals = allActions.filter((action) => (
+            isProposalTeamId(action?.team)
+            && !isDraftAction(action)
+            && !isStrategicOrientationAction(action)
+            && this.isProposalAction(action)
+        ));
+        this.greenTeamProposals = this.proposalTeamProposals;
+        this.redTeamResponses = allActions.filter((action) => (
+            action?.team === 'red'
+            && !isDraftAction(action)
+            && !isStrategicOrientationAction(action)
+        ));
+        const pendingStrategicOrientationArtifacts = this.strategicOrientationArtifacts.filter((action) => canAdjudicateAction(action));
+        const pendingBlueTeamActions = this.blueTeamActions.filter((action) => canAdjudicateAction(action));
+        const proposalCommunications = communicationsStore.getAll();
+        const pendingProposalTeamProposals = this.proposalTeamProposals.filter((action) => (
+            canAdjudicateAction(action)
+            || getPendingProposalResponseReviews(proposalCommunications, action.id).length > 0
+        ));
+        const pendingRedTeamResponses = this.redTeamResponses.filter((action) => canAdjudicateAction(action));
+        this.captureQueueArrivals({
+            strategicOrientationArtifacts: this.strategicOrientationArtifacts,
+            blueTeamActions: this.blueTeamActions,
+            proposalTeamProposals: this.proposalTeamProposals,
+            greenTeamProposals: this.greenTeamProposals,
+            redTeamResponses: this.redTeamResponses
+        }, {
+            announce
+        });
+
+        this.renderStrategicOrientationReview();
+        this.renderActionReview();
+        this.renderMoveResponses();
+        this.renderProposals();
+        this.renderReturnedRevisionHistory();
+        const gameState = this.getCurrentGameState();
+        this.updateGameStateDisplay(gameState);
+        this.updateTimerAllocationControls();
+        this.updateTimerControlButtons();
+
+        this.updateSidebarBadge('strategicOrientationBadge', pendingStrategicOrientationArtifacts.length);
+        this.updateSidebarBadge('actionsBadge', pendingBlueTeamActions.length);
+        this.updateSidebarBadge('proposalsBadge', pendingProposalTeamProposals.length);
+        this.updateSidebarBadge('responsesBadge', pendingRedTeamResponses.length);
+    }
+
+    async loadReturnedRevisionHistory({ announceError = false } = {}) {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            this.returnedRevisionHistory = [];
+            this.returnedRevisionHistoryError = null;
+            this.renderReturnedRevisionHistory();
+            return [];
+        }
+
+        this.returnedRevisionHistoryLoading = true;
+        this.returnedRevisionHistoryError = null;
+        this.renderReturnedRevisionHistory();
+
+        try {
+            this.returnedRevisionHistory = (await database.fetchArtifactWorkflowReviews(sessionId, {
+                artifactKinds: ['action', 'strategic_orientation', 'rfi'],
+                decisions: [
+                    ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM,
+                    ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_FOR_CLARIFICATION
+                ]
+            })) || [];
+            return this.returnedRevisionHistory;
+        } catch (error) {
+            this.returnedRevisionHistoryError = error;
+            logger.error('Failed to load returned artifact revision history:', error);
+            if (announceError) {
+                showToast({ message: getUserMessage(error), type: 'error' });
+            }
+            return [];
+        } finally {
+            this.returnedRevisionHistoryLoading = false;
+            this.renderReturnedRevisionHistory();
+            this.renderRfiQueue();
+        }
+    }
+
+    retainWorkflowReview(review = null) {
+        const returnDecisions = new Set([
+            ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM,
+            ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_FOR_CLARIFICATION
+        ]);
+        if (!review || !returnDecisions.has(review.decision)) return;
+
+        const reviewKey = review.id
+            || `${review.artifact_kind}:${review.artifact_id}:${review.revision_number}:${review.decision}`;
+        const withoutDuplicate = this.returnedRevisionHistory.filter((candidate) => {
+            const candidateKey = candidate.id
+                || `${candidate.artifact_kind}:${candidate.artifact_id}:${candidate.revision_number}:${candidate.decision}`;
+            return candidateKey !== reviewKey;
+        });
+        this.returnedRevisionHistory = [review, ...withoutDuplicate]
+            .sort((left, right) => new Date(right.reviewed_at || 0) - new Date(left.reviewed_at || 0));
+        this.renderReturnedRevisionHistory();
+        if (review.artifact_kind === 'rfi') {
+            this.renderRfiQueue();
+        }
+    }
+
+    updateSidebarBadge(badgeId, count) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+
+        badge.textContent = String(count);
+        badge.hidden = count <= 0;
+    }
+
+    captureQueueArrivals({
+        strategicOrientationArtifacts = [],
+        blueTeamActions = [],
+        proposalTeamProposals = null,
+        greenTeamProposals = [],
+        redTeamResponses = []
+    } = {}, {
+        announce = false
+    } = {}) {
+        this.captureQueueArrivalSet({
+            queueName: 'strategicOrientation',
+            nextItems: strategicOrientationArtifacts,
+            seenSet: this.seenStrategicOrientationIds,
+            newSet: this.newStrategicOrientationIds,
+            hydratedFlag: 'hasHydratedStrategicOrientationQueue',
+            announce
+        });
+
+        this.captureQueueArrivalSet({
+            queueName: 'actions',
+            nextItems: blueTeamActions,
+            seenSet: this.seenBlueActionIds,
+            newSet: this.newBlueActionIds,
+            hydratedFlag: 'hasHydratedBlueActionQueue',
+            announce
+        });
+
+        this.captureQueueArrivalSet({
+            queueName: 'proposals',
+            nextItems: proposalTeamProposals || greenTeamProposals,
+            seenSet: this.seenGreenProposalIds,
+            newSet: this.newGreenProposalIds,
+            hydratedFlag: 'hasHydratedGreenProposalQueue',
+            announce
+        });
+
+        this.captureQueueArrivalSet({
+            queueName: 'responses',
+            nextItems: redTeamResponses,
+            seenSet: this.seenRedResponseIds,
+            newSet: this.newRedResponseIds,
+            hydratedFlag: 'hasHydratedRedResponseQueue',
+            announce
+        });
+    }
+
+    captureQueueArrivalSet({
+        queueName,
+        nextItems = [],
+        seenSet,
+        newSet,
+        hydratedFlag,
+        announce = false
+    } = {}) {
+        const notifications = nextItems
+            .map((item) => ({ item, notification: this.buildQueueDurableNotification(queueName, item) }))
+            .filter(({ notification }) => notification);
+        const nextIds = new Set(nextItems.map((item) => item?.id).filter(Boolean));
+
+        if (!this[hydratedFlag]) {
+            seenSet.clear();
+            notifications.forEach(({ notification }) => seenSet.add(notification.id));
+            this.durableNotifications?.seed(notifications.map(({ notification }) => notification));
+            newSet.clear();
+            this[hydratedFlag] = true;
+            return;
+        }
+
+        notifications.forEach(({ item, notification }) => {
+            if (!item?.id || seenSet.has(notification.id)) {
+                return;
+            }
+
+            seenSet.add(notification.id);
+            newSet.add(item.id);
+            if (announce) {
+                this.durableNotifications?.notify(notification, {
+                    onOpen: (durableNotification) => this.openDurableDestination(durableNotification)
+                });
+            }
+        });
+
+        newSet.forEach((itemId) => {
+            if (!nextIds.has(itemId)) {
+                newSet.delete(itemId);
+            }
+        });
+    }
+
+    buildQueueDurableNotification(queueName = '', item = {}) {
+        const configs = {
+            strategicOrientation: { section: 'strategicOrientation', artifactType: 'Strategic Orientation' },
+            actions: { section: 'actions', artifactType: 'Action' },
+            proposals: { section: 'proposals', artifactType: 'Proposal' },
+            responses: { section: 'responses', artifactType: 'Red action' }
+        };
+        return buildWhiteCellArtifactNotification(item, configs[queueName]);
+    }
+
+    clearQueueArrivalHighlights(queueName = '', itemId = '') {
+        const queueMap = {
+            strategicOrientation: {
+                newSet: this.newStrategicOrientationIds,
+                rerender: () => {
+                    this.renderStrategicOrientationReview();
+                }
+            },
+            actions: {
+                newSet: this.newBlueActionIds,
+                rerender: () => {
+                    this.renderActionReview();
+                }
+            },
+            proposals: {
+                newSet: this.newGreenProposalIds,
+                rerender: () => {
+                    this.renderProposals();
+                }
+            },
+            responses: {
+                newSet: this.newRedResponseIds,
+                rerender: () => {
+                    this.renderMoveResponses();
+                }
+            }
+        };
+        const queueState = queueMap[queueName];
+        if (!queueState || !itemId || !queueState.newSet.has(itemId)) {
+            return;
+        }
+
+        queueState.newSet.delete(itemId);
+        this.durableNotifications?.markDestinationRead({ recordId: itemId });
+        queueState.rerender();
+    }
+
+    flushQueueArrivalAnnouncement() {
+        Object.values(this.pendingQueueArrivalSummary).forEach((queue) => queue.clear());
+    }
+
+    isProposalAction(action = {}) {
+        return getProposalViewModel(action).hasProposalDetails;
+    }
+
+    renderDefinitionList(rows = []) {
+        const filteredRows = rows.filter((row) => {
+            const value = row?.value;
+            return value != null && String(value).trim();
+        });
+
+        if (!filteredRows.length) {
+            return '<p class="text-sm text-gray-500" style="margin: 0;">No details recorded.</p>';
+        }
+
+        return `
+            <dl style="margin: 0; display: grid; gap: var(--space-2);">
+                ${filteredRows.map((row) => `
+                    <div>
+                        <dt class="text-xs text-gray-500" style="font-weight: 600;">${this.escapeHtml(row.label)}</dt>
+                        <dd class="text-sm" style="margin: var(--space-1) 0 0;">${this.escapeHtml(row.value)}</dd>
+                    </div>
+                `).join('')}
+            </dl>
+        `;
+    }
+
+    renderSummaryCard(title, rows = []) {
+        return `
+            <div class="card card-bordered" style="padding: var(--space-3);">
+                <h4 class="font-semibold" style="margin: 0 0 var(--space-3);">${this.escapeHtml(title)}</h4>
+                ${this.renderDefinitionList(rows)}
+            </div>
+        `;
+    }
+
+    renderProposalDetails(action = {}) {
+        const proposalViewModel = getProposalViewModel(action);
+        if (proposalViewModel.hasIndustryTurnSheet) {
+            const display = buildIndustryTurnSheetDisplayModel(proposalViewModel.industryTurnSheet);
+            return `
+                <section class="industry-proposal-summary" aria-label="Industry proposal details" style="margin-top: var(--space-3);">
+                    <div class="card card-bordered" style="padding: var(--space-3); margin-bottom: var(--space-3);">
+                        <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">${this.escapeHtml(display.eyebrow)}</p>
+                        <h3 class="font-semibold" style="margin: 0;">${this.escapeHtml(display.title)}</h3>
+                        <p class="text-sm" style="margin: var(--space-2) 0 0;"><strong>Visibility:</strong> ${this.escapeHtml(display.visibility)}</p>
+                    </div>
+                    <div class="section-grid section-grid-2" style="gap: var(--space-3);">
+                        ${display.sections.map((section) => this.renderSummaryCard(section.title, section.rows.map(([label, value]) => ({ label, value })))).join('')}
+                    </div>
+                </section>
+            `;
+        }
+        const routingLabels = new Set([
+            'Originators',
+            'Intended Partners',
+            'Recipient Teams',
+            'Proposed Recipient Approvals',
+            'Delivery (historical)',
+            'Timing & Conditions',
+            'Revision',
+            'Prior Workflow State',
+            'Reviewed At',
+            'Reviewed By',
+            'Review Notes',
+            'Completed At'
+        ]);
+        const routingDetails = proposalViewModel.artifactDetails.filter((field) => routingLabels.has(field.label));
+        const overviewDetails = proposalViewModel.artifactDetails.filter((field) => !routingLabels.has(field.label));
+
+        return `
+            <div class="section-grid section-grid-2" style="gap: var(--space-3); margin-top: var(--space-3);">
+                ${this.renderSummaryCard('Proposal Overview', overviewDetails)}
+                ${this.renderSummaryCard('Routing & Review', routingDetails)}
+            </div>
+        `;
+    }
+
+    getForwardedProposalCommunication(action = null, recipientTeam = '') {
+        if (!action?.id) {
+            return null;
+        }
+
+        return communicationsStore.getAll()
+            .filter((communication) => (
+                communication?.type === 'PROPOSAL_FORWARDED'
+                && communication?.metadata?.source_proposal_id === action.id
+                && (!recipientTeam || communication?.metadata?.recipient_team === recipientTeam)
+            ))
+            .sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0] || null;
+    }
+
+    formatProposalRecipientTeamLabel(team = '') {
+        const normalizedTeam = typeof team === 'string' ? team.trim().toLowerCase() : '';
+        switch (normalizedTeam) {
+            case 'blue':
+                return 'Blue Team';
+            case 'red':
+                return 'Red Team';
+            case 'green':
+                return 'Green Team';
+            case 'industry':
+                return 'Industry Team';
+            default:
+                return team || 'Recipient team';
+        }
+    }
+
+    getProposalResponseAudienceLabel(responseEntry = null, fallbackTeam = '') {
+        return this.formatProposalRecipientTeamLabel(
+            responseEntry?.responseFromTeam || fallbackTeam || ''
+        );
+    }
+
+    renderLegacyProposalRecipientState(action = null) {
+        const forwardedCommunication = this.getForwardedProposalCommunication(action);
+        if (!forwardedCommunication) {
+            return '';
+        }
+
+        const proposalViewModel = getProposalViewModel(action);
+        const recipientEntry = getProposalRecipientEntry(forwardedCommunication);
+        const recipientTeam = forwardedCommunication?.metadata?.recipient_team
+            || proposalViewModel.recipientTeam
+            || '';
+        const recipientLabel = this.formatProposalRecipientTeamLabel(recipientTeam);
+        const status = getProposalRecipientStatus(forwardedCommunication);
+        const isNegotiationRequest = isProposalNegotiationRequest(forwardedCommunication);
+        const statusLabel = isNegotiationRequest
+            ? 'Negotiation requested'
+            : formatProposalRecipientStatus(status);
+        const actionedAt = recipientEntry?.actioned_at || null;
+        const responseEntry = getProposalResponseEntry(forwardedCommunication);
+        const responseAudienceLabel = this.getProposalResponseAudienceLabel(responseEntry, recipientTeam);
+        const responseSentAt = responseEntry?.responseSentAt || actionedAt || null;
+        const timestampLabel = responseSentAt ? formatRelativeTime(responseSentAt) : '';
+        const statusMessage = {
+            [PROPOSAL_RECIPIENT_STATUSES.UNREAD]: `Awaiting recipient confirmation from ${recipientLabel}.`,
+            [PROPOSAL_RECIPIENT_STATUSES.ACKNOWLEDGED]: `${recipientLabel} opened this proposal and is reviewing it.`,
+            [PROPOSAL_RECIPIENT_STATUSES.RESPONDED]: isNegotiationRequest
+                ? `${responseAudienceLabel} requested negotiation.`
+                : `Response received from ${responseAudienceLabel}.`,
+            [PROPOSAL_RECIPIENT_STATUSES.DECLINED]: `${recipientLabel} declined this proposal.`,
+            [PROPOSAL_RECIPIENT_STATUSES.IGNORED]: `${recipientLabel} marked this proposal as ignored.`
+        }[status] || `Awaiting recipient confirmation from ${recipientLabel}.`;
+        const accentColor = {
+            [PROPOSAL_RECIPIENT_STATUSES.UNREAD]: 'var(--color-info-600)',
+            [PROPOSAL_RECIPIENT_STATUSES.ACKNOWLEDGED]: 'var(--color-warning)',
+            [PROPOSAL_RECIPIENT_STATUSES.RESPONDED]: 'var(--color-success)',
+            [PROPOSAL_RECIPIENT_STATUSES.DECLINED]: 'var(--color-error)',
+            [PROPOSAL_RECIPIENT_STATUSES.IGNORED]: 'var(--color-text-muted)'
+        }[status] || 'var(--color-info-600)';
+        const responseContentMarkup = responseEntry?.responseContent ? `
+            <div
+                style="margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface);"
+            >
+                <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">
+                    <strong>${isNegotiationRequest ? 'Negotiation terms' : `${this.escapeHtml(responseAudienceLabel)} Response`}</strong>
+                </p>
+                <p class="text-sm" style="margin: 0;">${this.escapeHtml(responseEntry.responseContent)}</p>
+            </div>
+        ` : '';
+
+        return `
+            <div
+                class="card card-bordered"
+                style="margin-top: var(--space-3); padding: var(--space-3); background: var(--color-surface-alt); border-left: 4px solid ${accentColor};"
+            >
+                <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">
+                    <strong>Recipient Team:</strong> ${this.escapeHtml(recipientLabel)}
+                </p>
+                <p class="text-sm font-semibold" style="margin: 0 0 var(--space-1);">
+                    ${this.escapeHtml(statusMessage)}
+                </p>
+                <p class="text-xs text-gray-500" style="margin: 0;">
+                    <strong>Recipient Status:</strong> ${this.escapeHtml(statusLabel)}${timestampLabel ? ` | ${this.escapeHtml(timestampLabel)}` : ''}
+                </p>
+                ${responseContentMarkup}
+            </div>
+        `;
+    }
+
+    renderProposalRecipientState(action = null) {
+        const proposal = getProposalViewModel(action || {});
+        const recipients = proposal.recipientTeams?.length
+            ? proposal.recipientTeams
+            : (proposal.recipientTeam ? [proposal.recipientTeam] : []);
+
+        if (!recipients.length) {
+            return '<p class="text-sm text-gray-500" style="margin-top: var(--space-3);">No intended recipient is recorded.</p>';
+        }
+
+        const legacyForwarded = this.getForwardedProposalCommunication(action);
+        if (legacyForwarded && !isProposalThreadMessage(legacyForwarded)) {
+            return this.renderLegacyProposalRecipientState(action);
+        }
+
+        return recipients.map((recipientTeam) => {
+            const recipientLabel = this.formatProposalRecipientTeamLabel(recipientTeam);
+            const messages = getProposalThreadForRecipient(
+                communicationsStore.getAll(),
+                action?.id,
+                recipientTeam, action.delegation_id ? action.revision_number : null
+            );
+            const persistedApproval = proposal.recipientApprovalStates?.[recipientTeam];
+            const status = messages.length
+                ? getProposalThreadStatus(messages)
+                : persistedApproval && persistedApproval !== PROPOSAL_RECIPIENT_APPROVAL_STATUS.PENDING
+                    ? PROPOSAL_RECIPIENT_STATUSES.APPROVED_FORWARDED
+                    : PROPOSAL_RECIPIENT_STATUSES.PENDING_APPROVAL;
+            const statusLabel = formatProposalRecipientStatus(status);
+            const latest = getLatestProposalThreadMessage(messages);
+            const latestMetadata = getProposalThreadMetadata(latest);
+            const messageList = messages.length ? `
+                <ol class="proposal-thread-list" aria-label="${this.escapeHtml(`${recipientLabel} proposal thread`)}">
+                    ${messages.map((message) => {
+                        const thread = getProposalThreadMetadata(message);
+                        const senderLabel = this.formatProposalRecipientTeamLabel(thread.senderTeam);
+                        return `
+                            <li class="proposal-thread-message" data-thread-id="${this.escapeHtml(thread.threadId)}" data-thread-round="${thread.roundNumber}" data-communication-id="${this.escapeHtml(String(message.id || ''))}">
+                                <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">
+                                    <strong>Round ${thread.roundNumber}</strong> &middot; ${this.escapeHtml(senderLabel)} &middot; ${this.escapeHtml(formatDateTime(thread.sentAt))}
+                                </p>
+                                <p class="text-sm" style="margin: 0;">${this.escapeHtml(message.content || '')}</p>
+                            </li>
+                        `;
+                    }).join('')}
+                </ol>
+            ` : status === PROPOSAL_RECIPIENT_STATUSES.APPROVED_FORWARDED
+                ? '<p class="text-sm text-gray-500" style="margin: var(--space-2) 0 0;">Approval is recorded; the recipient thread is synchronizing.</p>'
+                : '<p class="text-sm text-gray-500" style="margin: var(--space-2) 0 0;">White Cell has not approved this recipient yet.</p>';
+
+            return `
+                <section class="card card-bordered proposal-recipient-thread" style="margin-top: var(--space-3); padding: var(--space-3);" aria-labelledby="proposal-recipient-${this.escapeHtml(String(action?.id || 'proposal'))}-${this.escapeHtml(recipientTeam)}">
+                    <div style="display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap;">
+                        <h4 id="proposal-recipient-${this.escapeHtml(String(action?.id || 'proposal'))}-${this.escapeHtml(recipientTeam)}" class="font-semibold" style="margin: 0;">${this.escapeHtml(recipientLabel)}</h4>
+                        <span class="text-xs font-semibold">${this.escapeHtml(statusLabel)}</span>
+                    </div>
+                    ${latestMetadata?.facilitatorDecision ? `<p class="text-xs text-gray-500" style="margin: var(--space-1) 0 0;"><strong>Latest decision:</strong> ${this.escapeHtml(latestMetadata.facilitatorDecision.replace(/_/g, ' '))}</p>` : ''}
+                    ${messageList}
+                </section>
+            `;
+        }).join('');
+    }
+
+    getProposalReviewOptions(action = {}) {
+        const proposalViewModel = getProposalViewModel(action);
+        const recipientTeams = (proposalViewModel.recipientTeams?.length
+            ? proposalViewModel.recipientTeams
+            : [proposalViewModel.recipientTeam])
+            .filter((team) => ['blue', 'red'].includes(team));
+        const recipients = recipientTeams.map((team) => {
+            const messages = getProposalThreadForRecipient(
+                communicationsStore.getAll(),
+                action?.id,
+                team
+            );
+            const persistedApproval = proposalViewModel.recipientApprovalStates?.[team];
+            const approved = messages.length > 0
+                || (persistedApproval && persistedApproval !== PROPOSAL_RECIPIENT_APPROVAL_STATUS.PENDING);
+            return {
+                team,
+                label: this.formatCommunicationRecipient(team),
+                status: messages.length
+                    ? getProposalThreadStatus(messages)
+                    : approved
+                        ? PROPOSAL_RECIPIENT_STATUSES.APPROVED_FORWARDED
+                        : PROPOSAL_RECIPIENT_STATUSES.PENDING_APPROVAL,
+                approved,
+                messages
+            };
+        });
+
+        return {
+            proposalViewModel,
+            recipients,
+            pendingRecipients: recipients.filter((recipient) => !recipient.approved)
+        };
+    }
+
+    getBlueTeamActionSequenceLabel(action = {}) {
+        const actionNumber = isStrategicOrientationAction(action)
+            ? null
+            : getActionSequenceNumber(
+                actionsStore.getAll().filter((candidate) => !isStrategicOrientationAction(candidate)),
+                action
+            );
+        return formatActionSequenceLabel({
+            teamLabel: this.formatTeamLabel(action.team),
+            move: action.move || 1,
+            actionNumber
+        });
+    }
+
+    getStrategicOrientationReviewTitle(action = {}, viewModel = getStrategicOrientationViewModel(action)) {
+        if (viewModel.hasIndustryStrategicPlan) {
+            return 'Review Industry Strategic Plan';
+        }
+        if (action.team === 'green' && GREEN_DELEGATIONS[action.delegation_id]) {
+            return `${GREEN_DELEGATIONS[action.delegation_id]}: ${viewModel.title}`;
+        }
+        if (!viewModel.hasStrategicOrientationDetails || !viewModel.isSelection) {
+            return viewModel.title;
+        }
+
+        const teamLabel = this.formatTeamLabel(viewModel.team || action.team);
+        return `${teamLabel} Strategic Orientation Selection: ${viewModel.orientationLabel}`;
+    }
+
+    renderStrategicOrientationReview() {
+        this.renderReviewQueue(document.getElementById('strategicOrientationList'), this.strategicOrientationArtifacts, {
+            section: 'strategicOrientation',
+            newIds: this.newStrategicOrientationIds,
+            ariaLabel: 'Strategic Orientation review',
+            emptyMessage: 'No Strategic Orientation artifacts have reached White Cell yet.'
+        });
+    }
+
+    renderActionReview() {
+        const blueStrategicOrientation = this.strategicOrientationArtifacts.filter((action) => (
+            action?.team === 'blue'
+        ));
+        this.renderBlueActionMarkQueue(
+            document.getElementById('actionsList'),
+            [...blueStrategicOrientation, ...this.blueTeamActions]
+        );
+    }
+
+    renderBlueActionMarkQueue(container, items = []) {
+        if (!container) return;
+
+        const groups = groupActionRecordsByMark(items);
+        if (!ACTION_MARKS.some((mark) => mark.key === this.blueActionMarkActiveKey)) {
+            this.blueActionMarkActiveKey = [...groups].reverse().find((mark) => mark.count > 0)?.key
+                || ACTION_MARKS[0].key;
+        }
+
+        const tabs = groups.map((mark) => {
+            const isActive = mark.key === this.blueActionMarkActiveKey;
+            return `
+                <button
+                    type="button"
+                    id="white-cell-action-mark-tab-${mark.key}"
+                    class="action-mark-tab${isActive ? ' is-active' : ''}"
+                    data-action-mark-tab="${mark.key}"
+                    role="tab"
+                    aria-selected="${isActive ? 'true' : 'false'}"
+                    aria-controls="white-cell-action-mark-panel-${mark.key}"
+                    aria-label="${this.escapeHtml(`${mark.label}, ${mark.count} ${mark.count === 1 ? 'record' : 'records'}`)}"
+                    tabindex="${isActive ? '0' : '-1'}"
+                >
+                    <span>${this.escapeHtml(mark.label)}</span>
+                    <span class="action-mark-count" aria-hidden="true">${mark.count}</span>
+                </button>
+            `;
+        }).join('');
+
+        const panels = groups.map((mark) => {
+            const isActive = mark.key === this.blueActionMarkActiveKey;
+            const visibleItems = mark.records.slice(0, WHITE_CELL_REVIEW_GROUP_RENDER_LIMIT);
+            return `
+                <section
+                    id="white-cell-action-mark-panel-${mark.key}"
+                    class="action-mark-panel"
+                    data-action-mark-panel="${mark.key}"
+                    role="tabpanel"
+                    aria-labelledby="white-cell-action-mark-tab-${mark.key}"
+                    ${isActive ? '' : 'hidden'}
+                >
+                    ${visibleItems.length
+                        ? visibleItems.map((action) => this.renderActionCard(action, {
+                            showAdjudicateAction: this.isLeadOperator() && canAdjudicateAction(action),
+                            isNew: this.newBlueActionIds.has(action.id) || this.newStrategicOrientationIds.has(action.id)
+                        })).join('')
+                        : `<p class="action-mark-empty">No records for ${this.escapeHtml(mark.label)}.</p>`}
+                    ${mark.count > visibleItems.length
+                        ? `<p class="action-sequence-overflow">Showing the newest ${visibleItems.length} of ${mark.count} records for this mark.</p>`
+                        : ''}
+                </section>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="action-mark-navigation" data-action-mark-navigation>
+                <div class="action-mark-rail" role="tablist" aria-label="Blue Team records by simulation mark">
+                    ${tabs}
+                </div>
+                <p class="action-mark-help">Use Left and Right Arrow keys to move between marks. Records are newest first.</p>
+                ${panels}
+            </div>
+        `;
+        this.bindActionCardButtons(container);
+    }
+
+    setBlueActionMark(markKey = '', container = document.getElementById('actionsList')) {
+        if (!ACTION_MARKS.some((mark) => mark.key === markKey)) return;
+        this.blueActionMarkActiveKey = markKey;
+        if (!container?.querySelectorAll) return;
+
+        container.querySelectorAll('[data-action-mark-tab]').forEach((button) => {
+            const isActive = button.dataset.actionMarkTab === markKey;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+            button.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+        container.querySelectorAll('[data-action-mark-panel]').forEach((panel) => {
+            panel.hidden = panel.dataset.actionMarkPanel !== markKey;
+        });
+    }
+
+    handleBlueActionMarkKeydown(event, container = document.getElementById('actionsList')) {
+        const currentTab = event.target?.closest?.('[data-action-mark-tab]');
+        if (!currentTab || !container?.contains?.(currentTab)) return;
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+
+        event.preventDefault();
+        const tabs = [...container.querySelectorAll('[data-action-mark-tab]')];
+        const currentIndex = tabs.indexOf(currentTab);
+        if (currentIndex < 0) return;
+        const nextIndex = event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+            ? tabs.length - 1
+            : event.key === 'ArrowLeft'
+            ? (currentIndex - 1 + tabs.length) % tabs.length
+            : (currentIndex + 1) % tabs.length;
+        const nextTab = tabs[nextIndex];
+        this.setBlueActionMark(nextTab?.dataset?.actionMarkTab || '', container);
+        nextTab?.focus?.();
+    }
+
+    renderMoveResponses() {
+        this.renderReviewQueue(document.getElementById('responsesList'), this.redTeamResponses, {
+            section: 'responses',
+            newIds: this.newRedResponseIds,
+            ariaLabel: 'Red Team action review',
+            emptyMessage: 'No Red Team actions are awaiting White Cell review.'
+        });
+    }
+
+    renderProposals() {
+        const pendingCount = this.proposalTeamProposals.filter((action) => (
+            canAdjudicateAction(action)
+            || getPendingProposalResponseReviews(communicationsStore.getAll(), action.id).length > 0
+        )).length;
+        this.updateSidebarBadge('proposalsBadge', pendingCount);
+        this.renderReviewQueue(document.getElementById('proposalsList'), this.proposalTeamProposals, {
+            section: 'proposals',
+            newIds: this.newGreenProposalIds,
+            ariaLabel: 'Green and Industry proposal review',
+            emptyMessage: 'No Green or Industry proposals have been submitted yet.'
+        });
+    }
+
+    renderReviewQueue(container, items = [], { section, newIds, ariaLabel, emptyMessage } = {}) {
+        if (!container) return;
+        items = regionalView(container, items, () => {
+            if (section === 'proposals') this.renderProposals();
+            else if (section === 'responses') this.renderMoveResponses();
+            else this.renderStrategicOrientationReview();
+        }, { sessionId: sessionStore.getSessionId() });
+
+        if (items.length === 0) {
+            container.innerHTML = `<p class="text-sm text-gray-500">${this.escapeHtml(emptyMessage)}</p>`;
+            return;
+        }
+
+        const hasPendingProposalResponse = (action) => (
+            section === 'proposals'
+            && getPendingProposalResponseReviews(communicationsStore.getAll(), action?.id).length > 0
+        );
+        const groups = [
+            {
+                key: 'pending',
+                label: 'Awaiting Review',
+                emptyHint: 'Nothing is awaiting review right now.',
+                items: items.filter((action) => canAdjudicateAction(action) || hasPendingProposalResponse(action))
+            },
+            {
+                key: 'deliberated',
+                label: 'Completed',
+                emptyHint: 'No items have been accepted as complete yet.',
+                items: items.filter((action) => isAdjudicatedAction(action) && !hasPendingProposalResponse(action))
+            }
+        ];
+
+        // Default to the stored tab when it has content, otherwise the first
+        // non-empty group, so operators always land on something actionable.
+        let activeKey = this.reviewActiveTabs[section];
+        if (!groups.some((group) => group.key === activeKey && group.items.length)) {
+            activeKey = (groups.find((group) => group.items.length) || groups[0]).key;
+        }
+        this.reviewActiveTabs[section] = activeKey;
+
+        const tabList = groups.map((group) => {
+            const isActive = group.key === activeKey;
+            return `
+                <button
+                    type="button"
+                    class="tab-button${isActive ? ' tab-button-active' : ''}"
+                    data-review-tab="${group.key}"
+                    role="tab"
+                    aria-selected="${isActive ? 'true' : 'false'}"
+                    aria-controls="reviewPanel-${section}-${group.key}"
+                >${group.label}${group.items.length ? `<span class="tab-badge">${group.items.length}</span>` : ''}</button>
+            `;
+        }).join('');
+
+        const panels = groups.map((group) => {
+            const isActive = group.key === activeKey;
+            const visibleItems = group.items.slice(0, WHITE_CELL_REVIEW_GROUP_RENDER_LIMIT);
+            const hiddenCount = Math.max(0, group.items.length - visibleItems.length);
+            const body = group.items.length
+                ? visibleItems.map((action) => this.renderActionCard(action, {
+                    showAdjudicateAction: this.isLeadOperator() && canAdjudicateAction(action),
+                    isNew: newIds?.has(action.id)
+                })).join('')
+                : `<p class="text-sm text-gray-500" style="margin: 0;">${group.emptyHint}</p>`;
+            const overflowNote = hiddenCount
+                ? `<p class="text-xs text-gray-500" style="margin: var(--space-2) 0 0;">Showing the first ${WHITE_CELL_REVIEW_GROUP_RENDER_LIMIT} of ${group.items.length} records in this queue.</p>`
+                : '';
+            return `
+                <div
+                    class="tab-panel"
+                    id="reviewPanel-${section}-${group.key}"
+                    data-review-panel="${group.key}"
+                    role="tabpanel"
+                    ${isActive ? '' : 'hidden'}
+                >${body}${overflowNote}</div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="tabbed-section" data-review-tabs="${section}">
+                <div class="tab-list" role="tablist" aria-label="${this.escapeHtml(ariaLabel || 'Review queue')}">
+                    ${tabList}
+                </div>
+                ${panels}
+            </div>
+        `;
+
+        this.bindActionCardButtons(container);
+    }
+
+    setReviewActiveTab(section, tab, container) {
+        if (!tab || this.reviewActiveTabs[section] === tab) return;
+        this.reviewActiveTabs[section] = tab;
+        if (!container || typeof container.querySelectorAll !== 'function') return;
+        container.querySelectorAll('.tab-button[data-review-tab]').forEach((button) => {
+            const isActive = button.dataset.reviewTab === tab;
+            button.classList.toggle('tab-button-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        container.querySelectorAll('.tab-panel[data-review-panel]').forEach((panel) => {
+            panel.hidden = panel.dataset.reviewPanel !== tab;
+        });
+    }
+
+    renderDetailGrid(fields = []) {
+        const items = fields
+            .filter((field) => field && field.value != null && String(field.value).trim() !== '')
+            .map((field) => `
+                <div class="detail-item${field.wide ? ' detail-item--wide' : ''}">
+                    <strong>${this.escapeHtml(field.label)}:</strong> ${this.escapeHtml(String(field.value))}
+                </div>
+            `).join('');
+        return items ? `<div class="detail-grid">${items}</div>` : '';
+    }
+
+    getActionReviewDetailFields(blueAction = {}) {
+        const notificationLabels = new Set(['Teams to Inform', 'Notification Note']);
+        return (blueAction.artifactDetails || []).filter(
+            (field) => !notificationLabels.has(field?.label)
+        );
+    }
+
+    renderActionNotificationRequest(action = {}, blueAction = getBlueActionViewModel(action)) {
+        const notificationTeams = Array.isArray(blueAction.notificationTeams)
+            ? blueAction.notificationTeams
+            : [];
+        const notificationNote = String(blueAction.notificationNote || '').trim();
+        if (!notificationTeams.length && !notificationNote) {
+            return '';
+        }
+
+        const sourceTeamLabel = this.formatTeamLabel(action.team);
+        const deliveredTeamIds = getActionNotificationDeliveryTeams(action, this.communications);
+        const deliveredTeamLabels = deliveredTeamIds.map((team) => this.formatTeamLabel(team));
+        const deliveryStatus = resolveArtifactWorkflowState(action) === ENUMS.ARTIFACT_WORKFLOW_STATE.COMPLETED
+            ? (deliveredTeamLabels.length
+                ? `Sent to ${deliveredTeamLabels.join(', ')}.`
+                : 'No requested team was informed when the action was completed.')
+            : 'Awaiting White Cell review.';
+        return `
+            <section
+                class="card card-bordered"
+                aria-label="${this.escapeHtml(`${sourceTeamLabel} notification request`)}"
+                style="margin-top: var(--space-3); padding: var(--space-3);"
+            >
+                <h4 class="font-semibold" style="margin: 0 0 var(--space-2);">Team notification request</h4>
+                <p class="text-sm" style="margin: 0 0 var(--space-2);">
+                    <strong>Teams to Inform:</strong> ${this.escapeHtml(formatBlueActionSelection(notificationTeams, 'None selected'))}
+                </p>
+                <p class="text-sm" style="margin: 0;">
+                    <strong>Notification Note:</strong> ${this.escapeHtml(notificationNote || 'No clarifying note provided.')}
+                </p>
+                <p class="text-sm" style="margin: var(--space-2) 0 0;">
+                    <strong>Delivery Status:</strong> ${this.escapeHtml(deliveryStatus)}
+                </p>
+            </section>
+        `;
+    }
+
+    renderActionNotificationApprovalControls(blueAction = {}) {
+        const requestedTeamIds = normalizeActionNotificationTeams(blueAction.notificationTeams);
+        if (!requestedTeamIds.length) return '';
+
+        const controls = requestedTeamIds.map((team) => {
+            const inputId = `actionNotificationApproval-${team}`;
+            const teamLabel = this.formatTeamLabel(team);
+            return `
+                <label class="form-check form-check-card" for="${inputId}">
+                    <input
+                        id="${inputId}"
+                        class="form-checkbox"
+                        type="checkbox"
+                        name="actionNotificationApproval"
+                        value="${this.escapeHtml(team)}"
+                        checked
+                    >
+                    <span class="form-check-label">Inform ${this.escapeHtml(teamLabel)} when this action is accepted</span>
+                </label>
+            `;
+        }).join('');
+
+        return `
+            <fieldset class="form-group" aria-describedby="actionNotificationApprovalHint">
+                <legend class="form-label">Requested team notifications</legend>
+                <div class="form-check-grid">${controls}</div>
+                <p class="form-hint" id="actionNotificationApprovalHint">
+                    Checked teams receive the completed action and the submitting team's notification note. Sending the action back informs no team.
+                </p>
+            </fieldset>
+        `;
+    }
+
+    renderReturnedRevisionHistory() {
+        const container = document.getElementById('returnedRevisionHistoryList');
+        if (!container) return;
+
+        if (this.returnedRevisionHistoryLoading && this.returnedRevisionHistory.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">Loading returned artifact history...</p>';
+            return;
+        }
+
+        if (this.returnedRevisionHistoryError && this.returnedRevisionHistory.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" role="status">
+                    <p class="text-sm text-gray-500">Returned artifact history could not be loaded.</p>
+                    <button type="button" class="btn btn-secondary btn-sm" data-review-history-retry>Retry</button>
+                </div>
+            `;
+            return;
+        }
+
+        if (this.returnedRevisionHistory.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">No actions, proposals, Strategic Orientation artifacts, or RFIs have been returned.</p>';
+            return;
+        }
+
+        const visibleReviews = this.returnedRevisionHistory.slice(0, WHITE_CELL_RETURN_HISTORY_RENDER_LIMIT);
+        const hiddenCount = Math.max(0, this.returnedRevisionHistory.length - visibleReviews.length);
+        container.innerHTML = `
+            ${hiddenCount ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the latest ${WHITE_CELL_RETURN_HISTORY_RENDER_LIMIT} of ${this.returnedRevisionHistory.length} returned revisions.</p>` : ''}
+            ${visibleReviews.map((review) => this.renderReturnedRevisionHistoryCard(review)).join('')}
+        `;
+    }
+
+    renderReturnedRevisionHistoryCard(review = {}) {
+        let artifact = review.prior_state || {};
+        if (typeof artifact === 'string') {
+            try {
+                artifact = JSON.parse(artifact);
+            } catch (_error) {
+                artifact = {};
+            }
+        }
+
+        const isRfi = review.artifact_kind === 'rfi';
+        const isOrientation = review.artifact_kind === 'strategic_orientation'
+            || isStrategicOrientationAction(artifact);
+        const isProposal = !isOrientation && isProposalAction(artifact);
+        const team = review.team || artifact.team;
+        const teamLabel = this.formatTeamLabel(team);
+        const revisionNumber = review.revision_number || artifact.revision_number || 1;
+        const reviewerLabel = getRoleDisplayName(review.reviewer_role)
+            || review.reviewer_role
+            || 'White Cell';
+        const reviewedAt = review.reviewed_at
+            ? formatDateTime(review.reviewed_at)
+            : 'Timestamp unavailable';
+        if (isRfi) {
+            return this.renderRfiRevisionHistoryCard(review, artifact);
+        }
+
+        const orientation = getStrategicOrientationViewModel(artifact);
+        const action = getBlueActionViewModel(artifact);
+        const proposal = getProposalViewModel(artifact);
+        const title = isOrientation
+            ? this.getStrategicOrientationReviewTitle(artifact, orientation)
+            : (isProposal ? proposal.title : action.title);
+        const sourceTeamId = typeof team === 'string' ? team.trim().toLowerCase() : '';
+        const sourceTeamBadge = createBadge({
+            text: teamLabel,
+            variant: 'primary',
+            size: 'sm',
+            rounded: true,
+            className: [
+                'badge-source-team',
+                SOURCE_TEAM_BADGE_CLASS_BY_ID[sourceTeamId]
+            ].filter(Boolean).join(' ')
+        }).outerHTML;
+        const artifactDetails = isOrientation
+            ? [
+                ...getStrategicOrientationDisplayFields(orientation),
+                ...(orientation.primaryLevers.length
+                    ? [{ label: 'Primary Levers', value: formatStrategicOrientationSelection(orientation.primaryLevers) }]
+                    : []),
+                ...(orientation.acceptedCosts.length
+                    ? [{ label: 'Accepted Costs', value: formatStrategicOrientationSelection(orientation.acceptedCosts) }]
+                    : []),
+                ...(orientation.posture ? [{ label: 'Posture', value: orientation.posture }] : []),
+                ...(orientation.rationale ? [{ label: 'Team Rationale', value: orientation.rationale, wide: true }] : [])
+            ]
+            : (isProposal ? proposal.artifactDetails : action.artifactDetails);
+
+        return `
+            <article class="entity-card entity-card--submitted" data-review-id="${this.escapeHtml(review.id || '')}">
+                <div class="entity-card__head">
+                    <div>
+                        <p class="entity-card__eyebrow">${isOrientation ? 'Strategic Orientation' : (isProposal ? 'Proposal' : 'Action')} &middot; Returned revision ${this.escapeHtml(String(revisionNumber))}</p>
+                        <h3 class="entity-card__title">${this.escapeHtml(title)}</h3>
+                    </div>
+                    <div class="entity-card__badges">
+                        ${sourceTeamBadge}
+                        ${createBadge({ text: 'Returned for Improvement', variant: 'warning', size: 'sm', rounded: true }).outerHTML}
+                    </div>
+                </div>
+                ${this.renderDetailGrid([
+                    { label: 'Submitting Team', value: teamLabel },
+                    { label: 'Revision', value: revisionNumber },
+                    { label: 'Reviewer', value: reviewerLabel },
+                    { label: 'Returned At', value: reviewedAt }
+                ])}
+                <p class="entity-card__note"><strong>Return Notes:</strong> ${this.escapeHtml(review.reviewer_notes || 'No return notes recorded.')}</p>
+                ${this.renderDetailGrid(artifactDetails)}
+            </article>
+        `;
+    }
+
+    renderRfiRevisionHistoryCard(review = {}, artifact = null) {
+        let priorRequest = artifact || review.prior_state || {};
+        if (typeof priorRequest === 'string') {
+            try {
+                priorRequest = JSON.parse(priorRequest);
+            } catch (_error) {
+                priorRequest = {};
+            }
+        }
+
+        const teamLabel = regionalAttribution(review) || regionalAttribution(priorRequest) || this.formatTeamLabel(review.team || priorRequest.team);
+        const revisionNumber = Number(review.revision_number || priorRequest.revision_number) || 1;
+        const reviewerLabel = getRoleDisplayName(review.reviewer_role)
+            || review.reviewer_role
+            || 'White Cell';
+        const reviewedAt = review.reviewed_at
+            ? formatDateTime(review.reviewed_at)
+            : 'Timestamp unavailable';
+
+        return `
+            <article class="entity-card entity-card--submitted" data-review-id="${this.escapeHtml(review.id || '')}" data-rfi-history-id="${this.escapeHtml(review.artifact_id || priorRequest.id || '')}">
+                <div class="entity-card__head">
+                    <div>
+                        <p class="entity-card__eyebrow">RFI &middot; Returned revision ${this.escapeHtml(String(revisionNumber))}</p>
+                        <h3 class="entity-card__title">${this.escapeHtml(priorRequest.query || priorRequest.question || 'Request for Information')}</h3>
+                    </div>
+                    <div class="entity-card__badges">
+                        ${createBadge({ text: teamLabel, variant: 'primary', size: 'sm', rounded: true }).outerHTML}
+                        ${createBadge({ text: 'Returned for Clarification', variant: 'warning', size: 'sm', rounded: true }).outerHTML}
+                    </div>
+                </div>
+                ${this.renderDetailGrid([
+                    { label: 'Submitting Team', value: teamLabel },
+                    { label: 'Revision', value: revisionNumber },
+                    { label: 'Reviewer', value: reviewerLabel },
+                    { label: 'Returned At', value: reviewedAt }
+                ])}
+                <p class="entity-card__note"><strong>Clarification Notes:</strong> ${this.escapeHtml(review.reviewer_notes || 'No clarification notes recorded.')}</p>
+            </article>
+        `;
+    }
+
+    renderActionCard(action, {
+        showAdjudicateAction = false,
+        isNew = false
+    } = {}) {
+        const strategicOrientation = getStrategicOrientationViewModel(action);
+        const isStrategicOrientationFlow = strategicOrientation.hasStrategicOrientationDetails;
+        const strategicOrientationTitle = this.getStrategicOrientationReviewTitle(action, strategicOrientation);
+        const blueAction = getBlueActionViewModel(action);
+        const proposalViewModel = getProposalViewModel(action);
+        const expectedOutcomes = isStrategicOrientationFlow
+            ? (strategicOrientation.isForecast
+                ? (strategicOrientation.forecastSummary || `Forecast: Blue will choose ${strategicOrientation.orientationLabel}.`)
+                : (strategicOrientation.orientationTag || 'Strategic Orientation selected.'))
+            : (blueAction.expectedOutcomes || '');
+        const targetLabel = formatBlueActionSelection(blueAction.focusCountries);
+        const sequenceLabel = isStrategicOrientationFlow
+            ? 'Pre-Move 1 | Strategic Orientation'
+            : this.getBlueTeamActionSequenceLabel(action);
+        const submittedMarkup = action.submitted_at
+            ? `<p class="entity-card__note"><strong>Submitted:</strong> ${this.escapeHtml(formatDateTime(action.submitted_at))}</p>`
+            : '';
+        const reviewNotes = action.review_notes || action.adjudication_notes;
+        const notesMarkup = reviewNotes
+            ? `<p class="entity-card__note"><strong>Notes:</strong> ${this.escapeHtml(reviewNotes)}</p>`
+            : '';
+        const revisionMarkup = Number.isInteger(action.revision_number)
+            ? `<p class="entity-card__note"><strong>Revision:</strong> ${this.escapeHtml(String(action.revision_number))}</p>`
+            : '';
+        const secondaryBadge = isStrategicOrientationFlow
+            ? createBadge({
+                text: getStrategicOrientationArtifactLabel(strategicOrientation),
+                variant: 'info',
+                size: 'sm',
+                rounded: true
+            }).outerHTML
+            : blueAction.hasBlueActionDetails && blueAction.enforcementTimeline
+            ? createBadge({ text: blueAction.enforcementTimeline, variant: 'info', size: 'sm', rounded: true }).outerHTML
+            : createPriorityBadge(action.priority || 'NORMAL').outerHTML;
+        const strategicOrientationDetails = isStrategicOrientationFlow
+            ? [
+                ...getStrategicOrientationDisplayFields(strategicOrientation),
+                ...(strategicOrientation.primaryLevers.length
+                    ? [{ label: 'Primary Levers', value: formatStrategicOrientationSelection(strategicOrientation.primaryLevers) }]
+                    : []),
+                ...(strategicOrientation.acceptedCosts.length
+                    ? [{ label: 'Accepted Costs', value: formatStrategicOrientationSelection(strategicOrientation.acceptedCosts) }]
+                    : []),
+                ...(strategicOrientation.posture
+                    ? [{ label: 'Posture', value: strategicOrientation.posture }]
+                    : []),
+                ...(strategicOrientation.rationale
+                    ? [{ label: 'Team Rationale', value: strategicOrientation.rationale, wide: true }]
+                    : [])
+            ]
+            : [];
+        const statusAccent = isAdjudicatedAction(action)
+            ? 'deliberated'
+            : (canAdjudicateAction(action) ? 'submitted' : '');
+        const detailsMarkup = isStrategicOrientationFlow
+            ? (strategicOrientation.hasIndustryStrategicPlan
+                ? renderIndustryStrategicPlanPositionView(strategicOrientation, {
+                    escapeHtml: (value) => this.escapeHtml(value),
+                    headingLevel: 4,
+                    idPrefix: `whitecell-industry-position-${action.id || 'card'}`
+                })
+                : this.renderDetailGrid(strategicOrientationDetails))
+            : proposalViewModel.hasProposalDetails
+            ? this.renderProposalDetails(action)
+            : this.renderDetailGrid(
+                blueAction.hasBlueActionDetails
+                    ? this.getActionReviewDetailFields(blueAction)
+                    : [
+                        ...(action.ally_contingencies ? [{ label: 'Ally Contingencies', value: action.ally_contingencies, wide: true }] : []),
+                        { label: 'Targets', value: targetLabel },
+                        { label: 'Sector', value: action.sector || 'Not specified' },
+                        { label: 'Exposure', value: action.exposure_type || 'Not specified' }
+                    ]
+            );
+        const notificationRequestMarkup = !isStrategicOrientationFlow && !proposalViewModel.hasProposalDetails
+            ? this.renderActionNotificationRequest(action, blueAction)
+            : '';
+        const proposalRecipientStateMarkup = proposalViewModel.hasProposalDetails && !isStrategicOrientationFlow
+            ? this.renderProposalRecipientState(action)
+            : '';
+        const arrivalBadgeMarkup = isNew
+            ? createBadge({ text: 'NEW', variant: 'warning', size: 'sm', rounded: true }).outerHTML
+            : '';
+        const sourceTeamId = typeof action.team === 'string'
+            ? action.team.trim().toLowerCase()
+            : '';
+        const sourceTeamBadgeMarkup = createBadge({
+            text: this.formatTeamLabel(action.team),
+            variant: 'primary',
+            size: 'sm',
+            rounded: true,
+            className: [
+                'badge-source-team',
+                SOURCE_TEAM_BADGE_CLASS_BY_ID[sourceTeamId]
+            ].filter(Boolean).join(' ')
+        }).outerHTML;
+        const actionButtons = [];
+        const pendingProposalResponses = proposalViewModel.hasProposalDetails
+            ? getPendingProposalResponseReviews(communicationsStore.getAll(), action.id)
+            : [];
+        const deliberationBadgeMarkup = canAdjudicateAction(action)
+            ? createBadge({ text: 'Deliberation Underway', variant: 'warning', size: 'sm', rounded: true }).outerHTML
+            : '';
+
+        if (showAdjudicateAction) {
+            actionButtons.push(`<button class="btn btn-primary btn-sm adjudicate-btn" data-action-id="${action.id}">${isStrategicOrientationFlow ? 'Review Strategic Orientation' : (proposalViewModel.hasProposalDetails ? 'Review Proposal' : 'Review Action')}</button>`);
+        }
+        pendingProposalResponses.forEach((response) => {
+            const review = getProposalResponseReviewMetadata(response);
+            const senderLabel = this.formatProposalRecipientTeamLabel(review?.senderTeam || '');
+            actionButtons.push(`<button type="button" class="btn btn-primary btn-sm proposal-response-review-btn" data-action-id="${this.escapeHtml(String(action.id))}" data-response-review-id="${this.escapeHtml(String(response.id))}">Review ${this.escapeHtml(senderLabel)} Response</button>`);
+        });
+
+        return `
+            <div class="entity-card${statusAccent ? ` entity-card--${statusAccent}` : ''}" data-action-id="${action.id}"${isNew ? ' style="background: var(--color-surface-alt);"' : ''}>
+                <div class="entity-card__head">
+                    <div>
+                        <p class="entity-card__eyebrow">${this.escapeHtml(isStrategicOrientationFlow ? 'Strategic Orientation' : (blueAction.instrumentOfPower || 'No mechanism'))} &middot; ${this.escapeHtml(sequenceLabel)} &middot; Phase ${action.phase || 1}</p>
+                        <h3 class="entity-card__title">${this.escapeHtml(isStrategicOrientationFlow ? strategicOrientationTitle : blueAction.title)}</h3>
+                    </div>
+                    <div class="entity-card__badges">
+                        ${arrivalBadgeMarkup}
+                        ${sourceTeamBadgeMarkup}
+                        ${createArtifactLifecycleBadge(action, { size: 'sm' }).outerHTML}
+                        ${deliberationBadgeMarkup}
+                        ${secondaryBadge}
+                    </div>
+                </div>
+                ${proposalViewModel.hasProposalDetails && !isStrategicOrientationFlow ? '' : `<p class="card-summary">${this.escapeHtml(expectedOutcomes || 'No expected outcomes recorded.')}</p>`}
+                ${detailsMarkup}
+                ${notificationRequestMarkup}
+                ${proposalRecipientStateMarkup}
+                ${submittedMarkup}
+                ${revisionMarkup}
+                ${notesMarkup}
+                ${actionButtons.length ? `
+                    <div class="card-actions" style="display: flex; gap: var(--space-2); margin-top: var(--space-3); flex-wrap: wrap;">
+                        ${actionButtons.join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    openProposalResponseReviewById(actionId, responseId) {
+        if (!this.isLeadOperator()) return false;
+
+        const normalizedActionId = String(actionId || '');
+        const action = [...this.actions, ...this.proposalTeamProposals].find((candidate) => (
+            String(candidate?.id) === normalizedActionId
+        ));
+        const response = communicationsStore.getAll().find((candidate) => (
+            String(candidate?.id) === String(responseId || '')
+        ));
+        if (!action || !response) {
+            showToast({
+                message: 'This proposal response is no longer available. Refresh the queue and try again.',
+                type: 'error'
+            });
+            return false;
+        }
+
+        this.markWhiteCellRecordOpened('proposals', normalizedActionId);
+        this.showProposalResponseReviewModal(action, response);
+        return true;
+    }
+
+    bindActionCardButtons(container) {
+        if (!this.isLeadOperator()) {
+            return;
+        }
+
+        container.querySelectorAll('.adjudicate-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const actionId = button.dataset.actionId;
+                const action = this.actions.find((candidate) => candidate.id === actionId);
+                if (action) {
+                    this.markWhiteCellRecordOpened(this.getQueueNameForAction(action), actionId);
+                    this.showAdjudicateModal(action);
+                }
+            });
+        });
+
+    }
+
+    async shareActionWithRedTeam(action) {
+        if (!canShareActionToRedTeam(action)) {
+            showToast({ message: 'Only Blue Team actions can be sent to Red Team from White Cell.', type: 'warning' });
+            return;
+        }
+
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const actionTitle = action.goal || action.title || 'Untitled action';
+        const confirmed = await confirmModal({
+            title: 'Share with Red Team',
+            message: `Send \"${actionTitle}\" to Red Team as a White Cell communication?`,
+            confirmLabel: 'Send to Red Team',
+            variant: 'primary'
+        });
+
+        if (!confirmed) return;
+
+        const loader = showLoader({ message: 'Sharing action with Red Team...' });
+
+        try {
+            const gameState = this.getCurrentGameState();
+            const actionDetails = action.artifact_payload?.action || parseBlueActionDetails(action.ally_contingencies) || {};
+            const actionTitle = action.goal || 'Untitled action';
+            const actionSnapshot = {
+                ...actionDetails,
+                title: actionTitle,
+                objective: actionDetails.objective || actionTitle
+            };
+            const recipientMetadata = buildWhiteCellRecipientMetadata(WHITE_CELL_RED_TEAM_RECIPIENT, {
+                shared_action_id: action.id,
+                source_team: action.team,
+                actor_role: this.getTimelineActorRole(),
+                action_snapshot: actionSnapshot
+            });
+            const communication = await database.createCommunication({
+                session_id: sessionId,
+                from_role: 'white_cell',
+                to_role: WHITE_CELL_RED_TEAM_RECIPIENT,
+                type: 'GUIDANCE',
+                title: `${String(action.team || '').replace(/^./, (letter) => letter.toUpperCase())} Team Action Notification`,
+                content: buildSharedActionCommunicationContent(action),
+                metadata: recipientMetadata
+            });
+            communicationsStore.updateFromServer('INSERT', communication);
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'GUIDANCE',
+                content: `White Cell shared Blue Team action with Red Team: ${actionTitle}`,
+                metadata: {
+                    role: this.getTimelineActorRole(),
+                    ...buildWhiteCellRecipientMetadata(WHITE_CELL_RED_TEAM_RECIPIENT, {
+                        shared_action_id: action.id,
+                        source_team: action.team
+                    })
+                },
+                team: 'white_cell',
+                move: gameState.move ?? 1,
+                phase: gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: 'Action shared with Red Team', type: 'success' });
+        } catch (err) {
+            logger.error('Failed to share action with Red Team:', err);
+            showToast({ message: 'Failed to share action with Red Team', type: 'error' });
+        } finally {
+            loader?.hide?.();
+            hideLoader();
+        }
+    }
+
+    showAdjudicateModal(action) {
+        if (!this.isLeadOperator()) {
+            showToast({ message: 'White Cell support cannot review artifacts.', type: 'warning' });
+            return;
+        }
+
+        if (this.isProposalAction(action)) {
+            this.showProposalReviewModal(action);
+            return;
+        }
+
+        if (isStrategicOrientationAction(action)) {
+            this.showStrategicOrientationReviewModal(action);
+            return;
+        }
+
+        const content = document.createElement('div');
+        const blueAction = getBlueActionViewModel(action);
+        const sectorLabel = formatBlueActionSelection(blueAction.sectors, blueAction.sector || 'Not specified');
+        const sequenceLabel = this.getBlueTeamActionSequenceLabel(action);
+        content.innerHTML = `
+            <div class="mb-4">
+                <h4 class="font-semibold">${this.escapeHtml(blueAction.title)}</h4>
+                <p class="text-sm text-gray-500">${this.escapeHtml(blueAction.instrumentOfPower || 'No mechanism')} | ${this.escapeHtml(sequenceLabel)} | Phase ${action.phase || 1}</p>
+                <p class="text-xs text-gray-500" style="margin-top: var(--space-2);">
+                    <strong>${blueAction.hasBlueActionDetails ? 'Focus Countries' : 'Targets'}:</strong> ${this.escapeHtml(formatBlueActionSelection(blueAction.focusCountries))} |
+                    <strong>${blueAction.hasBlueActionDetails ? 'Sectors' : 'Sector'}:</strong> ${this.escapeHtml(sectorLabel)}
+                </p>
+                ${action.submitted_at ? `
+                    <p class="text-xs text-gray-500" style="margin-top: var(--space-2);">
+                        <strong>Submitted:</strong> ${this.escapeHtml(formatDateTime(action.submitted_at))}
+                    </p>
+                ` : ''}
+                ${blueAction.hasBlueActionDetails ? `
+                    ${this.renderDetailGrid(this.getActionReviewDetailFields(blueAction))}
+                    ${this.renderActionNotificationRequest(action, blueAction)}
+                ` : action.ally_contingencies ? `
+                    <p class="text-xs text-gray-500" style="margin-top: var(--space-2);">
+                        <strong>Ally Contingencies:</strong> ${this.escapeHtml(action.ally_contingencies)}
+                    </p>
+                ` : ''}
+                <p class="text-sm mt-2">${this.escapeHtml(blueAction.expectedOutcomes || '')}</p>
+            </div>
+
+            <form id="artifactReviewForm">
+                ${this.renderActionNotificationApprovalControls(blueAction)}
+                <div class="form-group">
+                    <label class="form-label" for="artifactReviewNotes">Review Notes</label>
+                    <textarea id="artifactReviewNotes" class="form-input form-textarea" rows="4"
+                        aria-describedby="artifactReviewNotesHint"
+                        placeholder="Describe any improvements the submitting team should make..."></textarea>
+                    <p class="form-hint" id="artifactReviewNotesHint">Required when sending back for improvement; optional when accepting as complete.</p>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Review Action',
+            content,
+            size: 'md',
+            buttons: [
+                {
+                    label: 'Cancel',
+                    variant: 'secondary',
+                    onClick: () => {}
+                },
+                {
+                    label: 'Send Back for Improvement',
+                    variant: 'secondary',
+                    onClick: () => {
+                        this.handleArtifactReview(
+                            modalRef.current,
+                            action,
+                            ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM
+                        ).catch((err) => {
+                            logger.error('Failed to return action for improvement:', err);
+                        });
+                        return false;
+                    }
+                },
+                {
+                    label: 'Accept as Complete',
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleArtifactReview(
+                            modalRef.current,
+                            action,
+                            ENUMS.ARTIFACT_REVIEW_DECISION.COMPLETE
+                        ).catch((err) => {
+                            logger.error('Failed to accept action as complete:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    showStrategicOrientationReviewModal(action) {
+        const viewModel = getStrategicOrientationViewModel(action);
+        const reviewTitle = this.getStrategicOrientationReviewTitle(action, viewModel);
+        const content = document.createElement('div');
+
+        content.innerHTML = `
+            <div class="mb-4">
+                <h4 class="font-semibold">${this.escapeHtml(reviewTitle)}</h4>
+                <p class="text-sm text-gray-500">Strategic Orientation | Pre-Move 1 | ${this.escapeHtml(getStrategicOrientationArtifactLabel(viewModel))}</p>
+                ${action.submitted_at ? `
+                    <p class="text-xs text-gray-500" style="margin-top: var(--space-2);">
+                        <strong>Submitted:</strong> ${this.escapeHtml(formatDateTime(action.submitted_at))}
+                    </p>
+                ` : ''}
+                ${viewModel.hasIndustryStrategicPlan
+                    ? renderIndustryStrategicPlanPositionView(viewModel, {
+                        escapeHtml: (value) => this.escapeHtml(value),
+                        headingLevel: 5,
+                        idPrefix: `whitecell-industry-review-${action.id || 'modal'}`
+                    })
+                    : this.renderDetailGrid([
+        ...getStrategicOrientationDisplayFields(viewModel),
+        ...(viewModel.primaryLevers.length
+            ? [{ label: 'Primary Levers', value: formatStrategicOrientationSelection(viewModel.primaryLevers) }]
+            : []),
+        ...(viewModel.acceptedCosts.length
+            ? [{ label: 'Accepted Costs', value: formatStrategicOrientationSelection(viewModel.acceptedCosts) }]
+            : []),
+        ...(viewModel.posture
+            ? [{ label: 'Posture', value: viewModel.posture }]
+            : []),
+        ...(viewModel.rationale
+            ? [{ label: 'Team Rationale', value: viewModel.rationale, wide: true }]
+            : [])
+    ])}
+            </div>
+
+            <form id="artifactReviewForm">
+                <div class="form-group">
+                    <label class="form-label" for="artifactReviewNotes">Review Notes</label>
+                    <textarea id="artifactReviewNotes" class="form-input form-textarea" rows="4"
+                        aria-describedby="artifactReviewNotesHint"
+                        placeholder="Describe any improvements the submitting team should make..."></textarea>
+                    <p class="form-hint" id="artifactReviewNotesHint">Required when sending back for improvement; optional when accepting as complete.</p>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: reviewTitle,
+            content,
+            size: viewModel.hasIndustryStrategicPlan ? 'lg' : 'md',
+            buttons: [
+                {
+                    label: 'Cancel',
+                    variant: 'secondary',
+                    onClick: () => {}
+                },
+                {
+                    label: 'Send Back for Improvement',
+                    variant: 'secondary',
+                    onClick: () => {
+                        this.handleArtifactReview(
+                            modalRef.current,
+                            action,
+                            ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM
+                        ).catch((err) => {
+                            logger.error('Failed to return Strategic Orientation for improvement:', err);
+                        });
+                        return false;
+                    }
+                },
+                {
+                    label: 'Accept as Complete',
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleArtifactReview(
+                            modalRef.current,
+                            action,
+                            ENUMS.ARTIFACT_REVIEW_DECISION.COMPLETE
+                        ).catch((err) => {
+                            logger.error('Failed to accept Strategic Orientation as complete:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    showLegacyProposalReviewModal(action) {
+        const { proposalViewModel, recipientLabel, decisions } = this.getProposalReviewOptions(action);
+        const content = document.createElement('div');
+        const sequenceLabel = this.getBlueTeamActionSequenceLabel(action);
+        const decisionMarkup = decisions.map((decision) => {
+            const inputId = `proposalReview${decision.value.replace(/[^a-z0-9]+/gi, '')}`;
+            return `
+                <label class="form-check form-check-card" for="${inputId}">
+                    <input
+                        id="${inputId}"
+                        class="form-radio"
+                        type="radio"
+                        name="proposalReviewDecision"
+                        value="${decision.value}"
+                    >
+                    <span class="form-check-label">${this.escapeHtml(decision.label)}</span>
+                </label>
+            `;
+        }).join('');
+
+        content.innerHTML = `
+            <div class="mb-4">
+                <h4 class="font-semibold">${this.escapeHtml(proposalViewModel.title)}</h4>
+                <p class="text-sm text-gray-500">${this.escapeHtml(action.mechanism || 'Proposal')} | ${this.escapeHtml(sequenceLabel)} | Phase ${action.phase || 1}</p>
+                ${action.submitted_at ? `
+                    <p class="text-xs text-gray-500" style="margin-top: var(--space-2);">
+                        <strong>Submitted:</strong> ${this.escapeHtml(formatDateTime(action.submitted_at))}
+                    </p>
+                ` : ''}
+                ${this.renderProposalDetails(action)}
+            </div>
+
+            <form id="proposalReviewForm">
+                <fieldset class="form-group" aria-describedby="proposalReviewDecisionHint">
+                    <legend class="form-label">Decision *</legend>
+                    <div class="form-check-grid" role="radiogroup" aria-label="Proposal review decision">
+                        ${decisionMarkup}
+                    </div>
+                    <p class="form-hint" id="proposalReviewDecisionHint">
+                        Forward sends the proposal to ${this.escapeHtml(recipientLabel)}. Request Changes returns this same logical proposal to the submitting team as the next editable revision; reviewer notes are required.
+                    </p>
+                </fieldset>
+
+                <div class="form-group">
+                    <label class="form-label" for="adjudicationNotes">White Cell Notes</label>
+                    <textarea id="adjudicationNotes" class="form-input form-textarea" rows="4" placeholder="Explain the review decision or the requested changes..."></textarea>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Review Proposal',
+            content,
+            size: 'lg',
+            buttons: [
+                {
+                    label: 'Cancel',
+                    variant: 'secondary',
+                    onClick: () => {}
+                },
+                {
+                    label: 'Submit Proposal Review',
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleProposalReview(modalRef.current, action).catch((err) => {
+                            logger.error('Failed to submit proposal review:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    showProposalReviewModal(action) {
+        const { proposalViewModel, recipients, pendingRecipients } = this.getProposalReviewOptions(action);
+        const content = document.createElement('div');
+        const sequenceLabel = this.getBlueTeamActionSequenceLabel(action);
+        const recipientControls = recipients.map((recipient) => {
+            const inputId = `proposalRecipientApproval-${recipient.team}`;
+            return `
+                <div class="card card-bordered" style="padding: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+                        <div>
+                            <p class="font-semibold" style="margin: 0;">${this.escapeHtml(recipient.label)}</p>
+                            <p class="text-xs text-gray-500" style="margin: var(--space-1) 0 0;">${this.escapeHtml(formatProposalRecipientStatus(recipient.status))}</p>
+                        </div>
+                        <label class="form-check" for="${inputId}">
+                            <input id="${inputId}" type="checkbox" name="proposalRecipientApproval" value="${recipient.team}" ${recipient.approved ? 'checked disabled' : ''}>
+                            <span class="form-check-label">${recipient.approved ? 'Already approved' : `Approve and forward to ${this.escapeHtml(recipient.label)}`}</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        content.innerHTML = `
+            <div class="mb-4">
+                <h4 class="font-semibold">${this.escapeHtml(proposalViewModel.title)}</h4>
+                <p class="text-sm text-gray-500">${this.escapeHtml(action.mechanism || 'Proposal')} | ${this.escapeHtml(sequenceLabel)} | Phase ${action.phase || 1}</p>
+                ${this.renderProposalDetails(action)}
+                ${this.renderProposalRecipientState(action)}
+            </div>
+            <form id="proposalReviewForm">
+                <fieldset class="form-group" aria-describedby="proposalRecipientApprovalHint">
+                    <legend class="form-label">Independent recipient approvals</legend>
+                    <div style="display: grid; gap: var(--space-2);">${recipientControls}</div>
+                    <p class="form-hint" id="proposalRecipientApprovalHint">Each checked recipient is approved independently. Unchecked recipients remain pending and receive no communication.</p>
+                </fieldset>
+                <div class="form-group">
+                    <label class="form-label" for="adjudicationNotes">White Cell notes</label>
+                    <textarea id="adjudicationNotes" class="form-input form-textarea" rows="4" placeholder="Optional approval notes, or required notes when returning for changes."></textarea>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Review Proposal Recipients',
+            content,
+            size: 'lg',
+            buttons: [
+                { label: 'Cancel', variant: 'secondary', onClick: () => {} },
+                ...(pendingRecipients.length ? [{
+                    label: 'Send Back for Improvement',
+                    variant: 'secondary',
+                    onClick: () => {
+                        this.handleProposalReview(modalRef.current, action, { returnForChanges: true }).catch((error) => {
+                            logger.error('Failed to return proposal for changes:', error);
+                        });
+                        return false;
+                    }
+                }] : []),
+                {
+                    label: 'Apply Recipient Approvals',
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleProposalReview(modalRef.current, action).catch((error) => {
+                            logger.error('Failed to approve proposal recipients:', error);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    showProposalResponseReviewModal(action, response) {
+        const review = getProposalResponseReviewMetadata(response);
+        if (!review) {
+            showToast({ message: 'This proposal response is not available for White Cell review.', type: 'error' });
+            return;
+        }
+
+        const proposal = getProposalViewModel(action);
+        const senderLabel = this.formatProposalRecipientTeamLabel(review.senderTeam);
+        const sourceLabel = this.formatProposalRecipientTeamLabel(review.sourceTeam || action.team);
+        const responseLabel = review.facilitatorDecision === 'negotiate'
+            ? 'Negotiation request'
+            : review.proposedMessageType === PROPOSAL_THREAD_MESSAGE_TYPES.THREAD_CLOSED
+                ? 'Thread closure'
+                : 'Proposal response';
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <div class="mb-4">
+                <p class="text-sm text-gray-500" style="margin: 0 0 var(--space-2);">${this.escapeHtml(responseLabel)} from ${this.escapeHtml(senderLabel)} for ${this.escapeHtml(sourceLabel)}</p>
+                <h4 class="font-semibold" style="margin: 0;">${this.escapeHtml(proposal.title)}</h4>
+            </div>
+            ${this.renderSummaryCard('Response Details', [
+                { label: 'Delegation', value: GREEN_DELEGATIONS[action.delegation_id] || '' },
+                { label: 'Revision', value: String(response.metadata?.source_revision || action.revision_number || 1) },
+                { label: 'Response type', value: responseLabel },
+                { label: 'From', value: senderLabel },
+                { label: 'Forward to', value: sourceLabel },
+                { label: 'Submitted', value: review.submittedAt ? formatDateTime(review.submittedAt) : '' }
+            ])}
+            <section class="card card-bordered" style="margin-top: var(--space-3); padding: var(--space-3);" aria-labelledby="proposalResponseReviewContentLabel">
+                <h4 id="proposalResponseReviewContentLabel" class="font-semibold" style="margin: 0 0 var(--space-2);">${this.escapeHtml(review.facilitatorDecision === 'negotiate' ? 'Negotiation terms' : 'Response')}</h4>
+                <p class="text-sm" style="margin: 0; white-space: pre-wrap;">${this.escapeHtml(response.content || '')}</p>
+            </section>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Review Proposal Response',
+            content,
+            size: 'md',
+            buttons: [
+                { label: 'Cancel', variant: 'secondary', onClick: () => {} },
+                {
+                    label: `Forward to ${sourceLabel}`,
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleProposalResponseForward(modalRef.current, response).catch((error) => {
+                            logger.error('Failed to forward proposal response:', error);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    async handleProposalResponseForward(modal, response) {
+        const review = getProposalResponseReviewMetadata(response);
+        if (!review) {
+            showToast({ message: 'This proposal response is no longer awaiting review.', type: 'warning' });
+            return;
+        }
+
+        const loader = showLoader({ message: 'Forwarding proposal response...' });
+        try {
+            const result = await database.forwardProposalResponse(response.id);
+            if (!result?.communication) {
+                throw new Error('Proposal response forwarding did not return a thread message.');
+            }
+            communicationsStore.updateFromServer('INSERT', result.communication);
+            if (result.timeline_event) timelineStore.updateFromServer('INSERT', result.timeline_event);
+            showToast({
+                message: `Proposal response forwarded to ${this.formatProposalRecipientTeamLabel(review.sourceTeam)}.`,
+                type: 'success'
+            });
+            modal?.close();
+            this.renderProposals();
+        } catch (error) {
+            logger.error('Failed to forward proposal response:', error);
+            showToast({ message: `Failed to forward proposal response. ${getUserMessage(error)}`, type: 'error' });
+        } finally {
+            hideLoader(loader);
+        }
+    }
+
+    async handleArtifactReview(modal, action, decision) {
+        const notes = document.getElementById('artifactReviewNotes')?.value?.trim() || '';
+        const isReturn = decision === ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM;
+        const isComplete = decision === ENUMS.ARTIFACT_REVIEW_DECISION.COMPLETE;
+        const artifactKind = getArtifactReviewKind(action);
+        const isOrientation = artifactKind === 'strategic_orientation';
+        const artifactLabel = isOrientation ? 'Strategic Orientation' : 'action';
+        const teamLabel = this.formatTeamLabel(action?.team);
+        const expectedRevision = Number(action?.revision_number || 1);
+        const actionViewModel = isOrientation ? null : getBlueActionViewModel(action);
+        const requestedNotificationTeams = normalizeActionNotificationTeams(
+            actionViewModel?.notificationTeams
+        );
+        const approvedNotificationTeams = isComplete && requestedNotificationTeams.length
+            ? normalizeActionNotificationTeams(
+                [...document.querySelectorAll('input[name="actionNotificationApproval"]:checked')]
+                    .map((input) => input.value)
+            )
+            : [];
+
+        if (!isReturn && !isComplete) {
+            showToast({ message: 'Choose a supported review decision.', type: 'error' });
+            return;
+        }
+        if (!canReviewArtifact(action)) {
+            showToast({ message: `This ${teamLabel} ${artifactLabel} is no longer awaiting review.`, type: 'warning' });
+            return;
+        }
+        if (isReturn && !notes) {
+            showToast({ message: `Notes are required to send the ${teamLabel} ${artifactLabel} back for improvement.`, type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({
+            message: `${isReturn ? 'Sending back' : 'Accepting'} ${teamLabel} ${artifactLabel}...`
+        });
+
+        try {
+            const reviewResult = isReturn
+                ? await database.returnArtifactToTeam(artifactKind, action.id, {
+                    team: action.team,
+                    expectedRevision,
+                    notes
+                })
+                : requestedNotificationTeams.length
+                    ? await database.completeActionWithNotifications(action.id, {
+                        team: action.team,
+                        expectedRevision,
+                        notes,
+                        notificationTeams: approvedNotificationTeams,
+                        notificationContent: buildActionNotificationCommunicationContent(action)
+                    })
+                    : await database.completeArtifact(artifactKind, action.id, {
+                        team: action.team,
+                        expectedRevision,
+                        notes
+                    });
+            const updatedAction = reviewResult?.artifact;
+            if (!updatedAction) {
+                throw new Error('Artifact review did not return the updated artifact.');
+            }
+
+            actionsStore.updateFromServer('UPDATE', updatedAction);
+            if (isComplete) {
+                const sessionIdForPli = sessionStore.getSessionId();
+                if (sessionIdForPli) {
+                    database.triggerPliAdjudication(sessionIdForPli).catch((triggerError) => {
+                        logger.warn('Failed to trigger PLI adjudication workflow', triggerError);
+                        showToast({
+                            message: `${teamLabel} ${artifactLabel} was accepted as complete, but the PLI auto-trigger failed — cron or Actions dispatch is backup.`,
+                            type: 'warning'
+                        });
+                    });
+                }
+            }
+            this.retainWorkflowReview(reviewResult.review);
+            (Array.isArray(reviewResult.communications) ? reviewResult.communications : [])
+                .forEach((communication) => {
+                    communicationsStore.updateFromServer('INSERT', communication);
+                });
+
+            const deliveredNotificationTeams = normalizeActionNotificationTeams(
+                reviewResult.notification_teams || approvedNotificationTeams
+            );
+            const deliveredNotificationLabels = deliveredNotificationTeams
+                .map((team) => this.formatTeamLabel(team));
+
+            const gameState = this.getCurrentGameState();
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionStore.getSessionId(),
+                type: isReturn ? 'ARTIFACT_RETURNED_TO_TEAM' : 'ARTIFACT_COMPLETED',
+                content: isReturn
+                    ? `${teamLabel} ${artifactLabel} revision ${expectedRevision} sent back for improvement by White Cell: ${notes}`
+                    : `${teamLabel} ${artifactLabel} revision ${expectedRevision} accepted as complete by White Cell.`,
+                metadata: {
+                    related_id: action.id,
+                    action_id: action.id,
+                    artifact_kind: artifactKind,
+                    submitting_team: action.team,
+                    review_decision: decision,
+                    revision_number: expectedRevision,
+                    next_revision_number: reviewResult.review?.next_revision_number
+                        || updatedAction.revision_number,
+                    role: this.getTimelineActorRole(),
+                    ...(requestedNotificationTeams.length ? {
+                        requested_notification_teams: requestedNotificationTeams,
+                        notified_teams: deliveredNotificationTeams
+                    } : {}),
+                    ...(isReturn ? { return_notes: notes } : {})
+                },
+                team: 'white_cell',
+                move: action.move ?? gameState.move ?? 1,
+                phase: action.phase ?? gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            if (isComplete && canOpenSmeActionHandoffs(updatedAction)) {
+                try {
+                    await database.ensureSmeHandoffs(sessionStore.getSessionId(), action.id);
+                } catch (handoffError) {
+                    logger.warn('Failed to open SME TSJ/Verba handoffs (migration may be pending)', handoffError);
+                }
+            }
+
+            showToast({
+                message: isReturn
+                    ? `${teamLabel} ${artifactLabel} sent back for improvement.`
+                    : deliveredNotificationLabels.length
+                        ? `${teamLabel} ${artifactLabel} accepted as complete and ${deliveredNotificationLabels.join(' and ')} informed.`
+                        : `${teamLabel} ${artifactLabel} accepted as complete.`,
+                type: 'success'
+            });
+            modal?.close();
+        } catch (err) {
+            logger.error(`Failed to ${isReturn ? 'return' : 'complete'} ${teamLabel} ${artifactLabel}:`, err);
+            const staleRevision = /stale artifact revision/i.test(String(err?.message || ''));
+            showToast({
+                message: staleRevision
+                    ? `The ${teamLabel} ${artifactLabel} changed while you were reviewing it. Refresh and review the latest revision.`
+                    : `Failed to ${isReturn ? 'send back' : 'accept'} the ${teamLabel} ${artifactLabel}. ${getUserMessage(err)}`,
+                type: 'error'
+            });
+        } finally {
+            loader?.hide?.();
+            hideLoader();
+        }
+    }
+
+    async handleLegacyProposalReview(modal, action) {
+        const selectedDecision = document.querySelector('input[name="proposalReviewDecision"]:checked')?.value;
+        const notes = document.getElementById('adjudicationNotes')?.value?.trim();
+
+        if (!selectedDecision) {
+            showToast({ message: 'Please choose a proposal review decision', type: 'error' });
+            return;
+        }
+
+        const reviewOptions = this.getProposalReviewOptions(action);
+        const decision = reviewOptions.decisions.find((option) => option.value === selectedDecision);
+
+        if (!decision) {
+            showToast({ message: 'Unsupported proposal review decision', type: 'error' });
+            return;
+        }
+
+        if (
+            selectedDecision === PROPOSAL_REVIEW_DECISIONS.FORWARD_TO_RECIPIENT
+            && !reviewOptions.recipientTeam
+        ) {
+            showToast({ message: 'This proposal is missing a valid intended recipient team', type: 'error' });
+            return;
+        }
+
+        if (selectedDecision === PROPOSAL_REVIEW_DECISIONS.REQUEST_CHANGES && !notes) {
+            showToast({ message: 'Reviewer notes are required when returning a proposal for changes', type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({ message: decision.loaderMessage });
+
+        try {
+            const isReturn = selectedDecision === PROPOSAL_REVIEW_DECISIONS.REQUEST_CHANGES;
+            const reviewResult = isReturn
+                ? await database.returnArtifactToTeam('action', action.id, {
+                    team: action.team,
+                    expectedRevision: Number(action.revision_number || 1),
+                    notes
+                })
+                : await database.reviewProposal(action.id, {
+                    decision: selectedDecision,
+                    recipient_team: reviewOptions.recipientTeam || null,
+                    expected_revision: Number(action.revision_number || 1),
+                    adjudication_notes: notes || null
+                });
+            const updatedAction = isReturn ? reviewResult?.artifact : reviewResult?.action;
+            if (!updatedAction) {
+                throw new Error('Proposal review did not return the updated proposal.');
+            }
+            actionsStore.updateFromServer('UPDATE', updatedAction);
+
+            if (isReturn) {
+                this.retainWorkflowReview(reviewResult.review);
+                const gameState = this.getCurrentGameState();
+                const returnedTimelineEvent = await database.createTimelineEvent({
+                    session_id: sessionStore.getSessionId(),
+                    type: 'ARTIFACT_RETURNED_TO_TEAM',
+                    content: `${this.formatTeamLabel(action.team)} proposal revision ${action.revision_number || 1} returned for changes by White Cell: ${notes}`,
+                    metadata: {
+                        related_id: action.id,
+                        action_id: action.id,
+                        artifact_kind: 'proposal',
+                        submitting_team: action.team,
+                        recipient_scope: 'team',
+                        recipient_team: action.team,
+                        review_decision: ENUMS.ARTIFACT_REVIEW_DECISION.RETURN_TO_TEAM,
+                        revision_number: action.revision_number || 1,
+                        next_revision_number: reviewResult.review?.next_revision_number || updatedAction.revision_number,
+                        return_notes: notes,
+                        role: this.getTimelineActorRole()
+                    },
+                    team: 'white_cell',
+                    move: action.move ?? gameState.move ?? 1,
+                    phase: action.phase ?? gameState.phase ?? 1
+                });
+                timelineStore.updateFromServer('INSERT', returnedTimelineEvent);
+            }
+
+            if (!isReturn && reviewResult.communication) {
+                communicationsStore.updateFromServer('INSERT', reviewResult.communication);
+            }
+
+            for (const timelineEvent of isReturn ? [] : (reviewResult.timeline_events || [])) {
+                if (timelineEvent) {
+                    timelineStore.updateFromServer('INSERT', timelineEvent);
+                }
+            }
+
+            showToast({ message: decision.successToast, type: 'success' });
+            modal?.close();
+        } catch (err) {
+            logger.error('Failed to submit proposal review:', err);
+            showToast({ message: 'Failed to submit proposal review', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async handleProposalReview(modal, action, { returnForChanges = false } = {}) {
+        const notes = document.getElementById('adjudicationNotes')?.value?.trim() || '';
+        const reviewOptions = this.getProposalReviewOptions(action);
+
+        if (returnForChanges) {
+            if (!notes) {
+                showToast({ message: 'Reviewer notes are required when returning a proposal', type: 'error' });
+                return;
+            }
+            if (reviewOptions.recipients.some((recipient) => recipient.approved)) {
+                showToast({ message: 'A proposal already forwarded to a recipient cannot be returned for revision.', type: 'error' });
+                return;
+            }
+
+            const loader = showLoader({ message: 'Returning proposal for improvement...' });
+            try {
+                const result = await database.returnArtifactToTeam('action', action.id, {
+                    team: action.team,
+                    expectedRevision: Number(action.revision_number || 1),
+                    notes
+                });
+                actionsStore.updateFromServer('UPDATE', result.artifact);
+                this.retainWorkflowReview(result.review);
+                showToast({ message: 'Proposal sent back for improvement', type: 'success' });
+                modal?.close();
+            } catch (error) {
+                logger.error('Failed to return proposal for improvement:', error);
+                showToast({ message: `Failed to return proposal. ${getUserMessage(error)}`, type: 'error' });
+            } finally {
+                hideLoader(loader);
+            }
+            return;
+        }
+
+        const selectedRecipients = Array.from(
+            document.querySelectorAll('input[name="proposalRecipientApproval"]:checked:not(:disabled)') || []
+        ).map((input) => input.value).filter((team) => ['blue', 'red'].includes(team));
+        if (!selectedRecipients.length) {
+            showToast({ message: 'Select at least one pending recipient to approve', type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({ message: 'Applying independent recipient approvals...' });
+        try {
+            const results = [];
+            for (const recipientTeam of selectedRecipients) {
+                const result = await database.reviewProposal(action.id, {
+                    decision: PROPOSAL_REVIEW_DECISIONS.FORWARD_TO_RECIPIENT,
+                    recipient_team: recipientTeam,
+                    adjudication_notes: notes || null,
+                    expected_revision: Number(action.revision_number || 1)
+                });
+                results.push(result);
+                if (result?.communication) {
+                    communicationsStore.updateFromServer('INSERT', result.communication);
+                }
+                (result?.timeline_events || []).forEach((event) => {
+                    if (event) timelineStore.updateFromServer('INSERT', event);
+                });
+            }
+
+            const updatedAction = results.at(-1)?.action;
+            if (updatedAction) actionsStore.updateFromServer('UPDATE', updatedAction);
+            const labels = selectedRecipients.map((team) => this.formatCommunicationRecipient(team));
+            showToast({
+                message: `Proposal approved and forwarded to ${labels.join(' and ')}.`,
+                type: 'success'
+            });
+            modal?.close();
+        } catch (error) {
+            logger.error('Failed to approve proposal recipient:', error);
+            showToast({ message: `Failed to approve recipient. ${getUserMessage(error)}`, type: 'error' });
+        } finally {
+            hideLoader(loader);
+        }
+    }
+
+    syncRfisFromStore({ event = '', data = null } = {}) {
+        const allRfis = requestsStore.getAll();
+        this.rfis = allRfis.filter(isRfiAwaitingWhiteCellResponse);
+        this.rfiHistory = allRfis.filter((rfi) => !isRfiAwaitingWhiteCellResponse(rfi));
+        this.captureRfiNotifications(allRfis, { event, data });
+
+        this.renderRfiQueue();
+
+        this.updateSidebarBadge('rfiBadge', this.rfis.length);
+    }
+
+    captureRfiNotifications(allRfis = [], { event = '', data = null } = {}) {
+        const notifications = allRfis
+            .map((rfi) => ({ rfi, notification: buildRfiWorkflowNotification(rfi, { audience: 'whitecell' }) }))
+            .filter(({ notification }) => notification);
+
+        if (!this.hasHydratedRfiNotifications) {
+            this.seenRfiNotificationIds = new Set(notifications.map(({ notification }) => notification.id));
+            this.durableNotifications?.seed(notifications.map(({ notification }) => notification));
+            this.hasHydratedRfiNotifications = true;
+            return;
+        }
+
+        const changedIds = new Set((event === 'reconciled' ? (Array.isArray(data) ? data : []) : [data])
+            .map((rfi) => rfi?.id)
+            .filter(Boolean));
+        notifications.forEach(({ rfi, notification }) => {
+            if (this.seenRfiNotificationIds.has(notification.id)) return;
+            this.seenRfiNotificationIds.add(notification.id);
+            if (!changedIds.has(rfi.id)) return;
+            this.newRfiIds.add(rfi.id);
+            this.durableNotifications?.notify(notification, {
+                onOpen: (durableNotification) => this.openDurableDestination(durableNotification)
+            });
+        });
+    }
+
+    getQueueNameForAction(action = {}) {
+        if (isStrategicOrientationAction(action)) return 'strategicOrientation';
+        if (this.isProposalAction(action)) return 'proposals';
+        if (action?.team === 'red') return 'responses';
+        return 'actions';
+    }
+
+    markWhiteCellRecordOpened(queueName = '', recordId = '') {
+        if (!recordId) return;
+        if (queueName === 'requests') {
+            this.newRfiIds.delete(recordId);
+            this.durableNotifications?.markDestinationRead({ recordId });
+            this.renderRfiQueue();
+            return;
+        }
+        this.clearQueueArrivalHighlights(queueName, recordId);
+    }
+
+    renderRfiQueue() {
+        const container = document.getElementById('rfiQueue');
+        if (!container) return;
+
+        const activeRfis = regionalView(container, this.rfiActiveView === 'history' ? this.rfiHistory : this.rfis,
+            () => this.renderRfiQueue(), { sessionId: sessionStore.getSessionId(),
+                regional: [...this.rfis, ...this.rfiHistory, ...this.returnedRevisionHistory].some((row) => regionalAttribution(row)) });
+        const returnedRfiReviews = this.rfiActiveView === 'history'
+            ? this.returnedRevisionHistory.filter((review) => review.artifact_kind === 'rfi'
+                && matchesRegionalView(review, container._regionalView?.select.value))
+            : [];
+        const visibleRfis = activeRfis.slice(0, WHITE_CELL_RFI_RENDER_LIMIT);
+        const visibleReturnedReviews = returnedRfiReviews.slice(
+            0,
+            Math.max(WHITE_CELL_RFI_RENDER_LIMIT - visibleRfis.length, 0)
+        );
+        const totalHistoryItems = activeRfis.length + returnedRfiReviews.length;
+        const hiddenCount = Math.max(
+            0,
+            (this.rfiActiveView === 'history' ? totalHistoryItems : activeRfis.length)
+                - visibleRfis.length
+                - visibleReturnedReviews.length
+        );
+        const currentCards = visibleRfis.map((rfi) => {
+            const queryText = rfi.query || rfi.question || '';
+            const isPending = isRfiAwaitingWhiteCellResponse(rfi);
+            const isNew = this.newRfiIds.has(rfi.id);
+            return `
+                <div class="card card-bordered" data-rfi-id="${rfi.id}" style="padding: var(--space-4); margin-bottom: var(--space-3);${isNew ? ' background: var(--color-surface-alt);' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2); gap: var(--space-2);">
+                        <span class="text-xs text-gray-500">${this.escapeHtml(GREEN_DELEGATIONS[rfi.delegation_id] || this.formatTeamLabel(rfi.team))} | Revision ${Number(rfi.revision_number) || 1} | ${formatRelativeTime(rfi.created_at)}</span>
+                        <div style="display: flex; gap: var(--space-2);">
+                            ${createArtifactLifecycleBadge(rfi, { size: 'sm' }).outerHTML}
+                            ${isNew ? createBadge({ text: 'NEW', variant: 'warning', size: 'sm', rounded: true }).outerHTML : ''}
+                        </div>
+                    </div>
+                    <p class="text-sm font-medium mb-2">${this.escapeHtml(queryText)}</p>
+                    ${Array.isArray(rfi.categories) && rfi.categories.length ? `
+                        <p class="text-xs text-gray-500"><strong>Categories:</strong> ${this.escapeHtml(rfi.categories.join(', '))}</p>
+                    ` : ''}
+                    ${rfi.review_notes ? `<p class="text-sm"><strong>Clarification notes:</strong> ${this.escapeHtml(rfi.review_notes)}</p>` : ''}
+                    ${rfi.response ? `<p class="text-sm"><strong>Final response:</strong> ${this.escapeHtml(rfi.response)}</p>` : ''}
+                    <p class="text-xs text-gray-500"><strong>Revision:</strong> ${Number(rfi.revision_number) || 1}</p>
+                    <div class="card-actions" style="margin-top: var(--space-3);">
+                        ${isPending ? `
+                            <button class="btn btn-primary btn-sm respond-rfi-btn" data-rfi-id="${rfi.id}">Respond</button>
+                            <button class="btn btn-secondary btn-sm return-rfi-btn" data-rfi-id="${rfi.id}">Return for Clarification</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        const revisionCards = visibleReturnedReviews
+            .map((review) => this.renderRfiRevisionHistoryCard(review))
+            .join('');
+        const cards = currentCards || revisionCards
+            ? `${currentCards}${revisionCards}`
+            : `<p class="text-sm text-gray-500">No ${this.rfiActiveView === 'history' ? 'answered or returned' : 'pending'} RFIs.</p>`;
+        const historyCount = this.rfiHistory.length + this.returnedRevisionHistory.filter(
+            (review) => review.artifact_kind === 'rfi'
+        ).length;
+        const historyStatus = this.rfiActiveView === 'history' && this.returnedRevisionHistoryLoading
+            ? '<div class="empty-state" role="status"><p class="text-sm text-gray-500">Refreshing immutable RFI revision history...</p></div>'
+            : this.rfiActiveView === 'history' && this.returnedRevisionHistoryError
+                ? `
+                    <div class="empty-state" role="status">
+                        <p class="text-sm text-gray-500">Immutable RFI revision history could not be loaded. Current request records remain available.</p>
+                        <button type="button" class="btn btn-secondary btn-sm" data-rfi-history-retry>Retry history</button>
+                    </div>
+                `
+                : '';
+
+        container.innerHTML = `
+            <div class="tab-list" role="tablist" aria-label="RFI queue views">
+                <button type="button" id="rfiPendingTab" class="tab-button${this.rfiActiveView === 'pending' ? ' active' : ''}" role="tab" aria-controls="rfiQueuePanel" aria-selected="${this.rfiActiveView === 'pending'}" tabindex="${this.rfiActiveView === 'pending' ? '0' : '-1'}" data-rfi-view="pending">Pending <span class="tab-badge">${this.rfis.length}</span></button>
+                <button type="button" id="rfiHistoryTab" class="tab-button${this.rfiActiveView === 'history' ? ' active' : ''}" role="tab" aria-controls="rfiQueuePanel" aria-selected="${this.rfiActiveView === 'history'}" tabindex="${this.rfiActiveView === 'history' ? '0' : '-1'}" data-rfi-view="history">Answered / History <span class="tab-badge">${historyCount}</span></button>
+            </div>
+            <div id="rfiQueuePanel" role="tabpanel" aria-labelledby="${this.rfiActiveView === 'history' ? 'rfiHistoryTab' : 'rfiPendingTab'}" tabindex="0" style="margin-top: var(--space-3);">
+                ${historyStatus}
+                ${hiddenCount ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the first ${WHITE_CELL_RFI_RENDER_LIMIT} of ${this.rfiActiveView === 'history' ? totalHistoryItems : activeRfis.length} ${this.rfiActiveView === 'history' ? 'answered/history' : 'pending'} RFIs.</p>` : ''}
+                ${cards}
+            </div>
+        `;
+
+        container.querySelectorAll('[data-rfi-view]').forEach((button) => {
+            button.addEventListener('click', () => {
+                this.rfiActiveView = button.dataset.rfiView === 'history' ? 'history' : 'pending';
+                this.renderRfiQueue();
+            });
+            button.addEventListener('keydown', (event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                this.rfiActiveView = event.key === 'ArrowLeft' || event.key === 'Home'
+                    ? 'pending'
+                    : 'history';
+                this.renderRfiQueue();
+                document.getElementById(this.rfiActiveView === 'history' ? 'rfiHistoryTab' : 'rfiPendingTab')?.focus?.();
+            });
+        });
+
+        container.querySelector('[data-rfi-history-retry]')?.addEventListener('click', () => {
+            this.loadReturnedRevisionHistory({ announceError: true });
+        });
+
+        container.querySelectorAll('.respond-rfi-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const rfiId = button.dataset.rfiId;
+                const rfi = this.rfis.find((candidate) => candidate.id === rfiId);
+                if (rfi) {
+                    this.markWhiteCellRecordOpened('requests', rfiId);
+                    this.showRespondRfiModal(rfi);
+                }
+            });
+        });
+        container.querySelectorAll('.return-rfi-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const rfi = this.rfis.find((candidate) => candidate.id === button.dataset.rfiId);
+                if (rfi) {
+                    this.markWhiteCellRecordOpened('requests', rfi.id);
+                    this.showReturnRfiModal(rfi);
+                }
+            });
+        });
+    }
+
+    showReturnRfiModal(rfi) {
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <p class="text-sm mb-3">${this.escapeHtml(rfi.query || rfi.question || '')}</p>
+            <form id="rfiReturnForm">
+                <div class="form-group">
+                    <label class="form-label" for="rfiReturnNotes">Clarification Notes *</label>
+                    <textarea id="rfiReturnNotes" class="form-input form-textarea" rows="4" required aria-describedby="rfiReturnNotesHint"></textarea>
+                    <p class="form-hint" id="rfiReturnNotesHint">Explain exactly what the Facilitator must clarify before resubmitting this same RFI.</p>
+                </div>
+            </form>
+        `;
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Return RFI for Clarification',
+            content,
+            size: 'md',
+            buttons: [
+                { label: 'Cancel', variant: 'secondary', onClick: () => {} },
+                {
+                    label: 'Return for Clarification',
+                    variant: 'primary',
+                    onClick: () => {
+                        const notes = content.querySelector('#rfiReturnNotes')?.value?.trim() || '';
+                        if (!notes) {
+                            showToast({ message: 'Clarification notes are required.', type: 'error' });
+                            content.querySelector('#rfiReturnNotes')?.focus?.();
+                            return false;
+                        }
+                        this.handleReturnRfi(rfi, notes, modalRef.current);
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    async handleReturnRfi(rfi, notes, modal = null) {
+        const loader = showLoader({ message: `Returning ${this.formatTeamLabel(rfi.team)} RFI...` });
+        try {
+            const reviewResult = await database.returnArtifactToTeam('rfi', rfi.id, {
+                team: rfi.team,
+                expectedRevision: Number(rfi.revision_number) || 1,
+                notes
+            });
+            const updatedRequest = reviewResult?.artifact;
+            if (!updatedRequest) throw new Error('RFI return did not return an updated artifact.');
+            requestsStore.updateFromServer('UPDATE', updatedRequest);
+            this.retainWorkflowReview(reviewResult.review);
+
+            const gameState = this.getCurrentGameState();
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: updatedRequest.session_id || sessionStore.getSessionId(),
+                type: 'RFI_RETURNED_FOR_CLARIFICATION',
+                content: `${this.formatTeamLabel(rfi.team)} RFI returned for clarification by White Cell.`,
+                metadata: {
+                    related_id: rfi.id,
+                    submitting_team: rfi.team,
+                    return_notes: notes,
+                    revision_number: rfi.revision_number || 1,
+                    next_revision_number: updatedRequest.revision_number || 1,
+                    ...buildWhiteCellRecipientMetadata(rfi.delegation_id ? `green_${rfi.delegation_id}` : rfi.team)
+                },
+                team: 'white_cell',
+                move: rfi.move ?? gameState.move ?? 1,
+                phase: rfi.phase ?? gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+            showToast({ message: 'RFI returned for clarification', type: 'success' });
+            modal?.close?.();
+        } catch (error) {
+            logger.error('Failed to return RFI for clarification:', error);
+            showToast({ message: 'Failed to return the RFI. Refresh the queue and try again.', type: 'error' });
+        } finally {
+            hideLoader(loader);
+        }
+    }
+
+    showRespondRfiModal(rfi) {
+        const content = document.createElement('div');
+        const queryText = rfi.query || rfi.question || '';
+
+        content.innerHTML = `
+            <div class="mb-4 p-3 bg-gray-50 rounded">
+                <p class="text-sm font-medium">Question</p>
+                <p class="text-sm">${this.escapeHtml(queryText)}</p>
+            </div>
+
+            <form id="rfiResponseForm">
+                <div class="form-group">
+                    <label class="form-label" for="rfiResponse">Response *</label>
+                    <textarea id="rfiResponse" class="form-input form-textarea" rows="4" placeholder="Enter your response..." required></textarea>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Respond to RFI',
+            content,
+            size: 'md',
+            buttons: [
+                {
+                    label: 'Cancel',
+                    variant: 'secondary',
+                    onClick: () => {}
+                },
+                {
+                    label: 'Send Response',
+                    variant: 'primary',
+                    onClick: () => {
+                        this.handleRfiResponse(modalRef.current, rfi.id, rfi).catch((err) => {
+                            logger.error('Failed to send RFI response:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    async handleRfiResponse(modal, rfiId, reviewedRequest = null) {
+        const response = document.getElementById('rfiResponse')?.value?.trim();
+        if (!response) {
+            showToast({ message: 'Please enter a response', type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({ message: 'Sending response...' });
+
+        try {
+            let latestRequest = null;
+            try {
+                await requestsStore.loadRequests();
+                latestRequest = requestsStore.getById(rfiId) || null;
+                this.syncRfisFromStore();
+            } catch (refreshError) {
+                logger.warn('Could not refresh the RFI before responding; the protected RPC will verify it:', refreshError);
+            }
+
+            if (latestRequest && !isRfiAwaitingWhiteCellResponse(latestRequest)) {
+                showToast({
+                    message: latestRequest.status === 'answered'
+                        ? 'This RFI was already answered. The queue has been refreshed.'
+                        : 'This RFI is already completed and can no longer be changed. The queue has been refreshed.',
+                    type: 'warning'
+                });
+                modal?.close();
+                return;
+            }
+
+            const updatedRequest = await database.updateRequest(rfiId, {
+                response,
+                status: 'answered',
+                responded_at: new Date().toISOString()
+            }, ...((reviewedRequest || latestRequest)?.delegation_id ? [reviewedRequest || latestRequest] : []));
+            requestsStore.updateFromServer('UPDATE', updatedRequest);
+
+            const gameState = this.getCurrentGameState();
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionStore.getSessionId(),
+                type: 'RFI_ANSWERED',
+                content: 'White Cell responded to an RFI.',
+                metadata: {
+                    related_id: rfiId,
+                    role: this.getTimelineActorRole(),
+                    ...buildWhiteCellRecipientMetadata(updatedRequest.delegation_id ? `green_${updatedRequest.delegation_id}` : updatedRequest.team)
+                },
+                team: 'white_cell',
+                move: gameState.move ?? 1,
+                phase: gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: 'Response sent', type: 'success' });
+            modal?.close();
+        } catch (err) {
+            if (isCompletedArtifactImmutabilityError(err)) {
+                logger.warn('RFI response skipped because the record was already completed; refreshing the queue.');
+                try {
+                    await requestsStore.loadRequests();
+                } catch (refreshError) {
+                    logger.warn('Could not refresh the RFI queue after a completed-record conflict:', refreshError);
+                }
+                this.rfis = requestsStore.getPending()
+                    .filter(isRfiAwaitingWhiteCellResponse)
+                    .filter((rfi) => rfi.id !== rfiId);
+                this.renderRfiQueue();
+                this.updateSidebarBadge('rfiBadge', this.rfis.length);
+                showToast({
+                    message: 'This RFI was already completed. The queue has been refreshed.',
+                    type: 'warning'
+                });
+                modal?.close();
+                return;
+            }
+            logger.error('Failed to respond to RFI:', err);
+            showToast({ message: 'Failed to send response', type: 'error' });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async handleCommunicationSubmit(event) {
+        event.preventDefault();
+
+        const form = event.currentTarget;
+        const recipient = document.getElementById('commRecipient')?.value;
+        const type = document.getElementById('commType')?.value || 'INJECT';
+        const content = document.getElementById('commContent')?.value?.trim();
+
+        if (!recipient || !content) {
+            showToast({ message: 'Please fill in all required fields', type: 'error' });
+            return;
+        }
+
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) return;
+
+        const loader = showLoader({ message: 'Sending communication...' });
+
+        try {
+            const gameState = this.getCurrentGameState();
+            const recipientMetadata = buildWhiteCellRecipientMetadata(recipient);
+            const communication = await database.createCommunication({
+                session_id: sessionId,
+                from_role: 'white_cell',
+                to_role: recipient,
+                type,
+                content,
+                metadata: recipientMetadata
+            });
+            communicationsStore.updateFromServer('INSERT', communication);
+
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type,
+                content: `White Cell ${type.toLowerCase()} sent to ${this.formatCommunicationRecipient(recipient)}`,
+                metadata: {
+                    role: this.getTimelineActorRole(),
+                    ...recipientMetadata,
+                    ...communication.metadata,
+                    ...(communication.recipient_scope ? { communication_id: communication.id } : {})
+                },
+                team: 'white_cell',
+                move: gameState.move ?? 1,
+                phase: gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            form.reset();
+            document.getElementById('commRecipient').value = WHITE_CELL_ALL_TEAMS_RECIPIENT;
+            document.getElementById('commType').value = 'INJECT';
+
+            showToast({ message: 'Communication sent', type: 'success' });
+        } catch (err) {
+            logger.error('Failed to send communication:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to send communication. Check the message and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    showSectionUpdateComposer({
+        title,
+        contentKind,
+        initialContent = '',
+        sourceMetadata = {}
+    }) {
+        const content = document.createElement('div');
+        const recipientOptions = buildWhiteCellCommunicationRecipientOptions()
+            .map((option) => `<option value="${this.escapeHtml(option.value)}">${this.escapeHtml(option.label)}</option>`)
+            .join('');
+
+        content.innerHTML = `
+            <form id="whiteCellSectionUpdateForm" novalidate>
+                <div class="form-group">
+                    <label class="form-label" for="whiteCellSectionUpdateRecipient">Recipient</label>
+                    <select id="whiteCellSectionUpdateRecipient" class="form-input form-select">
+                        ${recipientOptions}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="whiteCellSectionUpdateContent">Update</label>
+                    <textarea
+                        id="whiteCellSectionUpdateContent"
+                        class="form-input form-textarea"
+                        rows="6"
+                        placeholder="Enter the update to send..."
+                    >${this.escapeHtml(initialContent)}</textarea>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title,
+            content,
+            size: 'md',
+            buttons: [
+                { label: 'Cancel', variant: 'secondary', onClick: () => {} },
+                {
+                    label: 'Send Update',
+                    variant: 'primary',
+                    onClick: () => {
+                        const recipient = content.querySelector('#whiteCellSectionUpdateRecipient')?.value || WHITE_CELL_ALL_TEAMS_RECIPIENT;
+                        const message = content.querySelector('#whiteCellSectionUpdateContent')?.value?.trim();
+                        if (!message) {
+                            showToast({ message: 'Update text is required.', type: 'error' });
+                            return false;
+                        }
+
+                        this.submitSectionUpdate(modalRef.current, {
+                            recipient,
+                            contentKind,
+                            content: message,
+                            sourceMetadata
+                        }).catch((err) => {
+                            logger.error('Failed to send section update:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    async submitSectionUpdate(modal, {
+        recipient,
+        contentKind,
+        content,
+        sourceMetadata = {}
+    }) {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            showToast({ message: 'No session selected.', type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({ message: 'Sending update...' });
+        try {
+            const gameState = this.getCurrentGameState();
+            const recipientMetadata = buildWhiteCellRecipientMetadata(recipient, {
+                content_kind: contentKind,
+                ...sourceMetadata
+            });
+            const communication = await database.createCommunication({
+                session_id: sessionId,
+                from_role: 'white_cell',
+                to_role: recipient,
+                type: 'GUIDANCE',
+                content,
+                metadata: recipientMetadata
+            });
+            communicationsStore.updateFromServer('INSERT', communication);
+
+            const sectionLabel = contentKind === WHITE_CELL_UPDATE_KINDS.TRIBE_STREET_JOURNAL
+                ? 'Tribe Street Journal update'
+                : 'Verba AI population sentiment';
+            const timelineEvent = await database.createTimelineEvent({
+                session_id: sessionId,
+                type: 'GUIDANCE',
+                content: `White Cell sent a ${sectionLabel} to ${this.formatCommunicationRecipient(recipient)}`,
+                metadata: {
+                    role: this.getTimelineActorRole(),
+                    ...recipientMetadata,
+                    ...communication.metadata,
+                    ...(communication.recipient_scope ? { communication_id: communication.id } : {})
+                },
+                team: 'white_cell',
+                move: gameState.move ?? 1,
+                phase: gameState.phase ?? 1
+            });
+            timelineStore.updateFromServer('INSERT', timelineEvent);
+
+            showToast({ message: 'Update sent', type: 'success' });
+            modal?.close();
+        } catch (err) {
+            logger.error('Failed to send section update:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to send update. Check the session state and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    syncCommunicationsFromStore({
+        announceThreadRounds = false,
+        changedCommunications = [],
+        event = ''
+    } = {}) {
+        this.communications = communicationsStore.getAll();
+        this.captureProposalThreadRoundNotifications(changedCommunications, {
+            announce: announceThreadRounds
+        });
+        this.captureInboundCommunicationNotifications(changedCommunications, { event });
+        this.scribeDeckAssignments = buildWhiteCellScribeDeckAssignments(this.communications);
+        this.verbaAiUpdates = this.communications
+            .filter((communication) => (
+                communication?.from_role === 'white_cell'
+                && getWhiteCellCommunicationUpdateKind(communication) === WHITE_CELL_UPDATE_KINDS.VERBA_AI_POPULATION_SENTIMENT
+            ))
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        this.renderCommunicationHistory();
+        this.renderProposals();
+        this.renderScribeDeckSettings();
+        this.renderVerbaAiList();
+    }
+
+    captureProposalThreadRoundNotifications(changedCommunications = [], { announce = false } = {}) {
+        const allRounds = this.communications.filter((communication) => {
+            const thread = getProposalThreadMetadata(communication);
+            return thread && thread.roundNumber > 0;
+        });
+        const changedKeys = new Set((changedCommunications || [])
+            .map((message) => getProposalThreadMessageKey(message))
+            .filter(Boolean));
+
+        if (!this.hasHydratedProposalThreadRounds) {
+            this.seenProposalThreadRoundKeys = new Set(allRounds
+                .map((message) => getProposalThreadMessageKey(message))
+                .filter((key) => key && (!announce || !changedKeys.has(key))));
+            this.hasHydratedProposalThreadRounds = true;
+            if (!announce) return;
+        }
+
+        allRounds.forEach((message) => {
+            const roundKey = getProposalThreadMessageKey(message);
+            if (!roundKey || this.seenProposalThreadRoundKeys.has(roundKey)) return;
+            this.seenProposalThreadRoundKeys.add(roundKey);
+            if (!announce || (changedKeys.size && !changedKeys.has(roundKey))) return;
+
+            const thread = getProposalThreadMetadata(message);
+            const durableNotification = buildProposalRoundNotification(message, { audience: 'whitecell' });
+            if (durableNotification?.destination?.recordId) {
+                this.newGreenProposalIds.add(durableNotification.destination.recordId);
+                this.renderProposals();
+            }
+            this.durableNotifications?.notify(durableNotification, {
+                onOpen: (notification) => this.openDurableDestination(notification)
+            });
+        });
+    }
+
+    captureInboundCommunicationNotifications(changedCommunications = [], { event = '' } = {}) {
+        const inbound = this.communications
+            .filter((communication) => (
+                !isProposalThreadMessage(communication)
+                && String(communication?.to_role || '').trim().toLowerCase() === 'white_cell'
+            ))
+            .map((communication) => ({
+                communication,
+                notification: getProposalResponseReviewMetadata(communication)
+                    ? buildProposalResponseReviewNotification(communication)
+                    : buildDirectCommunicationNotification(communication, { audience: 'whitecell' })
+            }))
+            .filter(({ notification }) => notification);
+
+        if (!this.hasHydratedInboundCommunications) {
+            this.seenInboundCommunicationIds = new Set(inbound.map(({ notification }) => notification.id));
+            this.durableNotifications?.seed(inbound.map(({ notification }) => notification));
+            this.hasHydratedInboundCommunications = true;
+            return;
+        }
+
+        const changedIds = new Set((changedCommunications || []).map((communication) => communication?.id).filter(Boolean));
+        inbound.forEach(({ communication, notification }) => {
+            if (this.seenInboundCommunicationIds.has(notification.id)) return;
+            this.seenInboundCommunicationIds.add(notification.id);
+            if (!['created', 'reconciled'].includes(event) || !changedIds.has(communication.id)) return;
+            const responseReview = getProposalResponseReviewMetadata(communication);
+            if (responseReview) {
+                this.newGreenProposalIds.add(responseReview.sourceProposalId);
+                this.renderProposals();
+            } else {
+                this.newCommunicationIds.add(String(communication.id));
+            }
+            this.durableNotifications?.notify(notification, {
+                onOpen: (durableNotification) => this.openDurableDestination(durableNotification)
+            });
+        });
+    }
+
+    restoreDurableNotifications() {
+        this.durableNotifications?.getNotifications({ unreadOnly: true }).forEach((notification) => {
+            const { section, recordId } = notification.destination || {};
+            if (!recordId) return;
+            const queueSets = {
+                strategicOrientation: this.newStrategicOrientationIds,
+                actions: this.newBlueActionIds,
+                proposals: this.newGreenProposalIds,
+                responses: this.newRedResponseIds,
+                requests: this.newRfiIds
+            };
+            queueSets[section]?.add(recordId);
+            if (section === 'communications') this.newCommunicationIds.add(recordId);
+        });
+        this.syncActionsFromStore();
+        this.syncRfisFromStore();
+        this.durableNotifications?.restore({
+            onOpen: (notification) => this.openDurableDestination(notification)
+        });
+    }
+
+    openDurableDestination(notification = {}) {
+        const destination = notification.destination || {};
+        const section = destination.section || 'communications';
+        const recordId = String(destination.recordId || '');
+        const communicationId = String(destination.communicationId || '');
+        this.durableNotifications?.markDestinationRead({ recordId, communicationId });
+
+        if (['strategicOrientation', 'actions', 'proposals', 'responses'].includes(section) && recordId) {
+            this.clearQueueArrivalHighlights(section, recordId);
+        } else if (section === 'requests' && recordId) {
+            this.newRfiIds.delete(recordId);
+            this.renderRfiQueue();
+        } else if (section === 'communications' && recordId) {
+            this.newCommunicationIds.delete(recordId);
+            this.renderCommunicationHistory();
+        }
+
+        document.querySelector?.(`.sidebar-link[data-section="${section}"]`)?.click?.();
+        requestAnimationFrame(() => {
+            const selector = communicationId
+                ? `[data-communication-id="${communicationId}"]`
+                : (recordId ? `[data-action-id="${recordId}"], [data-rfi-id="${recordId}"], [data-communication-id="${recordId}"]` : 'h2');
+            const target = document.querySelector?.(`#${section}Section ${selector}`)
+                || document.querySelector?.(`#${section}Section h2, #${section}Section h3`);
+            if (!target) return;
+            if (!target.hasAttribute?.('tabindex')) target.setAttribute?.('tabindex', '-1');
+            target.focus?.({ preventScroll: false });
+        });
+    }
+
+    syncParticipantsFromStore() {
+        this.participants = buildWhiteCellParticipantRoster(participantsStore.getAll());
+        this.configureParticipantFilters();
+        this.renderParticipants();
+    }
+
+    configureParticipantFilters() {
+        const sessionSelect = document.getElementById('participantsSessionFilter');
+        const teamSelect = document.getElementById('participantsTeamFilter');
+        const roleSelect = document.getElementById('participantsRoleFilter');
+        if (!sessionSelect || !teamSelect || !roleSelect) return;
+
+        const activeSession = sessionStore.getSessionData?.() || null;
+        const { sessionOptions, teamOptions, roleOptions } = buildWhiteCellParticipantFilterOptions(this.participants, {
+            activeSession
+        });
+        this.populateFilterSelect(sessionSelect, sessionOptions, this.participantFilters.session);
+        this.populateFilterSelect(teamSelect, teamOptions, this.participantFilters.team);
+        this.populateFilterSelect(roleSelect, roleOptions, this.participantFilters.role);
+        this.participantFilters.session = sessionSelect.value || null;
+        this.participantFilters.team = teamSelect.value || null;
+        this.participantFilters.role = roleSelect.value || null;
+    }
+
+    renderParticipants() {
+        const summary = document.getElementById('participantsSummary');
+        const container = document.getElementById('participantsList');
+        if (!summary || !container) return;
+
+        const activeSession = sessionStore.getSessionData?.() || null;
+        const filteredParticipants = filterWhiteCellParticipants(regionalView(container, this.participants,
+            () => { this.selectedParticipantSeatIds.clear(); this.renderParticipants(); }, { sessionId: sessionStore.getSessionId() }), {
+            ...this.participantFilters,
+            activeSession
+        });
+        const availableParticipantIds = new Set(this.participants.map((participant) => String(participant.id)));
+        [...this.selectedParticipantSeatIds].forEach((seatId) => {
+            if (!availableParticipantIds.has(seatId)) {
+                this.selectedParticipantSeatIds.delete(seatId);
+            }
+        });
+        const hasActiveFilters = Boolean(
+            this.participantFilters.session
+            || this.participantFilters.team
+            || this.participantFilters.role
+        );
+        const filteredSummary = filteredParticipants.length === 0 && this.participants.length > 0 && hasActiveFilters
+            ? 'No participants match the current filters.'
+            : formatWhiteCellParticipantSummary(filteredParticipants);
+        const activeSessionLabel = getWhiteCellSessionLabel(activeSession);
+        const summaryText = filteredSummary.endsWith('.') ? filteredSummary : `${filteredSummary}.`;
+
+        summary.textContent = activeSessionLabel
+            ? `${summaryText} Active session: ${activeSessionLabel}.`
+            : filteredSummary;
+
+        if (filteredParticipants.length === 0) {
+            container.innerHTML = hasActiveFilters
+                ? '<p class="text-sm text-gray-500">No participants match the selected filters.</p>'
+                : '<p class="text-sm text-gray-500">No Scribe, Facilitator, Notetaker, or White Cell seats are connected in this session yet.</p>';
+            return;
+        }
+
+        const selectedCount = this.selectedParticipantSeatIds.size;
+        container.innerHTML = `
+            <div data-participant-bulk-controls style="display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap;">
+                <span class="text-sm text-gray-500" data-selected-participant-count role="status" aria-live="polite">${selectedCount} selected</span>
+                <button
+                    type="button"
+                    class="btn btn-danger btn-sm"
+                    data-participant-action="remove-selected"
+                    ${selectedCount === 0 ? 'disabled' : ''}
+                >Remove selected${selectedCount > 0 ? ` (${selectedCount})` : ''}</button>
+            </div>
+        ` + filteredParticipants.map((participant) => {
+            const connectionBadge = createBadge({
+                text: isConnectedParticipant(participant) ? 'Connected' : 'Inactive',
+                variant: isConnectedParticipant(participant) ? 'success' : 'default',
+                size: 'sm',
+                rounded: true
+            }).outerHTML;
+            const roleBadge = createRoleBadge(participant.role || 'unknown').outerHTML;
+            const roleLabel = getRoleDisplayName(participant.role) || participant.role || 'Unknown role';
+            const lastActiveAt = participant.heartbeat_at || participant.last_seen || participant.joined_at;
+            const participantSessionLabel = getWhiteCellParticipantSessionLabel(participant, activeSession)
+                || getWhiteCellParticipantSessionFilterFallbackLabel(
+                    getWhiteCellParticipantSessionFilterValue(participant, activeSession)
+                );
+
+            return `
+                <div class="card card-bordered" style="padding: var(--space-3); margin-bottom: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-2);">
+                        <div>
+                            <label style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer;">
+                                <input
+                                    type="checkbox"
+                                    class="form-checkbox"
+                                    data-participant-select-seat-id="${this.escapeHtml(participant.id || '')}"
+                                    aria-label="Select ${this.escapeHtml(participant.display_name || 'participant')} for removal"
+                                    ${this.selectedParticipantSeatIds.has(String(participant.id)) ? 'checked' : ''}
+                                >
+                                <span class="text-sm font-semibold">${this.escapeHtml(participant.display_name || 'Unknown')}</span>
+                            </label>
+                            <p class="text-xs text-gray-500">${this.escapeHtml(roleLabel)}</p>
+                            ${participantSessionLabel ? `<p class="text-xs text-gray-500" style="margin-top: 2px;">Session: ${this.escapeHtml(participantSessionLabel)}</p>` : ''}
+                        </div>
+                        <div style="display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end;">
+                            ${connectionBadge}
+                            ${roleBadge}
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-2);">
+                        <p class="text-xs text-gray-500" style="margin: 0;">
+                            ${lastActiveAt ? `Last active ${formatRelativeTime(lastActiveAt)}` : 'Joined this session recently'}
+                        </p>
+                        <button
+                            type="button"
+                            class="btn btn-ghost btn-sm"
+                            data-participant-action="remove"
+                            data-participant-seat-id="${this.escapeHtml(participant.id || '')}"
+                            style="color: var(--color-alert);"
+                        >Remove seat</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    updateParticipantSelectionControls() {
+        const container = document.getElementById('participantsList');
+        if (!container) return;
+        const selectedCount = this.selectedParticipantSeatIds.size;
+        const status = container.querySelector('[data-selected-participant-count]');
+        const button = container.querySelector('button[data-participant-action="remove-selected"]');
+        if (status) {
+            status.textContent = `${selectedCount} selected`;
+        }
+        if (button) {
+            button.disabled = selectedCount === 0;
+            button.textContent = `Remove selected${selectedCount > 0 ? ` (${selectedCount})` : ''}`;
+        }
+    }
+
+    renderScribeDeckSettings() {
+        const summary = document.getElementById('scribeDeckSettingsSummary');
+        const container = document.getElementById('scribeDeckSettingsList');
+        if (!summary || !container) {
+            return;
+        }
+
+        summary.textContent = "Set the slide deck each team's facilitator presents. Confirm the assignment scope before sending; a regional view never changes a shared deck assignment.";
+        const previousScope = document.getElementById('scribeDeckScope-green');
+        const selectedScope = previousScope?.dataset?.sessionId === sessionStore.getSessionId()
+            ? previousScope.value : null;
+
+        container.innerHTML = TEAM_OPTIONS.map((team) => {
+            const assignment = this.scribeDeckAssignments[team.id] || buildDefaultScribeDeckAssignment(team);
+            const defaultDeckPath = buildDefaultScribeDeckPath(team.id);
+            const pathInputId = `scribeDeckPath-${team.id}`;
+            const labelInputId = `scribeDeckLabel-${team.id}`;
+            const uploadInputId = `scribeDeckUpload-${team.id}`;
+            const isUpload = assignment.deckSource === SCRIBE_DECK_SOURCE_UPLOAD;
+            const method = isUpload ? 'upload' : 'repo';
+            const sourceBadge = createBadge({
+                text: isUpload ? 'Browser upload' : 'Repo deck',
+                variant: isUpload ? 'warning' : 'info',
+                size: 'sm',
+                rounded: true
+            }).outerHTML;
+            const metaText = assignment.assignedAt
+                ? `Updated ${formatRelativeTime(assignment.assignedAt)}`
+                : 'Default deck';
+            const currentDeckLabel = isUpload && assignment.deckFileName
+                ? `${assignment.deckLabel} (${assignment.deckFileName})`
+                : assignment.deckLabel;
+            const pathValue = assignment.deckSource === SCRIBE_DECK_SOURCE_REPO
+                ? assignment.deckPath
+                : '';
+            const teamId = this.escapeHtml(team.id);
+            const scopeOptions = team.id === 'green' ? greenDeckAssignmentOptions(sessionStore.getSessionData?.() || {}) : [];
+            const scopeControl = scopeOptions.length ? `
+                <div class="form-group">
+                    <label class="form-label" for="scribeDeckScope-green">Green assignment scope</label>
+                    <select class="form-select" id="scribeDeckScope-green" data-session-id="${this.escapeHtml(sessionStore.getSessionId() || '')}">
+                        ${scopeOptions.length > 1 ? '<option value="">Choose regional deck recipients</option>' : ''}
+                        ${scopeOptions.map((option) => `<option value="${option.value}"${option.value === selectedScope ? ' selected' : ''}>${this.escapeHtml(option.label)}</option>`).join('')}
+                    </select>
+                    <p class="form-help">Shared sessions keep one deck for both views. Label Asia-Pacific and Europe reference sections inside that deck; these are not private regional assets.</p>
+                    <ul>${[...new Set(scopeOptions.flatMap((option) => option.roles))].map((role) => {
+                        const notice = this.communications.find((entry) => entry.to_role === role && getScribeDeckAssignmentDetails(entry));
+                        const current = notice && getScribeDeckAssignmentDetails(notice);
+                        return `<li>${this.escapeHtml(getRoleDisplayName(role))}: ${this.escapeHtml(current?.deckLabel || DEFAULT_SCRIBE_DECK_LABEL)}${current?.deckSource === SCRIBE_DECK_SOURCE_UPLOAD ? ' (browser-local upload)' : ''}</li>`;
+                    }).join('')}</ul>
+                </div>` : '';
+
+            return `
+                <section class="card card-bordered scribe-deck-card" data-deck-method="${method}">
+                    <div class="scribe-deck-card-head">
+                        <div>
+                            <p class="scribe-deck-team">${this.escapeHtml(team.label)} Facilitator</p>
+                            <p class="scribe-deck-deck">${this.escapeHtml(currentDeckLabel)}</p>
+                            <p class="scribe-deck-meta">${this.escapeHtml(metaText)}</p>
+                        </div>
+                        ${sourceBadge}
+                    </div>
+                    ${scopeControl}
+
+                    <div class="scribe-deck-toggle" role="group" aria-label="Deck source for ${this.escapeHtml(team.label)} Facilitator">
+                        <button type="button" data-scribe-deck-method="repo" data-scribe-deck-team="${teamId}" aria-pressed="${method === 'repo'}">Repo deck</button>
+                        <button type="button" data-scribe-deck-method="upload" data-scribe-deck-team="${teamId}" aria-pressed="${method === 'upload'}">Upload file</button>
+                    </div>
+
+                    <div class="form-group" style="margin: 0;">
+                        <label class="form-label" for="${labelInputId}">Display name</label>
+                        <input
+                            id="${labelInputId}"
+                            class="form-input"
+                            type="text"
+                            value="${this.escapeHtml(assignment.deckLabel)}"
+                            placeholder="${this.escapeHtml(DEFAULT_SCRIBE_DECK_LABEL)}"
+                            maxlength="120"
+                        >
+                    </div>
+
+                    <div class="scribe-deck-panel" data-method-panel="repo">
+                        <div class="form-group" style="margin: 0;">
+                            <label class="form-label" for="${pathInputId}">Deck path</label>
+                            <input
+                                id="${pathInputId}"
+                                class="form-input"
+                                type="text"
+                                value="${this.escapeHtml(pathValue)}"
+                                placeholder="${this.escapeHtml(defaultDeckPath)}"
+                                spellcheck="false"
+                                autocomplete="off"
+                            >
+                            <p class="form-help">Bare filenames resolve in <code>decks/${teamId}/</code>. Works across devices.</p>
+                        </div>
+                        <div class="card-actions" style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" data-scribe-deck-action="load" data-scribe-deck-team="${teamId}">Load deck</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-scribe-deck-action="reset" data-scribe-deck-team="${teamId}">Use default</button>
+                        </div>
+                    </div>
+
+                    <div class="scribe-deck-panel" data-method-panel="upload">
+                        <div class="form-group" style="margin: 0;">
+                            <label class="form-label" for="${uploadInputId}">Deck HTML file</label>
+                            <input
+                                id="${uploadInputId}"
+                                class="form-input"
+                                type="file"
+                                accept=".html,text/html"
+                            >
+                            <p class="form-help">Cached in this browser profile only. The notice does not transfer the file. A missing or inaccessible upload shows the default deck with a warning; repository decks work across browsers.</p>
+                        </div>
+                        <div class="card-actions" style="display: flex; gap: var(--space-2); flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" data-scribe-deck-action="upload" data-scribe-deck-team="${teamId}">Upload deck</button>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }).join('');
+    }
+
+    async validateScribeDeckPath(deckPath) {
+        parseScribeDeckHtml(await fetchScribeDeckHtmlWithTimeout(deckPath));
+    }
+
+    async handleScribeDeckAssignmentSubmit(teamId, {
+        useDefault = false,
+        useUpload = false
+    } = {}) {
+        const team = TEAM_OPTIONS.find((entry) => entry.id === teamId);
+        if (!team) {
+            showToast({ message: 'Unknown team selected for the facilitator deck.', type: 'error' });
+            return;
+        }
+
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            showToast({ message: 'No session selected', type: 'error' });
+            return;
+        }
+
+        const pathInput = document.getElementById(`scribeDeckPath-${teamId}`);
+        const labelInput = document.getElementById(`scribeDeckLabel-${teamId}`);
+        const uploadInput = document.getElementById(`scribeDeckUpload-${teamId}`);
+        const rawDeckPath = useDefault
+            ? buildDefaultScribeDeckPath(team.id)
+            : pathInput?.value || '';
+        const uploadedFile = useUpload
+            ? uploadInput?.files?.[0] || null
+            : null;
+
+        if (useUpload && !uploadedFile) {
+            showToast({ message: 'Choose a deck HTML file to upload.', type: 'error' });
+            return;
+        }
+
+        if (!useUpload && !useDefault && !String(rawDeckPath).trim()) {
+            showToast({ message: 'Deck path is required.', type: 'error' });
+            return;
+        }
+
+        let deckSource = SCRIBE_DECK_SOURCE_REPO;
+        let deckPath = null;
+        let deckStorageKey = null;
+        let deckFileName = null;
+        let deckLabel = DEFAULT_SCRIBE_DECK_LABEL;
+
+        if (useUpload) {
+            deckSource = SCRIBE_DECK_SOURCE_UPLOAD;
+            deckFileName = normalizeUploadedScribeDeckFileName(uploadedFile?.name || '');
+            deckStorageKey = buildUploadedScribeDeckStorageKey(sessionId, team.id);
+            deckLabel = normalizeUploadedScribeDeckLabel(labelInput?.value || '', deckFileName);
+        } else {
+            try {
+                deckPath = normalizeScribeDeckPath(rawDeckPath || '', {
+                    teamId: team.id
+                });
+            } catch (error) {
+                showToast({
+                    message: getUserMessage(error, {
+                        fallback: 'Deck path is invalid. Use an HTML deck path inside this app.'
+                    }),
+                    type: 'error'
+                });
+                return;
+            }
+
+            deckLabel = useDefault
+                ? DEFAULT_SCRIBE_DECK_LABEL
+                : normalizeScribeDeckLabel(labelInput?.value || '', deckPath, {
+                    teamId: team.id
+                });
+        }
+
+        const loader = showLoader({
+            message: useUpload
+                ? `Uploading ${team.label} facilitator slides...`
+                : useDefault
+                ? `Restoring ${team.label} facilitator deck...`
+                : `Loading ${team.label} facilitator deck...`
+        });
+
+        try {
+            const session = sessionStore.getSessionData?.() || {};
+            const regionalGreen = team.id === 'green' && regionalRecipientOptions(session).length > 0;
+            const sharedGreen = regionalGreen && (session.greenSeatModel || session.green_seat_model) === 'shared_facilitator_v1';
+            const recipients = team.id === 'green'
+                ? greenDeckAssignmentRoles(session, document.getElementById('scribeDeckScope-green')?.value
+                    ?? (regionalGreen ? '' : 'unified'))
+                : [buildTeamRole(team.id, ROLE_SURFACES.SCRIBE)];
+            const slides = deckSource === SCRIBE_DECK_SOURCE_UPLOAD ? parseScribeDeckHtml(await uploadedFile.text()) : null;
+            if (!slides) await this.validateScribeDeckPath(deckPath);
+            for (const recipientRole of recipients) {
+                const recipientLabel = regionalGreen ? getRoleDisplayName(recipientRole) : `${team.label} Facilitator`;
+                if (slides) {
+                    if (sharedGreen) {
+                        const seat = participantsStore.getActiveByRole('green_shared_facilitator')[0];
+                        if (!seat?.id) throw new Error('The shared Facilitator must join before an uploaded deck can be assigned.');
+                        deckStorageKey = getSeatDeckStorageKey({ sessionId, teamId: 'green', role: recipientRole,
+                            greenSeatModel: 'shared_facilitator_v1', participantId: seat.id });
+                    } else if (regionalGreen) deckStorageKey = buildUploadedScribeDeckStorageKey(sessionId, 'green', parseTeamRole(recipientRole).delegationId);
+                    await saveUploadedScribeDeck({
+                        storageKey: deckStorageKey,
+                        sessionId,
+                        teamId: team.id,
+                        deckLabel,
+                        fileName: deckFileName,
+                        slides
+                    });
+                }
+                const recipientMetadata = buildWhiteCellRecipientMetadata(recipientRole, {
+                    content_kind: SCRIBE_DECK_ASSIGNMENT_CONTENT_KIND,
+                    deck_label: deckLabel,
+                    deck_source: deckSource,
+                    ...(deckSource === SCRIBE_DECK_SOURCE_UPLOAD
+                        ? {
+                            deck_storage_key: deckStorageKey,
+                            deck_file_name: deckFileName
+                        }
+                        : {
+                            deck_path: deckPath
+                        }),
+                    source: WHITE_CELL_SCRIBE_DECK_ASSIGNMENT_SOURCE,
+                    actor_role: this.getTimelineActorRole()
+                });
+                const content = buildScribeDeckAssignmentCommunicationContent({
+                    teamLabel: team.label,
+                    recipientLabel,
+                    deckLabel,
+                    deckPath,
+                    deckSource,
+                    deckFileName
+                });
+                const communication = await database.createCommunication({
+                    session_id: sessionId,
+                    from_role: 'white_cell',
+                    to_role: recipientRole,
+                    type: 'GUIDANCE',
+                    content,
+                    metadata: recipientMetadata
+                });
+                communicationsStore.updateFromServer('INSERT', {
+                    ...communication,
+                    session_id: sessionId,
+                    from_role: 'white_cell',
+                    to_role: recipientRole,
+                    type: 'GUIDANCE',
+                    content,
+                    metadata: communication.metadata || recipientMetadata,
+                    created_at: communication?.created_at || new Date().toISOString()
+                });
+
+                const gameState = this.getCurrentGameState();
+                const timelineEvent = await database.createTimelineEvent({
+                    session_id: sessionId,
+                    type: 'GUIDANCE',
+                    content: deckSource === SCRIBE_DECK_SOURCE_UPLOAD
+                        ? `White Cell uploaded ${deckLabel} to ${recipientLabel}`
+                        : `White Cell loaded ${deckLabel} into ${recipientLabel}`,
+                    metadata: {
+                        role: this.getTimelineActorRole(),
+                        ...recipientMetadata,
+                        ...communication.metadata,
+                        ...(communication.recipient_scope ? { communication_id: communication.id } : {})
+                    },
+                    team: 'white_cell',
+                    move: gameState.move ?? 1,
+                    phase: gameState.phase ?? 1
+                });
+                timelineStore.updateFromServer('INSERT', {
+                    ...timelineEvent,
+                    session_id: sessionId,
+                    type: 'GUIDANCE',
+                    content: deckSource === SCRIBE_DECK_SOURCE_UPLOAD
+                        ? `White Cell uploaded ${deckLabel} to ${recipientLabel}`
+                        : `White Cell loaded ${deckLabel} into ${recipientLabel}`,
+                    metadata: {
+                        role: this.getTimelineActorRole(),
+                        ...recipientMetadata,
+                        ...communication.metadata,
+                        ...(communication.recipient_scope ? { communication_id: communication.id } : {})
+                    },
+                    team: 'white_cell',
+                    move: gameState.move ?? 1,
+                    phase: gameState.phase ?? 1,
+                    created_at: timelineEvent?.created_at || new Date().toISOString()
+                });
+            }
+
+            showToast({
+                message: useUpload
+                    ? `${team.label} facilitator slides uploaded.`
+                    : useDefault
+                    ? `${team.label} facilitator deck reset to default.`
+                    : `${team.label} facilitator deck updated.`,
+                type: 'success'
+            });
+        } catch (err) {
+            logger.error('Failed to assign facilitator deck:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to load the facilitator deck. Check the deck source and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async handleRemoveParticipantSeat(seatId) {
+        return this.handleRemoveParticipantSeats(seatId ? [seatId] : []);
+    }
+
+    async handleRemoveParticipantSeats(seatIds = []) {
+        const selectedParticipants = (Array.isArray(seatIds) ? seatIds : [])
+            .map((seatId) => this.participants.find((entry) => entry.id === seatId))
+            .filter(Boolean);
+        if (selectedParticipants.length === 0) return;
+        const isBulkRemoval = selectedParticipants.length > 1;
+        const displayName = selectedParticipants[0]?.display_name || 'this participant';
+
+        const confirmed = await confirmModal({
+            title: isBulkRemoval ? 'Remove seats' : 'Remove seat',
+            message: isBulkRemoval
+                ? `Remove ${selectedParticipants.length} selected participants from the session? Their seats will become available for other participants to claim.`
+                : `Remove ${displayName} from the session? Their seat will become available for another participant to claim.`,
+            confirmLabel: isBulkRemoval ? `Remove ${selectedParticipants.length} seats` : 'Remove',
+            variant: 'danger'
+        });
+        if (!confirmed) return;
+
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            showToast({ message: 'No session selected', type: 'error' });
+            return;
+        }
+
+        const loader = showLoader({
+            message: isBulkRemoval ? `Removing ${selectedParticipants.length} seats...` : 'Removing seat...'
+        });
+        try {
+            const outcomes = await Promise.all(selectedParticipants.map(async (participant) => {
+                try {
+                    await database.removeSessionParticipant(sessionId, participant.id);
+                    participantsStore.updateFromServer('DELETE', { id: participant.id, session_id: sessionId });
+                    return { participant, removed: true };
+                } catch (error) {
+                    logger.error('Failed to remove seat:', error);
+                    return { participant, removed: false, error };
+                }
+            }));
+            const removed = outcomes.filter((outcome) => outcome.removed);
+            const failed = outcomes.filter((outcome) => !outcome.removed);
+            removed.forEach((outcome) => this.selectedParticipantSeatIds.delete(String(outcome.participant.id)));
+
+            if (failed.length === 0) {
+                showToast({
+                    message: isBulkRemoval ? `${removed.length} seats removed` : 'Seat removed',
+                    type: 'success'
+                });
+            } else if (removed.length > 0) {
+                showToast({
+                    message: `${removed.length} seat${removed.length === 1 ? '' : 's'} removed; ${failed.length} could not be removed and remain selected for retry.`,
+                    type: 'warning'
+                });
+            } else {
+                showToast({
+                    message: getUserMessage(failed[0]?.error, {
+                        fallback: 'Failed to remove seats. Refresh the roster and try again.'
+                    }),
+                    type: 'error'
+                });
+            }
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async loadSessionsAdmin() {
+        await this.loadResearchExportRuntime();
+        const container = document.getElementById('sessionsList');
+        const summary = document.getElementById('sessionsSummary');
+        if (!container) return;
+
+        container.innerHTML = '<p class="text-sm text-gray-500">Loading sessions...</p>';
+
+        try {
+            const sessions = await database.getActiveSessions();
+            this.adminSessions = Array.isArray(sessions) ? sessions : [];
+            if (summary) {
+                summary.textContent = this.adminSessions.length === 0
+                    ? 'No sessions found.'
+                    : `${this.adminSessions.length} session${this.adminSessions.length === 1 ? '' : 's'} on record.`;
+            }
+            this.renderSessionsAdmin();
+        } catch (err) {
+            logger.error('Failed to load sessions:', err);
+            container.innerHTML = '<p class="text-sm" style="color: var(--color-alert);">Failed to load sessions.</p>';
+        }
+    }
+
+    renderSessionsAdmin() {
+        const container = document.getElementById('sessionsList');
+        if (!container) return;
+
+        const activeSessionId = sessionStore.getSessionId();
+        const header = `
+            <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap;">
+                <button type="button" class="btn btn-primary btn-sm" data-session-action="create">Create Session</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-session-action="refresh">Refresh</button>
+            </div>
+        `;
+
+        if (!this.adminSessions || this.adminSessions.length === 0) {
+            container.innerHTML = `${header}<p class="text-sm text-gray-500">No sessions yet. Click "Create Session" to get started.</p>`;
+            return;
+        }
+
+        const rows = this.adminSessions.map((session) => {
+            const isActive = session.id === activeSessionId;
+            const resolvedCode = getWhiteCellSessionCode(session);
+            const code = resolvedCode === 'N/A' ? '-' : resolvedCode;
+            const status = session.status || 'unknown';
+            return `
+                <div class="card card-bordered" style="padding: var(--space-3); margin-bottom: var(--space-2); ${isActive ? 'border-left: 3px solid var(--color-primary-500);' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3);">
+                        <div>
+                            <p class="text-sm font-semibold" style="margin: 0;">${this.escapeHtml(session.name || 'Unnamed session')}${isActive ? ' <span class="text-xs" style="color: var(--color-primary-600); text-transform: uppercase; letter-spacing: 0.05em; margin-left: var(--space-2);">Active</span>' : ''}</p>
+                            <p class="text-xs text-gray-500" style="margin: 2px 0 0;">Code: ${this.escapeHtml(code)} | Status: ${this.escapeHtml(status)}</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn btn-ghost btn-sm"
+                            data-session-action="archive"
+                            data-session-id="${this.escapeHtml(session.id)}"
+                        >Archive</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `${header}${rows}`;
+    }
+
+    showCreateSessionAdminModal() {
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <form id="createSessionAdminForm" novalidate>
+                <div class="form-group">
+                    <label class="form-label" for="newSessionName">Session Name *</label>
+                    <input id="newSessionName" class="form-input" type="text" placeholder="e.g. Spring 2026 Exercise" maxlength="120">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="newSessionCode">Join Code (optional)</label>
+                    <input id="newSessionCode" class="form-input" type="text" placeholder="Leave blank to auto-generate" maxlength="${SESSION_CODE_MAX_LENGTH}">
+                    <p class="form-hint">Participants enter this to join from the landing page.</p>
+                </div>
+            </form>
+        `;
+
+        const modalRef = { current: null };
+        modalRef.current = showModal({
+            title: 'Create Session',
+            content,
+            size: 'md',
+            buttons: [
+                { label: 'Cancel', variant: 'secondary', onClick: () => {} },
+                {
+                    label: 'Create',
+                    variant: 'primary',
+                    onClick: () => {
+                        const name = content.querySelector('#newSessionName')?.value?.trim();
+                        const code = content.querySelector('#newSessionCode')?.value?.trim();
+                        if (!name) {
+                            showToast({ message: 'Session name is required.', type: 'error' });
+                            return false;
+                        }
+                        this.submitCreateSessionAdmin(modalRef.current, { name, code }).catch((err) => {
+                            logger.error('Failed to create session:', err);
+                        });
+                        return false;
+                    }
+                }
+            ]
+        });
+    }
+
+    async submitCreateSessionAdmin(modal, { name, code }) {
+        const loader = showLoader({ message: 'Creating session...' });
+        try {
+            const payload = { name, status: 'active' };
+            if (code) payload.session_code = code;
+            const session = await database.createSession(payload);
+            showToast({ message: `Session "${session.name || name}" created.`, type: 'success' });
+            modal?.close();
+            await this.loadSessionsAdmin();
+        } catch (err) {
+            logger.error('Failed to create session:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to create session. Check the session name and join code, then try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async handleArchiveSessionAdmin(sessionId) {
+        const session = (this.adminSessions || []).find((entry) => entry.id === sessionId);
+        const confirmed = await confirmModal(getWhiteCellArchiveSessionConfirmationOptions(session));
+        if (!confirmed) return;
+
+        showLoader({ message: 'Archiving session...' });
+        try {
+            await database.archiveSession(sessionId);
+            showToast({ message: 'Session archived. Its audit evidence was retained.', type: 'success' });
+            await this.loadSessionsAdmin();
+        } catch (err) {
+            logger.error('Failed to archive session:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to archive session. Export its research archive, then refresh and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    async loadResearchExportRuntime() {
+        try {
+            const captureModePromise = typeof database.getResearchCaptureMode === 'function'
+                ? database.getResearchCaptureMode().catch(() => 'research')
+                : Promise.resolve('research');
+            const buildHashPromise = typeof database.getResearchBuildHash === 'function'
+                ? database.getResearchBuildHash().catch(() => null)
+                : Promise.resolve(null);
+            const [captureMode, softwareBuildHash] = await Promise.all([
+                captureModePromise,
+                buildHashPromise
+            ]);
+
+            this.researchCaptureMode = captureMode === 'standard' ? 'standard' : 'research';
+            this.researchBuildHash = softwareBuildHash || null;
+        } catch (error) {
+            logger.warn('Failed to load research export runtime config; using research mode.', error);
+            this.researchCaptureMode = 'research';
+            this.researchBuildHash = null;
+        }
+
+        this.renderExportDataAdmin();
+    }
+
+    getResearchNotesAppendixEnabled() {
+        return document.getElementById('whiteCellExportResearchIncludeNotes')?.checked === true;
+    }
+
+    getResearchExportVersion(sessionId) {
+        if (!sessionId || typeof window === 'undefined') {
+            return 1;
+        }
+
+        try {
+            const rawValue = window.localStorage?.getItem('esg_research_export_versions');
+            const versionMap = rawValue ? JSON.parse(rawValue) : {};
+            const nextVersion = Number(versionMap?.[sessionId] || 0) + 1;
+
+            window.localStorage?.setItem('esg_research_export_versions', JSON.stringify({
+                ...versionMap,
+                [sessionId]: nextVersion
+            }));
+
+            return nextVersion;
+        } catch (error) {
+            logger.warn('Failed to persist research export version; defaulting to 1.', error);
+            return 1;
+        }
+    }
+
+    resolveResearchExporterPseudonym() {
+        const operatorAuth = sessionStore.getOperatorAuth?.();
+        const roleLabel = this.isLeadOperator() ? 'lead' : 'support';
+
+        if (operatorAuth?.grantId) {
+            return `white_cell_${roleLabel}-${String(operatorAuth.grantId).slice(0, 8)}`;
+        }
+
+        return `white_cell_${roleLabel}_operator`;
+    }
+
+    renderExportDataAdmin() {
+        const container = document.getElementById('exportDataList');
+        if (!container) return;
+
+        const includeNotesAppendix = this.getResearchNotesAppendixEnabled();
+        const sessionData = sessionStore.getSessionData?.() || null;
+        const selectionState = buildWhiteCellExportSelectionState({
+            sessionId: sessionStore.getSessionId(),
+            sessionName: sessionData?.name || null,
+            captureMode: this.researchCaptureMode
+        });
+        const legacyButtons = getWhiteCellAdminExportButtonConfig()
+            .filter(({ availability }) => availability === 'legacy')
+            .map(({ action, className, label }) => (
+                `<button type="button" class="${className}" data-export-type="${action}" ${selectionState.disabled ? 'disabled' : ''}>${label}</button>`
+            ))
+            .join('');
+        const researchButtons = getWhiteCellAdminExportButtonConfig()
+            .filter(({ availability }) => availability === 'research')
+            .map(({ action, className, label }) => (
+                `<button type="button" class="${className}" data-export-type="${action}" ${selectionState.researchDisabled ? 'disabled' : ''}>${label}</button>`
+            ))
+            .join('');
+
+        container.innerHTML = `
+            <div style="display: grid; gap: var(--space-3);">
+                <p class="text-xs text-gray-500" id="whiteCellExportSelectionState">${this.escapeHtml(selectionState.message)}</p>
+                <div class="card card-bordered" style="padding: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3);">
+                        <div>
+                            <h4 class="text-sm font-semibold" style="margin: 0 0 var(--space-1);">Legacy Session Bundle</h4>
+                            <p class="text-xs text-gray-500" style="margin: 0;">Exports are scoped to the currently active session.</p>
+                        </div>
+                    </div>
+                    <div style="display: grid; gap: var(--space-2);">
+                        ${legacyButtons}
+                    </div>
+                </div>
+                <div class="card card-bordered" style="padding: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3);">
+                        <div>
+                            <h4 class="text-sm font-semibold" style="margin: 0 0 var(--space-1);">Research Bundle</h4>
+                            <p class="text-xs text-gray-500" style="margin: 0;">White Cell can export the same research ZIP and printable report as Game Master when backend research capture mode is enabled.</p>
+                        </div>
+                        <span class="text-xs text-gray-500" aria-live="polite">${selectionState.captureMode === 'research' ? 'Research mode' : 'Standard mode'}</span>
+                    </div>
+                    <label for="whiteCellExportResearchIncludeNotes" class="switch-field" style="margin-bottom: var(--space-3);">
+                        <span class="switch-field-label">Include notes appendix in <code>report.html</code></span>
+                        <span class="switch">
+                            <input type="checkbox" id="whiteCellExportResearchIncludeNotes" ${selectionState.researchDisabled ? 'disabled' : ''}>
+                            <span class="switch-track"></span>
+                        </span>
+                    </label>
+                    <div style="display: grid; gap: var(--space-2);">
+                        ${researchButtons}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const notesToggle = document.getElementById('whiteCellExportResearchIncludeNotes');
+        if (notesToggle && includeNotesAppendix && !selectionState.researchDisabled) {
+            notesToggle.checked = true;
+        }
+    }
+
+    async handleExportAdmin(exportType) {
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            showToast({ message: 'No active session selected.', type: 'error' });
+            return;
+        }
+
+        const exportConfig = getWhiteCellAdminExportButtonConfig().find((config) => config.action === exportType);
+        if (!exportConfig) {
+            showToast({ message: `Unknown export type: ${exportType}`, type: 'error' });
+            return;
+        }
+
+        if (exportConfig.availability === 'research' && this.researchCaptureMode !== 'research') {
+            showToast({
+                message: 'Research archive export requires research capture mode on the backend.',
+                type: 'warning'
+            });
+            return;
+        }
+
+        const loader = showLoader({ message: 'Preparing export...' });
+        try {
+            if (exportConfig.availability === 'research') {
+                const researchBundle = await database.fetchResearchExportBundle(sessionId);
+                const researchExport = await buildResearchExportBundle(researchBundle, {
+                    captureMode: this.researchCaptureMode,
+                    generatedByPseudonym: this.resolveResearchExporterPseudonym(),
+                    exportVersion: this.getResearchExportVersion(sessionId),
+                    includeNotesAppendix: this.getResearchNotesAppendixEnabled(),
+                    softwareBuildHash: this.researchBuildHash || researchBundle.softwareBuildHash || null
+                });
+
+                if (exportType === 'research-archive') {
+                    await downloadResearchExportArchive(researchExport, `${researchExport.rootFolderName}.zip`);
+                } else {
+                    await openResearchPrintWindow(researchExport.reportHtml, {
+                        title: `${researchBundle.session?.name || 'Research report'}`
+                    });
+                }
+            } else {
+                const bundle = await database.fetchSessionBundle(sessionId);
+
+                if (exportType === 'actions-csv') {
+                    downloadCsv(
+                        exportSessionActionsCsv(bundle.actions),
+                        `session-${sessionId.slice(0, 8)}-actions.csv`
+                    );
+                } else if (exportType === 'rfis-csv') {
+                    downloadCsv(
+                        exportSessionRequestsCsv(bundle.requests),
+                        `session-${sessionId.slice(0, 8)}-rfis.csv`
+                    );
+                } else if (exportType === 'timeline-csv') {
+                    downloadCsv(
+                        exportSessionTimelineCsv(bundle.timeline),
+                        `session-${sessionId.slice(0, 8)}-timeline.csv`
+                    );
+                } else if (exportType === 'participants-csv') {
+                    downloadCsv(
+                        exportSessionParticipantsCsv(bundle.participants),
+                        `session-${sessionId.slice(0, 8)}-participants.csv`
+                    );
+                } else if (exportType === 'session-json') {
+                    const payload = buildJsonExportPayload(bundle);
+                    downloadJsonData(payload, `session-${sessionId.slice(0, 8)}.json`);
+                }
+            }
+            showToast({ message: exportConfig.successMessage, type: 'success' });
+        } catch (err) {
+            logger.error('Failed to export data:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to export data. Refresh the selected session and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            hideLoader();
+        }
+    }
+
+    renderTribeStreetJournalList() {
+        const container = document.getElementById('tribeStreetJournalList');
+        if (!container) return;
+        this.renderTribeStreetJournalEmbed();
+
+        if (this.tribeStreetJournalEntries.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">No team captures are available for review yet.</p>';
+            return;
+        }
+
+        const visibleEntries = this.tribeStreetJournalEntries.slice(0, WHITE_CELL_TRIBE_STREET_JOURNAL_RENDER_LIMIT);
+        const hiddenCount = Math.max(0, this.tribeStreetJournalEntries.length - visibleEntries.length);
+
+        container.innerHTML = `
+            ${hiddenCount ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the first ${WHITE_CELL_TRIBE_STREET_JOURNAL_RENDER_LIMIT} of ${this.tribeStreetJournalEntries.length} team captures.</p>` : ''}
+            ${visibleEntries.map((entry) => {
+            const eventType = entry.type || entry.event_type || 'NOTE';
+            const badgeVariant = {
+                NOTE: 'default',
+                MOMENT: 'warning',
+                QUOTE: 'info'
+            }[eventType] || 'default';
+            const actorLabel = entry.metadata?.actor || getRoleDisplayName(entry.metadata?.role) || 'Team capture';
+            const noteScope = entry?.metadata?.note_scope || null;
+            const noteScopeLabel = getNotetakerTimelineScopeLabel(noteScope);
+            const noteDetails = getNotetakerSaveTimelineDetailItems(entry);
+            const noteDetailsMarkup = isNotetakerSaveTimelineEvent(entry) && noteDetails.length > 0
+                ? `
+                    <div class="card card-bordered" style="margin-top: var(--space-3); padding: var(--space-3);">
+                        <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-2);">${this.escapeHtml(noteScopeLabel)} snapshot</p>
+                        <dl style="display: grid; gap: var(--space-2); margin: 0;">
+                            ${noteDetails.map((detail) => `
+                                <div>
+                                    <dt class="text-xs text-gray-500" style="margin: 0;">${this.escapeHtml(detail.label)}</dt>
+                                    <dd class="text-sm" style="margin: 0;">${this.escapeHtml(detail.value)}</dd>
+                                </div>
+                            `).join('')}
+                        </dl>
+                    </div>
+                `
+                : '';
+            const scopeBadgeMarkup = isNotetakerSaveTimelineEvent(entry)
+                ? createBadge({
+                    text: `${noteScopeLabel.toUpperCase()} SNAPSHOT`,
+                    variant: 'info',
+                    size: 'sm',
+                    rounded: true
+                }).outerHTML
+                : '';
+
+            return `
+                <div class="card card-bordered" style="padding: var(--space-3); margin-bottom: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-2);">
+                        <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+                            ${createBadge({ text: eventType, variant: badgeVariant, size: 'sm', rounded: true }).outerHTML}
+                            ${scopeBadgeMarkup}
+                            ${createBadge({ text: this.formatTeamLabel(entry.team), variant: 'primary', size: 'sm', rounded: true }).outerHTML}
+                            <span class="text-xs text-gray-500">${this.escapeHtml(actorLabel)}</span>
+                        </div>
+                        <span class="text-xs text-gray-400">${formatDateTime(entry.created_at)}</span>
+                    </div>
+                    <p class="text-sm">${this.escapeHtml(entry.content || entry.description || '')}</p>
+                    ${noteDetailsMarkup}
+                    <div class="card-actions" style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-3);">
+                        <span class="text-xs text-gray-500">Move ${this.escapeHtml(String(entry.move || 1))} | Phase ${this.escapeHtml(String(entry.phase || 1))}</span>
+                        <button
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            data-journal-action="send-update"
+                            data-source-event-id="${this.escapeHtml(entry.id || '')}"
+                        >Send Update</button>
+                    </div>
+                </div>
+            `;
+        }).join('')}
+        `;
+    }
+
+    renderTribeStreetJournalEmbed() {
+        const container = document.getElementById('tribeStreetJournalEmbed');
+        if (!container || container.innerHTML?.includes(TRIBE_STREET_JOURNAL_EMBED_URL)) return;
+
+        container.innerHTML = createTribeStreetJournalEmbedMarkup({
+            title: 'White Cell Tribe Street Journal live site'
+        });
+    }
+
+    renderVerbaAiList() {
+        const container = document.getElementById('verbaAiList');
+        if (!container) return;
+
+        if (this.verbaAiUpdates.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">No Verba AI population sentiment updates have been sent yet.</p>';
+            return;
+        }
+
+        const visibleUpdates = this.verbaAiUpdates.slice(0, WHITE_CELL_VERBA_AI_RENDER_LIMIT);
+        const hiddenCount = Math.max(0, this.verbaAiUpdates.length - visibleUpdates.length);
+
+        container.innerHTML = `
+            ${hiddenCount ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the first ${WHITE_CELL_VERBA_AI_RENDER_LIMIT} of ${this.verbaAiUpdates.length} Verba AI updates.</p>` : ''}
+            ${visibleUpdates.map((communication) => `
+            <div class="card card-bordered" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--color-success);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-2);">
+                    <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
+                        ${createBadge({ text: 'VERBA AI', variant: 'success', size: 'sm', rounded: true }).outerHTML}
+                        <span class="text-xs text-gray-500">${this.escapeHtml(this.formatCommunicationRecipient(communication.to_role))}</span>
+                    </div>
+                    <span class="text-xs text-gray-400">${formatDateTime(communication.created_at)}</span>
+                </div>
+                <p class="text-sm">${this.escapeHtml(communication.content || '')}</p>
+            </div>
+        `).join('')}
+        `;
+    }
+
+    renderCommunicationHistory() {
+        const container = document.getElementById('commHistory');
+        if (!container) return;
+
+        const communications = regionalView(container, this.communications, () => this.renderCommunicationHistory(),
+            { sessionId: sessionStore.getSessionId() });
+        if (communications.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500">No communications have been exchanged yet.</p>';
+            return;
+        }
+
+        const visibleCommunications = communications.slice(0, WHITE_CELL_COMMUNICATION_RENDER_LIMIT);
+        const hiddenCount = Math.max(0, communications.length - visibleCommunications.length);
+
+        container.innerHTML = `
+            ${hiddenCount ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the first ${WHITE_CELL_COMMUNICATION_RENDER_LIMIT} of ${this.communications.length} communications.</p>` : ''}
+            ${visibleCommunications.map((communication) => {
+            const isOutbound = communication.from_role === 'white_cell';
+            const thread = getProposalThreadMetadata(communication);
+            const isNegotiationRequest = isProposalNegotiationRequest(communication);
+            const counterpartLabel = isOutbound
+                ? `To ${this.formatCommunicationRecipient(communication.to_role)}`
+                : `From ${this.formatCommunicationRecipient(communication.from_role)}`;
+            const isNew = this.newCommunicationIds.has(String(communication.id));
+
+            return `
+                <div class="card card-bordered" data-communication-id="${this.escapeHtml(String(communication.id || ''))}" style="padding: var(--space-4); margin-bottom: var(--space-3);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-2);">
+                        <div>
+                            <p class="text-sm font-semibold">${this.escapeHtml(counterpartLabel)}</p>
+                            <p class="text-xs">${this.escapeHtml(regionalAttribution(communication))}</p>
+                            <p class="text-xs text-gray-500">${formatRelativeTime(communication.created_at)}</p>
+                        </div>
+                        ${createBadge({ text: thread ? `THREAD ROUND ${thread.roundNumber}` : (isNegotiationRequest ? 'NEGOTIATION REQUESTED' : (communication.type || 'MESSAGE')), size: 'sm' }).outerHTML}
+                        ${isNew ? createBadge({ text: 'NEW', variant: 'warning', size: 'sm', rounded: true }).outerHTML : ''}
+                    </div>
+                    ${thread ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">${this.escapeHtml(this.formatProposalRecipientTeamLabel(thread.recipientTeam))} thread &middot; ${this.escapeHtml(thread.messageType.replace(/_/g, ' '))}</p>` : (isNegotiationRequest ? '<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-1);">Negotiation terms</p>' : '')}
+                    <p class="text-sm">${this.escapeHtml(communication.content || '')}</p>
+                    ${isNew ? `<button type="button" class="btn btn-secondary btn-sm" data-open-communication-id="${this.escapeHtml(String(communication.id))}">Open message</button>` : ''}
+                </div>
+            `;
+        }).join('')}
+        `;
+
+        container.querySelectorAll('[data-open-communication-id]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const communicationId = button.dataset.openCommunicationId || '';
+                this.newCommunicationIds.delete(communicationId);
+                this.durableNotifications?.markDestinationRead({ recordId: communicationId });
+                this.renderCommunicationHistory();
+                document.querySelector?.('#communicationsSection h2, #communicationsSection h3')?.focus?.();
+            });
+        });
+    }
+
+    formatCommunicationRecipient(recipient) {
+        const regional = regionalRecipientOptions(sessionStore.getState?.() || {}).find((option) => option.value === recipient);
+        if (regional) return regional.label;
+        if (recipient === WHITE_CELL_ALL_TEAMS_RECIPIENT) {
+            return 'All Teams';
+        }
+
+        if (recipient === 'white_cell') {
+            return 'White Cell';
+        }
+
+        if (TEAM_LABELS[recipient]) {
+            return getWhiteCellTeamLabel(recipient);
+        }
+
+        return getRoleDisplayName(recipient) || recipient || 'Unknown recipient';
+    }
+
+    syncTimelineFromStore() {
+        this.timelineEvents = timelineStore.getAll();
+        this.tribeStreetJournalEntries = this.timelineEvents
+            .filter((event) => isTeamCaptureTimelineEvent(event) || isNotetakerSaveTimelineEvent(event))
+            .sort((a, b) => new Date(b.created_at || b.updated_at || 0) - new Date(a.created_at || a.updated_at || 0));
+        this.configureTimelineFilters();
+        this.renderTimeline();
+        this.renderTribeStreetJournalList();
+    }
+
+    configureTimelineFilters() {
+        const teamSelect = document.getElementById('timelineTeamFilter');
+        const roleSelect = document.getElementById('timelineRoleFilter');
+        const moveSelect = document.getElementById('timelineMoveFilter');
+        const activityTypeSelect = document.getElementById('timelineActivityTypeFilter');
+        if (!teamSelect || !roleSelect || !moveSelect || !activityTypeSelect) return;
+
+        const {
+            teamOptions,
+            roleOptions,
+            moveOptions,
+            activityTypeOptions
+        } = buildWhiteCellTimelineFilterOptions(this.timelineEvents);
+        this.populateFilterSelect(teamSelect, teamOptions, this.timelineFilters.team);
+        this.populateFilterSelect(roleSelect, roleOptions, this.timelineFilters.role);
+        this.populateFilterSelect(moveSelect, moveOptions, this.timelineFilters.move);
+        this.populateFilterSelect(activityTypeSelect, activityTypeOptions, this.timelineFilters.activityType);
+        this.timelineFilters.team = teamSelect.value || null;
+        this.timelineFilters.role = roleSelect.value || null;
+        this.timelineFilters.move = moveSelect.value || null;
+        this.timelineFilters.activityType = activityTypeSelect.value || null;
+    }
+
+    populateFilterSelect(selectElement, options, currentValue) {
+        if (!selectElement) {
+            return;
+        }
+
+        const normalizedValue = currentValue || '';
+        selectElement.innerHTML = options.map((option) => (
+            `<option value="${this.escapeHtml(option.value)}">${this.escapeHtml(option.label)}</option>`
+        )).join('');
+
+        selectElement.value = options.some((option) => option.value === normalizedValue)
+            ? normalizedValue
+            : '';
+    }
+
+    renderTimeline() {
+        const container = document.getElementById('timelineList');
+        if (!container) return;
+
+        const filteredEvents = filterWhiteCellTimelineEvents(this.timelineEvents, this.timelineFilters);
+        const hasActiveFilters = Boolean(
+            this.timelineFilters.team
+            || this.timelineFilters.role
+            || this.timelineFilters.move
+            || this.timelineFilters.activityType
+        );
+
+        if (filteredEvents.length === 0) {
+            container.innerHTML = hasActiveFilters
+                ? '<p class="text-sm text-gray-500">No timeline events match the selected filters.</p>'
+                : '<p class="text-sm text-gray-500">No events yet.</p>';
+            return;
+        }
+
+        const visibleEvents = filteredEvents.slice(0, WHITE_CELL_TIMELINE_RENDER_LIMIT);
+        const hiddenCount = Math.max(0, filteredEvents.length - visibleEvents.length);
+        const overflowNote = hiddenCount
+            ? `<p class="text-xs text-gray-500" style="margin: 0 0 var(--space-3);">Showing the first ${WHITE_CELL_TIMELINE_RENDER_LIMIT} of ${filteredEvents.length} timeline events for the current filters.</p>`
+            : '';
+
+        container.innerHTML = `
+            ${overflowNote}
+            ${visibleEvents.map((event) => {
+            const eventType = getWhiteCellTimelineEventType(event) || 'EVENT';
+            const eventContent = event.content || event.description || '';
+            const teamLabel = this.formatTeamLabel(event.team);
+            const rawRole = resolveWhiteCellTimelineMetadataRole(event);
+            const inferredRole = getWhiteCellTimelineRoleFilterValue(event);
+            const teamRoleLabel = rawRole
+                ? (getRoleDisplayName(rawRole) || rawRole)
+                : (inferredRole ? getWhiteCellFilterRoleLabel(inferredRole) : 'Unknown role');
+            const move = event.move ?? 1;
+            const phase = event.phase ?? 1;
+            const phaseLabel = `Phase ${phase} - ${getPhaseLabel(phase)}`;
+            const timestamp = formatDateTime(event.created_at);
+            const noteScope = event?.metadata?.note_scope || null;
+            const noteScopeLabel = getNotetakerTimelineScopeLabel(noteScope);
+            const noteDetails = getNotetakerSaveTimelineDetailItems(event);
+            const noteDetailsMarkup = isNotetakerSaveTimelineEvent(event) && noteDetails.length > 0
+                ? `
+                    <div class="card card-bordered" style="margin-top: var(--space-2); padding: var(--space-3);">
+                        <p class="text-xs text-gray-500" style="margin: 0 0 var(--space-2);">${this.escapeHtml(noteScopeLabel)} snapshot</p>
+                        <dl style="display: grid; gap: var(--space-2); margin: 0;">
+                            ${noteDetails.map((detail) => `
+                                <div>
+                                    <dt class="text-xs text-gray-500" style="margin: 0;">${this.escapeHtml(detail.label)}</dt>
+                                    <dd class="text-sm" style="margin: 0;">${this.escapeHtml(detail.value)}</dd>
+                                </div>
+                            `).join('')}
+                        </dl>
+                    </div>
+                `
+                : '';
+
+            return `
+                <div class="timeline-event" style="display: flex; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--color-gray-200);">
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary-500); margin-top: 6px; flex-shrink: 0;"></div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; gap: var(--space-2); align-items: center;">
+                            ${createBadge({ text: eventType, size: 'sm' }).outerHTML}
+                            <span class="text-xs text-gray-400">${this.escapeHtml(timestamp)}</span>
+                        </div>
+                        <p class="text-sm mt-1">${this.escapeHtml(eventContent)}</p>
+                        ${noteDetailsMarkup}
+                        <p class="timeline-event-meta" style="margin-top: var(--space-2); font-size: var(--text-xs); color: var(--color-text-secondary);">${this.escapeHtml(teamLabel)} | ${this.escapeHtml(teamRoleLabel)} | Move ${this.escapeHtml(String(move))} | ${this.escapeHtml(phaseLabel)}</p>
+                    </div>
+                </div>
+            `;
+        }).join('')}
+        `;
+    }
+
+    formatTeamLabel(team) {
+        return getWhiteCellTeamLabel(team);
+    }
+
+    escapeHtml(value) {
+        if (typeof value !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+    }
+
+    destroy() {
+        const documentRef = typeof document !== 'undefined' ? document : null;
+        this.mountedPlugins.forEach((mountedPlugin) => {
+            mountedPlugin.plugin.unmount?.(mountedPlugin.mountResult, {
+                controller: this,
+                document: documentRef,
+                gameState: this.getCurrentGameState(),
+                gameStateStore,
+                host: mountedPlugin.host,
+                plugin: mountedPlugin.plugin,
+                pluginState: this.pluginState[mountedPlugin.plugin.id],
+                sessionStore
+            });
+            if (mountedPlugin.host) {
+                mountedPlugin.host.innerHTML = '';
+                mountedPlugin.host.remove?.();
+            }
+        });
+        this.mountedPlugins.clear();
+        this.storeUnsubscribers.forEach((unsubscribe) => unsubscribe?.());
+        this.storeUnsubscribers = [];
+    }
+}
+
+const whiteCellController = new WhiteCellController();
+
+const shouldAutoInitWhiteCell = typeof document !== 'undefined' &&
+    typeof window !== 'undefined' &&
+    !globalThis.__ESG_DISABLE_AUTO_INIT__;
+
+if (shouldAutoInitWhiteCell) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => whiteCellController.init());
+    } else {
+        whiteCellController.init();
+    }
+
+    window.addEventListener('beforeunload', () => whiteCellController.destroy());
+}
+
+export default whiteCellController;

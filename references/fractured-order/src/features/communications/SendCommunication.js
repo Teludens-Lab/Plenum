@@ -1,0 +1,387 @@
+/**
+ * Send Communication Component
+ * ESG Economic Statecraft Simulation Platform v2.0
+ *
+ * Form for White Cell to send communications to teams.
+ */
+
+import { database } from '../../services/database.js';
+import { sessionStore } from '../../stores/index.js';
+import { gameStateStore } from '../../stores/index.js';
+import { timelineStore, EVENT_TYPES } from '../../stores/index.js';
+import { showToast } from '../../components/ui/Toast.js';
+import { showModal } from '../../components/ui/Modal.js';
+import { createLogger } from '../../utils/logger.js';
+import { getUserMessage } from '../../core/errors.js';
+import { TEAM_OPTIONS } from '../../core/teamContext.js';
+import { buildWhiteCellRecipientMetadata, regionalRecipientOptions } from './targeting.js';
+
+const logger = createLogger('SendCommunication');
+
+/**
+ * Communication types
+ */
+const COMM_TYPES = [
+    { value: 'INJECT', label: 'Inject', description: 'New scenario element or development', icon: '💉' },
+    { value: 'ANNOUNCEMENT', label: 'Announcement', description: 'Official game announcement', icon: '📢' },
+    { value: 'GUIDANCE', label: 'Guidance', description: 'Clarification or procedural guidance', icon: '📋' }
+];
+
+/**
+ * Recipient options
+ */
+const RECIPIENTS = [
+    ...TEAM_OPTIONS.filter((team) => team.id === 'blue').map((team) => ({ value: team.id, label: team.label })),
+    { value: 'all', label: 'All Teams' },
+    ...TEAM_OPTIONS.filter((team) => team.id !== 'blue').map((team) => ({ value: team.id, label: team.label }))
+];
+
+function recipients() {
+    const regional = regionalRecipientOptions(sessionStore.getState?.() || {});
+    return regional.length ? [...RECIPIENTS.filter((option) => option.value !== 'green'), ...regional] : RECIPIENTS;
+}
+
+/**
+ * Create a send communication component
+ * @param {Object} options - Component options
+ * @param {HTMLElement} options.container - Container element
+ * @param {Function} options.onSend - Send callback
+ * @returns {Object} Component controller
+ */
+export function createSendCommunication(options = {}) {
+    const { container, onSend } = options;
+
+    if (!container) {
+        throw new Error('Container element is required');
+    }
+
+    // Create component structure
+    const wrapper = document.createElement('div');
+    wrapper.className = 'send-communication';
+
+    wrapper.innerHTML = `
+        <div class="send-communication-header">
+            <h3 class="send-communication-title">Send Communication</h3>
+        </div>
+
+        <form class="send-communication-form" id="commForm">
+            <div class="form-group">
+                <label class="form-label">Communication Type</label>
+                <div class="comm-type-options" id="commTypeOptions">
+                    ${COMM_TYPES.map((type, index) => `
+                        <label class="comm-type-option ${index === 0 ? 'selected' : ''}">
+                            <input
+                                type="radio"
+                                name="commType"
+                                value="${type.value}"
+                                ${index === 0 ? 'checked' : ''}
+                            >
+                            <span class="comm-type-icon">${type.icon}</span>
+                            <span class="comm-type-label">${type.label}</span>
+                            <span class="comm-type-desc">${type.description}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="commRecipient">Recipient</label>
+                <select id="commRecipient" class="form-select" required>
+                    ${recipients().map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="commSubject">Subject (Optional)</label>
+                <input
+                    type="text"
+                    id="commSubject"
+                    class="form-input"
+                    placeholder="Brief subject line..."
+                    maxlength="100"
+                >
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="commContent">Message *</label>
+                <textarea
+                    id="commContent"
+                    class="form-input form-textarea"
+                    rows="5"
+                    placeholder="Enter your message..."
+                    required
+                ></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Send Communication</button>
+            </div>
+        </form>
+    `;
+
+    container.appendChild(wrapper);
+
+    const form = wrapper.querySelector('#commForm');
+    const typeOptions = wrapper.querySelectorAll('.comm-type-option');
+    let isSubmitting = false;
+
+    // Handle type selection visual
+    typeOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            typeOptions.forEach(o => o.classList.remove('selected'));
+            option.classList.add('selected');
+        });
+    });
+
+    // Handle form submission
+    form.addEventListener('submit', handleSubmit);
+
+    /**
+     * Handle form submission
+     * @param {Event} e
+     */
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (isSubmitting) return;
+
+        const commType = form.querySelector('input[name="commType"]:checked').value;
+        const recipient = form.querySelector('#commRecipient').value;
+        const subject = form.querySelector('#commSubject').value.trim();
+        const content = form.querySelector('#commContent').value.trim();
+
+        if (!content) {
+            showToast({ message: 'Please enter a message', type: 'error' });
+            return;
+        }
+
+        const sessionId = sessionStore.getSessionId();
+        if (!sessionId) {
+            showToast({ message: 'No active session', type: 'error' });
+            return;
+        }
+
+        isSubmitting = true;
+        setSubmitPending(form, true, 'Sending...');
+        try {
+            // Save communication to database
+            const communication = await database.createCommunication({
+                session_id: sessionId,
+                from_role: 'white_cell',
+                to_role: recipient,
+                type: commType,
+                title: subject || null,
+                metadata: buildWhiteCellRecipientMetadata(recipient),
+                content,
+                move: gameStateStore.getCurrentMove()
+            });
+
+            // Create timeline event
+            await timelineStore.create({
+                type: commType,
+                content: subject || `${commType} to ${recipient}`,
+                team: 'white_cell',
+                move: gameStateStore.getCurrentMove(),
+                metadata: {
+                    communication_id: communication.id,
+                    ...communication.metadata,
+                    content_preview: content.substring(0, 100)
+                }
+            });
+
+            showToast({
+                message: `${getTypeLabel(commType)} sent to ${getRecipientLabel(recipient)}`,
+                type: 'success'
+            });
+
+            // Reset form
+            form.reset();
+            typeOptions.forEach((o, i) => {
+                o.classList.toggle('selected', i === 0);
+            });
+
+            if (onSend) onSend({ commType, recipient, subject, content });
+
+        } catch (err) {
+            logger.error('Failed to send communication:', err);
+            showToast({
+                message: getUserMessage(err, {
+                    fallback: 'Failed to send communication. Check the message and try again.'
+                }),
+                type: 'error'
+            });
+        } finally {
+            isSubmitting = false;
+            setSubmitPending(form, false);
+        }
+    }
+
+    /**
+     * Get type label
+     * @param {string} value
+     * @returns {string}
+     */
+    function getTypeLabel(value) {
+        return COMM_TYPES.find(t => t.value === value)?.label || value;
+    }
+
+    /**
+     * Get recipient label
+     * @param {string} value
+     * @returns {string}
+     */
+    function getRecipientLabel(value) {
+        return recipients().find(r => r.value === value)?.label || value;
+    }
+
+    /**
+     * Destroy component
+     */
+    function destroy() {
+        wrapper.remove();
+    }
+
+    return { destroy };
+}
+
+/**
+ * Show send communication modal
+ * @param {Object} options
+ * @returns {Promise}
+ */
+export function showSendCommunicationModal(options = {}) {
+    return new Promise((resolve) => {
+        const content = document.createElement('div');
+        let isSubmitting = false;
+        const modalRef = { current: null };
+
+        content.innerHTML = `
+            <form id="modalCommForm">
+                <div class="form-group">
+                    <label class="form-label" for="modalCommType">Type</label>
+                    <select id="modalCommType" class="form-select" required>
+                        ${COMM_TYPES.map(t => `<option value="${t.value}">${t.icon} ${t.label}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="modalCommRecipient">Recipient</label>
+                    <select id="modalCommRecipient" class="form-select" required>
+                        ${recipients().map(r => `<option value="${r.value}">${r.label}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="modalCommContent">Message *</label>
+                    <textarea
+                        id="modalCommContent"
+                        class="form-input form-textarea"
+                        rows="4"
+                        placeholder="Enter your message..."
+                        required
+                    ></textarea>
+                </div>
+            </form>
+        `;
+
+        modalRef.current = showModal({
+            title: 'Send Communication',
+            content,
+            size: 'md',
+            buttons: [
+                {
+                    label: 'Cancel',
+                    variant: 'secondary',
+                    onClick: () => {
+                        const closed = modalRef.current?.requestClose
+                            ? modalRef.current.requestClose('cancel')
+                            : (modalRef.current?.close?.(), true);
+                        if (closed) resolve(null);
+                        return false;
+                    }
+                },
+                {
+                    label: 'Send',
+                    variant: 'primary',
+                    onClick: () => {
+                        if (isSubmitting) return false;
+                        const commType = content.querySelector('#modalCommType').value;
+                        const recipient = content.querySelector('#modalCommRecipient').value;
+                        const message = content.querySelector('#modalCommContent').value.trim();
+
+                        if (!message) {
+                            showToast({ message: 'Please enter a message', type: 'error' });
+                            return false;
+                        }
+
+                        const sessionId = sessionStore.getSessionId();
+                        if (!sessionId) {
+                            showToast({ message: 'No active session', type: 'error' });
+                            return false;
+                        }
+
+                        isSubmitting = true;
+                        const submitButton = modalRef.current?.element?.querySelector('.modal-footer .btn-primary');
+                        setButtonPending(submitButton, true, 'Sending...');
+                        content.querySelector('#modalCommForm')?.setAttribute('aria-busy', 'true');
+
+                        (async () => {
+                            const communication = await database.createCommunication({
+                                session_id: sessionId,
+                                from_role: 'white_cell',
+                                to_role: recipient,
+                                type: commType,
+                                metadata: buildWhiteCellRecipientMetadata(recipient),
+                                content: message,
+                                move: gameStateStore.getCurrentMove()
+                            });
+
+                            await timelineStore.create({
+                                type: commType,
+                                content: `${commType} to ${recipient}`,
+                                metadata: { ...communication.metadata, communication_id: communication.id },
+                                team: 'white_cell',
+                                move: gameStateStore.getCurrentMove()
+                            });
+
+                            showToast({ message: 'Communication sent', type: 'success' });
+                            modalRef.current?.close?.();
+                            resolve({ commType, recipient, message });
+                        })().catch((err) => {
+                            logger.error('Failed to send communication:', err);
+                            showToast({
+                                message: getUserMessage(err, {
+                                    fallback: 'Failed to send communication. Check the message and try again.'
+                                }),
+                                type: 'error'
+                            });
+                        }).finally(() => {
+                            isSubmitting = false;
+                            setButtonPending(submitButton, false);
+                            content.querySelector('#modalCommForm')?.setAttribute('aria-busy', 'false');
+                        });
+
+                        return false;
+                    }
+                }
+            ]
+        });
+    });
+}
+
+function setSubmitPending(form, isPending, pendingLabel = 'Sending...') {
+    const submitButton = form.querySelector('button[type="submit"]');
+    form.setAttribute('aria-busy', String(isPending));
+    setButtonPending(submitButton, isPending, pendingLabel);
+}
+
+function setButtonPending(button, isPending, pendingLabel = 'Sending...') {
+    if (!button) return;
+    if (!button.dataset.defaultLabel) {
+        button.dataset.defaultLabel = button.textContent;
+    }
+
+    button.disabled = isPending;
+    button.textContent = isPending ? pendingLabel : button.dataset.defaultLabel;
+}
+
+export default createSendCommunication;

@@ -1,0 +1,20 @@
+{
+  "name": "plenum-reference-slice",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/domain.test.mjs",
+    "migrate": "node src/migrate.mjs",
+    "seed": "node src/seed.mjs",
+    "smoke": "node test/smoke.mjs",
+    "dbtest": "node --test test/db.test.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.3"
+  }
+}

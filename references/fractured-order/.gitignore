@@ -1,0 +1,71 @@
+.env
+.env.local
+
+# Installed dependencies
+node_modules/
+.venv/
+
+# Build output
+dist/
+
+# Python bytecode and interpreter caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Unit, coverage, and browser-test output
+test-results/
+playwright-report/
+.playwright-mcp/
+coverage/
+.nyc_output/
+
+# Local release evidence and generated reports
+output/release-evidence/
+release-evidence/
+pli/reports/out/
+/Plenum Briefing/Plenum_Pre_Demo_Deck.pdf
+
+# Unused local duplicate; the authored runtime video stays under Plenum Briefing.
+/src/video/PLenum Onboarding Video.mp4
+
+# Browser-downloaded session recordings
+recordings/
+session-recordings/
+session-recording-*.webm
+session-recording-*.ogg
+session-recording-*.mp4
+session-recording-*.wav
+
+# Local neural narration generation (only approved encoded public assets ship)
+scripts/start-here-audio/models/
+scripts/start-here-audio/**/*.pth
+scripts/start-here-audio/**/*.pt
+scripts/start-here-audio/**/*.onnx
+scripts/start-here-audio/**/*.safetensors
+scripts/start-here-audio/**/*.ckpt
+scripts/start-here-audio/**/*.gguf
+scripts/start-here-audio/work/
+
+# Temporary LaTeX report build files
+report.aux
+report.bbl
+report.bcf
+report.blg
+report.fdb_latexmk
+report.fls
+report.log
+report.out
+report.run.xml
+report.synctex.gz
+report.toc
+
+# Intentionally published PLI binaries remain trackable.
+!pli/deliverables/
+!pli/deliverables/**
+
+SSG_Strategic_Orientation_Modal_v2.html
+
+
+# Agent files
+

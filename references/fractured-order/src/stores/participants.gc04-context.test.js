@@ -1,0 +1,124 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { database, sessionStore, restoreConfirmedSeat, participantLogger } = vi.hoisted(() => ({
+    database: { updateHeartbeat: vi.fn(), disconnectParticipantKeepalive: vi.fn() },
+    sessionStore: { getConfirmedSeat: vi.fn(), invalidateSeat: vi.fn(), notify: vi.fn() },
+    restoreConfirmedSeat: vi.fn(),
+    participantLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
+}));
+vi.mock('../services/database.js', () => ({ database }));
+vi.mock('../services/seatBootstrap.js', () => ({ restoreConfirmedSeat }));
+vi.mock('./session.js', () => ({ sessionStore }));
+vi.mock('../utils/logger.js', () => ({ createLogger: () => participantLogger }));
+vi.mock('../core/config.js', () => ({ CONFIG: { HEARTBEAT_INTERVAL_MS: 30000 }, getRoleLimit: () => 1, isHeartbeatFresh: () => true }));
+import { participantsStore } from './participants.js';
+
+beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal('navigator', { onLine: true });
+    participantsStore.sessionId = 'session';
+    participantsStore.currentParticipantId = 'seat';
+});
+afterEach(() => { participantsStore.reset(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it('retains the legacy unified White Cell pagehide disconnect', () => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    sessionStore.getConfirmedSeat.mockReturnValue({ participantId: 'seat', role: 'whitecell_lead', topology: 1 });
+    participantsStore.bindPagehideKeepalive();
+    participantsStore.pagehideHandler();
+    expect(database.disconnectParticipantKeepalive).toHaveBeenCalledWith('session', 'seat');
+});
+
+it('treats a closed-session heartbeat as a normal terminal transition', async () => {
+    sessionStore.getConfirmedSeat.mockReturnValue({ participantId: 'seat', role: 'blue_scribe', topology: 1 });
+    database.updateHeartbeat.mockRejectedValue({
+        originalError: { code: '42501', message: 'This session is not currently joinable.' }
+    });
+
+    await participantsStore.sendHeartbeat();
+
+    expect(participantLogger.warn).toHaveBeenCalledWith(
+        'Heartbeat stopped because the session is no longer joinable.'
+    );
+    expect(participantLogger.error).not.toHaveBeenCalled();
+    expect(sessionStore.invalidateSeat).toHaveBeenCalledOnce();
+    expect(sessionStore.notify).toHaveBeenCalledOnce();
+});
+
+describe.each([['green_europe_scribe', 'europe'], ['green_shared_facilitator', null],
+    ['whitecell_lead', null], ['whitecell_support', null], ['sme_econ', null]])('GC04/04A/07 heartbeat: %s', (role, delegation) => {
+    beforeEach(() => {
+        sessionStore.getConfirmedSeat.mockReturnValue({ participantId: 'seat', role, delegationId: delegation, topology: 2 });
+    });
+    it('preserves the confirmed regional lease during page navigation', () => {
+        vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+        participantsStore.bindPagehideKeepalive();
+        participantsStore.pagehideHandler();
+        expect(database.disconnectParticipantKeepalive).not.toHaveBeenCalled();
+    });
+    it('pauses offline heartbeats without discarding rejoin context or renewing the lease', async () => {
+        navigator.onLine = false;
+        await participantsStore.sendHeartbeat();
+        expect(database.updateHeartbeat).not.toHaveBeenCalled();
+        expect(sessionStore.invalidateSeat).not.toHaveBeenCalled();
+    });
+    it('retains rejoin context when an in-flight heartbeat fails as the browser goes offline', async () => {
+        database.updateHeartbeat.mockImplementation(async () => {
+            navigator.onLine = false;
+            throw { originalError: { code: '', message: 'TypeError: Failed to fetch' } };
+        });
+        await participantsStore.sendHeartbeat();
+        expect(database.updateHeartbeat).toHaveBeenCalledWith('session', 'seat');
+        expect(sessionStore.invalidateSeat).not.toHaveBeenCalled();
+    });
+    it('honors a server permission denial even if connectivity changes before it arrives', async () => {
+        database.updateHeartbeat.mockImplementation(async () => {
+            navigator.onLine = false;
+            throw { originalError: { code: '42501', message: 'GC03_SEAT_REJOIN_REQUIRED' } };
+        });
+        await participantsStore.sendHeartbeat();
+        expect(sessionStore.invalidateSeat).toHaveBeenCalledOnce();
+        expect(sessionStore.notify).toHaveBeenCalledOnce();
+    });
+    it('fails closed for online heartbeat errors', async () => {
+        database.updateHeartbeat.mockRejectedValue(new Error('Server unavailable'));
+        await participantsStore.sendHeartbeat();
+        expect(sessionStore.invalidateSeat).toHaveBeenCalledOnce();
+    });
+    it('revalidates an expired lease on the server before retrying the heartbeat once', async () => {
+        database.updateHeartbeat.mockRejectedValueOnce({ originalError: { code: '42501', message: 'GC03_SEAT_REJOIN_REQUIRED' } })
+            .mockResolvedValueOnce({ id: 'seat', role, delegation_id: delegation });
+        restoreConfirmedSeat.mockResolvedValue({ participantId: 'seat' });
+        await participantsStore.sendHeartbeat();
+        expect(restoreConfirmedSeat).toHaveBeenCalledWith({ checkRoute: false });
+        expect(restoreConfirmedSeat.mock.invocationCallOrder[0]).toBeLessThan(database.updateHeartbeat.mock.invocationCallOrder[1]);
+        expect(database.updateHeartbeat).toHaveBeenCalledTimes(2);
+        expect(sessionStore.invalidateSeat).not.toHaveBeenCalled();
+    });
+    it('clears a replaced or revoked seat when server rejoin fails', async () => {
+        database.updateHeartbeat.mockRejectedValue({ originalError: { code: '42501', message: 'GC03_SEAT_REJOIN_REQUIRED' } });
+        restoreConfirmedSeat.mockRejectedValue(new Error('GC04_INVALID_SESSION_SEAT'));
+        await participantsStore.sendHeartbeat();
+        expect(database.updateHeartbeat).toHaveBeenCalledOnce();
+        expect(sessionStore.invalidateSeat).toHaveBeenCalledOnce();
+    });
+    it('invalidates on the next scheduled heartbeat when no revocation event is delivered, then stops renewing', async () => {
+        vi.useFakeTimers();
+        database.updateHeartbeat.mockResolvedValueOnce({ id: 'seat', role, delegation_id: delegation })
+            .mockRejectedValue({ originalError: { code: '42501', message: 'GC03_SEAT_REJOIN_REQUIRED' } });
+        restoreConfirmedSeat.mockRejectedValue({ code: '42501', message: 'GC04_INVALID_SESSION_SEAT' });
+        await participantsStore.startHeartbeat();
+        await vi.advanceTimersByTimeAsync(29999);
+        expect(database.updateHeartbeat).toHaveBeenCalledOnce();
+        expect(sessionStore.invalidateSeat).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(database.updateHeartbeat).toHaveBeenCalledTimes(2);
+        expect(restoreConfirmedSeat).toHaveBeenCalledOnce();
+        expect(restoreConfirmedSeat).toHaveBeenCalledWith({ checkRoute: false });
+        expect(sessionStore.invalidateSeat).toHaveBeenCalledOnce();
+        expect(sessionStore.notify).toHaveBeenCalledOnce();
+        expect(participantsStore.heartbeatInterval).toBeNull();
+        await vi.advanceTimersByTimeAsync(60000);
+        expect(database.updateHeartbeat).toHaveBeenCalledTimes(2);
+    });
+});

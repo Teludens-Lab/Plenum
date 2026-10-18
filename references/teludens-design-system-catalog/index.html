@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-density="standard">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="Teludens Interface System — product design language and interactive component catalog." />
+  <title>Teludens Interface System</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Catalog navigation">
+      <div class="brand-lockup">
+        <svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true">
+          <path d="M7 6v24M7 13h10M17 13v17M17 21h12M29 21v9" />
+          <circle cx="7" cy="6" r="2"/><circle cx="17" cy="13" r="2"/><circle cx="29" cy="21" r="2"/>
+        </svg>
+        <div>
+          <div class="brand-name">TELUDENS</div>
+          <div class="brand-sub">Interface System · v1.0</div>
+        </div>
+      </div>
+
+      <nav class="catalog-nav" id="catalogNav">
+        <a href="#overview" class="nav-link active"><span>00</span> Overview</a>
+        <a href="#foundations" class="nav-link"><span>01</span> Foundations</a>
+        <a href="#color" class="nav-link"><span>02</span> Color</a>
+        <a href="#typography" class="nav-link"><span>03</span> Typography</a>
+        <a href="#density" class="nav-link"><span>04</span> Density</a>
+        <a href="#motion" class="nav-link"><span>05</span> Motion</a>
+        <a href="#grammar" class="nav-link"><span>06</span> Decision Grammar</a>
+        <a href="#controls" class="nav-link"><span>07</span> Controls</a>
+        <a href="#navigation" class="nav-link"><span>08</span> Navigation & Shell</a>
+        <a href="#overlays" class="nav-link"><span>09</span> Panels & Overlays</a>
+        <a href="#operational" class="nav-link"><span>10</span> Operational</a>
+        <a href="#plenum" class="nav-link"><span>11</span> Plenum Slice</a>
+        <a href="#guidance" class="nav-link"><span>12</span> Guidance</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-line"><span class="status-dot"></span> Canonical v1</div>
+        <a href="docs/TELUDENS_TOKENS.json" class="text-link">Tokens JSON ↗</a>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <button class="icon-button mobile-nav-toggle" id="mobileNavToggle" aria-label="Toggle catalog navigation" aria-expanded="false">☰</button>
+      <div class="topbar-context">
+        <span class="eyebrow">TELUDENS LAB</span>
+        <span class="topbar-title">Product Design Language</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="command-trigger" id="commandTrigger" aria-haspopup="dialog">
+          <span>Search catalog</span><kbd>⌘ K</kbd>
+        </button>
+        <div class="segmented compact" aria-label="Density mode">
+          <button data-density-value="focus">Focus</button>
+          <button class="selected" data-density-value="standard">Standard</button>
+          <button data-density-value="operations">Operations</button>
+        </div>
+        <button class="icon-button" id="themeToggle" aria-label="Toggle dark theme" title="Toggle theme">
+          <span class="theme-icon" aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="content" class="content">
+      <section id="overview" class="catalog-section hero-section searchable" data-search="overview teludens design language precision computational instruments strategic thought apple adobe identity">
+        <div class="section-index">00</div>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="section-kicker">TELUDENS INTERFACE SYSTEM</p>
+            <h1>Precision computational instruments for strategic thought.</h1>
+            <p class="hero-lede">A product design language built around calm computational power, professional-tool architecture, and a proprietary grammar for actors, decisions, branches, paths, gates, states, consequences, evidence, and time.</p>
+            <div class="hero-actions">
+              <a class="button primary" href="#controls">Explore components</a>
+              <a class="button secondary" href="#plenum">Open reference slice</a>
+              <a class="button quiet" href="https://www.figma.com/design/aKoNDxJc9KUo9WQhmHtA9m" target="_blank" rel="noreferrer">Figma library ↗</a>
+            </div>
+          </div>
+          <div class="hero-topology" aria-label="Decision topology illustration">
+            <div class="topology-label">DECISION TOPOLOGY / LIVE</div>
+            <svg viewBox="0 0 540 320" role="img" aria-label="Branching decision structure">
+              <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" class="arrowhead"/></marker></defs>
+              <path class="path path-active" d="M70 160H190" marker-end="url(#arrow)"/>
+              <path class="path" d="M210 160 C290 160 280 84 360 84" marker-end="url(#arrow)"/>
+              <path class="path" d="M210 160 C290 160 280 236 360 236" marker-end="url(#arrow)"/>
+              <path class="path path-active" d="M380 84H475" marker-end="url(#arrow)"/>
+              <circle class="node active" cx="60" cy="160" r="10"/><circle class="node" cx="200" cy="160" r="8"/>
+              <rect class="gate" x="355" y="69" width="24" height="30" rx="3"/><circle class="node active" cx="485" cy="84" r="10"/>
+              <circle class="node" cx="365" cy="236" r="8"/>
+              <text x="42" y="196">DECISION</text><text x="174" y="196">BRANCH</text><text x="340" y="57">GATE</text><text x="454" y="120">STATE</text><text x="342" y="270">ALTERNATE</text>
+            </svg>
+            <div class="topology-state"><span></span> Current path · consequence pending</div>
+          </div>
+        </div>
+        <div class="principle-strip" aria-label="Core design principles">
+          <div><b>01</b><span>Calm computational power</span></div>
+          <div><b>02</b><span>Structure before decoration</span></div>
+          <div><b>03</b><span>Progressive density</span></div>
+          <div><b>04</b><span>Signal scarcity</span></div>
+        </div>
+      </section>
+
+      <section id="foundations" class="catalog-section searchable" data-search="foundations principles identity calm computational power structure direct manipulation progressive density consequence motion signal operational legibility">
+        <div class="section-heading">
+          <div><p class="section-kicker">01 · FOUNDATIONS</p><h2>One identity. Multiple products.</h2></div>
+          <p>Teludens sits above universal interface quality standards and defines the opinionated identity, behavior, geometry, and product feel shared across Teludens tools.</p>
+        </div>
+        <div class="foundation-table">
+          <div class="foundation-row"><span class="foundation-num">01</span><h3>Calm computational power</h3><p>Capability is deep; presentation stays quiet. Complexity is organized, not dramatized.</p></div>
+          <div class="foundation-row"><span class="foundation-num">02</span><h3>Structure before decoration</h3><p>Hierarchy comes from geometry, typography, tone, boundaries, and state before ornament.</p></div>
+          <div class="foundation-row"><span class="foundation-num">03</span><h3>Direct manipulation</h3><p>Objects preserve continuity through state change. Selection, ownership and context do not teleport.</p></div>
+          <div class="foundation-row"><span class="foundation-num">04</span><h3>Progressive density</h3><p>Focus, Standard, and Operations use the same architecture at different information compression levels.</p></div>
+          <div class="foundation-row"><span class="foundation-num">05</span><h3>Consequence-aware UI</h3><p>Information, interpretation, intention, action, and consequence remain perceptually distinct.</p></div>
+          <div class="foundation-row"><span class="foundation-num">06</span><h3>Motion communicates causality</h3><p>Movement answers what changed, where it came from, and what it now affects.</p></div>
+        </div>
+      </section>
+
+      <section id="color" class="catalog-section searchable" data-search="color electric vermilion semantic materials signal cobalt green amber crimson graphite light dark palette tokens">
+        <div class="section-heading">
+          <div><p class="section-kicker">02 · COLOR</p><h2>Material first. Signal second.</h2></div>
+          <p>Warm neutral materials create the working environment. Electric Vermilion is scarce and consequential. Brand signal, error, status, and information never collapse into one color.</p>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title"><h3>Primitive ramps</h3><span>Click any swatch to copy its value</span></div>
+          <div id="primitivePalette" class="palette-stack"></div>
+        </div>
+        <div class="subsection">
+          <div class="subsection-title"><h3>Semantic materials</h3><span>Theme-aware roles, not isolated hex values</span></div>
+          <div id="semanticPalette" class="semantic-grid"></div>
+        </div>
+        <div class="signal-rule">
+          <div class="signal-swatch"></div>
+          <div><span class="eyebrow">SIGNAL / DECISION</span><h3>Electric Vermilion is not “the primary color.”</h3><p>It marks the current path, active decision, execution point, or meaningful brand moment. Generic primary actions remain neutral; destructive actions remain Crimson.</p></div>
+        </div>
+      </section>
+
+      <section id="typography" class="catalog-section searchable" data-search="typography display heading title body label detail control operational state telemetry interface brand tracking">
+        <div class="section-heading">
+          <div><p class="section-kicker">03 · TYPOGRAPHY</p><h2>Editorial calm. Operational speed.</h2></div>
+          <p>Brand typography may be architectural and widely tracked. Product typography defaults to sentence case, tighter tracking, strong role hierarchy, and fast scanning.</p>
+        </div>
+        <div id="typeSpecimens" class="type-specimens"></div>
+        <div class="type-guidance">
+          <div><span>Brand</span><strong>TELUDENS LAB</strong><p>Uppercase · sparse · architectural</p></div>
+          <div><span>Interface</span><strong>Proposal requires facilitator review</strong><p>Sentence case · direct · scannable</p></div>
+          <div><span>Operational</span><strong class="mono">MOVE 02 · 14:32 · LIVE</strong><p>Compact metadata · tabular rhythm</p></div>
+        </div>
+      </section>
+
+      <section id="density" class="catalog-section searchable" data-search="density focus standard operations rows controls toolbar panel padding spacing compression">
+        <div class="section-heading">
+          <div><p class="section-kicker">04 · DENSITY</p><h2>Progressive density, not separate products.</h2></div>
+          <p>Switch modes to see the same component architecture adapt. Density changes information compression without changing conceptual location or control semantics.</p>
+        </div>
+        <div class="density-demo-shell">
+          <div class="density-demo-toolbar">
+            <div><span class="eyebrow">PROPOSAL QUEUE</span><strong>12 open · 3 require attention</strong></div>
+            <button class="button primary">Create proposal</button>
+          </div>
+          <div id="densityDemoRows" class="density-demo-rows"></div>
+        </div>
+        <div id="densityMetrics" class="metric-grid"></div>
+      </section>
+
+      <section id="motion" class="catalog-section searchable" data-search="motion experience physics latency hover press selection tooltip popover modal panel view causal interruption reversal reduced motion">
+        <div class="section-heading">
+          <div><p class="section-kicker">05 · MOTION</p><h2>Motion is system feedback.</h2></div>
+          <p>Routine interaction stays below 300ms. Motion must communicate causality, continuity, orientation, feedback, or hierarchy—and remain interruptible.</p>
+        </div>
+        <div id="motionTokens" class="motion-timeline"></div>
+        <div class="motion-playground">
+          <div class="playground-copy"><span class="eyebrow">INTERACTION PHYSICS</span><h3>Panels preserve context.</h3><p>Opening, updating, interrupting, and reversing all settle into stable endpoints. No queued animation. No persistent float. No generic hover lift.</p><button class="button secondary" id="motionPanelTrigger">Toggle inspector</button></div>
+          <div class="playground-stage">
+            <div class="mini-workspace"><span></span><span></span><span></span><span></span></div>
+            <div class="mini-inspector" id="motionInspector"><b>P-142</b><small>Context preserved</small><div class="mini-field"></div><div class="mini-field short"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="grammar" class="catalog-section searchable" data-search="node branch path gate state decision topology visual grammar actors decisions options dependencies consequences time">
+        <div class="section-heading">
+          <div><p class="section-kicker">06 · DECISION GRAMMAR</p><h2>Node / Branch / Path / Gate / State</h2></div>
+          <p>The core visual language for representing decisions, alternatives, relationships, constraints, and changing conditions across Teludens products.</p>
+        </div>
+        <div class="grammar-layout">
+          <div class="grammar-legend" id="grammarLegend"></div>
+          <div class="grammar-canvas">
+            <svg id="grammarSvg" viewBox="0 0 900 440" role="img" aria-label="Interactive decision topology">
+              <path class="grammar-path active" data-path="a" d="M120 220H290"/>
+              <path class="grammar-path" data-path="b" d="M310 220 C420 220 390 100 535 100"/>
+              <path class="grammar-path" data-path="c" d="M310 220 C420 220 390 340 535 340"/>
+              <path class="grammar-path" data-path="d" d="M570 100H755"/>
+              <path class="grammar-path" data-path="e" d="M570 340H755"/>
+              <circle class="grammar-node active" data-node="Decision" cx="105" cy="220" r="15"/>
+              <circle class="grammar-node" data-node="Branch" cx="300" cy="220" r="12"/>
+              <rect class="grammar-gate" data-node="Gate" x="530" y="78" width="44" height="44" rx="5"/>
+              <circle class="grammar-node state active" data-node="State" cx="770" cy="100" r="16"/>
+              <circle class="grammar-node" data-node="Alternate" cx="550" cy="340" r="12"/>
+              <circle class="grammar-node state" data-node="State" cx="770" cy="340" r="14"/>
+              <text x="75" y="268">DECISION</text><text x="270" y="268">BRANCH</text><text x="527" y="64">GATE</text><text x="747" y="142">STATE</text><text x="510" y="383">ALTERNATE</text>
+            </svg>
+            <div class="grammar-readout"><span class="status-dot"></span><span id="grammarReadout">Current path: Decision → Gate → State</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="controls" class="catalog-section searchable" data-search="controls button primary decision secondary quiet destructive input checkbox radio switch select states hover pressed focus disabled">
+        <div class="section-heading">
+          <div><p class="section-kicker">07 · CONTROLS</p><h2>Action semantics before visual emphasis.</h2></div>
+          <p>The component API separates neutral primary authority, consequential decision actions, secondary controls, quiet actions, and destructive semantics.</p>
+        </div>
+        <div class="component-block">
+          <div class="component-doc"><span class="eyebrow">BUTTON</span><h3>Action control</h3><p>Use one clear primary action per decision group. Decision style is reserved for consequential transitions. Destructive never borrows Vermilion.</p><div class="component-meta"><span>States · 5</span><span>Styles · 5</span><span>Radius · 5px</span></div></div>
+          <div class="component-stage button-stage">
+            <button class="button primary">Continue</button>
+            <button class="button decision">Commit decision</button>
+            <button class="button secondary">Secondary</button>
+            <button class="button quiet">Quiet</button>
+            <button class="button destructive">Delete</button>
+            <button class="button primary" disabled>Disabled</button>
+          </div>
+        </div>
+        <div class="component-block">
+          <div class="component-doc"><span class="eyebrow">FIELDS</span><h3>Structured input</h3><p>Fields sit on the control plane, use explicit focus treatment, and preserve labels. Placeholder text never replaces a label.</p></div>
+          <div class="component-stage field-stage">
+            <label class="field"><span>Proposal title</span><input value="Port access guarantees" /></label>
+            <label class="field"><span>Current owner</span><select><option>Facilitator</option><option>White Cell</option></select></label>
+            <label class="check"><input type="checkbox" checked><span>Mark decision-relevant</span></label>
+            <label class="switch"><input type="checkbox" checked><span class="switch-track"></span><span>Live updates</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section id="navigation" class="catalog-section searchable" data-search="navigation shell context bar state rail orient action adjudicate resolve command toolbar selection app rail">
+        <div class="section-heading">
+          <div><p class="section-kicker">08 · NAVIGATION & SHELL</p><h2>Stable context under changing state.</h2></div>
+          <p>The shell remains structurally stable while simulation context, role, move, ownership, and phase update inside it.</p>
+        </div>
+        <div class="shell-demo">
+          <div class="shell-top"><b>PLENUM</b><span>ARES PASSAGE / LIVE</span><strong>MOVE 02 · ACTION</strong><span>14:32</span><span>BLUE · INDUSTRY</span></div>
+          <div class="shell-body">
+            <div class="shell-nav">
+              <small>SIMULATION</small>
+              <button>Overview</button><button>Teams & actors</button><button class="selected">Proposals & actions</button><button>RFIs & observations</button><button>Timeline & activity</button><button>Analysis</button>
+            </div>
+            <div class="shell-workspace">
+              <div class="state-rail"><div class="complete"><i></i><span>ORIENT</span></div><div class="current"><i></i><span>ACTION</span></div><div><i></i><span>ADJUDICATE</span></div><div><i></i><span>RESOLVE</span></div></div>
+              <div class="shell-placeholder"><span></span><span></span><span></span></div>
+            </div>
+            <div class="shell-inspector"><small>INSPECTOR</small><h4>P-142</h4><p>Port access guarantees and emergency logistics corridor</p><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Move</dt><dd>02</dd></div></dl></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="overlays" class="catalog-section searchable" data-search="panels overlays inspector command palette modal dialog popover transient context contextual panel">
+        <div class="section-heading">
+          <div><p class="section-kicker">09 · PANELS & OVERLAYS</p><h2>Context stays in place.</h2></div>
+          <p>Inspectors are persistent. Commands are transient. Dialogs interrupt only when the state transition deserves interruption.</p>
+        </div>
+        <div class="overlay-catalog">
+          <div class="overlay-demo inspector-demo"><div class="overlay-label">INSPECTOR</div><h3>P-142</h3><p>Port access guarantees and emergency logistics corridor</p><hr><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Submitted</dt><dd>14:08</dd></div><div><dt>Dependency</dt><dd>Port authority response</dd></div></dl></div>
+          <div class="overlay-demo command-demo"><div class="overlay-label">COMMAND PALETTE</div><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div></div>
+          <div class="overlay-demo dialog-demo"><div class="overlay-label">DIALOG</div><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary">Cancel</button><button class="button decision">Forward</button></div></div>
+        </div>
+      </section>
+
+      <section id="operational" class="catalog-section searchable" data-search="operational proposal row proposal state actor chip decision node rfi observation timeline dependency status draft review returned white cell accepted resolved">
+        <div class="section-heading">
+          <div><p class="section-kicker">10 · OPERATIONAL COMPONENTS</p><h2>Objects retain identity through the workflow.</h2></div>
+          <p>Proposal identity persists from Industry submission through Facilitator review, White Cell handling, adjudication, and resolution.</p>
+        </div>
+        <div class="proposal-status-strip" id="statusStrip"></div>
+        <div class="proposal-table" id="proposalTable"></div>
+        <div class="proposal-flow">
+          <div class="flow-head"><span class="eyebrow">P-142 · PROPOSAL FLOW</span><p>One object identity persists through ownership and adjudication.</p></div>
+          <div class="flow-stages"><div><span>INDUSTRY</span><strong>Submitted</strong></div><b>→</b><div class="active"><span>FACILITATOR</span><strong>Review</strong></div><b>→</b><div><span>WHITE CELL</span><strong>Next</strong></div><b>→</b><div><span>ADJUDICATION</span><strong>Pending</strong></div></div>
+        </div>
+      </section>
+
+      <section id="plenum" class="catalog-section searchable" data-search="plenum reference slice canonical proposal queue decision workspace inspector modal command palette industry facilitator white cell">
+        <div class="section-heading">
+          <div><p class="section-kicker">11 · PLENUM REFERENCE SLICE</p><h2>The canonical baseline.</h2></div>
+          <p>This slice defines how the system behaves when multiple Teludens patterns coexist. Shared Plenum patterns should reconcile against this baseline before propagation.</p>
+        </div>
+        <div class="reference-toolbar">
+          <div class="segmented"><button class="selected" data-ref-state="base">Base</button><button data-ref-state="dialog">Dialog open</button><button data-ref-state="command">Command palette</button></div>
+          <span class="reference-note">Interactive reference · 1440 × 900 concept</span>
+        </div>
+        <div class="plenum-frame" id="plenumFrame">
+          <div class="p-top"><b>PLENUM</b><span>ARES PASSAGE / LIVE</span><strong>MOVE 02 · ACTION</strong><span>14:32</span><span>BLUE · INDUSTRY</span></div>
+          <div class="p-nav"><small>SIMULATION</small><button>Overview</button><button>Teams & actors</button><button class="selected">Proposals & actions</button><button>RFIs & observations</button><button>Timeline & activity</button><button>Analysis</button><small class="sync">SYNCED · 14:08:12</small></div>
+          <div class="p-main">
+            <div class="p-rail"><div class="complete"><i></i><span>ORIENT</span></div><div class="current"><i></i><span>ACTION</span></div><div><i></i><span>ADJUDICATE</span></div><div><i></i><span>RESOLVE</span></div></div>
+            <div class="p-toolbar"><h3>Proposal queue</h3><span>12 open · 3 require attention</span><button class="button primary">Create proposal</button></div>
+            <div class="p-list" id="pList"></div>
+            <div class="p-flow"><div><b>P-142 · Proposal flow</b><span>One proposal identity persists across ownership and adjudication.</span></div><div class="p-flow-row"><span>INDUSTRY<br><b>Submitted</b></span><i>→</i><span class="active">FACILITATOR<br><b>Review</b></span><i>→</i><span>WHITE CELL<br><b>Next</b></span><i>→</i><span>ADJUDICATION<br><b>Pending</b></span></div></div>
+          </div>
+          <aside class="p-inspector"><span class="signal-label">P-142</span><h3>Port access guarantees and emergency logistics corridor</h3><span class="eyebrow">FACILITATOR REVIEW</span><div class="inspector-section"><b>Proposal context</b><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Move</dt><dd>02</dd></div><div><dt>Submitted</dt><dd>14:08</dd></div><div><dt>Dependency</dt><dd>Port authority response</dd></div></dl></div><div class="inspector-body"><span>Objective</span><p>Secure predictable access and logistics continuity while preserving room for White Cell adjudication.</p><span>Dependencies</span><ul><li>Port authority response</li><li>Fuel allocation decision</li><li>Regional customs position</li></ul></div><div class="inspector-actions"><button class="button secondary">Return for revision</button><button class="button decision" id="pForward">Forward to White Cell</button></div></aside>
+          <div class="p-scrim" id="pScrim"></div>
+          <div class="p-dialog" id="pDialog"><span class="eyebrow">STATE TRANSITION</span><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review. Proposal history remains unchanged.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary" data-close-overlay>Cancel</button><button class="button decision" data-close-overlay>Forward</button></div></div>
+          <div class="p-command" id="pCommand"><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div><div class="command-row"><kbd>R</kbd> Show unresolved RFIs</div><div class="command-row"><kbd>L</kbd> Open activity log</div></div>
+        </div>
+      </section>
+
+      <section id="guidance" class="catalog-section searchable" data-search="guidance anti patterns qa documentation implementation source files accessibility reduced motion runtime">
+        <div class="section-heading">
+          <div><p class="section-kicker">12 · GUIDANCE</p><h2>Rules that protect the system.</h2></div>
+          <p>A design system is a behavior contract, not a screenshot archive. The catalog exposes the reusable rules; runtime products still need accessibility, performance, keyboard, responsive, and reduced-motion validation.</p>
+        </div>
+        <div class="guidance-grid">
+          <article><span class="eyebrow">DO</span><h3>Preserve object continuity.</h3><p>Selection, inspector context, scroll position, and proposal identity should survive state transitions whenever the mental model survives them.</p></article>
+          <article><span class="eyebrow">DO</span><h3>Reserve signal.</h3><p>Strong color and motion should mean something. A0–A2 content does not get promoted with animation.</p></article>
+          <article><span class="eyebrow warning">AVOID</span><h3>Card mosaics.</h3><p>Prefer continuous working surfaces, aligned lists, panels, tables, rails, and contextual inspectors over repeated floating rectangles.</p></article>
+          <article><span class="eyebrow warning">AVOID</span><h3>Generic motion.</h3><p>No scale-on-hover, persistent floating, decorative bounce, queued transitions, or motion without causality.</p></article>
+        </div>
+        <div class="source-files">
+          <div><span class="eyebrow">SOURCE PACKAGE</span><h3>Design-system documents</h3></div>
+          <div class="source-links">
+            <a href="docs/TELUDENS_DESIGN_LANGUAGE.md">Design Language <span>↗</span></a>
+            <a href="docs/EXPERIENCE_PHYSICS.md">Experience Physics <span>↗</span></a>
+            <a href="docs/SPATIAL_GRAMMAR.md">Spatial Grammar <span>↗</span></a>
+            <a href="docs/TELUDENS_TOKENS.json">Tokens <span>↗</span></a>
+            <a href="docs/PLENUM_REFERENCE_SLICE.md">Plenum Reference Slice <span>↗</span></a>
+            <a href="docs/FIGMA_LIBRARY_SPEC.md">Figma Library Spec <span>↗</span></a>
+            <a href="https://www.figma.com/design/aKoNDxJc9KUo9WQhmHtA9m" target="_blank" rel="noreferrer">Figma Library <span>↗</span></a>
+          </div>
+        </div>
+      </section>
+
+      <footer class="catalog-footer">
+        <span>TELUDENS LAB</span><span>Interface System v1.0</span><span>Structure before decoration · Signal scarcity · Causal motion</span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="search-dialog" id="searchDialog" role="dialog" aria-modal="true" aria-label="Search design system" hidden>
+    <div class="search-panel">
+      <div class="search-input-row"><span>⌘K</span><input id="catalogSearch" autocomplete="off" placeholder="Search tokens, components, patterns…" /><button class="icon-button" id="closeSearch" aria-label="Close search">×</button></div>
+      <div class="search-results" id="searchResults"></div>
+      <div class="search-help"><span>↑↓ navigate</span><span>↵ open</span><span>Esc close</span></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

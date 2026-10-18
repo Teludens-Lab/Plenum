@@ -1,0 +1,289 @@
+openapi: 3.1.0
+info:
+  title: Plenum Reference Slice API
+  version: 0.2.0
+  description: >
+    Executable reference surface for the Fractured Order slice (07 Roadmap Phase 1 spike; non-authoritative per DEC-27).
+    Identity uses local-only demo headers. Error codes follow 09 Contracts §8.1; command outcomes follow DEC-37 and DEC-43.
+servers:
+  - url: http://127.0.0.1:3000
+security:
+  - DemoPerson: []
+    DemoOrganization: []
+components:
+  securitySchemes:
+    DemoPerson:
+      type: apiKey
+      in: header
+      name: x-demo-user
+      description: Acting Person UUID (demo only; replaced by OIDC in the product, ADR-012).
+    DemoOrganization:
+      type: apiKey
+      in: header
+      name: x-org-id
+      description: Organization UUID (demo only; derived from authenticated context in the product).
+  parameters:
+    ProjectId: {in: path, name: projectId, required: true, schema: {type: string, format: uuid}}
+    SessionId: {in: path, name: sessionId, required: true, schema: {type: string, format: uuid}}
+    CommandId: {in: path, name: commandId, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, correlationId]
+          properties:
+            code: {type: string, description: Canonical code from 09 Contracts §8.1}
+            message: {type: string}
+            details: {}
+            correlationId: {type: string, format: uuid}
+    Definition:
+      type: object
+      description: Slice subset of the 03 Schema Core Design. See definitions/fractured-order-reference.json.
+      required: [sessionRoles, forms, artifactTypes, workflows]
+      properties:
+        sessionRoles:
+          type: array
+          items: {type: object, required: [id], properties: {id: {type: string}, name: {type: string}}}
+        forms:
+          type: array
+          items:
+            type: object
+            required: [id, formVersion, fields]
+            properties:
+              id: {type: string}
+              formVersion: {type: string}
+              fields:
+                type: array
+                items:
+                  type: object
+                  required: [key, type]
+                  properties:
+                    key: {type: string}
+                    label: {type: string}
+                    type: {type: string, enum: [short_text, long_text]}
+                    required: {type: boolean}
+        artifactTypes:
+          type: array
+          items:
+            type: object
+            required: [key, formId, workflowId]
+            properties:
+              key: {type: string}
+              name: {type: string}
+              formId: {type: string}
+              workflowId: {type: string}
+              decisionBearing: {type: boolean}
+        workflows:
+          type: array
+          items:
+            type: object
+            required: [id, initialState, states, transitions]
+            properties:
+              id: {type: string}
+              key: {type: string}
+              initialState: {type: string}
+              states:
+                type: array
+                items:
+                  type: object
+                  required: [key, kind]
+                  properties:
+                    key: {type: string}
+                    label: {type: string}
+                    kind: {type: string, enum: [draft, task, review, approval, wait, terminal, cancelled]}
+                    holderSessionRoleIds: {type: array, items: {type: string}}
+                    holderRelation: {type: string, enum: [creator]}
+              transitions:
+                type: array
+                items:
+                  type: object
+                  required: [from, command, to, allowedSessionRoleIds]
+                  properties:
+                    id: {type: string}
+                    from: {type: [string, 'null']}
+                    command: {type: string, pattern: '^[a-z_]+\.[a-z_]+$'}
+                    to: {type: string}
+                    allowedSessionRoleIds: {type: array, items: {type: string}, minItems: 1}
+                    notifySessionRoleIds: {type: array, items: {type: string}}
+                    notifyCreator: {type: boolean}
+                    contentOnly: {type: boolean}
+    Command:
+      type: object
+      required: [commandId, deviceId, operationType, aggregateId, governingReleaseId, expectedAggregateVersion]
+      properties:
+        commandId: {type: string, format: uuid}
+        deviceId: {type: string, format: uuid}
+        operationType: {type: string, pattern: '^[a-z_]+\.[a-z_]+$', examples: [artifact.create, artifact.edit, artifact.submit, artifact.forward, artifact.return, artifact.accept]}
+        aggregateId: {type: string, format: uuid}
+        governingReleaseId: {type: string, format: uuid}
+        expectedAggregateVersion: {type: integer, minimum: 0}
+        activeSessionRoleId: {type: string, description: Required when the Participant holds more than one Session Role}
+        deviceObservedAt: {type: string, format: date-time, description: Observation only; never authoritative}
+        payload:
+          type: object
+          description: artifact.create needs artifactTypeKey and optional content; artifact.edit needs content.
+          properties:
+            artifactTypeKey: {type: string}
+            content: {type: object, additionalProperties: true}
+    Receipt:
+      type: object
+      required: [commandId, status, aggregateVersion, evidenceSequence, errorCode, replayed]
+      properties:
+        commandId: {type: string, format: uuid}
+        status: {type: string, enum: [accepted, rejected, needs_reconciliation]}
+        aggregateVersion: {type: [integer, 'null']}
+        evidenceSequence: {type: [integer, 'null']}
+        errorCode: {type: [string, 'null'], enum: [null, PERMISSION_DENIED, TARGET_NOT_FOUND, TARGET_EXISTS, INVALID_TRANSITION, SESSION_NOT_ACTIVE, STALE_AGGREGATE_VERSION, INCOMPATIBLE_RELEASE, VALIDATION_FAILED]}
+        message: {type: [string, 'null']}
+        replayed: {type: boolean}
+  responses:
+    Error:
+      description: Error envelope
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+    ReceiptResponse:
+      description: >
+        Recorded command outcome. 200 accepted; rejected uses the HTTP status of its error code (403, 404, 409, 422);
+        needs_reconciliation is 409. Replays return the original receipt with replayed true.
+      content: {application/json: {schema: {$ref: '#/components/schemas/Receipt'}}}
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        '200': {description: Process and database reachable}
+        '503': {description: Database unavailable}
+  /reference-definition.json:
+    get:
+      security: []
+      responses:
+        '200': {description: The Fractured Order reference definition}
+  /v1/projects:
+    post:
+      summary: Create a Simulation Project with its Draft (Designer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, definition]
+              properties:
+                title: {type: string}
+                definition: {$ref: '#/components/schemas/Definition'}
+      responses:
+        '201': {description: Project created, content: {application/json: {schema: {type: object, properties: {projectId: {type: string}, draftId: {type: string}, version: {type: integer}}}}}}
+        '403': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /v1/projects/{projectId}/draft:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    get:
+      summary: Read the Draft (Designer or Publisher)
+      responses:
+        '200': {description: Draft definition and version}
+        '404': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Optimistic Draft update (Designer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [definition, expectedVersion]
+              properties:
+                definition: {$ref: '#/components/schemas/Definition'}
+                expectedVersion: {type: integer, minimum: 1}
+      responses:
+        '200': {description: New Draft version}
+        '409': {description: VERSION_CONFLICT, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /v1/projects/{projectId}/validate:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      summary: Validate the Draft in plain language (Designer or Publisher)
+      responses:
+        '200': {description: '{valid, errors[]}'}
+  /v1/projects/{projectId}/publish:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      summary: Freeze, validate, create Definition Revision and Simulation Release (Publisher)
+      responses:
+        '201': {description: Release published}
+        '409': {description: ALREADY_PUBLISHED, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '422': {description: VALIDATION_FAILED with error list in details, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /v1/sessions:
+    post:
+      summary: Create a Session from a Release (Operator). This Deployment becomes its Session Authority.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [releaseId], properties: {releaseId: {type: string, format: uuid}}}
+      responses:
+        '201': {description: 'Session created in status "created" with authorityEpoch 1'}
+  /v1/sessions/{sessionId}/status:
+    parameters: [{$ref: '#/components/parameters/SessionId'}]
+    post:
+      summary: Change Session status (Operator)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [status], properties: {status: {type: string, enum: [active, paused, completed]}, reason: {type: string}}}
+      responses:
+        '200': {description: Status changed; Evidence Event recorded}
+        '409': {description: INVALID_TRANSITION}
+        '503': {description: AUTHORITY_UNAVAILABLE}
+  /v1/sessions/{sessionId}/participants:
+    parameters: [{$ref: '#/components/parameters/SessionId'}]
+    post:
+      summary: Assign a Person to a Session Role defined by the active Release (Operator)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [personId, sessionRoleId], properties: {personId: {type: string, format: uuid}, sessionRoleId: {type: string}}}
+      responses:
+        '201': {description: Participant and Seat Assignment created}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /v1/devices:
+    post:
+      summary: Register a device for the acting Person
+      responses:
+        '201': {description: Device registered}
+  /v1/sessions/{sessionId}/commands:
+    parameters: [{$ref: '#/components/parameters/SessionId'}]
+    post:
+      summary: Submit an idempotent Command to the Session Authority
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Command'}}}
+      responses:
+        '200': {$ref: '#/components/responses/ReceiptResponse'}
+        '403': {description: 'Recorded PERMISSION_DENIED receipt, or unrecorded NOT_A_PARTICIPANT / DEVICE_NOT_REGISTERED error'}
+        '404': {description: Recorded TARGET_NOT_FOUND receipt, or unknown session}
+        '409': {description: 'Recorded rejection or needs_reconciliation receipt, or unrecorded IDEMPOTENCY_COLLISION error'}
+        '422': {description: 'Recorded VALIDATION_FAILED receipt, or unrecorded INVALID_COMMAND error'}
+        '503': {description: AUTHORITY_UNAVAILABLE (no receipt)}
+  /v1/sessions/{sessionId}/commands/{commandId}:
+    parameters: [{$ref: '#/components/parameters/SessionId'}, {$ref: '#/components/parameters/CommandId'}]
+    get:
+      summary: Look up your own Command Receipt
+      responses:
+        '200': {content: {application/json: {schema: {$ref: '#/components/schemas/Receipt'}}}, description: Receipt}
+        '404': {$ref: '#/components/responses/Error'}
+  /v1/sessions/{sessionId}/artifacts:
+    parameters: [{$ref: '#/components/parameters/SessionId'}]
+    get:
+      summary: Artifacts visible to the acting Participant (slice projection, not full Information Policy)
+      responses:
+        '200': {description: Visible artifacts and the Participant's active Session Roles}
+  /v1/sessions/{sessionId}/evidence:
+    parameters: [{$ref: '#/components/parameters/SessionId'}]
+    get:
+      summary: Export the Session's Evidence Events in sequence order (Operator)
+      responses:
+        '200': {description: 'Evidence export labeled captured_history'}

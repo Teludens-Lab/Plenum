@@ -1,0 +1,399 @@
+# GC-04 join, routing and persistent regional context
+
+The implementation and evidence below describe the original four-seat regional
+model. The new three-seat model is tracked separately in
+[GC-04A](gc04a-shared-facilitator.md); earlier PASS results are not evidence for
+that model. Manual screen-reader checks were subsequently excluded by the user,
+not performed or passed.
+
+Human-run unit, build, local browser and database SQL checks have passed as
+reported below. The local frontend also passed the automated matrix against
+real rehearsal Supabase. The deployed site subsequently passed all 20 automated
+checkpoints. Retained build/deployment provenance remains outstanding; GC-04 is
+not signed off here. Screen-reader verification was excluded by the user, not
+passed. This historical evidence remains the paired/unified baseline; the
+GC-04A `--shared` runner supplies separate three-seat, contention and IndexedDB
+cleanup procedures before GC-04A sign-off.
+
+Participants enter the session code and use **Check session**, choose Green,
+choose Asia-Pacific or Europe, then choose Scribe or Facilitator. The complete
+delegation and semantic role appear above Join Session and in the join status.
+Discovering a regional session during submission pauses for explicit delegation
+selection. Regional Notetaker seats are not added to the public chooser by GC-04.
+Existing legacy Notetaker routes remain supported.
+
+| Semantic seat | Persisted role | Workspace |
+| --- | --- | --- |
+| Asia-Pacific Scribe | `green_asian_pacific_scribe` | `teams/green/facilitator.html?delegation=asian_pacific` |
+| Asia-Pacific Facilitator | `green_asian_pacific_facilitator` | `teams/green/scribe.html?delegation=asian_pacific` |
+| Europe Scribe | `green_europe_scribe` | `teams/green/facilitator.html?delegation=europe` |
+| Europe Facilitator | `green_europe_facilitator` | `teams/green/scribe.html?delegation=europe` |
+
+Legacy role inversion is unchanged. URLs use the existing Vite base path and
+page entries; no new page or build architecture is required. Historical unified
+Green records, roster membership, White Cell review, PLI scoring and proposal
+thread revisions are unchanged.
+
+## Server boundary and recovery
+
+Apply `data/2026-09-22_gc04_session_context.sql` after the September 18–21
+migrations, once in a dedicated rehearsal project before the matching frontend.
+The latest lookup definition inspected was August 18; August 26 keeps retired
+training sessions closed. The latest claim/heartbeat wrappers are September 19;
+September 20/21 replace workflow functions/indexes, not seat authority.
+
+`lookup_joinable_session_by_code` now requires authenticated identity and returns
+`session_topology_version`. Missing topology is a setup error, never assumed v1.
+`restore_session_seat_context(session UUID, seat UUID)` resolves `auth.uid()`
+to the existing seat and derives role/client identity on the server. It rejects
+foreign, ambiguous, revoked and non-live seats. It calls the GC-03 claim wrapper
+to recover disconnected/stale seats, retaining capacity locks and replacement
+tombstones. It never accepts a role or delegation parameter.
+Regional page navigation retains the seat lease to avoid a late disconnect
+racing reload recovery. Explicit logout releases the seat; closing a tab lets
+the existing 90-second lease expire.
+
+Browser storage is a rejoin hint. Confirmed scope exists only in memory and must
+be restored before shared controllers or protected sync start. A missing URL
+delegation is restored from the seat; conflicting or duplicate authority hints,
+wrong workspaces, wrong base paths and observer-mode substitution are rejected.
+The historical observer path without a participant seat remains separate.
+
+Heartbeat and realtime revocation invalidate the confirmed scope. Reconnect
+revalidates the seat before refreshing data. Authentication/permission loss
+blocks the workspace and clears its scoped browser state. Transient validation
+failure also blocks, with keyboard-accessible Retry and Return to join controls.
+The existing sync banner supplies offline, reconnecting, degraded and retry
+states. No offline write authority is granted.
+
+Regional heartbeats pause during known browser-offline periods, preserving the
+rejoin context without renewing the server lease. A stale-lease heartbeat on
+reconnect uses the authenticated restore RPC before one retry; a denied restore
+still clears access. Shared startup registers regional deck cleanup for both
+legacy workspaces, including semantic Scribes that do not read uploaded decks.
+
+Local keys include session, topology, parent team, delegation (or explicit
+unified identity), role and seat. Scoped draft/local-state lookup never searches
+legacy fallback keys. Notification read/dismiss state, onboarding and deck
+sidebar preferences are scoped. Existing in-memory draft maps are discarded with
+the inaccessible workspace; no draft decisions are synthesized. Logout, seat
+change and removal clear scoped state while retaining server evidence and
+unrelated historical export keys.
+
+Uploaded deck keys accept an explicit delegation:
+`scribe-deck:SESSION:green:europe` or `scribe-deck:SESSION:green:asian_pacific`.
+Regional readers reject a unified or other-region uploaded key before IndexedDB
+access. Seat invalidation requests removal of that regional browser deck;
+storage failures cannot grant access. Repository briefing material is still
+shared historical material. Regional deck authoring/assignment controls are a
+later-prompt dependency; a rejected assignment presents the existing deck error
+and retry state. Do not relabel the historical briefing as regional approval.
+
+## Human verification
+
+### Legacy-session topology compatibility
+
+The user reported `PLENUM2026` blocked on the deployed landing page with
+"Session topology unavailable". Inspection found a GC-04 compatibility defect:
+GC-02 intentionally leaves pre-existing sessions' stored topology NULL and
+defines that as unified version 1; September 22 returned raw NULL to clients
+that correctly require explicit server topology. The passing regional rehearsal
+matrix used new version-2 sessions and did not cover this historical case.
+The live PLENUM2026 row has not been queried by the coding agent.
+
+Apply `data/2026-09-23_gc04_legacy_session_topology.sql` through Supabase SQL
+Editor as postgres after the already-installed September 22 migration. Expected:
+successful transaction with no errors. This additive migration replaces only the
+lookup and restore functions, normalizing NULL to 1 in their returned JSON.
+It preserves the authenticated ownership checks, active-session restrictions,
+revocation handling, seat locking and execute grants. Historical sessions, seats,
+artifacts and roster snapshots are not rewritten. Regional version 2 stays 2.
+Do not reapply September 22 or change PLENUM2026 to version 2 as a workaround.
+
+Paste all of `tests/sql/gc04-legacy-session-editor.sql` into SQL Editor and run.
+It is read-only, uses synthetic JWT claims, contains PLENUM2026 already, and
+requires no copied IDs. Expected: one PASS row; for an older NULL-topology
+session, `stored_topology` is NULL, `returned_topology` is 1, and `session_status`
+is active. Missing/inactive sessions error rather than pass. This checks lookup
+under simulated identity, not live Auth or seat restoration.
+
+Then refresh the deployed site, enter PLENUM2026 and click Check session.
+Expected: the session is identified as unified Green, with the existing legacy
+role choices. The Check session button remains available for retry or another
+code; Join Session claims the selected seat. Verify join, reload and Resume with
+an authorized available seat. No frontend rebuild is required for the SQL fix.
+Browser NULL/missing/unknown topology remains blocked instead of silently falling
+back. Historical unified Green is not presented as a regional session.
+
+Human-run regression commands:
+
+```powershell
+npm test -- tests/unit/gc04-legacy-topology.test.js src/roles/landing.join.test.js src/core/seatContext.test.js src/services/seatBootstrap.test.js
+```
+
+Expected: all four files pass. The migration contract test pins both function
+bodies and grants to September 22 except their two response normalizations and
+CREATE OR REPLACE; landing tests pin unified Green success and invalid-topology
+denial. Paste `tests/sql/gc04-session-context-editor.sql` into SQL Editor after
+the migration to recheck regional authority; expected four PASS rows, nine
+assertions each, ending in ROLLBACK. The new migration and tests have not been
+executed by the coding agent. Fresh SQL and PLENUM2026 join/reload evidence remain
+required; earlier regional results do not establish legacy-session recovery.
+
+Necessary scope expansion: the additive compatibility migration, focused tests,
+the read-only diagnostic and setup/rollback documentation. No UI, authorization
+policy, participant decision, PLI scoring or historical-record change is included.
+
+No commands below were executed by the coding agent.
+
+### Reported verification results
+
+The user supplied a terminal transcript showing the commands below completed:
+
+- Vitest: 8 test files and 65 tests passed (3.20 seconds).
+- Vite: production build succeeded (172 modules, 9.60 seconds).
+- Playwright: all 5 GC-04 browser tests passed (27 seconds).
+
+The local `test-results/playwright-gate-summary.json` also reports 5 tests,
+no skipped tests, no retries, no browser errors and no violations;
+`test-results/.last-run.json` reports no failed tests. These artifacts do not
+identify a candidate commit or establish hosted Supabase authorization evidence.
+The build emitted nonfatal mixed static/dynamic import and chunk-size warnings.
+The user subsequently reported successful installation of
+`data/2026-09-22_gc04_session_context.sql` in Supabase with no errors. The first
+SQL regression attempt in SQL Editor failed to parse at the psql-only `\set`
+command; that failed attempt is not an authorization-test result.
+
+After the self-contained runner replaced manual fixture parameters, the user
+supplied fresh evidence:
+
+- Terminal transcript: `tests/unit/gc04-sql-runner.test.js` passed all 3 tests
+  in 1.46 seconds (reported start time 18:25:36).
+- Supabase SQL Editor screenshot: all four regional roles returned `PASS`,
+  each with `assertions_passed = 9`, for 36 successful SQL assertions. The
+  screenshot shows the script ending with `ROLLBACK`.
+
+These results establish the runner contract and the SQL matrix under simulated
+JWT claims on the tested database. The screenshot does not identify the project
+or candidate commit. At that stage, hosted Auth/browser integration,
+operator-removal UI cleanup and manual accessibility evidence remained outstanding.
+
+The subsequent hosted-run transcript reports 25 tests passing across six files
+and a successful 8.76-second build. Live run
+`e82ee015-ee19-4658-b318-7e8df3ee5cfa` failed at the missing deployed
+`#checkSessionBtn` before any checkpoint; its saved report confirms successful
+fixture archival. At that stage the deployed frontend lacked the GC-04 changes. The hosted
+runner now checks landing markup before provisioning and rejects shell commands
+at its screen-reader prompt; see the live verification procedure for recovery.
+
+The subsequent local run on 2026-09-18 passed all 14 runner/preflight unit tests
+(two files, 4.02 seconds). Saved browser report
+`test-results/gc04-live/118695e2-7338-454e-bd56-0861c3920891/results.json`
+confirms `target: "local"`, 20 checkpoints, no browser errors or asset failure,
+and successful automatic archival against rehearsal project
+`gsromgrxgrwwfywaoyme`. All four roles passed real hosted Auth, keyboard joins,
+reload/Resume, RPC/RLS isolation, offline/reconnect, route/storage tampering and
+operator-removal DOM/storage/deck/authority cleanup. Chromium was 143.0.7499.4;
+the frontend was served at `http://127.0.0.1:4174/Fractured-Order/`.
+The report records source hashes and working-tree state with HEAD
+`2a2ada60cbcee6d96d487bf948248b8651a33ad6`; the tested candidate included
+uncommitted changes. No manual observations were recorded, so `manualPassed`
+and overall `passed` remain false. This supplies local integration evidence
+without claiming deployed routing, deployment provenance or screen-reader approval.
+
+Deployed run `0f9d94cd-63de-471b-88cb-769ff2f38177` subsequently passed on
+2026-09-18 (23:52:22 to 23:54:01 UTC). Its saved `results.json` under
+`test-results/gc04-live/0f9d94cd-63de-471b-88cb-769ff2f38177/` confirms the
+GitHub Pages target `https://ssgwm25.github.io/Fractured-Order/`, the same
+rehearsal project and Chromium version, all 20 automated checkpoints, no browser
+errors or asset failure, and successful fixture archival. The report records
+clean working-tree state at `fc1e04e4bd4018cdded53dfa890bb627326ac8e2` and
+source/fetched asset hashes. This supplies deployed browser integration evidence;
+retain matching build/deployment provenance separately. Zero manual observations
+were recorded, so `manualPassed` and overall `passed` remain false.
+
+### Reproduction commands
+
+During the later GC-06 compatibility rerun, the human reported
+`42P01: relation "gc04_run" does not exist`. This failure does not erase the
+historical results above or establish a cause from the message alone. The SQL
+Editor runner now uses the same containment pattern as GC-04A/GC-05/GC-06:
+one server-side block creates and uses the temporary tables and composite types,
+with explicit `pg_temp` references. The outer result query reads a transaction-
+local JSON report, preserving the four grouped result columns. Missing or empty
+reports return FAIL. Unexpected errors retain SQLSTATE and add the stage and
+stacked SQL context to MESSAGE. All 36 seat assertions, authenticated role
+switches and the final rollback remain. No installed function, policy or
+migration changes are required; this is a necessary GC-06 verification dependency.
+
+Run the updated runner checks, then recopy the entire SQL file:
+
+```powershell
+npm test -- tests/unit/gc04-sql-runner.test.js
+if ($LASTEXITCODE -ne 0) { throw 'GC04 SQL runner checks failed.' }
+Get-Content -Raw -Encoding UTF8 'tests/sql/gc04-session-context-editor.sql' | Set-Clipboard
+```
+
+Expected: six tests pass, including three new containment/diagnostic/reporting
+checks. These inspect source structure and do not execute SQL. Paste the copied
+file into a new SQL Editor query and run everything as postgres with RLS enabled.
+Expected: four PASS rows with nine assertions each (36 total), followed by
+rollback. Retain any full `GC04 stage=...` error. No tests or SQL were executed
+by the agent.
+
+The subsequent human terminal output reports **six runner tests passed** in
+Vitest 1.6.1, start time `00:31:35`, duration `3.44s`, with no failures or skips.
+The accompanying SQL Editor screenshot shows all four regional roles PASS with
+nine assertions each (**36 total**). Its visible checks cover disconnected
+rejoin, foreign-seat denial, join, legacy workspace mapping, topology lookup,
+identity restoration, revoked-seat denial, stale rejoin and wrong-session denial.
+This is fresh user-supplied GC-04 compatibility evidence during GC-06 verification;
+it is separate from the historical GC-04 runs above. The screenshot does not
+identify the database, executed-source hash or independently confirm rollback
+cleanup. Those receipts and GC-06 browser/hosted/concurrency evidence remain
+outstanding; no full GC-06 gate is declared passed.
+
+```powershell
+npm test -- src/core/seatContext.test.js src/services/seatBootstrap.test.js src/services/database.seat-context.test.js src/roles/landing.join.test.js src/core/teamContext.test.js src/core/navigation.test.js src/stores/session.test.js tests/unit/repo-docs-contract.test.js
+npm run build
+node --preserve-symlinks --preserve-symlinks-main ./node_modules/@playwright/test/cli.js test tests/e2e/gc04-regional-context.e2e.js
+```
+
+Expected: all assertions pass; build succeeds; all five browser cases pass.
+Browser fixtures are synthetic and local only. They verify the four keyboard
+joins, full-seat feedback, reload, deep-link restoration and tampered storage/
+queries. They are not live Supabase authorization evidence.
+
+For **Supabase SQL Editor**, paste the entire
+`tests/sql/gc04-session-context-editor.sql` file and run as `postgres` against
+the migrated rehearsal project. No placeholders, manual UUIDs, existing seats
+or pre-created Auth accounts are needed. Do not reinstall the successful migration.
+
+The suite generates two isolated session IDs, four distinct synthetic identities
+and an empty synthetic roster fixture, then claims the four regional seats via
+the installed RPC as `authenticated`. The empty roster follows the GC-03 SQL
+test pattern; it neither adds represented countries nor approves an exercise.
+Every fixture and lease/revocation write is inside the final rolled-back
+transaction. No existing exercise is selected or modified, and no participant
+decisions or artifact revisions are created. Run the whole file, including
+`BEGIN` and `ROLLBACK`.
+
+Expected: **four result rows, each with status `PASS` and `assertions_passed = 9`**,
+and no errors. The 36 assertions cover join, topology lookup, restored seat
+identity, semantic/legacy workspace mapping, foreign-seat denial, wrong-session
+denial, disconnected rejoin, stale rejoin and revoked-seat denial. Negative tests
+require the intended seat-authorization exception, not an unrelated SQL error.
+Foreign seats are active when ownership is checked. A failed assertion aborts
+the transaction; it cannot produce a complete passing matrix.
+
+This tests the installed database functions under simulated JWT claims, not
+Supabase Auth token issuance or browser/live RLS integration. The user-supplied
+SQL Editor results above cover this expanded 36-assertion suite.
+
+For the terminal alternative, set `GC04_DATABASE_URL` to the rehearsal database
+connection and run the same suite through its psql entry point:
+
+```powershell
+psql "$env:GC04_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/sql/gc04-session-context.sql
+```
+
+Expected: the same four passing rows, `ROLLBACK`, and exit code 0. The psql
+wrapper's `\set`/`\ir` commands are for the terminal only. SQL Editor uses the
+full editor file directly. Neither runner has been executed by the coding agent.
+
+The narrow runner contract checks prevent recurrence of SQL Editor placeholders
+and client commands, keep both entry points on one suite, and guard rollback:
+
+```powershell
+npm test -- tests/unit/gc04-sql-runner.test.js
+```
+
+Expected: all six checks pass. These source checks do not execute PostgreSQL
+and cannot establish that the SQL assertions pass on the installed database.
+
+Also verify on the freshly built candidate at `/Fractured-Order/`: all four
+roles retain region after reload and Resume; changing `session`, `delegation`,
+`role`, `team`, `mode` or the workspace path blocks access. Inspect direct
+authenticated RPC/RLS requests from separate identities, not only browser
+filters. Remove a seat as operator and check that its open tab loses private
+content and local keys. Check offline/reconnect and denied storage with keyboard
+and screen reader at mobile and desktop widths.
+
+Before committing, use the [local candidate procedure](gc04-live-verification.md#check-the-local-candidate-before-committing)
+to build and serve `/Fractured-Order/`, then run the runner with `--local`.
+This uses real rehearsal Supabase and automatically generated fixtures. Reports
+identify the local frontend explicitly; deployment evidence remains separate.
+The local automated matrix passed in the human run recorded above.
+
+The self-contained [hosted browser runner](gc04-live-verification.md) now
+implements the live verification workflow, including generated fixtures,
+real browser Auth/RPC/RLS checks, routing, reconnect, operator-removal cleanup,
+recorded screen-reader observations and automatic archival. Run:
+
+```powershell
+node --preserve-symlinks --preserve-symlinks-main scripts/gc04-live-check.mjs --manual
+```
+
+It prompts for deployment/credential inputs when not configured, never for
+fixture UUIDs. Expected: 20 automated checkpoints, 24 manual observations and
+successful archival. The latest hosted automated matrix passed as recorded above;
+the combined automated/manual matrix remains incomplete.
+
+## Dependencies and evidence still required
+
+- The user reported successful GC-04 migration installation and supplied passing
+  SQL results. Retain the target project's verified migration ledger, including
+  GC-02/03 and the September 20/21 fixes, with the candidate evidence.
+- Roster approval and v2 activation remain operator-owned dependencies. This
+  change does not approve or expand a represented roster.
+- Regional artifact authoring/handoff and communication/deck assignment flows
+  remain GC-05–07 scope. This change preserves their server authorization and
+  does not claim end-to-end regional workflow completion.
+- Unit/build/browser and SQL results are reported above. Local frontend integration
+  with hosted Auth/RPC/RLS, keyboard operation, removal cleanup and reconnect is
+  supported by run `118695e2-7338-454e-bd56-0861c3920891`. Deployed-site automation
+  is supported by run `0f9d94cd-63de-471b-88cb-769ff2f38177`. Manual screen-reader
+  observations and retained candidate/build/deployment provenance remain required.
+  The hosted report includes source/fetched asset hashes and clean working-tree
+  state, but does not itself verify the build/deployment workflow chain.
+
+For lookup/restore permission errors, verify identity, live session status,
+revocation and installed function definitions. For full seats, select an
+available seat or ask the operator to review the roster. For missing topology/
+RPC, apply the verified forward migration; never restore broad legacy policies.
+Contain a frontend problem with a compatible reader and retain the additive
+functions, ownership columns, tombstones and historical evidence. Do not undo
+regional ownership or replay old schema snapshots as rollback.
+
+## Change inventory
+
+GC-04 changes these files (pre-existing GC-02/03 edits in shared files are retained):
+
+- Join and page identity: `index.html`, `src/roles/landing.js`,
+  `teams/green/facilitator.html`, `teams/green/scribe.html`.
+- Context and startup: `src/core/teamContext.js`, `src/core/seatContext.js`,
+  `src/services/seatBootstrap.js`, `src/stores/session.js`, `src/main.js`.
+- Necessary shared-controller/lifecycle dependencies: `src/roles/facilitator.js`,
+  `src/roles/scribe.js`, `src/roles/notetaker.js`, `src/stores/participants.js`,
+  `src/services/sync.js`.
+- Persistence dependencies: `src/utils/keyGenerator.js`,
+  `src/components/ui/DurableNotification.js`, `src/features/scribe/deckStorage.js`.
+- Server and mock adapter: `src/services/database.js`, `src/services/supabaseMock.js`,
+  `data/2026-09-22_gc04_session_context.sql`.
+- New regression files: `src/core/seatContext.test.js`,
+  `src/services/seatBootstrap.test.js`, `src/services/database.seat-context.test.js`,
+  `tests/e2e/gc04-regional-context.e2e.js`, `tests/sql/gc04-session-context.sql`,
+  `tests/sql/gc04-session-context-editor.sql`, `tests/unit/gc04-sql-runner.test.js`.
+- Extended regressions: `src/roles/landing.join.test.js`, `src/stores/session.test.js`,
+  `tests/unit/repo-docs-contract.test.js`.
+- Hosted verification tooling: `scripts/gc04-live-check.mjs`,
+  `scripts/gc04-live-contract.mjs`, `scripts/gc04-live-browser.mjs`,
+  `scripts/gc04-live-preflight.mjs`, `tests/unit/gc04-live-preflight.test.js`,
+  `tests/unit/gc04-live-check.test.js`, `src/stores/participants.gc04-context.test.js`,
+  `src/services/seatBootstrap.deck-cleanup.test.js`.
+- Documentation: this file, `docs/architecture/gc04-live-verification.md`,
+  `docs/supabase-setup.md`, `docs/supabase-rollback.md`.
+
+`src/core/navigation.js` and `vite.config.js` were inspected and require no
+changes: the existing base-path builder and Green page entries are reused.
+The prompt handbook was not edited. No gate status was changed.

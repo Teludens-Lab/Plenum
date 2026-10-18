@@ -1,0 +1,233 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "meta": {
+    "name": "Teludens Interface System",
+    "version": "1.0.0",
+    "baseGrid": 4
+  },
+  "primitive": {
+    "neutral": {
+      "0": "#FFFFFF",
+      "25": "#FDFCFA",
+      "50": "#F8F7F4",
+      "100": "#F0EFEB",
+      "200": "#E3E1DC",
+      "300": "#C9C6BF",
+      "400": "#A5A19A",
+      "500": "#7D7972",
+      "600": "#5F5B55",
+      "700": "#45413C",
+      "800": "#2D2A27",
+      "900": "#1D1B19",
+      "950": "#121110"
+    },
+    "vermilion": {
+      "50": "#FFF4F1",
+      "100": "#FFE5DF",
+      "200": "#FFC8BD",
+      "300": "#FF9B89",
+      "400": "#FF6B52",
+      "500": "#F24B35",
+      "600": "#D93A27",
+      "700": "#B72D1D",
+      "800": "#8F261B",
+      "900": "#76241C"
+    },
+    "cobalt": {
+      "100": "#E7EEFF",
+      "500": "#3567D6",
+      "700": "#24489E"
+    },
+    "green": {
+      "100": "#E5F4EA",
+      "500": "#2E7D4F",
+      "700": "#205A39"
+    },
+    "amber": {
+      "100": "#FFF0D1",
+      "500": "#A96500",
+      "700": "#754700"
+    },
+    "crimson": {
+      "100": "#FDE5E3",
+      "500": "#D13C32",
+      "700": "#9C2923"
+    }
+  },
+  "semantic": {
+    "light": {
+      "material": {
+        "canvas": "{primitive.neutral.50}",
+        "workspace": "{primitive.neutral.25}",
+        "surface": "{primitive.neutral.0}",
+        "surfaceRaised": "{primitive.neutral.0}",
+        "surfaceRecessed": "{primitive.neutral.100}",
+        "overlay": "{primitive.neutral.0}",
+        "control": "{primitive.neutral.100}",
+        "controlHover": "{primitive.neutral.200}",
+        "controlPressed": "{primitive.neutral.300}",
+        "selection": "{primitive.vermilion.50}",
+        "focus": "{primitive.cobalt.100}"
+      },
+      "text": {
+        "primary": "{primitive.neutral.900}",
+        "secondary": "{primitive.neutral.700}",
+        "tertiary": "{primitive.neutral.500}",
+        "inverse": "{primitive.neutral.0}"
+      },
+      "boundary": {
+        "subtle": "{primitive.neutral.200}",
+        "standard": "{primitive.neutral.300}",
+        "strong": "{primitive.neutral.500}"
+      },
+      "signal": {
+        "decision": "{primitive.vermilion.500}",
+        "decisionStrong": "{primitive.vermilion.600}",
+        "decisionSoft": "{primitive.vermilion.100}"
+      },
+      "info": {
+        "default": "{primitive.cobalt.500}",
+        "soft": "{primitive.cobalt.100}"
+      },
+      "success": {
+        "default": "{primitive.green.500}",
+        "soft": "{primitive.green.100}"
+      },
+      "caution": {
+        "default": "{primitive.amber.500}",
+        "soft": "{primitive.amber.100}"
+      },
+      "error": {
+        "default": "{primitive.crimson.500}",
+        "soft": "{primitive.crimson.100}"
+      },
+      "action": {
+        "primary": "{primitive.neutral.900}",
+        "primaryHover": "{primitive.neutral.800}",
+        "primaryPressed": "{primitive.neutral.700}",
+        "decision": "{primitive.vermilion.500}",
+        "decisionHover": "{primitive.vermilion.600}",
+        "decisionPressed": "{primitive.vermilion.600}",
+        "destructive": "{primitive.crimson.500}",
+        "destructiveHover": "{primitive.crimson.700}",
+        "destructivePressed": "{primitive.crimson.700}"
+      }
+    },
+    "dark": {
+      "material": {
+        "canvas": "{primitive.neutral.950}",
+        "workspace": "{primitive.neutral.900}",
+        "surface": "{primitive.neutral.800}",
+        "surfaceRaised": "{primitive.neutral.700}",
+        "surfaceRecessed": "{primitive.neutral.950}",
+        "overlay": "{primitive.neutral.800}",
+        "control": "{primitive.neutral.700}",
+        "controlHover": "{primitive.neutral.600}",
+        "controlPressed": "{primitive.neutral.500}",
+        "selection": "{primitive.neutral.700}",
+        "focus": "{primitive.cobalt.700}"
+      },
+      "text": {
+        "primary": "{primitive.neutral.50}",
+        "secondary": "{primitive.neutral.300}",
+        "tertiary": "{primitive.neutral.400}",
+        "inverse": "{primitive.neutral.950}"
+      },
+      "boundary": {
+        "subtle": "{primitive.neutral.700}",
+        "standard": "{primitive.neutral.600}",
+        "strong": "{primitive.neutral.400}"
+      },
+      "signal": {
+        "decision": "{primitive.vermilion.400}",
+        "decisionStrong": "{primitive.vermilion.300}",
+        "decisionSoft": "{primitive.vermilion.900}"
+      },
+      "info": {
+        "default": "{primitive.cobalt.500}",
+        "soft": "{primitive.cobalt.700}"
+      },
+      "success": {
+        "default": "{primitive.green.500}",
+        "soft": "{primitive.green.700}"
+      },
+      "caution": {
+        "default": "{primitive.amber.500}",
+        "soft": "{primitive.amber.700}"
+      },
+      "error": {
+        "default": "{primitive.crimson.500}",
+        "soft": "{primitive.crimson.700}"
+      },
+      "action": {
+        "primary": "{primitive.neutral.50}",
+        "primaryHover": "{primitive.neutral.100}",
+        "primaryPressed": "{primitive.neutral.200}",
+        "decision": "{primitive.vermilion.400}",
+        "decisionHover": "{primitive.vermilion.300}",
+        "decisionPressed": "{primitive.vermilion.300}",
+        "destructive": "{primitive.crimson.500}",
+        "destructiveHover": "{primitive.crimson.100}",
+        "destructivePressed": "{primitive.crimson.100}"
+      }
+    }
+  },
+  "spacing": {
+    "xxs": 4,
+    "xs": 8,
+    "sm": 12,
+    "md": 16,
+    "lg": 20,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 40,
+    "4xl": 48,
+    "5xl": 64,
+    "6xl": 80
+  },
+  "radius": {
+    "none": 0,
+    "xs": 3,
+    "sm": 5,
+    "md": 8,
+    "lg": 12,
+    "full": 999
+  },
+  "density": {
+    "focus": {
+      "controlHeight": 48,
+      "rowHeight": 44,
+      "toolbarHeight": 48,
+      "panelPadding": 24,
+      "sectionGap": 28,
+      "inlineGap": 12
+    },
+    "standard": {
+      "controlHeight": 42,
+      "rowHeight": 36,
+      "toolbarHeight": 44,
+      "panelPadding": 16,
+      "sectionGap": 22,
+      "inlineGap": 10
+    },
+    "operations": {
+      "controlHeight": 38,
+      "rowHeight": 30,
+      "toolbarHeight": 40,
+      "panelPadding": 12,
+      "sectionGap": 14,
+      "inlineGap": 8
+    }
+  },
+  "motion": {
+    "press": 80,
+    "hover": 110,
+    "selection": 140,
+    "tooltip": 150,
+    "popover": 180,
+    "modal": 210,
+    "panel": 220,
+    "view": 260,
+    "majorCausal": 340
+  }
+}

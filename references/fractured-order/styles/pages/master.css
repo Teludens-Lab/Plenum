@@ -1,0 +1,176 @@
+/**
+ * Game Master Console Page Styles
+ * Extracted from master.html inline <style> block
+ */
+
+/* Skip link is defined centrally in styles/base/reset.css. */
+
+/* ==================== SIDEBAR POLISH ==================== */
+
+.master-page .sidebar {
+    box-shadow: var(--shadow-md);
+}
+
+.sidebar-brand {
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-6);
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-family: var(--font-display);
+    font-weight: var(--font-semibold);
+    font-size: var(--text-lg);
+    color: var(--color-navy);
+    letter-spacing: -0.022em;
+}
+
+.master-page .sidebar-link:hover {
+    transform: translateX(4px);
+}
+
+/* ==================== HEADER POLISH ==================== */
+
+.master-page .page-header {
+    background: var(--glass-header-bg);
+    -webkit-backdrop-filter: saturate(180%) blur(var(--blur-md));
+    backdrop-filter: saturate(180%) blur(var(--blur-md));
+    border-bottom: 1px solid var(--color-border-light);
+    box-shadow: none;
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .master-page .page-header {
+        background: var(--color-surface);
+    }
+}
+
+/* Game state pill in header */
+.master-page .header-game-state {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 4px 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.master-page .game-state-item {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    border-left: none;
+    padding: 0;
+    font-size: var(--text-sm);
+}
+
+.master-page .game-state-value {
+    font-family: var(--font-mono);
+}
+
+.master-page .header-game-state.is-strategic-orientation {
+    border-radius: var(--radius-lg);
+    max-width: 28rem;
+}
+
+.master-page .header-game-state.is-strategic-orientation .game-state-value {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    letter-spacing: 0;
+    white-space: normal;
+}
+
+/* ==================== CARD POLISH ==================== */
+
+.master-page .card {
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-card);
+    transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+    overflow: hidden;
+}
+
+.master-page .card-hoverable:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--color-navy-soft);
+}
+
+.master-page .card-header {
+    background: linear-gradient(to right, var(--color-surface-alt), transparent);
+    border-bottom: 1px solid var(--color-border-light);
+    padding: var(--space-4) var(--space-6);
+}
+
+.master-page .card-header h3 {
+    font-size: var(--text-base);
+    font-weight: var(--font-semibold);
+    margin: 0;
+    color: var(--color-navy);
+}
+
+/* ==================== STAT CARDS ==================== */
+
+.master-page .stat-card {
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+}
+
+.master-page .stat-label {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-2);
+}
+
+.master-page .stat-value {
+    font-size: var(--text-3xl);
+    font-family: var(--font-display);
+    color: var(--color-navy);
+    font-weight: var(--font-semibold);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==================== SESSION MANAGEMENT ==================== */
+
+.master-page .session-list-group + .session-list-group {
+    margin-top: var(--space-8);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border-light);
+}
+
+.master-page .session-list-group-header {
+    margin-bottom: var(--space-4);
+}
+
+.master-page .session-list-group-header h3 {
+    margin: 0 0 var(--space-1);
+    color: var(--color-navy);
+    font-size: var(--text-lg);
+}
+
+.master-page .session-list-group-header p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+/* ==================== PLUGINS SECTION ==================== */
+
+/* Stack mounted plugins with consistent spacing. */
+.master-page #gameMasterPluginMounts {
+    display: grid;
+    gap: var(--space-4);
+}
+
+/* Explain the empty state instead of leaving the panel blank. */
+.master-page #gameMasterPluginMounts:empty::before {
+    content: "No plugins are active for the selected session. Choose a session and enable plugins from the White Cell settings.";
+    display: block;
+    padding: var(--space-10) var(--space-6);
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--card-radius);
+}
+

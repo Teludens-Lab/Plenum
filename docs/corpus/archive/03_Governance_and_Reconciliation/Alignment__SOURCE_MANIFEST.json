@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-17",
+  "sources": [
+    {
+      "source": "02_PLATFORM_ARCHITECTURE(2).md",
+      "version": "1.1.0",
+      "sha256": "fca2fdb47b6ea6efa3ac12d97aa0be1eb55ae3e873c12952d988350b5bfd404c",
+      "amended": "02_PLATFORM_ARCHITECTURE_v1.2.md"
+    },
+    {
+      "source": "04_DESIGN_STUDIO_SPECIFICATION(2).md",
+      "version": "1.1.0",
+      "sha256": "64d8854c584510e140cdd81713ebee047b9622ac32607320c312b29d29e4c7ff",
+      "amended": "04_DESIGN_STUDIO_SPECIFICATION_v1.2.md"
+    },
+    {
+      "source": "05_RUNTIME_AND_ADJUDICATION(1).md",
+      "version": "1.1.0",
+      "sha256": "4fb89aab690ce28cea9a79d62dbf234b776f009097768bc75657b716de670114",
+      "amended": "05_RUNTIME_AND_ADJUDICATION_v1.2.md"
+    },
+    {
+      "source": "06_DATA_SECURITY_REPORTING(1).md",
+      "version": "1.1.0",
+      "sha256": "81851b1c028bb0794369d20826c62ed8e0c6230ea67d437aa3a384112adfc8b0",
+      "amended": "06_DATA_SECURITY_REPORTING_v1.2.md"
+    },
+    {
+      "source": "07_IMPLEMENTATION_ROADMAP(3).md",
+      "version": "1.1.0",
+      "sha256": "114983b4796d51855925cbf150b40d6b0ea6131a9dc11674dd993e290bb6e57d",
+      "amended": "07_IMPLEMENTATION_ROADMAP_v1.2.md"
+    }
+  ],
+  "verification": "document-level only"
+}

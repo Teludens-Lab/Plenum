@@ -1,0 +1,471 @@
+/**
+ * Proposal Details
+ *
+ * Shared option lists + serialization for the New Proposal modal used by
+ * proposal-capable teams. Fields are packed into an action's
+ * `ally_contingencies` text blob behind a recognizable prefix so existing
+ * card / review code paths can opt into proposal-shaped display via
+ * `getProposalViewModel`.
+ */
+
+import { GREEN_DELEGATIONS } from '../../core/teamContext.js';
+import {
+    buildIndustryTurnSheetDisplayModel,
+    normalizeIndustryTurnSheet
+} from './industryTurnSheet.js';
+
+export const PROPOSAL_DETAILS_PREFIX = 'Proposal Details';
+export const PROPOSAL_ACTION_MECHANISM = 'Proposal';
+
+export const PROPOSAL_ORIGINATORS = Object.freeze([
+    'EU',
+    'France',
+    'UK',
+    'ROK',
+    'ASEAN',
+    'Japan'
+]);
+
+export const PROPOSAL_CATEGORIES = Object.freeze([
+    'Partnership',
+    'Conditions',
+    'Alignment',
+    'Refusal',
+    'Other'
+]);
+
+export const PROPOSAL_SECTORS = Object.freeze([
+    'Biotechnology',
+    'Agriculture',
+    'Telecommunications',
+    'Other'
+]);
+
+export const PROPOSAL_RECIPIENT_TEAMS = Object.freeze(['blue', 'red']);
+export const PROPOSAL_RECIPIENT_APPROVAL_STATUS = Object.freeze({
+    PENDING: 'pending_white_cell_approval'
+});
+
+export const PROPOSAL_DELIVERIES = Object.freeze([
+    'Diplomatic Engagement',
+    'Joint Statement',
+    'Backchannel Negotiation',
+    'Multilateral Forum',
+    'Other'
+]);
+
+export const PROPOSAL_SCRIBE_HANDOFF = Object.freeze({
+    DRAFT: 'Draft',
+    FORWARDED: 'Forwarded'
+});
+
+function normalizeString(value) {
+    return typeof value === 'string'
+        ? value.replace(/\s+/g, ' ').trim()
+        : '';
+}
+
+function normalizeStringList(values = []) {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map((value) => normalizeString(value)).filter(Boolean))];
+}
+
+function normalizeRecipientTeams(values = []) {
+    return normalizeStringList(values)
+        .map((value) => value.toLowerCase())
+        .filter((value) => PROPOSAL_RECIPIENT_TEAMS.includes(value));
+}
+
+function normalizeRecipientApprovalStates(value = {}, recipientTeams = []) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return Object.fromEntries(normalizeRecipientTeams(recipientTeams).map((team) => [
+        team,
+        normalizeString(source[team]) || PROPOSAL_RECIPIENT_APPROVAL_STATUS.PENDING
+    ]));
+}
+
+function parseRecipientApprovalStates(value = '', recipientTeams = []) {
+    if (!normalizeString(value)) return {};
+
+    try {
+        return normalizeRecipientApprovalStates(JSON.parse(value), recipientTeams);
+    } catch (_error) {
+        return {};
+    }
+}
+
+function serializeStringList(values = []) {
+    const normalizedValues = normalizeStringList(values);
+    return normalizedValues.length ? JSON.stringify(normalizedValues) : 'None selected';
+}
+
+function parseStringList(value = '') {
+    const normalizedValue = normalizeString(value);
+    if (!normalizedValue || normalizedValue === 'None selected') return [];
+
+    try {
+        const parsedValue = JSON.parse(normalizedValue);
+        if (Array.isArray(parsedValue)) {
+            return normalizeStringList(parsedValue);
+        }
+    } catch (_error) {
+        // Fall through for legacy comma-separated values.
+    }
+
+    return normalizeStringList(normalizedValue.split(','));
+}
+
+function normalizeDecision(value = '') {
+    const normalizedValue = normalizeString(value).toLowerCase();
+    if (normalizedValue === 'yes') return 'Yes';
+    if (normalizedValue === 'no') return 'No';
+    return '';
+}
+
+function normalizeRevisionMetadata(value = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    const revisionNumberValue = source.revisionNumber ?? source.revision_number;
+    const revisionNumber = Number(revisionNumberValue);
+
+    return {
+        revisionNumber: Number.isInteger(revisionNumber) && revisionNumber >= 1 ? revisionNumber : null,
+        revisionNumberOrigin: normalizeString(source.revisionNumberOrigin ?? source.revision_number_origin),
+        priorWorkflowState: normalizeString(source.priorWorkflowState ?? source.prior_workflow_state),
+        reviewedAt: normalizeString(source.reviewedAt ?? source.reviewed_at),
+        reviewedByRole: normalizeString(source.reviewedByRole ?? source.reviewed_by_role),
+        reviewNotes: normalizeString(source.reviewNotes ?? source.review_notes),
+        completedAt: normalizeString(source.completedAt ?? source.completed_at)
+    };
+}
+
+function parseRevisionMetadata(value = '') {
+    if (!normalizeString(value)) return normalizeRevisionMetadata();
+
+    try {
+        return normalizeRevisionMetadata(JSON.parse(value));
+    } catch (_error) {
+        return normalizeRevisionMetadata();
+    }
+}
+
+function parseIndustryTurnSheet(value = '') {
+    if (!normalizeString(value)) return null;
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object'
+            ? normalizeIndustryTurnSheet(parsed)
+            : null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function mergeRevisionMetadata(action = {}, embedded = {}) {
+    return normalizeRevisionMetadata({
+        revisionNumber: action.revision_number ?? embedded.revisionNumber,
+        revisionNumberOrigin: action.revision_number_origin ?? embedded.revisionNumberOrigin,
+        priorWorkflowState: action.prior_workflow_state ?? embedded.priorWorkflowState,
+        reviewedAt: action.reviewed_at ?? embedded.reviewedAt,
+        reviewedByRole: action.reviewed_by_role ?? embedded.reviewedByRole,
+        reviewNotes: action.review_notes ?? embedded.reviewNotes,
+        completedAt: action.completed_at ?? embedded.completedAt
+    });
+}
+
+function formatDetailSelection(values = [], fallback = '') {
+    return Array.isArray(values) && values.length ? values.join(', ') : fallback;
+}
+
+function formatRecipientTeams(values = []) {
+    return normalizeStringList(values).map((team) => {
+        const normalizedTeam = team.toLowerCase();
+        return ['blue', 'red', 'green'].includes(normalizedTeam)
+            ? `${normalizedTeam[0].toUpperCase()}${normalizedTeam.slice(1)} Team`
+            : (normalizedTeam === 'industry' ? 'Industry Team' : team);
+    }).join(', ');
+}
+
+function formatRecipientApprovalStates(states = {}) {
+    const labels = {
+        [PROPOSAL_RECIPIENT_APPROVAL_STATUS.PENDING]: 'Awaiting separate White Cell approval',
+        approved_forwarded: 'Approved and forwarded',
+        response_received: 'Response received',
+        negotiation_underway: 'Negotiation underway',
+        closed: 'Closed'
+    };
+    return PROPOSAL_RECIPIENT_TEAMS
+        .filter((team) => states[team])
+        .map((team) => `${formatRecipientTeams([team])}: ${labels[states[team]] || states[team].replace(/_/g, ' ')}`)
+        .join('; ');
+}
+
+export function formatProposalRecipientTeams(values = [], fallback = 'Not specified') {
+    return formatRecipientTeams(values) || fallback;
+}
+
+function buildProposalArtifactDetails(viewModel = {}) {
+    if (viewModel.hasIndustryTurnSheet) {
+        return buildIndustryTurnSheetDisplayModel(viewModel.industryTurnSheet).sections
+            .flatMap((section) => section.rows.map(([label, value]) => ({
+                label: `${section.title}: ${label}`,
+                value
+            })));
+    }
+    const revision = viewModel.revisionMetadata || {};
+    const isIndustryProposal = viewModel.team === 'industry';
+    const instrumentOfPower = formatDetailSelection(
+        viewModel.instruments,
+        isIndustryProposal ? viewModel.category : ''
+    );
+    return [
+        { label: 'Delegation', value: viewModel.delegationLabel },
+        { label: 'Proposal Objective', value: viewModel.objective },
+        { label: 'Originators', value: formatDetailSelection(viewModel.originators) },
+        { label: 'Instrument of Power', value: instrumentOfPower },
+        { label: 'Category (historical)', value: isIndustryProposal ? '' : viewModel.category },
+        {
+            label: 'Intended Partners',
+            value: viewModel.intendedPartners || formatRecipientTeams(viewModel.recipientTeams)
+        },
+        {
+            label: 'Proposed Recipient Approvals',
+            value: formatRecipientApprovalStates(viewModel.recipientApprovalStates)
+        },
+        { label: 'Focus Sectors', value: formatDetailSelection(viewModel.focusSectors) },
+        { label: 'Supply Chain Decision', value: viewModel.supplyChainFocusDecision },
+        { label: 'Action Angles', value: formatDetailSelection(viewModel.supplyChainActionAngles) },
+        { label: 'Supply Chain Areas', value: formatDetailSelection(viewModel.supplyChainAreas) },
+        { label: 'Industry Focus', value: viewModel.industryFocus },
+        { label: 'Country Focus', value: viewModel.countryFocus },
+        { label: 'Proposed Activity', value: viewModel.proposedActivity },
+        { label: 'Delivery (historical)', value: viewModel.delivery },
+        { label: 'Timing & Conditions', value: viewModel.timingAndConditions },
+        { label: 'Expected Outcomes', value: viewModel.expectedOutcomes },
+        { label: 'Revision', value: revision.revisionNumber === null ? '' : String(revision.revisionNumber) },
+        { label: 'Prior Workflow State', value: revision.priorWorkflowState },
+        { label: 'Reviewed At', value: revision.reviewedAt },
+        { label: 'Reviewed By', value: revision.reviewedByRole },
+        { label: 'Review Notes', value: revision.reviewNotes },
+        { label: 'Completed At', value: revision.completedAt }
+    ].filter((field) => field.value !== '' && field.value !== null && field.value !== undefined);
+}
+
+function normalizeScribeHandoff(value = '') {
+    const normalizedValue = normalizeString(value).toLowerCase();
+
+    if (normalizedValue === 'forwarded' || normalizedValue === 'forwarded to scribe') {
+        return PROPOSAL_SCRIBE_HANDOFF.FORWARDED;
+    }
+
+    if (normalizedValue === 'draft') {
+        return PROPOSAL_SCRIBE_HANDOFF.DRAFT;
+    }
+
+    return '';
+}
+
+export function serializeProposalDetails(details = {}) {
+    const originators = normalizeStringList(details.originators);
+    const recipientTeams = normalizeRecipientTeams(
+        Array.isArray(details.recipientTeams)
+            ? details.recipientTeams
+            : (details.recipientTeam ? [details.recipientTeam] : [])
+    );
+    const focusSectors = normalizeStringList(
+        Array.isArray(details.focusSectors)
+            ? details.focusSectors
+            : (details.focusSector ? [details.focusSector] : [])
+    );
+    const supplyChainActionAngles = normalizeStringList(details.supplyChainActionAngles);
+    const supplyChainAreas = normalizeStringList(details.supplyChainAreas);
+    const supplyChainFocusDecision = normalizeDecision(details.supplyChainFocusDecision)
+        || (supplyChainActionAngles.length || supplyChainAreas.length ? 'Yes' : '');
+    const revisionMetadata = normalizeRevisionMetadata(details.revisionMetadata || details);
+    const recipientApprovalStates = normalizeRecipientApprovalStates(
+        details.recipientApprovalStates,
+        recipientTeams
+    );
+    const scribeHandoff = normalizeScribeHandoff(details.scribeHandoff)
+        || PROPOSAL_SCRIBE_HANDOFF.DRAFT;
+    const industryTurnSheet = details.industryTurnSheet
+        ? normalizeIndustryTurnSheet(details.industryTurnSheet)
+        : null;
+    return [
+        PROPOSAL_DETAILS_PREFIX,
+        `Originators: ${serializeStringList(originators)}`,
+        `Objective: ${normalizeString(details.objective)}`,
+        `Instruments: ${serializeStringList(details.instruments)}`,
+        ...(normalizeString(details.category) ? [`Category: ${normalizeString(details.category)}`] : []),
+        `Intended Partners: ${normalizeString(details.intendedPartners)}`,
+        ...(normalizeString(details.delivery) ? [`Delivery: ${normalizeString(details.delivery)}`] : []),
+        `Timing And Conditions: ${normalizeString(details.timingAndConditions)}`,
+        `Recipient Teams: ${serializeStringList(recipientTeams)}`,
+        `Recipient Approval States: ${JSON.stringify(recipientApprovalStates)}`,
+        `Focus Sectors: ${serializeStringList(focusSectors)}`,
+        `Supply Chain Focus Decision: ${supplyChainFocusDecision || 'Not selected'}`,
+        `Supply Chain Action Angles: ${serializeStringList(supplyChainFocusDecision === 'No' ? [] : supplyChainActionAngles)}`,
+        `Supply Chain Areas: ${serializeStringList(supplyChainFocusDecision === 'No' ? [] : supplyChainAreas)}`,
+        `Industry Focus: ${normalizeString(details.industryFocus)}`,
+        `Country Focus: ${normalizeString(details.countryFocus)}`,
+        `Proposed Activity: ${normalizeString(details.proposedActivity)}`,
+        `Revision Metadata: ${JSON.stringify(revisionMetadata)}`,
+        ...(industryTurnSheet ? [`Industry Proposal: ${JSON.stringify(industryTurnSheet)}`] : []),
+        `Scribe Handoff: ${scribeHandoff}`
+    ].join('\n');
+}
+
+export function parseProposalDetails(value = '') {
+    if (typeof value !== 'string' || !value.startsWith(PROPOSAL_DETAILS_PREFIX)) {
+        return null;
+    }
+
+    try {
+        const lines = value
+            .slice(PROPOSAL_DETAILS_PREFIX.length)
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+        const parsed = Object.fromEntries(
+            lines
+                .map((line) => {
+                    const separatorIndex = line.indexOf(':');
+                    if (separatorIndex === -1) return null;
+                    return [
+                        line.slice(0, separatorIndex).trim(),
+                        line.slice(separatorIndex + 1).trim()
+                    ];
+                })
+                .filter(Boolean)
+        );
+
+        const originators = parseStringList(parsed.Originators);
+        const recipientTeams = normalizeRecipientTeams(
+            parseStringList(parsed['Recipient Teams'] || parsed['Recipient Team'])
+        );
+        const focusSectors = parseStringList(parsed['Focus Sectors'] || parsed['Focus Sector']);
+        const parsedSupplyChainActionAngles = parseStringList(parsed['Supply Chain Action Angles']);
+        const parsedSupplyChainAreas = parseStringList(parsed['Supply Chain Areas']);
+        const supplyChainFocusDecision = normalizeDecision(parsed['Supply Chain Focus Decision'])
+            || (parsedSupplyChainActionAngles.length || parsedSupplyChainAreas.length ? 'Yes' : '');
+        const supplyChainActionAngles = supplyChainFocusDecision === 'No' ? [] : parsedSupplyChainActionAngles;
+        const supplyChainAreas = supplyChainFocusDecision === 'No' ? [] : parsedSupplyChainAreas;
+        const industryTurnSheet = parseIndustryTurnSheet(
+            parsed['Industry Proposal'] || parsed['Industry Turn Sheet']
+        );
+
+        return {
+            originators,
+            objective: normalizeString(parsed.Objective),
+            instruments: parseStringList(parsed.Instruments),
+            category: normalizeString(parsed.Category),
+            intendedPartners: normalizeString(parsed['Intended Partners']),
+            delivery: normalizeString(parsed.Delivery),
+            timingAndConditions: normalizeString(parsed['Timing And Conditions']),
+            recipientTeam: recipientTeams[0] || '',
+            recipientTeams,
+            recipientApprovalStates: parseRecipientApprovalStates(
+                parsed['Recipient Approval States'],
+                recipientTeams
+            ),
+            focusSector: focusSectors[0] || '',
+            focusSectors,
+            supplyChainFocusDecision,
+            supplyChainActionAngles,
+            supplyChainAreas,
+            industryFocus: normalizeString(parsed['Industry Focus']),
+            countryFocus: normalizeString(parsed['Country Focus']),
+            proposedActivity: normalizeString(parsed['Proposed Activity']),
+            revisionMetadata: parseRevisionMetadata(parsed['Revision Metadata']),
+            ...(industryTurnSheet ? { industryTurnSheet } : {}),
+            scribeHandoff: normalizeScribeHandoff(parsed['Scribe Handoff'])
+        };
+    } catch (_error) {
+        return null;
+    }
+}
+
+export function isProposalAction(action = {}) {
+    return Boolean(parseProposalDetails(action?.ally_contingencies))
+        || normalizeString(action?.mechanism) === PROPOSAL_ACTION_MECHANISM;
+}
+
+export function getProposalViewModel(action = {}) {
+    const details = parseProposalDetails(action.ally_contingencies);
+    const envelopeRecipientTeams = details?.recipientTeams?.length
+        ? details.recipientTeams
+        : normalizeStringList(details?.recipientTeam ? [details.recipientTeam] : []);
+    const focusSectors = details?.focusSectors?.length
+        ? details.focusSectors
+        : normalizeStringList(details?.focusSector
+            ? [details.focusSector]
+            : (action.sector ? [action.sector] : []));
+    const revisionMetadata = mergeRevisionMetadata(action, details?.revisionMetadata);
+    const embeddedIndustryTurnSheet = action?.artifact_payload?.proposal?.industryTurnSheet
+        || action?.artifact_payload?.proposal?.industry_turn_sheet
+        || details?.industryTurnSheet
+        || null;
+    const industryTurnSheet = embeddedIndustryTurnSheet
+        ? normalizeIndustryTurnSheet(embeddedIndustryTurnSheet, {
+            proposalId: action.id,
+            sessionId: action.session_id,
+            move: action.move
+        })
+        : null;
+    const recipientTeams = industryTurnSheet?.recipientTeams?.length
+        ? industryTurnSheet.recipientTeams
+        : envelopeRecipientTeams;
+    const persistedRecipientReviews = action?.artifact_payload?.proposal_recipient_reviews
+        && typeof action.artifact_payload.proposal_recipient_reviews === 'object'
+        ? action.artifact_payload.proposal_recipient_reviews
+        : {};
+    const recipientApprovalStates = Object.fromEntries(recipientTeams.map((team) => [
+        team,
+        normalizeString(persistedRecipientReviews?.[team]?.status)
+            || (!action.delegation_id && details?.recipientApprovalStates?.[team])
+            || PROPOSAL_RECIPIENT_APPROVAL_STATUS.PENDING
+    ]));
+
+    const viewModel = {
+        hasProposalDetails: Boolean(details),
+        hasIndustryTurnSheet: Boolean(industryTurnSheet),
+        industryTurnSheet,
+        team: normalizeString(action.team).toLowerCase(),
+        delegationLabel: GREEN_DELEGATIONS[action.delegation_id] || '',
+        title: action.goal || action.title || 'Untitled proposal',
+        originators: details?.originators || [],
+        objective: details?.objective || '',
+        instrumentOfPower: details?.instruments?.[0] || '',
+        instruments: details?.instruments || [],
+        category: details?.category || '',
+        intendedPartners: details?.intendedPartners || '',
+        focusSector: focusSectors[0] || '',
+        focusSectors,
+        delivery: details?.delivery || '',
+        timingAndConditions: details?.timingAndConditions || '',
+        expectedOutcomes: action.expected_outcomes || '',
+        recipientTeam: recipientTeams[0] || '',
+        recipientTeams,
+        recipientApprovalStates,
+        supplyChainFocusDecision: details?.supplyChainFocusDecision || '',
+        supplyChainActionAngles: details?.supplyChainActionAngles || [],
+        supplyChainAreas: details?.supplyChainAreas || [],
+        industryFocus: details?.industryFocus || '',
+        countryFocus: details?.countryFocus || '',
+        proposedActivity: details?.proposedActivity || '',
+        revisionMetadata,
+        scribeHandoff: details?.scribeHandoff || ''
+    };
+
+    return {
+        ...viewModel,
+        artifactDetails: buildProposalArtifactDetails(viewModel)
+    };
+}
+
+export function isProposalForwardedToScribe(action = {}) {
+    return getProposalViewModel(action).scribeHandoff === PROPOSAL_SCRIBE_HANDOFF.FORWARDED;
+}
+
+export function formatProposalSelection(values = [], fallback = 'Not specified') {
+    return Array.isArray(values) && values.length ? values.join(', ') : fallback;
+}

@@ -1,0 +1,30 @@
+# Technology decision matrix
+
+This consolidates pointers and implementation consequences. It is not a parallel decision authority.
+
+| Concern | Current choice | Authority | Status | Pinning task | Exit implication |
+|---|---|---|---|---|---|
+| Frontend | React + TypeScript; retain vanilla reference slice | ADR-007 | Approved | PS-100 | May implement |
+| Backend | Node 26 target, 24 floor; TypeScript monorepo | ADR-008 | Proposed | PS-001, PS-100 | Label dependency; do not ratify locally |
+| Topology | Modular monolith and Pg-backed jobs | ADR-005 | Proposed | PS-100, PS-120 | No broker/cache/service split without measurements |
+| Database | PostgreSQL 18 minimum | ADR-009 | Proposed | PS-001 | Phase 1 exit needs Pg18 evidence and approval |
+| Object storage | S3 API; self-host candidate pending evaluation | ADR-011 | Proposed | PS-130, PS-530 | Pin adapter after evaluation |
+| Identity | OIDC relying party; Keycloak for local profiles | ADR-006, ADR-012 | Approved principle; Proposed product | PS-110, PS-530 | No Supabase; production needs security approval |
+| Runtime realtime | HTTPS Commands + SSE deltas; polling fallback | ADR-010 | Proposed | PS-140 | WebSocket is not Runtime transport |
+| Studio collaboration | Authenticated WebSocket + CRDT | ADR-002, ADR-010 | Proposed | PS-300 | CRDT never merges Runtime Commands |
+| CRDT library | Yjs | Platform section 23 | Candidate | PS-300 | Pin only after compatibility spike |
+| Media | Self-hosted WebRTC SFU + TURN behind adapter | DEC-49, ADR-017 | Exception Confirmed; adapter Proposed | PS-250, PS-530 | LiveKit remains candidate, not dependency |
+| Extension isolation | Rootless containers; WASM/WASI additional target | ADR-018 | Proposed | PS-220, PS-230 | Python/native waits for OPEN-022 |
+| Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Proposed | PS-530 | Kubernetes optional only |
+| Persistence | Relational current state + append-only evidence | ADR-014 | Proposed | PS-120 | No full event sourcing |
+| Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Proposed | PS-110 | Real app-role denial tests required |
+| Router/query/state/forms | React Router, TanStack Query, Zustand, React Hook Form | Platform section 23 | Candidates | PS-100/150/310 | Use only when slice needs them; pin in lockfile |
+| Validation | Zod and JSON Schema compatibility | Platform section 23; OPEN-022 | Candidate / Open | PS-100/310 | Do not duplicate schema authority |
+| Interaction editors | dnd-kit, React Flow | Platform section 23 | Candidates | PS-310/330 | Prefer native/simple controls until needed |
+| Unit/browser tests | Vitest, Playwright | Platform section 23 | Candidates | PS-100/150 | Pin after verifying runtime compatibility |
+| Build/UI candidates | Vite, Radix, Tailwind, Tiptap | Remaining v1.2 proposals | Candidates | Owning UI task | No blanket adoption |
+| SQL/client storage | Kysely, IndexedDB/Dexie | Remaining v1.2 proposals | Candidates | PS-110/500 | Existing `pg` and platform storage win until need proven |
+| Contracts | OpenAPI 3.1 and JSON Schema | Slice observed; OPEN-022 for compatibility | Implemented slice / Open product policy | PS-100 | Preserve slice contract; version product contracts |
+| Observability | Structured logging, OpenTelemetry | Remaining proposals | Candidates | PS-120/540 | Add only to diagnose critical journeys |
+
+Every dependency or layer must answer the repository complexity test. The lockfile, not this matrix, is the exact implementation version record.

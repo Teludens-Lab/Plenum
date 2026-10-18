@@ -8,7 +8,7 @@ Updated: 2026-10-18.
 - The corpus is under `docs/corpus/`; reference implementations are under `references/`.
 - The official Fractured Order golden reference is the verified snapshot under `references/`, pinned to commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b`.
 - PS-000 has produced the classified reference inventory, hard-coding register, route/service/data/realtime maps and parity fixture plan under `docs/reference-audit/`, `definitions/fractured-order/` and `tests/parity/`.
-- Application implementation now includes the PS-100 TypeScript contract kernel; no HTTP server, database adapter, or rendered frontend exists yet.
+- Application implementation includes the PS-100 contract kernel and PS-110 OIDC, trusted Session context, policy, PostgreSQL and reassignment slice. No HTTP transport or rendered frontend exists yet.
 - Promptbook generation changes only `docs/promptbook/`.
 
 ## Observed maturity
@@ -20,6 +20,7 @@ Updated: 2026-10-18.
 | Promptbook | Yes | n/a | PASS: 31 prompts, JSON Schema, 94/94 REQ, 28/28 INV, no cycles, nine samples | n/a | n/a | n/a | n/a | n/a |
 | PS-000 reference audit | Yes, with OPEN-026 review blocks | Yes | PASS: pin/tree, 30 role capabilities, 15 operational capabilities, 15 hard-coding rows and 17 parity targets | Documentation/definition inventory only | No | n/a | n/a | No |
 | First-release application | Specified | PS-100 contract kernel | PASS: clean install, lint, typecheck, build and 2/2 contract tests on Node 24.22.0 | Shared contracts compile in server and Runtime consumer | Partial: negative trusted-context tests only; no formal review | No | No | No |
+| PS-110 identity/policy slice | Specified with OPEN-007/025 limits | Yes | PASS: typecheck, unit 5/5 and integration 4/4 on Node 24.22.0/Pg18.6 | OIDC mapping, forced RLS, context, reassignment and revocation integrated | Control tests pass; Security Owner approval pending | No | Disposable Docker only | No |
 
 ## Current command evidence
 
@@ -37,7 +38,8 @@ Updated: 2026-10-18.
 - PS-100 clean root `npm ci --ignore-scripts`: PASS on Node 24.22.0/npm 11.19.1; TypeScript 5.9.3; audit reported 0 vulnerabilities.
 - `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, and `CMD-PLATFORM-BUILD`: PASS on Node 24.22.0. Four workspaces compile from the root lockfile; contract lint checked four application/package source files, three versioned contracts, canonical naming, and an acyclic workspace graph.
 - `CMD-PLATFORM-TEST`: PASS 2/2 (`PS-100-T01`, `PS-100-T02`) on Node 24.22.0. The retained slice domain regression also passed 12/12 without source or OpenAPI changes. Full evidence is in `docs/ps-100-verification.md`.
+- PS-110 `CMD-PLATFORM-TYPECHECK`: PASS; `CMD-PLATFORM-TEST`: PASS 5/5; `CMD-PLATFORM-INTEGRATION`: PASS 4/4 on Node 24.22.0/PostgreSQL 18.6. DB-01 used a reused pool connection under `plenum_app`; PS-110-T03 included forced transactional rollback. Full evidence is in `docs/ps-110-verification.md`.
 
 ## Next eligible work
 
-`PS-100` is implementation-complete on Node 24.22.0; `ADR-008` remains Proposed and prevents release approval without Technical Lead review. `PS-110` is the exact next eligible implementation task because its sole `PS-100` prerequisite now has evidence. PS-000 implementation is complete, but its ambiguous methodology rows still require Methodology Lead review under `OPEN-026`; PS-200 behavioral extraction/parity remains ineligible until that approval and its other recorded prerequisites have evidence.
+`PS-110` is implementation-complete on Node 24.22.0/PostgreSQL 18.6, but production identity use remains blocked on Security Owner approval and ADR-012/ADR-015 ratification. `PS-120 — Implement the transactional command and evidence kernel` is the exact next task. PS-130 is also dependency-eligible, but PS-120 is the next numbered foundation slice and owns the general command transaction that later Runtime work requires.

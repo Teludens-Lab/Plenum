@@ -1,8 +1,14 @@
 import {
-  createErrorEnvelope,
-  type CommandEnvelopeV1,
-  type ErrorEnvelopeV1
+  type CommandEnvelopeV1
 } from "@plenum/event-contracts";
+import { authorizationError } from "./errors.js";
+
+export { createDatabasePool, withOrganizationTransaction } from "./database.js";
+export { AuthorizationError, authorizationError } from "./errors.js";
+export * from "./identity/oidc.js";
+export * from "./identity/login.js";
+export * from "./identity/context.js";
+export * from "./access/reassignment.js";
 
 /** Identity and authority values created by authenticated server middleware. */
 export interface TrustedSessionContext {
@@ -13,16 +19,6 @@ export interface TrustedSessionContext {
   seatAssignmentIds: string[];
   activeSessionRoleId: string;
   authorityEpoch: number;
-}
-
-export class AuthorizationError extends Error {
-  readonly envelope: ErrorEnvelopeV1;
-
-  constructor(envelope: ErrorEnvelopeV1) {
-    super(envelope.error.message);
-    this.name = "AuthorizationError";
-    this.envelope = envelope;
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,9 +34,7 @@ export function requireTrustedSessionContext(
   correlationId: string
 ): TrustedSessionContext {
   if (!isRecord(value) || !hasNonEmptyString(value, "principalId")) {
-    throw new AuthorizationError(
-      createErrorEnvelope("UNAUTHENTICATED", "Sign in is required.", correlationId)
-    );
+    throw authorizationError("UNAUTHENTICATED", "Sign in is required.", correlationId);
   }
 
   if (
@@ -53,12 +47,10 @@ export function requireTrustedSessionContext(
     !Number.isSafeInteger(value.authorityEpoch) ||
     Number(value.authorityEpoch) < 0
   ) {
-    throw new AuthorizationError(
-      createErrorEnvelope(
-        "NOT_A_PARTICIPANT",
-        "A current Session Participant context is required.",
-        correlationId
-      )
+    throw authorizationError(
+      "NOT_A_PARTICIPANT",
+      "A current Session Participant context is required.",
+      correlationId
     );
   }
 
@@ -74,12 +66,10 @@ export function authorizeCommandRole(
     command.activeSessionRoleId !== undefined &&
     command.activeSessionRoleId !== context.activeSessionRoleId
   ) {
-    throw new AuthorizationError(
-      createErrorEnvelope(
-        "PERMISSION_DENIED",
-        "The requested Active Role Context is not authorized.",
-        correlationId
-      )
+    throw authorizationError(
+      "PERMISSION_DENIED",
+      "The requested Active Role Context is not authorized.",
+      correlationId
     );
   }
 }

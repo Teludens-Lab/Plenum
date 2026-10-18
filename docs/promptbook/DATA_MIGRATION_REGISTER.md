@@ -5,7 +5,7 @@ IDs are planned and unique in `tasks.json`. Exact SQL filenames are assigned by 
 | Planned ID | Owner task | Change | Pattern | Recovery / compatibility |
 |---|---|---|---|---|
 | 001-004 | Observed slice | Core, Runtime/sync/evidence, collaboration schema, security/RLS | Forward-only, per-file transaction | Historical PASS Pg16; PS-001 rehearses Pg18 |
-| `005_identity_oidc_context` | PS-110 | Federated identities and trusted context | Expand then switch auth adapter | Demo headers stay slice-only |
+| `005_identity_oidc_context` | PS-110 | `apps/server/migrations/005_identity_oidc_context.sql`: federated identities, login/authentication sessions, access revisions, projection grants, Audit Records and Seat Assignment history fields | Expand; tested after 001-004 on disposable Pg18.6 | Demo headers stay slice-only; forward-fix before production, with no destructive contraction |
 | `006_command_kernel` | PS-120 | Product command/evidence constraints | Expand, dual-read only if needed, switch | Preserve receipts/events |
 | `007_release_packages` | PS-130 | Package manifest/compatibility records | Expand | Existing embedded slice Releases remain readable |
 | `008_projection_cursors` | PS-140 | Snapshots, grants, cursors | Expand | Cursors disposable; outbox preserved |

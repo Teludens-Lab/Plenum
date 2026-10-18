@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: Plenum identity and Session context API
+  version: 0.1.0
+paths:
+  /v1/auth/oidc/{providerKey}/begin:
+    post:
+      operationId: beginOidcLogin
+      security: []
+      parameters:
+        - in: path
+          name: providerKey
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Server-created OIDC authorization request using state, nonce and PKCE.
+  /v1/auth/oidc/{providerKey}/callback:
+    get:
+      operationId: completeOidcLogin
+      x-contract-id: oidc-callback-v1
+      security: []
+      parameters:
+        - in: path
+          name: providerKey
+          required: true
+          schema: { type: string, minLength: 1 }
+        - in: query
+          name: code
+          required: true
+          schema: { type: string, minLength: 1 }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "204": { description: Authentication Session established in a Secure, HttpOnly cookie. }
+        "401": { description: Invalid or expired identity response. }
+  /v1/sessions/{sessionId}/access-context:
+    get:
+      operationId: getSessionAccessContext
+      x-contract-id: session-access-context-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Server-derived Session Access Context. }
+        "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+components:
+  securitySchemes:
+    InstitutionalOidc:
+      type: openIdConnect
+      openIdConnectUrl: https://identity.example/.well-known/openid-configuration
+      description: The actual issuer and discovery URL come only from trusted server configuration.
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: plenum_session
+      description: Opaque server Authentication Session identifier; Secure, HttpOnly and SameSite.

@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/event-contracts" },
     { "path": "packages/simulation-schema" },
+    { "path": "packages/policy-engine" },
     { "path": "apps/server" },
     { "path": "apps/runtime-web" }
   ]

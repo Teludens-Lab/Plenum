@@ -11,9 +11,10 @@ Plenum/
   tsconfig*.json               # shared strict TypeScript configuration
   apps/
     runtime-web/               # contract-only frontend consumer; no UI yet
-    server/                    # trusted Session context boundary
+    server/                    # OIDC, trusted Session context, Pg transaction boundary
   packages/
     event-contracts/           # versioned Command, Event and error envelopes
+    policy-engine/             # default-deny server projection policy
     simulation-schema/         # versioned Release manifest and Plugin binding types
   scripts/
     contract-lint.mjs          # terminology, naming and workspace-boundary checks
@@ -30,7 +31,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-PS-100 has started the application implementation with a contract-only skeleton. There is no HTTP server, database adapter, or rendered frontend yet; those remain owned by later slices.
+PS-100 established the contract skeleton. PS-110 adds a PostgreSQL adapter, OIDC relying-party service, Session Access Context resolver, default-deny policy package and migration 005. There is still no HTTP transport implementation or rendered frontend; those remain owned by later slices.
 
 ## Target code topology
 

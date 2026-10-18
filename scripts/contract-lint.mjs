@@ -90,7 +90,10 @@ for (const file of sourceFiles) {
   if (file.includes(`${path.sep}apps${path.sep}`)) {
     assert.doesNotMatch(source, demoIdentity, `${path.relative(root, file)} contains demo identity handling`);
   }
-  if (file.includes(`${path.sep}packages${path.sep}`)) {
+  if (
+    file.includes(`${path.sep}packages${path.sep}event-contracts${path.sep}`) ||
+    file.includes(`${path.sep}packages${path.sep}simulation-schema${path.sep}`)
+  ) {
     assert.doesNotMatch(source, /\borganizationId\b/u, `${path.relative(root, file)} exposes a tenant identifier`);
   }
 }

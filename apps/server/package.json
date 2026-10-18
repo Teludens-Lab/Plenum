@@ -10,6 +10,9 @@
     }
   },
   "dependencies": {
-    "@plenum/event-contracts": "0.1.0"
+    "@plenum/event-contracts": "0.1.0",
+    "@plenum/policy-engine": "0.1.0",
+    "jose": "6.2.12",
+    "pg": "8.23.1"
   }
 }

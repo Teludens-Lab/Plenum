@@ -10,9 +10,12 @@ export * from "./identity/login.js";
 export * from "./identity/context.js";
 export * from "./access/reassignment.js";
 export * from "./runtime/commands/processor.js";
+export * from "./runtime/artifact-workflow.js";
+export * from "./runtime/operator-projection.js";
 export * from "./sync/runtime-sync.js";
 export * from "./registry/object-store.js";
 export * from "./registry/publication.js";
+export * from "./http/runtime-http.js";
 
 /** Identity and authority values created by authenticated server middleware. */
 export interface TrustedSessionContext {

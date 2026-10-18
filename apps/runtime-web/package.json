@@ -9,9 +9,14 @@
       "import": "./dist/index.js"
     }
   },
+  "scripts": {
+    "build:web": "vite build --outDir dist/web"
+  },
   "dependencies": {
     "@plenum/event-contracts": "0.1.0",
     "@plenum/simulation-schema": "0.1.0",
-    "@plenum/sync-client": "0.1.0"
+    "@plenum/sync-client": "0.1.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

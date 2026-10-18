@@ -18,11 +18,18 @@
     "test:integration": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs apps/server/test/object-store.integration.test.mjs",
     "test:db": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs",
     "test:s3": "npm run build --silent && node --test apps/server/test/object-store.integration.test.mjs",
-    "build": "tsc --build --pretty false"
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.mjs",
+    "test:a11y": "playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
+    "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
-    "typescript": "5.9.3"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.4"
   }
 }

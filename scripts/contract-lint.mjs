@@ -5,19 +5,23 @@ import { fileURLToPath } from "node:url";
 
 import {
   COMMAND_ENVELOPE_CONTRACT_ID,
+  ARTIFACT_COMMAND_CONTRACT_ID,
   COMMAND_RECEIPT_CONTRACT_ID,
   DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
   EVENT_ENVELOPE_CONTRACT_ID,
   RUNTIME_SSE_CONTRACT_ID,
+  RUNTIME_PROJECTION_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
+  artifactCommandV1Schema,
   commandReceiptV1Schema,
   domainEventV1Schema,
   errorEnvelopeV1Schema,
   eventEnvelopeV1Schema,
   runtimeSseV1Schema,
+  runtimeProjectionV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
   isCommandOperationType,
@@ -71,16 +75,19 @@ async function readPackageGraph() {
 }
 
 assert.equal(commandEnvelopeV1Schema.$id, COMMAND_ENVELOPE_CONTRACT_ID);
+assert.equal(artifactCommandV1Schema.$id, ARTIFACT_COMMAND_CONTRACT_ID);
 assert.equal(commandReceiptV1Schema.$id, COMMAND_RECEIPT_CONTRACT_ID);
 assert.equal(domainEventV1Schema.$id, DOMAIN_EVENT_CONTRACT_ID);
 assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
 assert.equal(errorEnvelopeV1Schema.$id, ERROR_ENVELOPE_CONTRACT_ID);
 assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
+assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 
-const contractSchemas = [commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
-  eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeSseV1Schema, syncDeltasV1Schema, syncSnapshotV1Schema];
+const contractSchemas = [artifactCommandV1Schema, commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
+  eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
+  syncDeltasV1Schema, syncSnapshotV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }
@@ -94,7 +101,7 @@ assert.equal(isPastTenseEventType("artifact.submit"), false);
 
 const sourceFiles = (await Promise.all(
   ["apps", "packages"].map((folder) => filesBelow(path.join(root, folder)))
-)).flat().filter((file) => file.endsWith(".ts") && !file.split(path.sep).includes("dist"));
+)).flat().filter((file) => (file.endsWith(".ts") || file.endsWith(".tsx")) && !file.split(path.sep).includes("dist"));
 
 const forbiddenAliases = /\b(?:runId|phaseId|roleId|tenantId|gameId|playerId|matchId)\b/u;
 const simulationSpecific = /(?:fractured[ -]order|white_cell|\bscribe\b|\bfacilitator\b|\b(?:blue|red|green|industry) team\b)/iu;

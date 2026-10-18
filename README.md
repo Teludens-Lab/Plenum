@@ -2,7 +2,7 @@
 
 Plenum is being developed as a configuration-driven simulation platform. This repository contains the governing product corpus, generated development promptbook, immutable and executable reference material, shared TypeScript contracts, and the standards that apply to application code.
 
-The implemented platform kernel now includes shared contracts, OIDC and tenant isolation, transactional Commands and Evidence Events, immutable Release Packages, S3-compatible storage, and authorized Runtime SSE/polling reconnect services. It does not yet provide an HTTP composition root or rendered UI.
+The implemented platform kernel now includes shared contracts, OIDC and tenant isolation, transactional Commands and Evidence Events, immutable Release Packages, S3-compatible storage, authorized Runtime SSE/polling reconnect services, and a React Runtime shell proving the configured S1 artifact workflow through the HTTP boundary. Studio authoring remains future work.
 
 ## Repository authorities
 
@@ -42,7 +42,11 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run test:e2e
+npm run test:a11y
 ```
+
+The browser commands also require an empty disposable PostgreSQL 18 database through `DATABASE_URL` and a locally installed Playwright Chromium browser.
 
 All production workspaces install from the root `package-lock.json`. The retained reference slice is intentionally outside the workspace and keeps its historical lockfile.
 

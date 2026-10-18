@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "sessionRoles": [
+    { "id": "scribe", "name": "Scribe" },
+    { "id": "facilitator", "name": "Facilitator" },
+    { "id": "white_cell", "name": "White Cell" }
+  ],
+  "stages": [
+    { "id": "stage-handoff", "label": "Artifact handoff" }
+  ],
+  "forms": [
+    {
+      "id": "form-request",
+      "name": "Request",
+      "formVersion": "1",
+      "fields": [
+        {
+          "key": "summary",
+          "label": "Summary",
+          "type": "long_text",
+          "required": true,
+          "helpText": "Describe the requested decision in plain language."
+        },
+        {
+          "key": "rationale",
+          "label": "Rationale",
+          "type": "long_text",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "artifactTypes": [
+    {
+      "key": "request",
+      "name": "Decision request",
+      "formId": "form-request",
+      "workflowId": "workflow-request"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "workflow-request",
+      "key": "request_review",
+      "states": [
+        { "key": "draft", "label": "Draft", "kind": "draft" },
+        { "key": "submitted", "label": "With Facilitator", "kind": "review", "holderSessionRoleIds": ["facilitator"] },
+        { "key": "in_review", "label": "With White Cell", "kind": "review", "holderSessionRoleIds": ["white_cell"] },
+        { "key": "returned", "label": "Returned", "kind": "draft" },
+        { "key": "accepted", "label": "Accepted", "kind": "terminal" }
+      ],
+      "transitions": [
+        { "from": null, "command": "artifact.create", "label": "Save draft", "to": "draft", "allowedSessionRoleIds": ["scribe"] },
+        { "from": "draft", "command": "artifact.edit", "label": "Save changes", "to": "draft", "allowedSessionRoleIds": ["scribe"], "contentOnly": true },
+        { "from": "draft", "command": "artifact.submit", "label": "Submit to Facilitator", "to": "submitted", "allowedSessionRoleIds": ["scribe"], "notifySessionRoleIds": ["facilitator"] },
+        { "from": "submitted", "command": "artifact.return", "label": "Return for revision", "to": "returned", "allowedSessionRoleIds": ["facilitator"], "notifySessionRoleIds": ["scribe"] },
+        { "from": "submitted", "command": "artifact.forward", "label": "Forward to White Cell", "to": "in_review", "allowedSessionRoleIds": ["facilitator"], "notifySessionRoleIds": ["white_cell"] },
+        { "from": "in_review", "command": "artifact.return", "label": "Return for revision", "to": "returned", "allowedSessionRoleIds": ["white_cell"], "notifySessionRoleIds": ["scribe", "facilitator"] },
+        { "from": "in_review", "command": "artifact.accept", "label": "Accept request", "to": "accepted", "allowedSessionRoleIds": ["white_cell"], "notifySessionRoleIds": ["scribe", "facilitator"] },
+        { "from": "returned", "command": "artifact.edit", "label": "Save revision", "to": "returned", "allowedSessionRoleIds": ["scribe"], "contentOnly": true },
+        { "from": "returned", "command": "artifact.submit", "label": "Resubmit to Facilitator", "to": "submitted", "allowedSessionRoleIds": ["scribe"], "notifySessionRoleIds": ["facilitator"] }
+      ]
+    }
+  ],
+  "interfaceProfiles": [
+    {
+      "id": "participant-author",
+      "sessionRoleIds": ["scribe"],
+      "stageIds": ["stage-handoff"],
+      "layout": "main_with_sidebar",
+      "modules": [
+        { "id": "artifact-form", "type": "artifact_form", "title": "Create an Artifact", "mode": "write", "emptyStateText": "No Artifact Types are available in this Stage." },
+        { "id": "task-list", "type": "task_list", "title": "Your workflow", "mode": "write", "emptyStateText": "No Artifacts have been created yet." },
+        { "id": "session-status", "type": "session_status", "title": "Session status", "mode": "read", "emptyStateText": "Session status is unavailable." }
+      ]
+    },
+    {
+      "id": "participant-review",
+      "sessionRoleIds": ["facilitator", "white_cell"],
+      "stageIds": ["stage-handoff"],
+      "layout": "single_column",
+      "modules": [
+        { "id": "task-list", "type": "task_list", "title": "Review tasks", "mode": "write", "emptyStateText": "No Artifacts currently require your review." },
+        { "id": "session-status", "type": "session_status", "title": "Session status", "mode": "read", "emptyStateText": "Session status is unavailable." }
+      ]
+    }
+  ]
+}

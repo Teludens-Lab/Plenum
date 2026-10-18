@@ -37,7 +37,7 @@ export interface ProcessCommandInput {
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-function validateCommand(command: CommandEnvelopeV1, correlationId: string): void {
+export function validateCommandEnvelope(command: CommandEnvelopeV1, correlationId: string): void {
   if (
     !uuid.test(command.commandId) || !uuid.test(command.deviceId) ||
     !uuid.test(command.aggregateId) || !uuid.test(command.governingReleaseId) ||
@@ -165,7 +165,7 @@ async function recordOutcome(
 
 export async function processSessionCommand(input: ProcessCommandInput): Promise<CommandReceiptV1> {
   const { pool, context, command, correlationId, deploymentId } = input;
-  validateCommand(command, correlationId);
+  validateCommandEnvelope(command, correlationId);
   if (context.deviceId === undefined || command.deviceId !== context.deviceId) {
     throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
   }

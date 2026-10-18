@@ -69,6 +69,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
+      x-contract-id: artifact-command-v1
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -82,11 +83,91 @@ paths:
             schema: { $ref: "#/components/schemas/CommandEnvelopeV1" }
       responses:
         "200":
-          description: Accepted, rejected, reconciled, or idempotently replayed recorded outcome.
+          description: Accepted or idempotently replayed recorded outcome.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandReceiptV1" }
+        "409":
+          description: Rejected or reconciliation-required recorded outcome.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CommandReceiptV1" }
         "503": { description: Deployment or Authority Epoch is not authoritative; no receipt is written. }
+  /v1/sessions/{sessionId}/commands/{commandId}:
+    get:
+      operationId: getCommandReceipt
+      x-contract-id: command-receipt-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: commandId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The caller's original durable Command Receipt.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandReceiptV1" }
+        "404": { description: Missing and unauthorized receipts share NOT_FOUND semantics. }
+  /v1/devices:
+    post:
+      operationId: registerDevice
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201":
+          description: A Device registered to the authenticated Person.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [deviceId]
+                properties:
+                  deviceId: { type: string, format: uuid }
+  /v1/sessions/{sessionId}/runtime-projection:
+    get:
+      operationId: getRuntimeInterfaceProjection
+      x-contract-id: runtime-projection-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Release-driven, server-authorized Runtime interface and task projection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RuntimeProjectionV1" }
+        "403": { description: Participant, Device, Seat Assignment, or Interface Profile is not authorized. }
+        "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+  /v1/operator/sessions/{sessionId}:
+    get:
+      operationId: getOperatorProjection
+      x-contract-id: operator-projection-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Authoritative Session summary for an Organization Operator.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorProjectionV1" }
+        "403": { description: The authenticated Principal is not an Operator. }
   /v1/sessions/{sessionId}/sync/stream:
     get:
       operationId: streamRuntimeDeltas
@@ -262,6 +343,84 @@ components:
         errorCode: { type: [string, "null"] }
         message: { type: [string, "null"] }
         replayed: { type: boolean }
+    RuntimeFormFieldV1:
+      type: object
+      additionalProperties: false
+      required: [key, label, type, required]
+      properties:
+        key: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1 }
+        type: { type: string, enum: [text, long_text] }
+        required: { type: boolean }
+        helpText: { type: string }
+    RuntimeFormV1:
+      type: object
+      additionalProperties: false
+      required: [id, name, formVersion, fields]
+      properties:
+        id: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        formVersion: { type: string, minLength: 1 }
+        fields: { type: array, items: { $ref: "#/components/schemas/RuntimeFormFieldV1" } }
+    RuntimeActionV1:
+      type: object
+      additionalProperties: false
+      required: [operationType, label, requiresForm]
+      properties:
+        operationType: { type: string, pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" }
+        label: { type: string, minLength: 1 }
+        requiresForm: { type: boolean }
+    RuntimeArtifactV1:
+      type: object
+      additionalProperties: false
+      required: [id, artifactTypeKey, title, state, stateLabel, payload, version, governingReleaseId, form, createdByMe, actions]
+      properties:
+        id: { type: string, format: uuid }
+        artifactTypeKey: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1 }
+        state: { type: string, minLength: 1 }
+        stateLabel: { type: string, minLength: 1 }
+        payload: { type: object }
+        version: { type: integer, minimum: 1 }
+        governingReleaseId: { type: string, format: uuid }
+        form: { $ref: "#/components/schemas/RuntimeFormV1" }
+        createdByMe: { type: boolean }
+        actions: { type: array, items: { $ref: "#/components/schemas/RuntimeActionV1" } }
+    RuntimeProjectionV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, currentStageId, currentStageLabel, interfaceProfileId, layout, modules, createTasks, artifacts]
+      properties:
+        contractId: { const: runtime-projection-v1 }
+        sessionId: { type: string, format: uuid }
+        sessionStatus: { type: string, minLength: 1 }
+        releaseId: { type: string, format: uuid }
+        releaseLabel: { type: string, minLength: 1 }
+        participantId: { type: string, format: uuid }
+        activeSessionRoleId: { type: string, minLength: 1 }
+        activeSessionRoleLabel: { type: string, minLength: 1 }
+        currentStageId: { type: [string, "null"] }
+        currentStageLabel: { type: [string, "null"] }
+        interfaceProfileId: { type: string, minLength: 1 }
+        layout: { type: string, enum: [single_column, main_with_sidebar, dashboard_grid, workspace_tabs] }
+        modules: { type: array, items: { type: object } }
+        createTasks: { type: array, items: { type: object } }
+        artifacts: { type: array, items: { $ref: "#/components/schemas/RuntimeArtifactV1" } }
+    OperatorProjectionV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantCount, occupiedSeatCount, artifactsByState, activeTasks, recentEvents]
+      properties:
+        contractId: { const: operator-projection-v1 }
+        sessionId: { type: string, format: uuid }
+        sessionStatus: { type: string, minLength: 1 }
+        releaseId: { type: string, format: uuid }
+        releaseLabel: { type: string, minLength: 1 }
+        participantCount: { type: integer, minimum: 0 }
+        occupiedSeatCount: { type: integer, minimum: 0 }
+        artifactsByState: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+        activeTasks: { type: array, items: { type: object } }
+        recentEvents: { type: array, items: { type: object } }
     RuntimeDeltaV1:
       type: object
       additionalProperties: false

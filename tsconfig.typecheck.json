@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
       "@plenum/event-contracts": ["packages/event-contracts/src/index.ts"],
@@ -14,6 +16,7 @@
   },
   "include": [
     "apps/*/src/**/*.ts",
+    "apps/*/src/**/*.tsx",
     "packages/*/src/**/*.ts"
   ]
 }

@@ -27,6 +27,9 @@ export const DOMAIN_EVENT_CONTRACT_ID = "domain-event-v1";
 export const RUNTIME_SSE_CONTRACT_ID = "runtime-sse-v1";
 export const SYNC_DELTAS_CONTRACT_ID = "sync-deltas-v1";
 export const SYNC_SNAPSHOT_CONTRACT_ID = "sync-snapshot-v1";
+export const ARTIFACT_COMMAND_CONTRACT_ID = "artifact-command-v1";
+export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
+export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
 
 export interface CommandEnvelopeV1 {
   commandId: string;
@@ -104,6 +107,89 @@ export interface RuntimeSseV1 {
   policyVersion: string;
   events: RuntimeSseEventV1[];
 }
+
+export interface RuntimeFormFieldV1 {
+  key: string;
+  label: string;
+  type: "text" | "long_text";
+  required: boolean;
+  helpText?: string;
+}
+
+export interface RuntimeFormV1 {
+  id: string;
+  name: string;
+  formVersion: string;
+  fields: RuntimeFormFieldV1[];
+}
+
+export interface RuntimeActionV1 {
+  operationType: string;
+  label: string;
+  requiresForm: boolean;
+}
+
+export interface RuntimeArtifactV1 {
+  id: string;
+  artifactTypeKey: string;
+  title: string;
+  state: string;
+  stateLabel: string;
+  payload: JsonObject;
+  version: number;
+  governingReleaseId: string;
+  form: RuntimeFormV1;
+  createdByMe: boolean;
+  actions: RuntimeActionV1[];
+}
+
+export interface RuntimeCreateTaskV1 {
+  artifactTypeKey: string;
+  title: string;
+  action: RuntimeActionV1;
+  form: RuntimeFormV1;
+}
+
+export interface RuntimeModuleV1 {
+  id: string;
+  type: "session_status" | "artifact_form" | "task_list";
+  title: string;
+  mode: "read" | "write";
+  emptyStateText: string;
+}
+
+export interface RuntimeProjectionV1 {
+  contractId: typeof RUNTIME_PROJECTION_CONTRACT_ID;
+  sessionId: string;
+  sessionStatus: string;
+  releaseId: string;
+  releaseLabel: string;
+  participantId: string;
+  activeSessionRoleId: string;
+  activeSessionRoleLabel: string;
+  currentStageId: string | null;
+  currentStageLabel: string | null;
+  interfaceProfileId: string;
+  layout: "single_column" | "main_with_sidebar" | "dashboard_grid" | "workspace_tabs";
+  modules: RuntimeModuleV1[];
+  createTasks: RuntimeCreateTaskV1[];
+  artifacts: RuntimeArtifactV1[];
+}
+
+export interface OperatorProjectionV1 {
+  contractId: typeof OPERATOR_PROJECTION_CONTRACT_ID;
+  sessionId: string;
+  sessionStatus: string;
+  releaseId: string;
+  releaseLabel: string;
+  participantCount: number;
+  occupiedSeatCount: number;
+  artifactsByState: Record<string, number>;
+  activeTasks: Array<{ artifactId: string; artifactTypeKey: string; state: string; version: number }>;
+  recentEvents: Array<{ type: string; recordedAt: string; aggregateId: string | null }>;
+}
+
+export type ArtifactCommandV1 = CommandEnvelopeV1;
 
 export const canonicalErrorCodes = [
   "UNAUTHENTICATED",
@@ -192,6 +278,16 @@ export const commandEnvelopeV1Schema = {
     payload: jsonObjectProperty
   }
 } as const satisfies ContractSchema<CommandEnvelopeV1>;
+
+export const artifactCommandV1Schema = {
+  ...commandEnvelopeV1Schema,
+  $id: ARTIFACT_COMMAND_CONTRACT_ID,
+  title: "Artifact Command v1",
+  properties: {
+    ...commandEnvelopeV1Schema.properties,
+    operationType: { type: "string", pattern: "^artifact\\.[a-z][a-z0-9_]*$" }
+  }
+} as const satisfies ContractSchema<ArtifactCommandV1>;
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -356,6 +452,36 @@ export const runtimeSseV1Schema = {
     }
   }
 } as const satisfies ContractSchema<RuntimeSseV1>;
+
+export const runtimeProjectionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: RUNTIME_PROJECTION_CONTRACT_ID,
+  title: "Authorized Runtime Projection v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "contractId", "sessionId", "sessionStatus", "releaseId", "releaseLabel", "participantId",
+    "activeSessionRoleId", "activeSessionRoleLabel", "currentStageId", "currentStageLabel",
+    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts"
+  ],
+  properties: {
+    contractId: { const: RUNTIME_PROJECTION_CONTRACT_ID },
+    sessionId: uuidProperty,
+    sessionStatus: { type: "string", minLength: 1 },
+    releaseId: uuidProperty,
+    releaseLabel: { type: "string", minLength: 1 },
+    participantId: uuidProperty,
+    activeSessionRoleId: { type: "string", minLength: 1 },
+    activeSessionRoleLabel: { type: "string", minLength: 1 },
+    currentStageId: { type: ["string", "null"] },
+    currentStageLabel: { type: ["string", "null"] },
+    interfaceProfileId: { type: "string", minLength: 1 },
+    layout: { type: "string", enum: ["single_column", "main_with_sidebar", "dashboard_grid", "workspace_tabs"] },
+    modules: { type: "array", items: { type: "object" } },
+    createTasks: { type: "array", items: { type: "object" } },
+    artifacts: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<RuntimeProjectionV1>;
 
 export function canonicalizeJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);

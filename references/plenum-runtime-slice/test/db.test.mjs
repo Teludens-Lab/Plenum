@@ -1,7 +1,7 @@
 // Database and authority negative tests (Data Model v1.1 §13: DB-01, DB-02, DB-04, DB-05; Runtime §22).
 // Requires: migrated database (DATABASE_URL as the migration owner), a running server (API_URL),
 // and DEMO_* variables from `npm run seed`.
-import {test, after} from 'node:test';
+import {describe, test, after} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -11,6 +11,7 @@ const {DATABASE_URL, DEMO_ORG_ID: org, DEMO_DESIGNER, DEMO_PUBLISHER, DEMO_OPERA
 const host = process.env.API_URL || 'http://127.0.0.1:3000';
 if (!DATABASE_URL || !org || !DEMO_SCRIBE) throw new Error('Set DATABASE_URL, API_URL and DEMO_* variables from npm run seed');
 
+describe('reference slice database boundaries', async () => {
 pg.types.setTypeParser(20, (v) => Number(v));
 const owner = new pg.Pool({connectionString: DATABASE_URL});
 after(() => owner.end());
@@ -123,4 +124,5 @@ test('ADR-001: a fenced authority cannot commit', async () => {
   } finally {
     await owner.query("UPDATE runtime.session_authorities SET status='active' WHERE session_id=$1", [session.sessionId]);
   }
+});
 });

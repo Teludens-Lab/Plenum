@@ -11,7 +11,7 @@ Plenum/
   tsconfig*.json               # shared strict TypeScript configuration
   apps/
     runtime-web/               # contract-only frontend consumer; no UI yet
-    server/                    # OIDC, trusted Session context, Pg transaction boundary
+    server/                    # OIDC, trusted context, transactional Command/evidence kernel
   packages/
     event-contracts/           # versioned Command, Event and error envelopes
     policy-engine/             # default-deny server projection policy
@@ -31,7 +31,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-PS-100 established the contract skeleton. PS-110 adds a PostgreSQL adapter, OIDC relying-party service, Session Access Context resolver, default-deny policy package and migration 005. There is still no HTTP transport implementation or rendered frontend; those remain owned by later slices.
+PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`: Authority fencing, idempotency, receipts, Evidence Events and the transactional outbox. There is still no HTTP transport, outbox publisher, or rendered frontend.
 
 ## Target code topology
 

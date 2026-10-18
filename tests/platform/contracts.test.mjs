@@ -3,9 +3,13 @@ import test from "node:test";
 
 import {
   COMMAND_ENVELOPE_CONTRACT_ID,
+  COMMAND_RECEIPT_CONTRACT_ID,
+  DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
   EVENT_ENVELOPE_CONTRACT_ID,
   commandEnvelopeV1Schema,
+  commandReceiptV1Schema,
+  canonicalizeJson,
   eventEnvelopeV1Schema,
   isCommandOperationType,
   isPastTenseEventType
@@ -42,11 +46,15 @@ const command = {
 
 test("PS-100-T01: versioned contracts are shared by server and frontend consumers", () => {
   assert.deepEqual(
-    [COMMAND_ENVELOPE_CONTRACT_ID, EVENT_ENVELOPE_CONTRACT_ID, ERROR_ENVELOPE_CONTRACT_ID],
-    ["command-envelope-v1", "event-envelope-v1", "error-envelope-v1"]
+    [COMMAND_ENVELOPE_CONTRACT_ID, COMMAND_RECEIPT_CONTRACT_ID, DOMAIN_EVENT_CONTRACT_ID,
+      EVENT_ENVELOPE_CONTRACT_ID, ERROR_ENVELOPE_CONTRACT_ID],
+    ["command-envelope-v1", "command-receipt-v1", "domain-event-v1",
+      "event-envelope-v1", "error-envelope-v1"]
   );
   assert.equal(commandEnvelopeV1Schema.additionalProperties, false);
   assert.equal(eventEnvelopeV1Schema.properties.eventVersion.const, 1);
+  assert.equal(commandReceiptV1Schema.additionalProperties, false);
+  assert.equal(canonicalizeJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
   assert.equal(isCommandOperationType(command.operationType), true);
   assert.equal(isCommandOperationType("artifact.submitted"), false);
   assert.equal(isPastTenseEventType("artifact.submitted"), true);

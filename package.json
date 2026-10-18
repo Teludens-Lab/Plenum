@@ -16,6 +16,7 @@
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit --pretty false",
     "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs packages/policy-engine/test/policy.test.mjs apps/server/test/identity.unit.test.mjs",
     "test:integration": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs",
+    "test:db": "npm run test:integration",
     "build": "tsc --build --pretty false"
   },
   "devDependencies": {

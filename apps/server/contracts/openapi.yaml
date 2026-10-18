@@ -3,6 +3,27 @@ info:
   title: Plenum identity and Session context API
   version: 0.1.0
 paths:
+  /v1/sessions/{sessionId}/commands:
+    post:
+      operationId: processSessionCommand
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommandEnvelopeV1" }
+      responses:
+        "200":
+          description: Accepted, rejected, reconciled, or idempotently replayed recorded outcome.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandReceiptV1" }
+        "503": { description: Deployment or Authority Epoch is not authoritative; no receipt is written. }
   /v1/auth/oidc/{providerKey}/begin:
     post:
       operationId: beginOidcLogin
@@ -50,6 +71,33 @@ paths:
         "200": { description: Server-derived Session Access Context. }
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
+  schemas:
+    CommandEnvelopeV1:
+      type: object
+      additionalProperties: false
+      required: [commandId, deviceId, operationType, aggregateId, expectedAggregateVersion, governingReleaseId, payload]
+      properties:
+        commandId: { type: string, format: uuid }
+        deviceId: { type: string, format: uuid }
+        operationType: { type: string, pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" }
+        aggregateId: { type: string, format: uuid }
+        expectedAggregateVersion: { type: integer, minimum: 0 }
+        governingReleaseId: { type: string, format: uuid }
+        activeSessionRoleId: { type: string, minLength: 1 }
+        deviceObservedAt: { type: string, format: date-time }
+        payload: { type: object }
+    CommandReceiptV1:
+      type: object
+      additionalProperties: false
+      required: [commandId, status, aggregateVersion, evidenceSequence, errorCode, message, replayed]
+      properties:
+        commandId: { type: string, format: uuid }
+        status: { type: string, enum: [received, accepted, rejected, needs_reconciliation] }
+        aggregateVersion: { type: [integer, "null"], minimum: 0 }
+        evidenceSequence: { type: [integer, "null"], minimum: 1 }
+        errorCode: { type: [string, "null"] }
+        message: { type: [string, "null"] }
+        replayed: { type: boolean }
   securitySchemes:
     InstitutionalOidc:
       type: openIdConnect

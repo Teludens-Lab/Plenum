@@ -49,7 +49,8 @@ async function applyMigrations() {
     "references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql",
     "references/plenum-runtime-slice/migrations/003_collaboration.sql",
     "references/plenum-runtime-slice/migrations/004_security.sql",
-    "apps/server/migrations/005_identity_oidc_context.sql"
+    "apps/server/migrations/005_identity_oidc_context.sql",
+    "apps/server/migrations/006_command_kernel.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -159,7 +160,7 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
   );
 });
 
-test("PS-110-T03 resolves context and commits reassignment atomically", async () => {
+test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async () => {
   const context = await withOrganizationTransaction(app, ids.orgA, (client) =>
     resolveSessionAccessContext(client, principal, {
       sessionId: ids.sessionA,
@@ -184,11 +185,12 @@ test("PS-110-T03 resolves context and commits reassignment atomically", async ()
       reason: "Operational reassignment"
     }
   };
-  const receipt = await reassignParticipant(app, context, command, "e0000000-0000-4000-8000-000000000003");
-  assert.equal(receipt.accessRevision, 2);
-  assert.equal(receipt.replayed, false);
-  const replay = await reassignParticipant(app, context, command, "e0000000-0000-4000-8000-000000000003");
-  assert.equal(replay.replayed, true);
+  const receipts = await Promise.all(Array.from({ length: 6 }, () =>
+    reassignParticipant(app, context, command, "e0000000-0000-4000-8000-000000000003", ids.deploymentA)));
+  assert.equal(receipts.filter((receipt) => !receipt.replayed).length, 1);
+  assert.equal(receipts.filter((receipt) => receipt.replayed).length, 5);
+  assert.equal(new Set(receipts.map((receipt) => receipt.evidenceSequence)).size, 1);
+  assert.equal(receipts[0].aggregateVersion, 2);
 
   const state = await owner.query(
     `SELECT
@@ -205,31 +207,92 @@ test("PS-110-T03 resolves context and commits reassignment atomically", async ()
     active: "1", closed: "1", revision: "2", revoked: "1", events: "1", audits: "1", outbox: "1"
   });
 
+  await assert.rejects(
+    reassignParticipant(app, context, { ...command, payload: { ...command.payload, reason: "Different payload" } },
+      "e0000000-0000-4000-8000-000000000003", ids.deploymentA),
+    (error) => error?.envelope?.error?.code === "IDEMPOTENCY_COLLISION"
+  );
+
+  const currentAssignment = await owner.query(
+    "SELECT id FROM runtime.seat_assignments WHERE participant_id=$1 AND valid_to IS NULL",
+    [ids.participantA]
+  );
+  const currentAssignmentId = currentAssignment.rows[0].id;
+  const staleCommand = {
+    ...command,
+    commandId: "f0000000-0000-4000-8000-000000000002",
+    expectedAggregateVersion: 1,
+    activeSessionRoleId: "role-c",
+    payload: { previousSeatAssignmentId: currentAssignmentId, newSessionRoleId: "role-d", newSeatId: "seat-d", reason: "Stale version" }
+  };
+  const stale = await reassignParticipant(
+    app, { ...context, activeSessionRoleId: "role-c", accessRevision: 2 }, staleCommand,
+    "e0000000-0000-4000-8000-000000000004", ids.deploymentA
+  );
+  assert.deepEqual([stale.status, stale.errorCode], ["needs_reconciliation", "STALE_AGGREGATE_VERSION"]);
+
+  const denied = await reassignParticipant(
+    app, { ...context, activeSessionRoleId: "role-c", organizationRoles: [], accessRevision: 2 },
+    { ...staleCommand, commandId: "f0000000-0000-4000-8000-000000000006", expectedAggregateVersion: 2 },
+    "e0000000-0000-4000-8000-000000000007", ids.deploymentA
+  );
+  assert.deepEqual([denied.status, denied.errorCode], ["rejected", "PERMISSION_DENIED"]);
+  const recordedOutcomes = await owner.query(
+    `SELECT receipt.status, event.event_type
+       FROM sync.command_receipts receipt
+       JOIN evidence.events event
+         ON event.session_id=receipt.session_id AND event.sequence=receipt.evidence_sequence
+      WHERE receipt.command_id IN ($1,$2)
+      ORDER BY receipt.status`,
+    [staleCommand.commandId, "f0000000-0000-4000-8000-000000000006"]
+  );
+  assert.deepEqual(recordedOutcomes.rows, [
+    { status: "needs_reconciliation", event_type: "command.reconciliation_required" },
+    { status: "rejected", event_type: "command.rejected" }
+  ]);
+
+  for (const [commandId, changedContext, deploymentId] of [
+    ["f0000000-0000-4000-8000-000000000003", { ...context, activeSessionRoleId: "role-c", authorityEpoch: 99 }, ids.deploymentA],
+    ["f0000000-0000-4000-8000-000000000004", { ...context, activeSessionRoleId: "role-c" }, ids.deploymentB]
+  ]) {
+    await assert.rejects(
+      reassignParticipant(app, changedContext, { ...staleCommand, commandId, expectedAggregateVersion: 2 },
+        "e0000000-0000-4000-8000-000000000005", deploymentId),
+      (error) => error?.envelope?.error?.code === "AUTHORITY_UNAVAILABLE"
+    );
+  }
+  const unrecorded = await owner.query(
+    "SELECT count(*) AS count FROM sync.command_receipts WHERE command_id IN ($1,$2)",
+    ["f0000000-0000-4000-8000-000000000003", "f0000000-0000-4000-8000-000000000004"]
+  );
+  assert.equal(unrecorded.rows[0].count, "0");
+
   await owner.query(
-    `CREATE FUNCTION evidence.fail_test_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-       BEGIN IF NEW.action='participant.reassigned' THEN RAISE EXCEPTION 'forced audit failure'; END IF; RETURN NEW; END $$;
-     CREATE TRIGGER fail_test_audit BEFORE INSERT ON evidence.audit_records
-       FOR EACH ROW EXECUTE FUNCTION evidence.fail_test_audit()`
+    `CREATE FUNCTION sync.fail_test_receipt() RETURNS trigger LANGUAGE plpgsql AS $$
+       BEGIN IF NEW.command_id='f0000000-0000-4000-8000-000000000005' THEN RAISE EXCEPTION 'forced receipt failure'; END IF; RETURN NEW; END $$;
+     CREATE TRIGGER fail_test_receipt BEFORE INSERT ON sync.command_receipts
+       FOR EACH ROW EXECUTE FUNCTION sync.fail_test_receipt()`
   );
   await assert.rejects(
     reassignParticipant(app, { ...context, activeSessionRoleId: "role-c", accessRevision: 2 }, {
       ...command,
-      commandId: "f0000000-0000-4000-8000-000000000002",
+      commandId: "f0000000-0000-4000-8000-000000000005",
       expectedAggregateVersion: 2,
       activeSessionRoleId: "role-c",
-      payload: { previousSeatAssignmentId: receipt.seatAssignmentId, newSessionRoleId: "role-d", newSeatId: "seat-d", reason: "Force rollback" }
-    }, "e0000000-0000-4000-8000-000000000004"),
-    /forced audit failure/
+      payload: { previousSeatAssignmentId: currentAssignmentId, newSessionRoleId: "role-d", newSeatId: "seat-d", reason: "Force rollback" }
+    }, "e0000000-0000-4000-8000-000000000006", ids.deploymentA),
+    /forced receipt failure/
   );
   const rolledBack = await owner.query(
     `SELECT
        (SELECT count(*) FROM runtime.seat_assignments WHERE participant_id=$1 AND valid_to IS NULL) active,
        (SELECT access_revision FROM runtime.participant_access_revisions WHERE participant_id=$1) revision,
-       (SELECT count(*) FROM evidence.events WHERE session_id=$2 AND event_type='seat_assignment.changed') events`,
+       (SELECT count(*) FROM evidence.events WHERE session_id=$2 AND event_type='seat_assignment.changed') events,
+       (SELECT next_sequence FROM evidence.session_sequences WHERE session_id=$2) next_sequence`,
     [ids.participantA, ids.sessionA]
   );
-  assert.deepEqual(rolledBack.rows[0], { active: "1", revision: "2", events: "1" });
-  await owner.query("DROP TRIGGER fail_test_audit ON evidence.audit_records; DROP FUNCTION evidence.fail_test_audit() ");
+  assert.deepEqual(rolledBack.rows[0], { active: "1", revision: "2", events: "1", next_sequence: "4" });
+  await owner.query("DROP TRIGGER fail_test_receipt ON sync.command_receipts; DROP FUNCTION sync.fail_test_receipt() ");
 });
 
 test("revocation invalidates Authentication Sessions and active projections", async () => {

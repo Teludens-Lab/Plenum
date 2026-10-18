@@ -22,6 +22,8 @@ export const EVENT_ENVELOPE_CONTRACT_ID = "event-envelope-v1";
 export const EVENT_ENVELOPE_VERSION = 1;
 export const ERROR_ENVELOPE_CONTRACT_ID = "error-envelope-v1";
 export const ERROR_ENVELOPE_VERSION = 1;
+export const COMMAND_RECEIPT_CONTRACT_ID = "command-receipt-v1";
+export const DOMAIN_EVENT_CONTRACT_ID = "domain-event-v1";
 
 export interface CommandEnvelopeV1 {
   commandId: string;
@@ -50,6 +52,20 @@ export interface EventEnvelopeV1 {
   occurredAt: string;
   payload: JsonObject;
 }
+
+export type CommandOutcomeStatus = "received" | "accepted" | "rejected" | "needs_reconciliation";
+
+export interface CommandReceiptV1 {
+  commandId: string;
+  status: CommandOutcomeStatus;
+  aggregateVersion: number | null;
+  evidenceSequence: number | null;
+  errorCode: CanonicalErrorCode | null;
+  message: string | null;
+  replayed: boolean;
+}
+
+export type DomainEventV1 = EventEnvelopeV1;
 
 export const canonicalErrorCodes = [
   "UNAUTHENTICATED",
@@ -198,6 +214,37 @@ export const errorEnvelopeV1Schema = {
     }
   }
 } as const satisfies ContractSchema<ErrorEnvelopeV1>;
+
+export const commandReceiptV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: COMMAND_RECEIPT_CONTRACT_ID,
+  title: "Command Receipt v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["commandId", "status", "aggregateVersion", "evidenceSequence", "errorCode", "message", "replayed"],
+  properties: {
+    commandId: uuidProperty,
+    status: { type: "string", enum: ["received", "accepted", "rejected", "needs_reconciliation"] },
+    aggregateVersion: { type: ["integer", "null"], minimum: 0 },
+    evidenceSequence: { type: ["integer", "null"], minimum: 1 },
+    errorCode: { type: ["string", "null"], enum: [...canonicalErrorCodes, null] },
+    message: { type: ["string", "null"] },
+    replayed: { type: "boolean" }
+  }
+} as const satisfies ContractSchema<CommandReceiptV1>;
+
+export const domainEventV1Schema = {
+  ...eventEnvelopeV1Schema,
+  $id: DOMAIN_EVENT_CONTRACT_ID,
+  title: "Domain Event v1"
+} as const satisfies ContractSchema<DomainEventV1>;
+
+export function canonicalizeJson(value: JsonValue): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalizeJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalizeJson(value[key] as JsonValue)}`).join(",")}}`;
+}
 
 const dotCaseName = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 const irregularPastParticiples = new Set(["cast", "held", "left", "sent", "set"]);

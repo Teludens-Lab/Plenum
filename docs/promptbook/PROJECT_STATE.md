@@ -39,7 +39,8 @@ Updated: 2026-10-18.
 - `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, and `CMD-PLATFORM-BUILD`: PASS on Node 24.22.0. Four workspaces compile from the root lockfile; contract lint checked four application/package source files, three versioned contracts, canonical naming, and an acyclic workspace graph.
 - `CMD-PLATFORM-TEST`: PASS 2/2 (`PS-100-T01`, `PS-100-T02`) on Node 24.22.0. The retained slice domain regression also passed 12/12 without source or OpenAPI changes. Full evidence is in `docs/ps-100-verification.md`.
 - PS-110 `CMD-PLATFORM-TYPECHECK`: PASS; `CMD-PLATFORM-TEST`: PASS 5/5; `CMD-PLATFORM-INTEGRATION`: PASS 4/4 on Node 24.22.0/PostgreSQL 18.6. DB-01 used a reused pool connection under `plenum_app`; PS-110-T03 included forced transactional rollback. Full evidence is in `docs/ps-110-verification.md`.
+- PS-120 `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, and `CMD-PLATFORM-DB`: PASS on Node 24.22.0/PostgreSQL 18.6. Six concurrent retries produced one commit; recorded rejection/reconciliation, authority refusal, collision, and rollback-without-sequence-gap passed. Full evidence is in `docs/ps-120-verification.md`.
 
 ## Next eligible work
 
-`PS-110` is implementation-complete on Node 24.22.0/PostgreSQL 18.6, but production identity use remains blocked on Security Owner approval and ADR-012/ADR-015 ratification. `PS-120 — Implement the transactional command and evidence kernel` is the exact next task. PS-130 is also dependency-eligible, but PS-120 is the next numbered foundation slice and owns the general command transaction that later Runtime work requires.
+`PS-120` is implementation-complete on Node 24.22.0/PostgreSQL 18.6. Milestone exit remains blocked on confirmation of ADR-001/ADR-003; authority transfer and evidence custody remain OPEN-016/OPEN-017. `PS-130 — Build the Release package compiler and registry` is the exact next task.

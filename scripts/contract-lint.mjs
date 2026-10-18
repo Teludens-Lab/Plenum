@@ -5,9 +5,13 @@ import { fileURLToPath } from "node:url";
 
 import {
   COMMAND_ENVELOPE_CONTRACT_ID,
+  COMMAND_RECEIPT_CONTRACT_ID,
+  DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
   EVENT_ENVELOPE_CONTRACT_ID,
   commandEnvelopeV1Schema,
+  commandReceiptV1Schema,
+  domainEventV1Schema,
   errorEnvelopeV1Schema,
   eventEnvelopeV1Schema,
   isCommandOperationType,
@@ -61,10 +65,12 @@ async function readPackageGraph() {
 }
 
 assert.equal(commandEnvelopeV1Schema.$id, COMMAND_ENVELOPE_CONTRACT_ID);
+assert.equal(commandReceiptV1Schema.$id, COMMAND_RECEIPT_CONTRACT_ID);
+assert.equal(domainEventV1Schema.$id, DOMAIN_EVENT_CONTRACT_ID);
 assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
 assert.equal(errorEnvelopeV1Schema.$id, ERROR_ENVELOPE_CONTRACT_ID);
 
-for (const schema of [commandEnvelopeV1Schema, eventEnvelopeV1Schema, errorEnvelopeV1Schema]) {
+for (const schema of [commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema, eventEnvelopeV1Schema, errorEnvelopeV1Schema]) {
   checkCamelCaseProperties(schema);
 }
 
@@ -105,4 +111,4 @@ const workspaceLockfiles = (await Promise.all(
 )).flat().filter((file) => path.basename(file) === "package-lock.json");
 assert.deepEqual(workspaceLockfiles, [], "apps and packages must use the root lockfile");
 
-console.log(`Contract lint PASS: ${sourceFiles.length} sources, 3 versioned contracts, canonical naming, acyclic workspaces.`);
+console.log(`Contract lint PASS: ${sourceFiles.length} sources, 5 versioned contracts, canonical naming, acyclic workspaces.`);

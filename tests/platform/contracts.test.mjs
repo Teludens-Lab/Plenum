@@ -105,7 +105,7 @@ test("PS-100-T01: versioned contracts are shared by server and frontend consumer
     id: "binding-1",
     pluginId: "plugin-1",
     pluginVersion: "1.0.0",
-    pluginDigest: "b".repeat(64),
+    pluginDigest: `sha256:${"b".repeat(64)}`,
     installationId: "installation-1",
     categories: [],
     connectivity: "offline_capable",

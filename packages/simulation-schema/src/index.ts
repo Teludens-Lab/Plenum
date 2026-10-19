@@ -422,7 +422,7 @@ export const releaseManifestV1Schema = {
 } as const satisfies ManifestSchema;
 
 export function hasPinnedPluginDigest(binding: PluginBindingV1): boolean {
-  return binding.pluginVersion.length > 0 && /^[0-9a-f]{64}$/u.test(binding.pluginDigest);
+  return binding.pluginVersion.length > 0 && /^sha256:[0-9a-f]{64}$/u.test(binding.pluginDigest);
 }
 
 export interface RuntimeFormValidationIssueV1 {

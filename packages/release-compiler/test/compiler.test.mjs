@@ -18,7 +18,7 @@ const input = {
     coreDesign: {
       pluginBindings: [{
         id: "binding-1", pluginId: "plugin-1", pluginVersion: "1.0.0",
-        pluginDigest: "a".repeat(64), installationId: "installation-1",
+        pluginDigest: `sha256:${"a".repeat(64)}`, installationId: "installation-1",
         categories: [], connectivity: "offline_capable", configuration: {},
         configurationDigest: "b".repeat(64), inputMappings: [], timeoutSeconds: 5,
         enabledInProfiles: ["institutional"]

@@ -45,10 +45,10 @@ ADR-001 through ADR-005 keep the meanings they had in the earlier governing-deci
 
 ## 3. Awaiting owner confirmation
 
-The following entries rest on recommended defaults or recommendations and are not yet in force:
+The following entries rest on recommended defaults or recommendations and are not yet in force, except where a dated Product Owner confirmation is recorded below:
 
 - **Assumed decisions:** DEC-21 to DEC-27 and DEC-30 to DEC-40. Questions 1–22 of the 2026-10-17 questionnaire came back without visible selections, so the recommended options were applied as stated in that questionnaire.
-- **Proposed ADRs:** ADR-001 to ADR-005 (questionnaire item 8 unanswered), ADR-008 to ADR-015 (recommendations the Product Owner requested) and ADR-016 to ADR-018 (technical detail for the 2026-10-17 feature specifications).
+- **Proposed ADRs:** ADR-001 to ADR-005 (questionnaire item 8 unanswered), ADR-008 to ADR-015 (recommendations the Product Owner requested) and ADR-016 to ADR-017 (technical detail for the 2026-10-17 feature specifications). ADR-018 was confirmed by Product Owner direction on 2026-10-19.
 - **Replacement term:** the name **Message Channel** in DEC-51 was chosen by the editor; the Product Owner confirmed only that "Voice Channel" keeps its name.
 - **Approver identities:** OPEN-001.
 
@@ -188,7 +188,7 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 | ADR-015 | **Tenant isolation layering.** Tenant identity comes only from authenticated server context. PostgreSQL row-level security is defense in depth under a non-owner application role without BYPASSRLS. Information asymmetry inside a Session is enforced by the application policy engine and server-side projections. | Proposed | Security Owner | Platform §18 "multitenancy and row-level security" |
 | ADR-016 | **Capability schemas.** Each core capability owns one PostgreSQL schema in the same cluster. Added to the ADR-005 list: `extension` (registry, bindings, runs, proposals, approvals), `voting` (polls, ballots, tallies, certifications) and `comms` (Voice Channel instances, grants, floor state, media events, recording references). | Proposed | Technical Lead | Documents 10–12 |
 | ADR-017 | **Voice media path.** Audio travels over WebRTC through a self-hosted selective forwarding unit behind a Media Provider Adapter (LiveKit is the candidate, not a hard dependency). The Runtime issues short-lived credentials scoped to Session, channel, permission and Participant; media-provider events are untrusted observations. | Proposed | Technical Lead, Security Owner | Document 12; DEC-49 |
-| ADR-018 | **Extension Host isolation.** Plugins run in hardened, rootless containers with read-only base images, resource limits and default-deny network egress through a controlled gateway; WASM/WASI is an additional target for deterministic models. Hosts never receive database, object-store or secret-store access. | Proposed | Technical Lead, Security Owner | Document 10; narrows OPEN-022 |
+| ADR-018 | **Confirmed 2026-10-19 by Product Owner direction. Extension Host isolation.** First-release Plugins run in hardened, rootless containers with read-only base images, resource limits and default-deny network egress through a controlled gateway. WASM/WASI is a later additional target for deterministic models. Hosts never receive database, object-store or secret-store access. Python/native targets remain deferred. | Confirmed | Product Owner | Document 10; narrows OPEN-022 |
 
 ### 6.1 Rationale for the recommendations requested in Q24 and Q26
 
@@ -229,16 +229,16 @@ In the Origin column, section numbers refer to the superseded source documents k
 | OPEN-017 | RPO/RTO and independent evidence anchor and export custody. | Release assurance | Product Owner, Operations Owner | Upstream DEC-15 |
 | OPEN-018 | Schema modeling questions: multiple Actions per Decision Record, co-authorship, revision after submission, one adjudication over many Actions, delayed effects, snapshot immutability, capability consumption, information access versus delivery, objective attachment. | Canonical Schema approval | Methodology Lead | Schema §26 |
 | OPEN-019 | Capacity acceptance targets (latency percentiles, reconnect-burst behavior, hardware baseline) for the DEC-16 workload, including ballot bursts, plugin execution and a separate media profile (rooms, active speakers, relay use, bitrate). | Load and reliability gate | Technical Lead, Operations Owner | Data model DB-10; Sync SYNC-15; VOTE-14; VOICE-12; EXT-19 |
-| OPEN-020 | Package signing policy for Releases and offline bundles. | Air-gapped package import | Security Owner | Foundation §7 |
+| OPEN-020 | **Resolved 2026-10-19 by Product Owner direction.** Releases and offline bundles use a canonical manifest covering the complete payload/dependency digest closure and detached Ed25519 signatures. Verification uses institution-provisioned trust roots kept outside the Package; a Package cannot establish its own trust. | — | Product Owner | Foundation §7 |
 | OPEN-021 | Plugin category taxonomy and per-category contracts. **Resolved 2026-10-17 by DEC-59 and DEC-60.** | — | Product Owner | Owner request, Q23 |
-| OPEN-022 | Remaining engineering ADRs: JSON Schema compatibility, workflow engine implementation, policy engine implementation, report generation, and the approved sandbox targets for Python and native scientific models (plugin isolation baseline: ADR-018). | Corresponding implementation epics | Technical Lead | Platform §18 |
+| OPEN-022 | **Resolved for the current implementation baseline 2026-10-19 by Product Owner direction.** Use JSON Schema 2020-12 and the existing workflow and policy engines; report generation remains in PS-520; Python and native scientific-model sandboxes are deferred and are not enabled by PS-220. | — | Product Owner | Platform §18; ADR-018 |
 | OPEN-023 | If the original PRD v0.6 is recovered, reconcile it with PRD v0.7. | Nothing until recovered | Product Owner | DEC-21 |
 | OPEN-024 | Information classification scheme for classified deployments beyond public, internal, confidential and restricted. | Air-gapped accreditation | Security Owner | Data §8 |
 | OPEN-025 | Organization roles for reviewers or methodology owners and for research analysts, beyond Admin, Designer, Publisher and Operator. | Publication approval and research export permissions | Product Owner | DEC-44; Foundation §4 |
 | OPEN-026 | **Resolved 2026-10-19.** Plenum must make generic Orientation/coverage gates, bounded Control operations and decision-trace capabilities available as configurable options to every simulation. Each Release selects the capabilities and supplies its roles, forms, labels, timing, ordering, required combinations and gate rules. Fractured Order's observed Orientation content and exact Control semantics remain Release configuration, not platform hard-coding. | — | Methodology Lead | DEC-22; owner direction |
 | OPEN-027 | How consent to recording and transcription is captured and withdrawn; legal basis; retention, access and export of recordings and transcripts; which transcription engines may run locally in air-gapped profiles. | Enabling recording or transcription in a production Session | Security Owner, Product Owner | DEC-50; document 12 |
 | OPEN-028 | Secret-ballot protection: ballot encryption, eligibility tokens, key custody, whether any administrator can recover choices, and small-group suppression thresholds for results. | Secret-ballot polls in a production Session | Security Owner, research governance | Document 11 |
-| OPEN-029 | Plugin trust operations: publisher key custody, signing algorithms, revocation distribution, offline update frequency, SBOM and vulnerability policy, catalog sharing and licensing between SSG and institutions. | Production plugin approval | Security Owner, Product Owner | Document 10 |
+| OPEN-029 | **Resolved 2026-10-19 by Product Owner direction.** Use DEC-52 restricted publishers and registered signing keys; distribute signed revocation data and require freshness within 30 days for new installations or bindings (existing digest-pinned runs may continue); require an SBOM; block known critical vulnerabilities, with only time-limited, recorded exceptions for high severity; require Organization license acceptance; keep the catalog curated and installations Organization-scoped. | — | Product Owner | Document 10 |
 
 ## 8. Retired ID crosswalk
 
@@ -308,3 +308,4 @@ These collided with the Foundation's DEC-01 to DEC-20 and are retired.
 | 1.0.3 | 2026-10-17 | Added §5.5 (DEC-46 to DEC-60) for the voting, voice and extension specifications; added ADR-016 to ADR-018; extended ADR-005, ADR-010 and ADR-013 notes; resolved OPEN-021; added OPEN-027 to OPEN-029; updated OPEN-015, OPEN-019 and OPEN-022. |
 | 1.0.4 | 2026-10-17 | Resolved OPEN-003 by recording the Product Owner's confirmation of Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official golden reference. |
 | 1.0.5 | 2026-10-19 | Resolved OPEN-026: reusable Orientation, Control and decision-trace mechanics are platform options; release-specific substance remains Release configuration. |
+| 1.0.6 | 2026-10-19 | Product Owner confirmed ADR-018 and resolved OPEN-020, OPEN-022 and OPEN-029 for the Plugin implementation baseline. |

@@ -1,0 +1,7 @@
+[
+  {
+    "name": "synthetic deterministic score",
+    "input": { "seed": 5, "pressure": 40 },
+    "expectedOutput": { "syntheticScore": 45 }
+  }
+]

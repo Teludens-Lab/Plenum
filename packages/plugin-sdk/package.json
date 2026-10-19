@@ -1,0 +1,16 @@
+{
+  "name": "@plenum/plugin-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@plenum/event-contracts": "0.1.0",
+    "ajv": "8.20.0"
+  }
+}

@@ -6,6 +6,7 @@
     { "path": "packages/workflow-engine" },
     { "path": "packages/policy-engine" },
     { "path": "packages/release-compiler" },
+    { "path": "packages/plugin-sdk" },
     { "path": "packages/sync-client" },
     { "path": "apps/server" },
     { "path": "apps/runtime-web" }

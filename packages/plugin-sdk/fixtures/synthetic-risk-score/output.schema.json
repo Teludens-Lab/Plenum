@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "synthetic-risk-score-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["syntheticScore"],
+  "properties": {
+    "syntheticScore": { "type": "number", "minimum": 0, "maximum": 100 }
+  }
+}

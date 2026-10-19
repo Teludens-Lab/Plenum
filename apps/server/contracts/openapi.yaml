@@ -3,6 +3,120 @@ info:
   title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/plugins/submissions:
+    post:
+      operationId: submitPluginArtifact
+      x-contract-ids: [plugin-manifest-v1, offline-plugin-bundle-v1]
+      x-authorized-organization-role: publisher
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Signed Plugin Artifact accepted into contract-validated lifecycle state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginArtifactV1" }
+        "403": { description: Publisher is not approved or its authority was revoked. }
+        "422": { description: Manifest, signature, digest closure, SBOM, vulnerability, or contract validation failed. }
+  /v1/plugins/{artifactId}/approve:
+    post:
+      operationId: approvePluginArtifact
+      x-contract-id: plugin-registry-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: artifactId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Artifact approved by a person other than its submitter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginArtifactV1" }
+        "403": { description: Admin authority or separation of duties is absent. }
+        "409": { description: Artifact is not in a valid approval state. }
+  /v1/plugins/offline-imports:
+    post:
+      operationId: importOfflinePluginBundle
+      x-contract-ids: [plugin-manifest-v1, offline-plugin-bundle-v1, plugin-registry-v1]
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Offline bundle verified into contract-validated state; separate Artifact approval and Installation are still required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginArtifactV1" }
+        "403": { description: Admin authority, institution trust root, or license acceptance is absent. }
+        "409": { description: Deployment profile or compatibility range is incompatible. }
+        "422": { description: Signature, digest closure, revocation freshness, SBOM, or vulnerability validation failed. }
+  /v1/organizations/{organizationId}/plugin-installations:
+    post:
+      operationId: installPluginArtifact
+      x-contract-ids: [plugin-registry-v1, offline-plugin-bundle-v1]
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          description: Must equal the Organization derived from the authenticated server context.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PluginInstallationRequestV1" }
+      responses:
+        "201": { description: Verified Plugin Artifact installed and enabled for one Deployment. }
+        "403": { description: Admin authority, trust root, approval, or license acceptance is absent. }
+        "409": { description: Host, Release schema, or deployment profile is incompatible. }
+        "422": { description: Signature, digest closure, revocation freshness, SBOM, or vulnerability validation failed. }
+  /v1/organizations/{organizationId}/plugin-catalog:
+    get:
+      operationId: getPluginCatalog
+      x-contract-id: plugin-registry-v1
+      x-authorized-organization-roles: [admin, designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: organizationId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Organization-scoped curated Plugin catalog; Participant access is denied server-side. }
+        "403": { description: Required Organization Role is absent. }
+  /v1/projects/{projectId}/plugin-bindings:
+    post:
+      operationId: bindPluginInstallation
+      x-contract-id: plugin-registry-v1
+      x-authorized-organization-roles: [admin, designer]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PluginBindingRequestV1" }
+      responses:
+        "201": { description: Enabled installation bound by immutable Artifact and configuration digests. }
+        "403": { description: Binding authority or Plugin approval is absent. }
+        "409": { description: Deployment profile or Release schema is incompatible. }
   /v1/projects/{projectId}/releases:
     post:
       operationId: publishRelease
@@ -286,6 +400,40 @@ paths:
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
   schemas:
+    PluginArtifactV1:
+      type: object
+      additionalProperties: false
+      required: [artifactId, pluginId, version, digest, lifecycleStatus]
+      properties:
+        artifactId: { type: string, format: uuid }
+        pluginId: { type: string, pattern: "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9_-]*){2,}$" }
+        version: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        lifecycleStatus: { type: string, enum: [contract_validated, approved, rejected, suspended, revoked, deprecated, quarantined] }
+    PluginInstallationRequestV1:
+      type: object
+      additionalProperties: false
+      required: [installationId, deploymentId, artifactId, permittedPermissions, hostApiVersion, releaseSchemaVersion, deploymentProfile]
+      properties:
+        installationId: { type: string, format: uuid }
+        deploymentId: { type: string, format: uuid }
+        artifactId: { type: string, format: uuid }
+        permittedPermissions: { type: array, uniqueItems: true, items: { type: string } }
+        hostApiVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        releaseSchemaVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        deploymentProfile: { type: string, enum: [connected, self_hosted, air_gapped] }
+    PluginBindingRequestV1:
+      type: object
+      additionalProperties: false
+      required: [bindingId, definitionRevisionId, installationId, configurationDigest, hostApiVersion, releaseSchemaVersion, deploymentProfile]
+      properties:
+        bindingId: { type: string, format: uuid }
+        definitionRevisionId: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        configurationDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        hostApiVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        releaseSchemaVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        deploymentProfile: { type: string, enum: [connected, self_hosted, air_gapped] }
     PublishReleaseRequestV1:
       type: object
       additionalProperties: false

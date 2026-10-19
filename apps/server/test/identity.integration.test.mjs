@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,17 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
 
 import {
+  createOfflinePluginBundle,
+  createPluginRevocations,
+  pluginDigest
+} from "@plenum/plugin-sdk";
+
+import {
   beginOidcLogin,
+  acceptPluginLicense,
+  approvePluginArtifact,
+  authorizePluginRun,
+  bindPluginInstallation,
   completeOidcLogin,
   createDatabasePool,
   exportReleasePackage,
@@ -16,12 +27,19 @@ import {
   getRuntimeSnapshot,
   getRuntimeSse,
   importReleasePackage,
+  importOfflinePluginBundle,
+  importPluginRevocations,
+  installPluginArtifact,
   LocalObjectStore,
   publishRelease,
   publishPendingRuntimeDeltas,
+  provisionPluginTrustRoot,
+  registerPluginPublisher,
   reassignParticipant,
   resolveSessionAccessContext,
   revokeAuthenticationSession,
+  revokePluginArtifact,
+  submitPluginArtifact,
   verifyImportedPackage,
   withOrganizationTransaction
 } from "../dist/index.js";
@@ -35,6 +53,7 @@ const ids = {
   personA: "20000000-0000-4000-8000-000000000001",
   personB: "20000000-0000-4000-8000-000000000002",
   personC: "20000000-0000-4000-8000-000000000003",
+  personD: "20000000-0000-4000-8000-000000000004",
   projectA: "30000000-0000-4000-8000-000000000001",
   projectB: "30000000-0000-4000-8000-000000000002",
   revisionA: "40000000-0000-4000-8000-000000000001",
@@ -77,7 +96,7 @@ const releaseMaterialization = {
       id: "binding-1",
       pluginId: "plugin-1",
       pluginVersion: "1.0.0",
-      pluginDigest: "c".repeat(64),
+      pluginDigest: `sha256:${"c".repeat(64)}`,
       installationId: "installation-1",
       categories: [],
       connectivity: "offline_capable",
@@ -109,7 +128,8 @@ async function applyMigrations() {
     "apps/server/migrations/007_release_packages.sql",
     "apps/server/migrations/008_projection_cursors.sql",
     "apps/server/migrations/009_runtime_capabilities.sql",
-    "apps/server/migrations/010_information_messages_injects.sql"
+    "apps/server/migrations/010_information_messages_injects.sql",
+    "apps/server/migrations/011_extension_registry.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -120,8 +140,8 @@ async function seed() {
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
-    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C')", [ids.personA, ids.personB, ids.personC]);
-    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher')", [ids.orgA, ids.personA, ids.orgB, ids.personB]);
+    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D')", [ids.personA, ids.personB, ids.personC, ids.personD]);
+    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
     await client.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
@@ -631,4 +651,216 @@ test("PS-130-T02 rejects a tampered portable Package before import", async () =>
     importReleasePackage(app, objectStore, publisher, tampered, manifest.rows[0].package_sha256, "f3000000-0000-4000-8000-000000000002"),
     (error) => error?.envelope?.error?.code === "VALIDATION_FAILED"
   );
+});
+
+test("EXT-01/02/16 separates Plugin submit, approval, install, bind, run authorization, and revocation", async () => {
+  const publisherKeys = generateKeyPairSync("ed25519");
+  const revocationKeys = generateKeyPairSync("ed25519");
+  const publicKeyPem = publisherKeys.publicKey.export({ type: "spki", format: "pem" }).toString();
+  const revocationPublicKeyPem = revocationKeys.publicKey.export({ type: "spki", format: "pem" }).toString();
+  const publisherId = "22000000-0000-4000-8000-000000000001";
+  const trustRootId = "22000000-0000-4000-8000-000000000002";
+  const revocationListId = "22000000-0000-4000-8000-000000000003";
+  const licenseAcceptanceId = "22000000-0000-4000-8000-000000000004";
+  const installationId = "22000000-0000-4000-8000-000000000005";
+  const bindingId = "22000000-0000-4000-8000-000000000006";
+  const deploymentId = "22000000-0000-4000-8000-000000000007";
+  const missingBindingId = "22000000-0000-4000-8000-000000000008";
+  const correlationId = "22000000-0000-4000-8000-000000000009";
+  const offlineInstallationId = "22000000-0000-4000-8000-00000000000a";
+  const offlineDeploymentId = "22000000-0000-4000-8000-00000000000d";
+  const now = new Date("2026-10-19T12:00:00.000Z");
+  const admin = {
+    authenticationSessionId: "22000000-0000-4000-8000-00000000000b",
+    principalId: ids.personC,
+    organizationId: ids.orgB,
+    organizationRoles: ["admin", "designer"],
+    authenticationStrength: "mfa",
+    expiresAt: new Date("2099-01-01T00:00:00.000Z")
+  };
+  const publisher = {
+    authenticationSessionId: "22000000-0000-4000-8000-00000000000c",
+    principalId: ids.personB,
+    organizationId: ids.orgB,
+    organizationRoles: ["publisher"],
+    authenticationStrength: "mfa",
+    expiresAt: new Date("2099-01-01T00:00:00.000Z")
+  };
+  const operator = { ...publisher, organizationRoles: ["operator"] };
+  const secondAdmin = { ...admin, principalId: ids.personD, organizationRoles: ["admin"] };
+  const pluginBytes = new TextEncoder().encode("synthetic fixture only");
+  const offlinePluginBytes = new TextEncoder().encode("synthetic offline fixture only");
+  const inputSchema = new TextEncoder().encode(JSON.stringify({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    required: ["seed"],
+    properties: { seed: { type: "integer" } }
+  }));
+  const outputSchema = new TextEncoder().encode(JSON.stringify({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    additionalProperties: false,
+    required: ["syntheticScore"],
+    properties: { syntheticScore: { type: "number" } }
+  }));
+  const manifest = {
+    contractId: "plugin-manifest-v1",
+    manifestVersion: "1.0.0",
+    pluginId: "org.ssg.fixtures.registry-score",
+    version: "1.0.0",
+    digest: pluginDigest(pluginBytes),
+    artifactPath: "plugin/payload.bin",
+    publisher: { id: publisherId, signatureKeyId: "publisher-key-1" },
+    categories: ["world_and_simulation"],
+    capabilities: ["compute"],
+    execution: { mode: "container", entrypoint: "plugin/payload.bin", rootless: true, readOnlyRoot: true },
+    connectivity: "offline_capable",
+    contracts: { inputSchema: "schemas/input.json", outputSchema: "schemas/output.json" },
+    compatibility: { hostApi: ">=1.0.0 <2.0.0", releaseSchema: ">=1.3.0 <2.0.0" },
+    limits: { timeoutSeconds: 5, memoryMiB: 64, cpuMillis: 1000, outputBytes: 4096 },
+    requestedPermissions: ["state_values.read:mapped"],
+    dataClassificationMaximum: "internal",
+    reproducibility: { deterministic: true, seedInput: "seed" },
+    dependencies: [],
+    provenance: { sourceRevision: "synthetic-only", buildSystem: "none" },
+    license: "synthetic-license-v1"
+  };
+  const built = createOfflinePluginBundle({
+    manifest,
+    files: new Map([
+      ["plugin/payload.bin", pluginBytes],
+      ["schemas/input.json", inputSchema],
+      ["schemas/output.json", outputSchema],
+      ["sbom/sbom.json", new TextEncoder().encode("{\"bomFormat\":\"CycloneDX\"}")]
+    ]),
+    supplyChain: {
+      sbomPath: "sbom/sbom.json",
+      attestationType: "synthetic-test",
+      attestedAt: now.toISOString(),
+      vulnerabilities: [],
+      vulnerabilityExceptions: [],
+      license: manifest.license
+    },
+    privateKey: publisherKeys.privateKey
+  });
+  const offlineBuilt = createOfflinePluginBundle({
+    manifest: { ...manifest, version: "1.0.1", digest: pluginDigest(offlinePluginBytes) },
+    files: new Map([
+      ["plugin/payload.bin", offlinePluginBytes],
+      ["schemas/input.json", inputSchema],
+      ["schemas/output.json", outputSchema],
+      ["sbom/sbom.json", new TextEncoder().encode("{\"bomFormat\":\"CycloneDX\"}")]
+    ]),
+    supplyChain: built.bundle.supplyChain,
+    privateKey: publisherKeys.privateKey
+  });
+
+  await registerPluginPublisher(app, admin, {
+    publisherId,
+    publisherPrincipalId: ids.personB,
+    displayName: "Synthetic fixture publisher",
+    signatureKeyId: "publisher-key-1",
+    publicKeyPem,
+    correlationId
+  });
+  await provisionPluginTrustRoot(app, admin, {
+    trustRootId,
+    publisherId,
+    publisherKeyId: "publisher-key-1",
+    publisherPublicKeyPem: publicKeyPem,
+    revocationKeyId: "revocation-key-1",
+    revocationPublicKeyPem,
+    correlationId
+  });
+  await importPluginRevocations(app, admin, {
+    revocationListId,
+    publisherId,
+    document: createPluginRevocations({
+      generatedAt: now.toISOString(),
+      publisherId,
+      keyId: "revocation-key-1",
+      privateKey: revocationKeys.privateKey
+    }),
+    correlationId
+  }, now);
+  await acceptPluginLicense(app, admin, {
+    acceptanceId: licenseAcceptanceId,
+    pluginId: manifest.pluginId,
+    license: manifest.license,
+    termsDigest: `sha256:${"1".repeat(64)}`,
+    correlationId
+  });
+
+  await assert.rejects(
+    submitPluginArtifact(app, objectStore, operator, built.bytes, correlationId, now),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  const submitted = await submitPluginArtifact(app, objectStore, publisher, built.bytes, correlationId, now);
+  assert.equal(submitted.lifecycleStatus, "contract_validated");
+  const approved = await approvePluginArtifact(app, admin, submitted.artifactId, correlationId, now);
+  assert.equal(approved.lifecycleStatus, "approved");
+  await assert.rejects(
+    authorizePluginRun(app, operator, missingBindingId, correlationId),
+    (error) => error?.envelope?.error?.code === "NOT_FOUND"
+  );
+
+  const offline = await importOfflinePluginBundle(app, objectStore, admin, offlineBuilt.bytes, {
+    artifactId: "22000000-0000-4000-8000-00000000000e",
+    compatibility: { hostApiVersion: "1.0.0", releaseSchemaVersion: "1.3.1", deploymentProfile: "air_gapped" },
+    correlationId
+  }, now);
+  assert.equal(offline.lifecycleStatus, "contract_validated");
+  await approvePluginArtifact(app, secondAdmin, offline.artifactId, correlationId, now);
+  const offlineInstalled = await installPluginArtifact(app, objectStore, secondAdmin, {
+    installationId: offlineInstallationId,
+    deploymentId: offlineDeploymentId,
+    artifactId: offline.artifactId,
+    permittedPermissions: ["state_values.read:mapped"],
+    compatibility: { hostApiVersion: "1.0.0", releaseSchemaVersion: "1.3.1", deploymentProfile: "air_gapped" },
+    correlationId
+  }, now);
+  assert.equal(offlineInstalled.deploymentId, offlineDeploymentId);
+
+  const installed = await installPluginArtifact(app, objectStore, admin, {
+    installationId,
+    deploymentId,
+    artifactId: submitted.artifactId,
+    permittedPermissions: ["state_values.read:mapped"],
+    compatibility: { hostApiVersion: "1.0.0", releaseSchemaVersion: "1.3.1", deploymentProfile: "air_gapped" },
+    correlationId
+  }, now);
+  assert.equal(installed.digest, manifest.digest);
+  await assert.rejects(
+    withOrganizationTransaction(app, ids.orgB, (client) => client.query(
+      "UPDATE extension.plugin_artifacts SET digest=$1 WHERE id=$2",
+      [`sha256:${"f".repeat(64)}`, submitted.artifactId]
+    )),
+    (error) => error?.code === "42501"
+  );
+  await bindPluginInstallation(app, admin, {
+    bindingId,
+    projectId: ids.projectB,
+    definitionRevisionId: ids.revisionB,
+    installationId,
+    configurationDigest: `sha256:${"2".repeat(64)}`,
+    compatibility: { hostApiVersion: "1.0.0", releaseSchemaVersion: "1.3.1", deploymentProfile: "air_gapped" },
+    correlationId
+  }, now);
+  assert.equal((await authorizePluginRun(app, operator, bindingId, correlationId)).artifactDigest, manifest.digest);
+
+  await revokePluginArtifact(app, admin, submitted.artifactId, correlationId, now);
+  await assert.rejects(
+    authorizePluginRun(app, operator, bindingId, correlationId),
+    (error) => error?.envelope?.error?.code === "PLUGIN_NOT_APPROVED"
+  );
+  const retained = await owner.query(
+    `SELECT
+       (SELECT count(*) FROM extension.plugin_artifacts WHERE id=$1) artifacts,
+       (SELECT count(*) FROM extension.plugin_installations WHERE id=$2) installations,
+       (SELECT count(*) FROM extension.plugin_bindings WHERE id=$3) bindings,
+       (SELECT count(*) FROM evidence.audit_records WHERE organization_id=$4 AND action LIKE 'plugin_%') audits`,
+    [submitted.artifactId, installationId, bindingId, ids.orgB]
+  );
+  assert.deepEqual(retained.rows[0], { artifacts: "1", installations: "1", bindings: "1", audits: "12" });
 });

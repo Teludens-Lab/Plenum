@@ -33,6 +33,10 @@ import {
   isCommandOperationType,
   isPastTenseEventType
 } from "../packages/event-contracts/dist/index.js";
+import {
+  PLUGIN_MANIFEST_CONTRACT_ID,
+  pluginManifestV1Schema
+} from "../packages/plugin-sdk/dist/index.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -93,11 +97,12 @@ assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
 assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
+assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
-  syncDeltasV1Schema, syncSnapshotV1Schema];
+  syncDeltasV1Schema, syncSnapshotV1Schema, pluginManifestV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }

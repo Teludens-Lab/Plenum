@@ -256,6 +256,31 @@ export interface RuntimePollDefinitionV1 {
   retentionPolicyId?: string;
 }
 
+export interface RuntimeVoiceChannelDefinitionV1 {
+  id: string;
+  name: string;
+  mode: "radio_ptt" | "open_room" | "private_call" | "broadcast";
+  capacity: number;
+  activeStageIds?: string[];
+  language?: string;
+  priorityPolicy?: Array<{ sessionRoleId: string; priority: number }>;
+  canListen: RuntimeActorSelectorV1;
+  canTransmit: RuntimeActorSelectorV1;
+  canModerate: RuntimeActorSelectorV1;
+  canInvite?: RuntimeActorSelectorV1;
+  radio?: {
+    floorLeaseMs: number;
+    queuePolicy: "fifo" | "priority";
+    preemption: "none" | "authorized_emergency";
+    maxTransmissionMs: number;
+    cooldownMs: number;
+  };
+  recordingPolicy: "off" | "on" | "with_consent";
+  transcriptionPolicy: "off" | "with_consent";
+  mediaProviderAdapterBindingId: string;
+  retentionPolicyId?: string;
+}
+
 export interface RuntimeTeamCellDefinitionV1 {
   id: string;
   teamId: string;
@@ -374,12 +399,13 @@ export interface RuntimeCoreDesignV1 {
   communications: {
     messageChannels: Array<{ id: string; name: string; type: string; supportsAttachments: boolean; supportsThreading: boolean; structuredArtifactTypeId?: string; informationPolicyId?: string; threadProtocol?: RuntimeProposalThreadProtocolV1 }>;
     routes: Array<{ id: string; channelId: string; sender: RuntimeActorSelectorV1; recipient: RuntimeActorSelectorV1; approvalWorkflowId?: string; informationPolicyId?: string; activeStageIds?: string[] }>;
-    voiceChannels: unknown[];
+    voiceChannels: RuntimeVoiceChannelDefinitionV1[];
   };
   polls?: RuntimePollDefinitionV1[];
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
   pluginBindings: PluginBindingV1[];
+  platformAdapters?: Array<{ id: string; digest: string }>;
   terminology?: { labels: Record<string, { singular: string; plural: string }>; customLabels: Record<string, string> };
   accessPolicy?: RuntimeAccessPolicyV1;
   identity?: { title: string; subtitle?: string; developer: string; developerLogoResourceId?: string };
@@ -633,6 +659,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   const seats = uniqueIds(runtime.seats, "Seat");
   const stageGroups = uniqueIds(runtime.stageGroups, "Stage Group");
   uniqueIds(runtime.polls ?? [], "Poll Definition");
+  uniqueIds(runtime.communications.voiceChannels ?? [], "Voice Channel Definition");
   uniqueIds(runtime.reports, "Report");
 
   const reference = (ids: Set<string>, id: string, label: string): void => {
@@ -727,6 +754,40 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     }
     poll.vetoRule.holderSeatIds.forEach((id) => reference(seats, id, `Poll ${poll.id} veto`));
     poll.certificationPolicy.certifierSessionRoleIds?.forEach((id) => reference(roles, id, `Poll ${poll.id} certification`));
+  }
+  for (const channel of runtime.communications.voiceChannels ?? []) {
+    if (!Number.isSafeInteger(channel.capacity) || channel.capacity < 2 || channel.name.trim().length === 0) {
+      throw new Error(`Voice Channel ${channel.id} has invalid identity or capacity`);
+    }
+    selector(channel.canListen, `Voice Channel ${channel.id} listen policy`);
+    selector(channel.canTransmit, `Voice Channel ${channel.id} transmit policy`);
+    selector(channel.canModerate, `Voice Channel ${channel.id} moderation policy`);
+    channel.canInvite === undefined || selector(channel.canInvite, `Voice Channel ${channel.id} invitation policy`);
+    channel.activeStageIds?.forEach((id) => reference(stages, id, `Voice Channel ${channel.id}`));
+    channel.priorityPolicy?.forEach(({ sessionRoleId, priority }) => {
+      reference(roles, sessionRoleId, `Voice Channel ${channel.id} priority policy`);
+      if (!Number.isSafeInteger(priority)) throw new Error(`Voice Channel ${channel.id} has an invalid priority`);
+    });
+    if (channel.mediaProviderAdapterBindingId.trim().length === 0 ||
+        !runtime.platformAdapters?.some(({id}) => id === channel.mediaProviderAdapterBindingId)) {
+      throw new Error(`Voice Channel ${channel.id} has no pinned Media Provider Adapter binding`);
+    }
+    if (channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") {
+      throw new Error(`Voice Channel ${channel.id} recording and transcription remain disabled pending OPEN-027`);
+    }
+    if (channel.mode === "radio_ptt") {
+      const radio = channel.radio;
+      if (radio === undefined || !Number.isSafeInteger(radio.floorLeaseMs) || radio.floorLeaseMs < 250 ||
+          !Number.isSafeInteger(radio.maxTransmissionMs) || radio.maxTransmissionMs < radio.floorLeaseMs ||
+          !Number.isSafeInteger(radio.cooldownMs) || radio.cooldownMs < 0) {
+        throw new Error(`Voice Channel ${channel.id} has invalid radio lease bounds`);
+      }
+    } else if (channel.radio !== undefined) {
+      throw new Error(`Voice Channel ${channel.id} has radio policy outside radio_ptt mode`);
+    }
+    if (channel.mode === "private_call" && channel.canInvite === undefined) {
+      throw new Error(`Voice Channel ${channel.id} has no invitation policy`);
+    }
   }
   for (const stage of runtime.stages) {
     stage.transitions.forEach((transition) => reference(stages, transition.targetStageId, `Stage ${stage.id}`));

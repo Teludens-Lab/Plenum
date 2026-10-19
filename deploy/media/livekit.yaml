@@ -1,0 +1,18 @@
+# Candidate local provider for Proposed ADR-017. Secrets are supplied with LiveKit --key-file.
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+turn:
+  enabled: true
+  domain: media.plenum.lan
+  tls_port: 5349
+  cert_file: /run/secrets/media-tls.crt
+  key_file: /run/secrets/media-tls.key
+logging:
+  level: info
+

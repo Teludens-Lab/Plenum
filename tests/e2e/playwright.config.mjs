@@ -13,6 +13,8 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4173",
     browserName: "chromium",
+    permissions: ["microphone"],
+    launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
     colorScheme: "dark",
     trace: "retain-on-failure"
   },

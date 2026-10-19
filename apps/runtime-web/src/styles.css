@@ -134,6 +134,9 @@ code { font-family: var(--font-mono); }
 .poll-results { display: grid; gap: var(--space-2); }
 .poll-results div { display: flex; justify-content: space-between; gap: var(--space-4); }
 .status-success { padding: var(--space-3); color: var(--color-status-success); background: var(--color-status-success-bg); border-radius: var(--radius-md); }
+.voice-card .badge { text-transform: capitalize; }
+.voice-audio { position: fixed; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.floor-control[aria-pressed="true"], .floor-control:active { background: var(--color-status-danger); border-color: var(--color-status-danger); }
 
 @media (max-width: 47.99rem) {
   .runtime-layout, .state-page { padding: var(--space-5) var(--space-4) var(--space-10); }

@@ -39,6 +39,9 @@ export const APPROVAL_DECISION_CONTRACT_ID = "approval-decision-v1";
 export const POLL_COMMAND_CONTRACT_ID = "poll-command-v1";
 export const BALLOT_COMMAND_CONTRACT_ID = "ballot-command-v1";
 export const CERTIFICATION_CONTRACT_ID = "certification-v1";
+export const VOICE_COMMAND_CONTRACT_ID = "voice-command-v1";
+export const MEDIA_CREDENTIAL_CONTRACT_ID = "media-credential-v1";
+export const FLOOR_LEASE_CONTRACT_ID = "floor-lease-v1";
 
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
 export const SESSION_OPERATOR_POLICY_V1 = {
@@ -290,6 +293,54 @@ export interface RuntimePollV1 {
   certification: CertificationV1 | null;
 }
 
+export type VoiceChannelModeV1 = "radio_ptt" | "open_room" | "private_call" | "broadcast";
+export type MediaPermissionV1 = "listen" | "transmit" | "moderate";
+
+export interface MediaCredentialV1 {
+  contractId: typeof MEDIA_CREDENTIAL_CONTRACT_ID;
+  providerAdapterId: string;
+  providerAdapterVersion: string;
+  providerAdapterDigest: string;
+  serverUrl: string;
+  room: string;
+  participantIdentity: string;
+  token: string;
+  permissions: MediaPermissionV1[];
+  expiresAt: string;
+}
+
+export interface FloorLeaseV1 {
+  contractId: typeof FLOOR_LEASE_CONTRACT_ID;
+  requestId: string;
+  channelId: string;
+  status: "granted" | "queued" | "released" | "expired" | "preempted";
+  floorToken: string | null;
+  expiresAt: string | null;
+  queuePosition: number | null;
+}
+
+export interface RuntimeVoiceChannelV1 {
+  id: string;
+  definitionId: string;
+  name: string;
+  mode: VoiceChannelModeV1;
+  status: "open" | "degraded" | "unavailable";
+  joined: boolean;
+  canListen: boolean;
+  canTransmit: boolean;
+  canModerate: boolean;
+  microphoneState: "unavailable" | "muted" | "ready" | "transmitting";
+  floorHeldByMe: boolean;
+  floorExpiresAt: string | null;
+  version: number;
+  governingReleaseId: string;
+}
+
+export interface VoiceCommandReceiptV1 extends CommandReceiptV1 {
+  contractId: typeof VOICE_COMMAND_CONTRACT_ID;
+  mediaCredential: MediaCredentialV1 | null;
+}
+
 export interface RuntimeProjectionV1 {
   contractId: typeof RUNTIME_PROJECTION_CONTRACT_ID;
   sessionId: string;
@@ -299,6 +350,7 @@ export interface RuntimeProjectionV1 {
   participantId: string;
   activeSessionRoleId: string;
   activeSessionRoleLabel: string;
+  authorityEpoch: number;
   activeTeamId: string | null;
   activeTeamLabel: string | null;
   currentStageId: string | null;
@@ -315,6 +367,7 @@ export interface RuntimeProjectionV1 {
   messages: RuntimeMessageV1[];
   injects: RuntimeInjectV1[];
   polls: RuntimePollV1[];
+  voiceChannels: RuntimeVoiceChannelV1[];
 }
 
 export interface OperatorProjectionV1 {
@@ -566,6 +619,41 @@ export const injectCommandV1Schema = commandSchema(INJECT_COMMAND_CONTRACT_ID, "
 export const messageCommandV1Schema = commandSchema(MESSAGE_COMMAND_CONTRACT_ID, "Message Command v1", "message");
 export const pollCommandV1Schema = commandSchema(POLL_COMMAND_CONTRACT_ID, "Poll Command v1", "poll");
 export const ballotCommandV1Schema = commandSchema(BALLOT_COMMAND_CONTRACT_ID, "Ballot Command v1", "ballot");
+export const voiceCommandV1Schema = {
+  ...commandEnvelopeV1Schema,
+  $id: VOICE_COMMAND_CONTRACT_ID,
+  title: "Voice Command v1",
+  properties: {
+    ...commandEnvelopeV1Schema.properties,
+    operationType: { type: "string", pattern: "^voice_(?:channel|recording|transcription|consent)\\.[a-z][a-z0-9_]*$" }
+  }
+} as const satisfies ContractSchema<CommandEnvelopeV1>;
+
+export const mediaCredentialV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: MEDIA_CREDENTIAL_CONTRACT_ID, title: "Media Credential v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "providerAdapterId", "providerAdapterVersion", "providerAdapterDigest", "serverUrl", "room", "participantIdentity", "token", "permissions", "expiresAt"],
+  properties: {
+    contractId: { const: MEDIA_CREDENTIAL_CONTRACT_ID }, providerAdapterId: { type: "string", minLength: 1 },
+    providerAdapterVersion: { type: "string", minLength: 1 }, providerAdapterDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    serverUrl: { type: "string", pattern: "^wss?://" }, room: { type: "string", minLength: 1 },
+    participantIdentity: { type: "string", minLength: 1 }, token: { type: "string", minLength: 1 },
+    permissions: { type: "array", uniqueItems: true, items: { enum: ["listen", "transmit", "moderate"] } },
+    expiresAt: utcInstantProperty
+  }
+} as const satisfies ContractSchema<MediaCredentialV1>;
+
+export const floorLeaseV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: FLOOR_LEASE_CONTRACT_ID, title: "Floor Lease v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "requestId", "channelId", "status", "floorToken", "expiresAt", "queuePosition"],
+  properties: {
+    contractId: { const: FLOOR_LEASE_CONTRACT_ID }, requestId: uuidProperty, channelId: uuidProperty,
+    status: { enum: ["granted", "queued", "released", "expired", "preempted"] },
+    floorToken: { type: ["string", "null"] }, expiresAt: { type: ["string", "null"], format: "date-time" },
+    queuePosition: { type: ["integer", "null"], minimum: 1 }
+  }
+} as const satisfies ContractSchema<FloorLeaseV1>;
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -739,9 +827,9 @@ export const runtimeProjectionV1Schema = {
   additionalProperties: false,
   required: [
     "contractId", "sessionId", "sessionStatus", "releaseId", "releaseLabel", "participantId",
-    "activeSessionRoleId", "activeSessionRoleLabel", "activeTeamId", "activeTeamLabel", "currentStageId", "currentStageLabel", "currentStageStatus",
+    "activeSessionRoleId", "activeSessionRoleLabel", "authorityEpoch", "activeTeamId", "activeTeamLabel", "currentStageId", "currentStageLabel", "currentStageStatus",
     "stageStartedAt", "stageDeadlineAt", "stageRemainingSeconds",
-    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects", "polls"
+    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects", "polls", "voiceChannels"
   ],
   properties: {
     contractId: { const: RUNTIME_PROJECTION_CONTRACT_ID },
@@ -752,6 +840,7 @@ export const runtimeProjectionV1Schema = {
     participantId: uuidProperty,
     activeSessionRoleId: { type: "string", minLength: 1 },
     activeSessionRoleLabel: { type: "string", minLength: 1 },
+    authorityEpoch: { type: "integer", minimum: 1 },
     activeTeamId: { type: ["string", "null"] },
     activeTeamLabel: { type: ["string", "null"] },
     currentStageId: { type: ["string", "null"] },
@@ -767,7 +856,8 @@ export const runtimeProjectionV1Schema = {
     artifacts: { type: "array", items: { type: "object" } },
     messages: { type: "array", items: { type: "object" } },
     injects: { type: "array", items: { type: "object" } },
-    polls: { type: "array", items: { type: "object" } }
+    polls: { type: "array", items: { type: "object" } },
+    voiceChannels: { type: "array", items: { type: "object" } }
   }
 } as const satisfies ContractSchema<RuntimeProjectionV1>;
 

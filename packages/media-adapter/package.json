@@ -1,0 +1,21 @@
+{
+  "name": "@plenum/media-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    }
+  },
+  "dependencies": {
+    "@plenum/event-contracts": "0.1.0",
+    "livekit-client": "2.23.0",
+    "livekit-server-sdk": "2.19.1"
+  }
+}

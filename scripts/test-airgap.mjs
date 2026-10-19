@@ -53,6 +53,8 @@ const args = [
   image,
   "node", "--test",
   "tests/airgap/network-denied.test.mjs",
+  "tests/airgap/media-profile.test.mjs",
+  "packages/media-adapter/test/adapter.test.mjs",
   "packages/plugin-sdk/test/sdk.test.mjs"
 ];
 const run = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });

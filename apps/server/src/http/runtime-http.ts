@@ -9,6 +9,7 @@ import {
   type JsonObject
 } from "@plenum/event-contracts";
 import type { Pool } from "pg";
+import type { MediaProviderAdapter } from "@plenum/media-adapter";
 
 import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
@@ -19,6 +20,7 @@ import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
+import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -28,14 +30,16 @@ export interface RuntimeHttpOptions {
   deploymentId: string;
   authenticate(request: IncomingMessage, correlationId: string): Promise<AuthenticatedPrincipal>;
   extensionRuntime?: ExtensionRuntime;
+  mediaAdapter?: MediaProviderAdapter;
+  floorTokenSecret?: string;
 }
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
   if (code === "UNAUTHENTICATED" || code === "AUTH_EXPIRED") return 401;
   if (["PERMISSION_DENIED", "RESULT_NOT_RELEASED", "ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED"].includes(code)) return 403;
   if (["NOT_FOUND", "TARGET_NOT_FOUND"].includes(code)) return 404;
-  if (["STALE_AGGREGATE_VERSION", "INCOMPATIBLE_RELEASE", "IDEMPOTENCY_COLLISION", "INVALID_TRANSITION", "TARGET_EXISTS", "ALREADY_VOTED", "DEADLINE_EXPIRED", "CAPABILITY_UNAVAILABLE"].includes(code)) return 409;
-  if (code === "AUTHORITY_UNAVAILABLE") return 503;
+  if (["STALE_AGGREGATE_VERSION", "INCOMPATIBLE_RELEASE", "IDEMPOTENCY_COLLISION", "INVALID_TRANSITION", "TARGET_EXISTS", "ALREADY_VOTED", "DEADLINE_EXPIRED", "CAPABILITY_UNAVAILABLE", "FLOOR_BUSY", "FLOOR_TOKEN_EXPIRED"].includes(code)) return 409;
+  if (["AUTHORITY_UNAVAILABLE", "MEDIA_UNAVAILABLE"].includes(code)) return 503;
   if (code === "TOO_LARGE") return 413;
   if (["INVALID_ID", "INVALID_JSON"].includes(code)) return 400;
   if (["INVALID_COMMAND", "VALIDATION_FAILED", "REFERENCE_INVALID"].includes(code)) return 422;
@@ -153,6 +157,43 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         send(response, 200, await getPolls(options.pool, context));
         return true;
       }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/voice-channels$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        const projection = await getRuntimeProjection({pool:options.pool,principal,sessionId,deviceId:context.deviceId!,correlationId});
+        send(response,200,{voiceChannels:projection.voiceChannels});
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/voice-channels\/([^/]+)\/status$/u))) {
+        const sessionId = pathId(match[1], correlationId), channelId = pathId(match[2], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        const projection = await getRuntimeProjection({pool:options.pool,principal,sessionId,deviceId:context.deviceId!,correlationId});
+        const channel = projection.voiceChannels.find(({id})=>id===channelId);
+        if(channel===undefined) throw authorizationError("TARGET_NOT_FOUND","The Voice Channel was not found.",correlationId);
+        send(response,200,channel);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/voice-channels\/([^/]+)\/floor-requests(?:\/([^/]+)\/(renew|release))?$/u))) {
+        if(options.mediaAdapter===undefined||options.floorTokenSecret===undefined) throw authorizationError("CAPABILITY_UNAVAILABLE","Voice media is not configured.",correlationId);
+        const sessionId=pathId(match[1],correlationId),channelId=pathId(match[2],correlationId),body=await readBody(request,correlationId);
+        const action=match[4]??"request",requestId=match[3]===undefined?body.requestId:pathId(match[3],correlationId);
+        const context=await withOrganizationTransaction(options.pool,principal.organizationId,(client)=>resolveSessionAccessContext(client,principal,
+          {sessionId,deviceId:deviceHeader(request,correlationId),correlationId}));
+        if(typeof requestId!=="string"||!uuid.test(requestId)||typeof body.connectionId!=="string"||!uuid.test(body.connectionId)||
+            !Number.isSafeInteger(body.expectedAuthorityEpoch)||(body.reason!==undefined&&(typeof body.reason!=="string"||body.reason.length>1000))||
+            (action!=="request"&&(typeof body.floorToken!=="string"||body.floorToken.length<32))) {
+          throw authorizationError("VALIDATION_FAILED","The Floor request is invalid.",correlationId);
+        }
+        const floorInput={pool:options.pool,context,channelId,deviceId:context.deviceId!,correlationId,deploymentId:options.deploymentId,
+          tokenSecret:options.floorTokenSecret,mediaAdapter:options.mediaAdapter,input:{requestId,connectionId:body.connectionId,
+            expectedAuthorityEpoch:Number(body.expectedAuthorityEpoch),...(typeof body.floorToken==="string"?{floorToken:body.floorToken}:{}),
+            ...(typeof body.reason==="string"?{reason:body.reason}:{})}};
+        const result=action==="request"?await requestFloor(floorInput):action==="renew"?await renewFloor(floorInput):await releaseFloor(floorInput);
+        send(response,200,result);
+        return true;
+      }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/polls\/([^/]+)\/(my-receipt|result|audit)$/u))) {
         const sessionId = pathId(match[1], correlationId), pollId = pathId(match[2], correlationId);
         const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
@@ -182,10 +223,32 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
             correlationId
           }));
         const receipt = await submitRuntimeCommand(
-          options.pool, context, command, correlationId, options.deploymentId, options.extensionRuntime?.plans
+          options.pool, context, command, correlationId, options.deploymentId, options.extensionRuntime?.plans, options.mediaAdapter
         );
         if (receipt.status === "accepted" && command.operationType === "composition_run.start" && options.extensionRuntime !== undefined) {
           await executePendingModelRun(options.pool, principal.organizationId, command.aggregateId, options.extensionRuntime);
+        }
+        const requiresMediaEnforcement = command.operationType.startsWith("voice_") || command.operationType.startsWith("stage.") ||
+          command.operationType === "participant.reassign";
+        if(options.mediaAdapter!==undefined && receipt.status==="accepted" && requiresMediaEnforcement) {
+          try {
+            if(command.operationType==="voice_channel.leave") await options.mediaAdapter.removeParticipant({organizationId:context.organizationId,sessionId,
+              channelId:command.aggregateId,participantId:context.participantId});
+            if(command.operationType==="voice_channel.close") await options.mediaAdapter.closeChannel({organizationId:context.organizationId,sessionId,channelId:command.aggregateId});
+            if(command.operationType==="voice_channel.moderate"&&typeof command.payload.targetParticipantId==="string") {
+              const target={organizationId:context.organizationId,sessionId,channelId:command.aggregateId,participantId:command.payload.targetParticipantId};
+              if(command.payload.action==="remove") await options.mediaAdapter.removeParticipant(target); else await options.mediaAdapter.setTransmit(target,false);
+            }
+            if(command.operationType.startsWith("stage.")||command.operationType==="participant.reassign") {
+              await reconcileRevokedVoiceParticipants(options.pool,context,options.mediaAdapter);
+            }
+          } catch { throw authorizationError("MEDIA_UNAVAILABLE","The authoritative change was recorded, but provider enforcement is pending retry.",correlationId); }
+        }
+        if(command.operationType==="voice_channel.join") {
+          if(options.mediaAdapter===undefined) throw authorizationError("CAPABILITY_UNAVAILABLE","Voice media is not configured.",correlationId);
+          const credential=receipt.status==="accepted"?await issueMediaCredential(options.pool,context,command.aggregateId,options.mediaAdapter,correlationId):null;
+          send(response,receipt.status==="accepted"?200:409,voiceReceipt(receipt,credential));
+          return true;
         }
         send(response, receipt.status === "accepted" ? 200 : 409, receipt);
         return true;

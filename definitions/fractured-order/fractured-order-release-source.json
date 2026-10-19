@@ -7598,7 +7598,68 @@
             "informationPolicyId": "policy-proposal-thread"
           }
         ],
-        "voiceChannels": []
+        "voiceChannels": [
+          {
+            "id": "all-hands-radio",
+            "name": "All-hands radio",
+            "mode": "radio_ptt",
+            "capacity": 200,
+            "priorityPolicy": [
+              { "sessionRoleId": "white_cell", "priority": 100 },
+              { "sessionRoleId": "facilitator", "priority": 10 }
+            ],
+            "canListen": { "public": true },
+            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
+            "canModerate": { "sessionRoleIds": ["white_cell"] },
+            "radio": {
+              "floorLeaseMs": 5000,
+              "queuePolicy": "priority",
+              "preemption": "authorized_emergency",
+              "maxTransmissionMs": 30000,
+              "cooldownMs": 500
+            },
+            "recordingPolicy": "off",
+            "transcriptionPolicy": "off",
+            "mediaProviderAdapterBindingId": "local-media-v1"
+          },
+          {
+            "id": "team-open-room",
+            "name": "Team open room",
+            "mode": "open_room",
+            "capacity": 50,
+            "canListen": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
+            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
+            "canModerate": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "recordingPolicy": "off",
+            "transcriptionPolicy": "off",
+            "mediaProviderAdapterBindingId": "local-media-v1"
+          },
+          {
+            "id": "private-consultation",
+            "name": "Private consultation",
+            "mode": "private_call",
+            "capacity": 8,
+            "canListen": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "canModerate": { "sessionRoleIds": ["white_cell"] },
+            "canInvite": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "recordingPolicy": "off",
+            "transcriptionPolicy": "off",
+            "mediaProviderAdapterBindingId": "local-media-v1"
+          },
+          {
+            "id": "control-broadcast",
+            "name": "Control broadcast",
+            "mode": "broadcast",
+            "capacity": 200,
+            "canListen": { "public": true },
+            "canTransmit": { "sessionRoleIds": ["white_cell"] },
+            "canModerate": { "sessionRoleIds": ["white_cell"] },
+            "recordingPolicy": "off",
+            "transcriptionPolicy": "off",
+            "mediaProviderAdapterBindingId": "local-media-v1"
+          }
+        ]
       },
       "polls": [],
       "stateVariables": [],
@@ -8032,6 +8093,9 @@
       "researchQuestions": [],
       "measurements": [],
       "pluginBindings": [],
+      "platformAdapters": [
+        { "id": "local-media-v1", "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" }
+      ],
       "compositions": [],
       "accessPolicy": {
         "joinMethods": [

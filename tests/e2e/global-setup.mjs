@@ -20,7 +20,8 @@ const migrations = [
   "apps/server/migrations/010_information_messages_injects.sql",
   "apps/server/migrations/011_extension_registry.sql",
   "apps/server/migrations/012_extension_runs_approvals.sql",
-  "apps/server/migrations/013_voting_core.sql"
+  "apps/server/migrations/013_voting_core.sql",
+  "apps/server/migrations/014_comms_voice_core.sql"
 ];
 
 export default async function globalSetup() {
@@ -184,6 +185,18 @@ export default async function globalSetup() {
       "INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)",
       [fixture.sessionId, fixture.organizationId]
     );
+    const voiceDefinitions = new Map(definition.coreDesign.communications.voiceChannels.map((channel) => [channel.id, channel]));
+    for (const [key, channelId] of Object.entries(fixture.voiceChannels)) {
+      const definitionId = key === "openRoom" ? "team-open-room" : key === "privateCall" ? "private-consultation" :
+        key === "broadcast" ? "control-broadcast" : "all-hands-radio";
+      const voiceDefinition = voiceDefinitions.get(definitionId);
+      await owner.query(`INSERT INTO comms.voice_channels
+        (id,organization_id,session_id,governing_release_id,definition_id,definition_revision,definition,status,
+         provider_binding_id,provider_adapter_digest,authority_epoch,opened_by)
+        VALUES ($1,$2,$3,$4,$5,1,$6::jsonb,'open','local-media-v1',$7,1,$8)`,
+      [channelId,fixture.organizationId,fixture.sessionId,fixture.releaseId,definitionId,JSON.stringify(voiceDefinition),
+        `sha256:${"e".repeat(64)}`,fixture.people.operator]);
+    }
     await owner.query("COMMIT");
   } catch (error) {
     await owner.query("ROLLBACK");

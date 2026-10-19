@@ -49,7 +49,13 @@ export const fixture = {
     redReviewer: "ps210-red-reviewer"
   },
   proposalArtifactId: "61000000-0000-4000-8000-000000000001",
-  pollId: "62000000-0000-4000-8000-000000000001"
+  pollId: "62000000-0000-4000-8000-000000000001",
+  voiceChannels: {
+    radio: "63000000-0000-4000-8000-000000000001",
+    openRoom: "63000000-0000-4000-8000-000000000002",
+    privateCall: "63000000-0000-4000-8000-000000000003",
+    broadcast: "63000000-0000-4000-8000-000000000004"
+  }
 };
 
 export function runtimeUrl() {

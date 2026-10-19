@@ -142,6 +142,59 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.close();
   });
 
+  test("@a11y VOICE-06/07/11 uses local media with keyboard controls and non-audio instructions", async ({ browser }) => {
+    test.skip(process.env.MEDIA_TEST_URL === undefined, "A local SFU is required for the real media proof");
+    test.setTimeout(60_000);
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce",
+      permissions: ["microphone"] });
+    await context.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
+      ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.author}`
+    } }));
+    const page = await context.newPage();
+    await page.goto(runtimeUrl());
+    await expect(page.getByRole("heading", { name: "Voice Channels" })).toBeVisible();
+    await expect(page.getByText(/Push-to-talk: hold Space, Enter, or the Floor button/u)).toBeVisible();
+    const openRoom = page.getByRole("article", { name: "Team open room" });
+    const joinOpen = openRoom.getByRole("button", { name: "Join voice" });
+    await joinOpen.focus(); await page.keyboard.press("Enter");
+    await expect(page.getByText("Joined Team open room. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
+    const listenerContext = await browser.newContext({ permissions: ["microphone"] });
+    await listenerContext.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
+      ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.reviewer}`
+    } }));
+    const listener = await listenerContext.newPage();
+    await listener.goto(runtimeUrl());
+    const listenerRoom = listener.getByRole("article", { name: "Team open room" });
+    await listenerRoom.getByRole("button", { name: "Join voice" }).click();
+    await expect(listener.getByText("Joined Team open room. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
+    const microphone = openRoom.getByRole("button", { name: "Enable microphone" });
+    await microphone.focus(); await page.keyboard.press("Enter");
+    await expect(openRoom.getByText("transmitting", { exact: true })).toBeVisible();
+    await expect(listenerRoom.getByText("Receiving 1 remote audio stream.", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press("Enter");
+    await expect(openRoom.getByText("ready", { exact: true })).toBeVisible();
+    await listenerRoom.getByRole("button", { name: "Leave voice" }).click();
+    await listenerContext.close();
+    await openRoom.getByRole("button", { name: "Leave voice" }).click();
+
+    const radio = page.getByRole("article", { name: "All-hands radio" });
+    await radio.getByRole("button", { name: "Join voice" }).focus(); await page.keyboard.press("Enter");
+    await expect(page.getByText("Joined All-hands radio. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
+    const floor = radio.getByRole("button", { name: /Hold to talk/u });
+    await floor.focus(); await page.keyboard.down("Space");
+    await expect(radio.getByText("transmitting", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.up("Space");
+    await expect(radio.getByText("ready", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await radio.getByRole("button", { name: "Leave voice" }).click();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `${evidenceRoot}/voice-keyboard-local-media.png`, fullPage: true });
+
+    await context.setOffline(true);
+    await expect(radio.getByRole("button", { name: "Join voice" })).toBeDisabled();
+    await expect(page.getByText("Offline", { exact: true })).toBeVisible();
+    await context.close();
+  });
+
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
     test.setTimeout(60_000);
     const author = await actor(browser, fixture.tokens.author);

@@ -183,7 +183,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
-      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1, poll-command-v1, ballot-command-v1, certification-v1]
+      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1, poll-command-v1, ballot-command-v1, certification-v1, voice-command-v1, media-credential-v1]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -200,7 +200,10 @@ paths:
           description: Accepted or idempotently replayed recorded outcome.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/CommandReceiptV1" }
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/CommandReceiptV1" }
+                  - { $ref: "#/components/schemas/VoiceCommandReceiptV1" }
         "409":
           description: Rejected or reconciliation-required recorded outcome.
           content:
@@ -363,6 +366,81 @@ paths:
       responses:
         "200": { description: Restricted definition, Tally hashes, and Certification correction chain; Ballot choices and voter identities are omitted. }
         "403": { description: Certification permission is absent. }
+  /v1/sessions/{sessionId}/voice-channels:
+    get:
+      operationId: listVoiceChannels
+      x-contract-id: voice-command-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Participant-scoped Voice Channels; unauthorized channels are omitted.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [voiceChannels]
+                properties:
+                  voiceChannels: { type: array, items: { $ref: "#/components/schemas/RuntimeVoiceChannelV1" } }
+  /v1/sessions/{sessionId}/voice-channels/{channelId}/status:
+    get:
+      operationId: getVoiceChannel
+      x-contract-id: voice-command-v1
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: channelId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Participant-scoped Voice Channel status., content: { application/json: { schema: { $ref: "#/components/schemas/RuntimeVoiceChannelV1" } } } }
+        "404": { description: Missing and unauthorized Voice Channels share TARGET_NOT_FOUND semantics. }
+  /v1/sessions/{sessionId}/voice-channels/{channelId}/floor-requests:
+    post:
+      operationId: requestVoiceFloor
+      x-contract-id: floor-lease-v1
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: channelId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FloorRequestV1" } } } }
+      responses:
+        "200": { description: Granted or queued Floor request., content: { application/json: { schema: { $ref: "#/components/schemas/FloorLeaseV1" } } } }
+        "409": { description: Floor is busy or the live request is stale. }
+  /v1/sessions/{sessionId}/voice-channels/{channelId}/floor-requests/{requestId}/renew:
+    post:
+      operationId: renewVoiceFloor
+      x-contract-id: floor-lease-v1
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: channelId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: requestId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FloorTokenRequestV1" } } } }
+      responses:
+        "200": { description: Renewed bounded Floor Lease., content: { application/json: { schema: { $ref: "#/components/schemas/FloorLeaseV1" } } } }
+        "409": { description: Floor token or Authority Epoch is stale. }
+  /v1/sessions/{sessionId}/voice-channels/{channelId}/floor-requests/{requestId}/release:
+    post:
+      operationId: releaseVoiceFloor
+      x-contract-id: floor-lease-v1
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: channelId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: requestId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FloorTokenRequestV1" } } } }
+      responses:
+        "200": { description: Released Floor Lease., content: { application/json: { schema: { $ref: "#/components/schemas/FloorLeaseV1" } } } }
+        "409": { description: Floor token or Authority Epoch is stale. }
   /v1/operator/sessions/{sessionId}:
     get:
       operationId: getOperatorProjection
@@ -593,6 +671,83 @@ components:
         errorCode: { type: [string, "null"] }
         message: { type: [string, "null"] }
         replayed: { type: boolean }
+    VoiceCommandReceiptV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, commandId, status, aggregateVersion, evidenceSequence, errorCode, message, replayed, mediaCredential]
+      properties:
+        contractId: { const: voice-command-v1 }
+        commandId: { type: string, format: uuid }
+        status: { type: string, enum: [received, accepted, rejected, needs_reconciliation] }
+        aggregateVersion: { type: [integer, "null"], minimum: 0 }
+        evidenceSequence: { type: [integer, "null"], minimum: 1 }
+        errorCode: { type: [string, "null"] }
+        message: { type: [string, "null"] }
+        replayed: { type: boolean }
+        mediaCredential: { oneOf: [{ $ref: "#/components/schemas/MediaCredentialV1" }, { type: "null" }] }
+    MediaCredentialV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, providerAdapterId, providerAdapterVersion, providerAdapterDigest, serverUrl, room, participantIdentity, token, permissions, expiresAt]
+      properties:
+        contractId: { const: media-credential-v1 }
+        providerAdapterId: { type: string, minLength: 1 }
+        providerAdapterVersion: { type: string, minLength: 1 }
+        providerAdapterDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        serverUrl: { type: string, format: uri }
+        room: { type: string, minLength: 1 }
+        participantIdentity: { type: string, minLength: 1 }
+        token: { type: string, minLength: 1 }
+        permissions: { type: array, uniqueItems: true, items: { type: string, enum: [listen, transmit, moderate] } }
+        expiresAt: { type: string, format: date-time }
+    FloorRequestV1:
+      type: object
+      additionalProperties: false
+      required: [requestId, connectionId, expectedAuthorityEpoch]
+      properties:
+        requestId: { type: string, format: uuid }
+        connectionId: { type: string, format: uuid }
+        expectedAuthorityEpoch: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    FloorTokenRequestV1:
+      type: object
+      additionalProperties: false
+      required: [connectionId, expectedAuthorityEpoch, floorToken]
+      properties:
+        connectionId: { type: string, format: uuid }
+        expectedAuthorityEpoch: { type: integer, minimum: 1 }
+        floorToken: { type: string, minLength: 32 }
+    FloorLeaseV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, requestId, channelId, status, floorToken, expiresAt, queuePosition]
+      properties:
+        contractId: { const: floor-lease-v1 }
+        requestId: { type: string, format: uuid }
+        channelId: { type: string, format: uuid }
+        status: { type: string, enum: [granted, queued, released, expired, preempted] }
+        floorToken: { type: [string, "null"] }
+        expiresAt: { type: [string, "null"], format: date-time }
+        queuePosition: { type: [integer, "null"], minimum: 1 }
+    RuntimeVoiceChannelV1:
+      type: object
+      additionalProperties: false
+      required: [id, definitionId, name, mode, status, joined, canListen, canTransmit, canModerate, microphoneState, floorHeldByMe, floorExpiresAt, version, governingReleaseId]
+      properties:
+        id: { type: string, format: uuid }
+        definitionId: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        mode: { type: string, enum: [radio_ptt, open_room, private_call, broadcast] }
+        status: { type: string, enum: [open, degraded, unavailable] }
+        joined: { type: boolean }
+        canListen: { type: boolean }
+        canTransmit: { type: boolean }
+        canModerate: { type: boolean }
+        microphoneState: { type: string, enum: [unavailable, muted, ready, transmitting] }
+        floorHeldByMe: { type: boolean }
+        floorExpiresAt: { type: [string, "null"], format: date-time }
+        version: { type: integer, minimum: 1 }
+        governingReleaseId: { type: string, format: uuid }
     RuntimeFormFieldV1:
       type: object
       additionalProperties: false
@@ -662,7 +817,7 @@ components:
     RuntimeProjectionV1:
       type: object
       additionalProperties: false
-      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, activeTeamId, activeTeamLabel, currentStageId, currentStageLabel, currentStageStatus, stageStartedAt, stageDeadlineAt, stageRemainingSeconds, interfaceProfileId, layout, modules, createTasks, artifacts, messages, injects, polls]
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, authorityEpoch, activeTeamId, activeTeamLabel, currentStageId, currentStageLabel, currentStageStatus, stageStartedAt, stageDeadlineAt, stageRemainingSeconds, interfaceProfileId, layout, modules, createTasks, artifacts, messages, injects, polls, voiceChannels]
       properties:
         contractId: { const: runtime-projection-v1 }
         sessionId: { type: string, format: uuid }
@@ -672,6 +827,7 @@ components:
         participantId: { type: string, format: uuid }
         activeSessionRoleId: { type: string, minLength: 1 }
         activeSessionRoleLabel: { type: string, minLength: 1 }
+        authorityEpoch: { type: integer, minimum: 1 }
         activeTeamId: { type: [string, "null"] }
         activeTeamLabel: { type: [string, "null"] }
         currentStageId: { type: [string, "null"] }
@@ -688,6 +844,7 @@ components:
         messages: { type: array, items: { type: object } }
         injects: { type: array, items: { type: object } }
         polls: { type: array, items: { $ref: "#/components/schemas/RuntimePollV1" } }
+        voiceChannels: { type: array, items: { $ref: "#/components/schemas/RuntimeVoiceChannelV1" } }
     RuntimePollV1:
       type: object
       additionalProperties: false

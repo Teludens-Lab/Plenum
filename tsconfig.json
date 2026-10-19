@@ -8,6 +8,7 @@
     { "path": "packages/release-compiler" },
     { "path": "packages/plugin-sdk" },
     { "path": "packages/extension-host" },
+    { "path": "packages/media-adapter" },
     { "path": "packages/sync-client" },
     { "path": "apps/server" },
     { "path": "apps/runtime-web" }

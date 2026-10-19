@@ -14,7 +14,10 @@ import {
   type RuntimeMessageV1,
   type RuntimeModuleV1,
   type RuntimePollV1,
-  type RuntimeProjectionV1
+  type RuntimeProjectionV1,
+  type RuntimeVoiceChannelV1,
+  type VoiceCommandReceiptV1,
+  type FloorLeaseV1
 } from "@plenum/event-contracts";
 import {
   runtimeFieldConditionMatches,
@@ -23,6 +26,7 @@ import {
   validateRuntimeFormPayload,
   type RuntimeFormDefinitionV1
 } from "@plenum/simulation-schema";
+import { VoiceControls } from "./voice/VoiceControls.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "error";
 
@@ -620,10 +624,12 @@ function RuntimeView() {
     requestAnimationFrame(() => main.current?.focus());
   };
 
-  const post = async (command: CommandEnvelopeV1) => {
-    if (id === null) return;
-    setPending({ status: "local_pending", command });
-    setNotice("Saved on this device. Waiting for a server receipt.");
+  const post = async (command: CommandEnvelopeV1, replayable = true): Promise<CommandReceiptV1 | null> => {
+    if (id === null) return null;
+    if (replayable) {
+      setPending({ status: "local_pending", command });
+      setNotice("Saved on this device. Waiting for a server receipt.");
+    } else setNotice("Submitting live operation. It will not be queued or replayed after reconnect.");
     try {
       const response = await fetch(`/v1/sessions/${id}/commands`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command)
@@ -636,15 +642,19 @@ function RuntimeView() {
         throw new Error(`Command returned an invalid response with status ${response.status}`);
       }
       await handleReceipt(body);
+      return body;
     } catch (cause) {
       if (cause instanceof ApiError) {
         setPending(null);
         setConnection("error");
         setNotice(`Command failed: ${cause.message}`);
-        return;
+        return null;
       }
       setConnection(navigator.onLine ? "error" : "offline");
-      setNotice("Delivery acknowledgement was lost. This Command is still local pending, not accepted.");
+      setNotice(replayable ? "Delivery acknowledgement was lost. This Command is still local pending, not accepted."
+        : "The live operation failed without acknowledgement and was not queued.");
+      if (!replayable) setPending(null);
+      return null;
     }
   };
 
@@ -686,6 +696,25 @@ function RuntimeView() {
     void post({ commandId: crypto.randomUUID(), deviceId, operationType, aggregateId: poll.id,
       expectedAggregateVersion: poll.version, governingReleaseId: poll.governingReleaseId,
       activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload });
+  };
+
+  const sendVoice = async (channel: RuntimeVoiceChannelV1, operation: "join" | "leave"): Promise<VoiceCommandReceiptV1 | null> => {
+    if (projection === null || deviceId === null || !navigator.onLine) {
+      setConnection("offline"); setNotice("Voice needs the live Session Authority and was not queued."); return null;
+    }
+    const receipt = await post({ commandId: crypto.randomUUID(), deviceId, operationType: `voice_channel.${operation}`,
+      aggregateId: channel.id, expectedAggregateVersion: channel.version, governingReleaseId: channel.governingReleaseId,
+      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload: {} }, false);
+    return receipt as VoiceCommandReceiptV1 | null;
+  };
+
+  const sendFloor = async (channel: RuntimeVoiceChannelV1, action: "request" | "renew" | "release",
+    body: Record<string, unknown>): Promise<FloorLeaseV1> => {
+    if (id === null || deviceId === null || !navigator.onLine) throw new Error("Floor operations require a live connection");
+    const path = action === "request" ? "floor-requests" : `floor-requests/${String(body.requestId)}/${action}`;
+    const requestBody = action === "request" ? body : { ...body, requestId: undefined };
+    return api<FloorLeaseV1>(`/v1/sessions/${id}/voice-channels/${channel.id}/${path}`,
+      { method: "POST", headers: { "x-device-id": deviceId }, body: JSON.stringify(requestBody) });
   };
 
   const decideEffect = async (proposal: EffectProposalV1, decision: "approve" | "reject" | "return", reason: string) => {
@@ -764,6 +793,8 @@ function RuntimeView() {
         <div className="section-heading"><p className="eyebrow">Authoritative voting</p><h2 id="polls-heading">Polls</h2></div>
         <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={pending !== null} send={sendPoll} />)}</div>
       </section>}
+      {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <VoiceControls projection={projection}
+        online={connection === "online"} disabled={pending !== null} command={sendVoice} floor={sendFloor} notice={setNotice} />}
       <EffectProposalReview proposals={effectProposals} disabled={pending !== null} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>

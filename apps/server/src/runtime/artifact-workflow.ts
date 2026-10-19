@@ -30,6 +30,8 @@ import {
 } from "./commands/processor.js";
 import { executeInformationCommand, getInformationProjection, releaseStageInjects } from "./information-flow.js";
 import { executeVotingCommand, getPollProjection } from "../voting/polls.js";
+import { createVoiceCommandExecutor, getVoiceProjection } from "../comms/voice.js";
+import type { MediaProviderAdapter } from "@plenum/media-adapter";
 
 interface RuntimeFieldDefinition {
   id: string;
@@ -779,6 +781,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     if (role === undefined) throw new Error(`Release lacks Session Role ${context.activeSessionRoleId}`);
     const information = await getInformationProjection(client, context, actor, input.correlationId);
     const polls = await getPollProjection(client, context);
+    const voiceChannels = await getVoiceProjection(client, context);
     return {
       contractId: RUNTIME_PROJECTION_CONTRACT_ID,
       sessionId: context.sessionId,
@@ -788,6 +791,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       participantId: context.participantId,
       activeSessionRoleId: context.activeSessionRoleId,
       activeSessionRoleLabel: role.name,
+      authorityEpoch: context.authorityEpoch,
       activeTeamId: actor.teamId ?? null,
       activeTeamLabel: actor.teamLabel ?? null,
       currentStageId: stage?.id ?? null,
@@ -812,7 +816,8 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       createTasks,
       artifacts,
       ...information,
-      polls
+      polls,
+      voiceChannels
     };
   });
 }
@@ -840,7 +845,8 @@ export async function submitRuntimeCommand(
   command: CommandEnvelopeV1,
   correlationId: string,
   deploymentId: string,
-  extensionRunPlans: ReadonlyMap<string, ExtensionRunPlan> = new Map()
+  extensionRunPlans: ReadonlyMap<string, ExtensionRunPlan> = new Map(),
+  mediaAdapter?: MediaProviderAdapter
 ) {
   const execute = command.operationType.startsWith("stage.") ? executeStageCommand :
     command.operationType.startsWith("artifact.") ? executeArtifactCommand :
@@ -848,6 +854,7 @@ export async function submitRuntimeCommand(
       command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :
       command.operationType.startsWith("effect_proposal.") ? executeEffectProposalCommand :
       command.operationType.startsWith("poll.") || command.operationType === "ballot.cast" ? executeVotingCommand :
+      command.operationType.startsWith("voice_") && mediaAdapter !== undefined ? createVoiceCommandExecutor(mediaAdapter) :
       async (): Promise<CommandDecision> => ({ status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE",
         message: "This configured capability is not available in the current Runtime." });
   return processSessionCommand({ pool, context, command, correlationId, deploymentId, lockAggregateAndExecute: execute });

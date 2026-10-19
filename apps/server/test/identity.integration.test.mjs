@@ -46,6 +46,9 @@ import {
   computeBuiltInTally,
   getPollProjection,
   getPollResult,
+  issueMediaCredential,
+  requestFloor,
+  releaseFloor,
   submitPluginArtifact,
   verifyImportedPackage,
   withOrganizationTransaction
@@ -138,7 +141,8 @@ async function applyMigrations() {
     "apps/server/migrations/010_information_messages_injects.sql",
     "apps/server/migrations/011_extension_registry.sql",
     "apps/server/migrations/012_extension_runs_approvals.sql",
-    "apps/server/migrations/013_voting_core.sql"
+    "apps/server/migrations/013_voting_core.sql",
+    "apps/server/migrations/014_comms_voice_core.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1174,4 +1178,117 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
   const secret = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000060", "poll.open", secretPollId, 0,
     { definitionId: "secret-resolution", definitionRevision: 1 }), "24000000-0000-4000-8000-000000000061", ids.deploymentA);
   assert.equal(secret.errorCode, "CAPABILITY_UNAVAILABLE");
+});
+
+test("VOICE-01..05 enforce grants, one live Floor, preemption, deduplication and revocation", async () => {
+  const revisionId = "25000000-0000-4000-8000-000000000001";
+  const releaseId = "25000000-0000-4000-8000-000000000002";
+  const channelId = "25000000-0000-4000-8000-000000000003";
+  const adapterDigest = `sha256:${"e".repeat(64)}`;
+  const definition = {
+    id: "priority-radio", name: "Priority radio", mode: "radio_ptt", capacity: 8,
+    priorityPolicy: [{ sessionRoleId: "role-c", priority: 10 }, { sessionRoleId: "role-c-viewer", priority: 100 }],
+    canListen: { sessionRoleIds: ["role-c", "role-c-viewer"] },
+    canTransmit: { sessionRoleIds: ["role-c", "role-c-viewer"] },
+    canModerate: { sessionRoleIds: ["role-c"] },
+    radio: { floorLeaseMs: 5000, queuePolicy: "priority", preemption: "authorized_emergency", maxTransmissionMs: 15000, cooldownMs: 0 },
+    recordingPolicy: "off", transcriptionPolicy: "off", mediaProviderAdapterBindingId: "adapter-1"
+  };
+  const privateDefinition = {
+    id: "private-consultation", name: "Private consultation", mode: "private_call", capacity: 4,
+    canListen: { sessionRoleIds: ["role-c", "role-c-viewer"] }, canTransmit: { sessionRoleIds: ["role-c", "role-c-viewer"] },
+    canModerate: { sessionRoleIds: ["role-c"] }, canInvite: { sessionRoleIds: ["role-c"] },
+    recordingPolicy: "off", transcriptionPolicy: "off", mediaProviderAdapterBindingId: "adapter-1"
+  };
+  const broadcastDefinition = {
+    id: "control-broadcast", name: "Control broadcast", mode: "broadcast", capacity: 8,
+    canListen: { sessionRoleIds: ["role-c", "role-c-viewer"] }, canTransmit: { sessionRoleIds: ["role-c"] },
+    canModerate: { sessionRoleIds: ["role-c"] }, recordingPolicy: "off", transcriptionPolicy: "off",
+    mediaProviderAdapterBindingId: "adapter-1"
+  };
+  const coreDesign = { communications: { voiceChannels: [definition, privateDefinition, broadcastDefinition] },
+    platformAdapters: [{ id: "adapter-1", digest: "e".repeat(64) }],
+    sessionRoles: [{ id: "role-c", isControlRole: true }, { id: "role-c-viewer" }],
+    seats: [{ id: "seat-a" }, { id: "seat-c-viewer" }] };
+  await owner.query(`INSERT INTO studio.definition_revisions
+    (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+    VALUES ($1,$2,$3,$4::jsonb,repeat('5',64),'v1',$5)`,
+  [revisionId,ids.orgA,ids.projectA,JSON.stringify({coreDesign}),ids.personA]);
+  await owner.query(`INSERT INTO registry.releases
+    (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
+    VALUES ($1,$2,$3,$4,3,'Voice fixture','1','1',repeat('5',64),'voice-fixture',$5)`,
+  [releaseId,ids.orgA,ids.projectA,revisionId,ids.personA]);
+  await owner.query(`INSERT INTO runtime.release_activations
+    (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+    VALUES ('25000000-0000-4000-8000-000000000004',$1,$2,$3,$4,3,'{}',$5)`,
+  [ids.orgA,ids.projectA,ids.sessionA,releaseId,ids.personA]);
+  const accessA=Number((await owner.query("SELECT access_revision FROM runtime.participant_access_revisions WHERE participant_id=$1",[ids.participantA])).rows[0].access_revision);
+  const accessC=Number((await owner.query("SELECT access_revision FROM runtime.participant_access_revisions WHERE participant_id=$1",[ids.participantC])).rows[0].access_revision);
+  const context={authenticationSessionId:"fixture",principalId:ids.personA,principalType:"person",organizationId:ids.orgA,sessionId:ids.sessionA,
+    sessionStatus:"active",participantId:ids.participantA,seatAssignmentIds:[ids.assignmentA],activeSessionRoleId:"role-c",seatId:"seat-a",
+    organizationRoles:["operator"],activeReleaseId:releaseId,authenticationStrength:"mfa",featureFlags:[],authorityEpoch:1,accessRevision:accessA,deviceId:ids.deviceA};
+  const high={...context,principalId:ids.personC,participantId:ids.participantC,seatAssignmentIds:[ids.assignmentC],activeSessionRoleId:"role-c-viewer",
+    seatId:"seat-c-viewer",organizationRoles:[],accessRevision:accessC,deviceId:ids.deviceC};
+  const media={id:"fixture-media",version:"fixture-v1",digest:adapterDigest,transmit:[],
+    async issueCredential(input){return{contractId:"media-credential-v1",providerAdapterId:this.id,providerAdapterVersion:this.version,
+      providerAdapterDigest:this.digest,serverUrl:"wss://media.fixture.invalid",room:input.channelId,participantIdentity:input.participantId,
+      token:"fixture-token",permissions:input.permissions,expiresAt:new Date(Date.now()+30000).toISOString()};},
+    async setTransmit(input,enabled){this.transmit.push([input.participantId,enabled]);},async removeParticipant(){},async closeChannel(){},async health(){return"available";}};
+  const submit=(actor,command)=>submitRuntimeCommand(app,actor,command,randomUUID(),ids.deploymentA,new Map(),media);
+  const make=(actor,id,operation,version,payload={})=>({commandId:id,deviceId:actor.deviceId,operationType:operation,aggregateId:channelId,
+    expectedAggregateVersion:version,governingReleaseId:releaseId,activeSessionRoleId:actor.activeSessionRoleId,payload});
+  assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000010","voice_channel.open",0,
+    {definitionId:"priority-radio",definitionRevision:1}))).status,"accepted");
+  await assert.rejects(issueMediaCredential(app,high,channelId,media,randomUUID()),error=>error?.envelope?.error?.code==="ACCESS_REVOKED");
+  assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000011","voice_channel.join",1))).status,"accepted");
+  assert.equal((await submit(high,make(high,"25000000-0000-4000-8000-000000000012","voice_channel.join",1))).status,"accepted");
+  const credential=await issueMediaCredential(app,context,channelId,media,randomUUID());
+  assert.equal(credential.providerAdapterDigest,adapterDigest);
+  assert.equal(credential.permissions.includes("transmit"),false);
+
+  const floor=(actor,requestId,connectionId,reason)=>({pool:app,context:actor,channelId,deviceId:actor.deviceId,correlationId:randomUUID(),
+    deploymentId:ids.deploymentA,tokenSecret:"fixture-floor-secret",mediaAdapter:media,
+    input:{requestId,connectionId,expectedAuthorityEpoch:1,...(reason===undefined?{}:{reason})}});
+  const lowRequest="25000000-0000-4000-8000-000000000020",lowConnection="25000000-0000-4000-8000-000000000021";
+  const low=await requestFloor(floor(context,lowRequest,lowConnection));
+  assert.equal(low.status,"granted");
+  assert.deepEqual(await requestFloor(floor(context,lowRequest,lowConnection)),low);
+  await assert.rejects(requestFloor(floor(context,lowRequest,"25000000-0000-4000-8000-000000000028")),
+    error=>error?.envelope?.error?.code==="FLOOR_TOKEN_EXPIRED");
+  assert.equal((await owner.query("SELECT count(*) FROM comms.floor_requests WHERE request_id=$1",[lowRequest])).rows[0].count,"1");
+  const highRequest="25000000-0000-4000-8000-000000000022",highConnection="25000000-0000-4000-8000-000000000023";
+  const preempted=await requestFloor(floor(high,highRequest,highConnection,"Control priority"));
+  assert.equal(preempted.status,"granted");
+  await assert.rejects(releaseFloor({...floor(context,lowRequest,lowConnection),input:{requestId:lowRequest,connectionId:lowConnection,
+    expectedAuthorityEpoch:1,floorToken:low.floorToken}}),error=>error?.envelope?.error?.code==="FLOOR_TOKEN_EXPIRED");
+  await releaseFloor({...floor(high,highRequest,highConnection),input:{requestId:highRequest,connectionId:highConnection,
+    expectedAuthorityEpoch:1,floorToken:preempted.floorToken}});
+
+  const simultaneous=await Promise.all([
+    requestFloor(floor(context,"25000000-0000-4000-8000-000000000024","25000000-0000-4000-8000-000000000025")),
+    requestFloor(floor(high,"25000000-0000-4000-8000-000000000026","25000000-0000-4000-8000-000000000027","Priority"))
+  ]);
+  assert.equal(simultaneous.every(({status})=>status==="granted"||status==="queued"),true);
+  assert.equal((await owner.query("SELECT count(*) FROM comms.floor_leases WHERE channel_id=$1 AND active",[channelId])).rows[0].count,"1");
+  const privateChannelId="25000000-0000-4000-8000-000000000030";
+  const privateCommand=(id,operation,version,payload={})=>({...make(context,id,operation,version,payload),aggregateId:privateChannelId});
+  assert.equal((await submit(context,privateCommand("25000000-0000-4000-8000-000000000031","voice_channel.open",0,
+    {definitionId:"private-consultation",definitionRevision:1}))).errorCode,"VALIDATION_FAILED");
+  assert.equal((await submit(context,privateCommand("25000000-0000-4000-8000-000000000032","voice_channel.open",0,
+    {definitionId:"private-consultation",definitionRevision:1,invitedParticipantIds:[ids.participantC]}))).status,"accepted");
+  assert.equal((await submit(high,{...privateCommand("25000000-0000-4000-8000-000000000033","voice_channel.join",1),
+    deviceId:high.deviceId,activeSessionRoleId:high.activeSessionRoleId})).status,"accepted");
+  const broadcastChannelId="25000000-0000-4000-8000-000000000034";
+  const broadcastCommand=(id,operation,version,payload={})=>({...make(context,id,operation,version,payload),aggregateId:broadcastChannelId});
+  assert.equal((await submit(context,broadcastCommand("25000000-0000-4000-8000-000000000035","voice_channel.open",0,
+    {definitionId:"control-broadcast",definitionRevision:1}))).status,"accepted");
+  assert.equal((await submit(high,{...broadcastCommand("25000000-0000-4000-8000-000000000036","voice_channel.join",1),
+    deviceId:high.deviceId,activeSessionRoleId:high.activeSessionRoleId})).status,"accepted");
+  assert.equal((await issueMediaCredential(app,high,broadcastChannelId,media,randomUUID())).permissions.includes("transmit"),false);
+  await owner.query("UPDATE runtime.seat_assignments SET valid_to=now() WHERE id=$1",[ids.assignmentC]);
+  assert.equal((await owner.query("SELECT count(*) FROM comms.voice_grants WHERE seat_assignment_id=$1 AND revoked_at IS NULL",[ids.assignmentC])).rows[0].count,"0");
+  assert.equal((await owner.query("SELECT count(*) FROM comms.floor_leases WHERE holder_seat_assignment_id=$1 AND active",[ids.assignmentC])).rows[0].count,"0");
+  await assert.rejects(issueMediaCredential(app,{...context,organizationId:ids.orgB},channelId,media,randomUUID()),
+    error=>error?.envelope?.error?.code==="TARGET_NOT_FOUND");
+  assert.equal(Number((await owner.query("SELECT count(*) FROM evidence.events WHERE aggregate_id=$1 AND event_type='floor_lease.preempted'",[channelId])).rows[0].count)>=1,true);
 });

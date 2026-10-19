@@ -8,11 +8,33 @@ import {
   createDatabasePool,
   createRuntimeHttpHandler
 } from "../../apps/server/dist/index.js";
+import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { fixture } from "./fixture.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
 const pool = createDatabasePool(databaseUrl);
+const fakeMediaAdapter = {
+  id: "e2e-local-media",
+  version: "e2e-v1",
+  digest: `sha256:${"e".repeat(64)}`,
+  async issueCredential(input) {
+    return { contractId: "media-credential-v1", providerAdapterId: this.id, providerAdapterVersion: this.version,
+      providerAdapterDigest: this.digest, serverUrl: "wss://media.plenum.invalid", room: input.channelId,
+      participantIdentity: input.participantId, token: "synthetic-non-secret-token", permissions: input.permissions,
+      expiresAt: new Date(Date.now() + 30_000).toISOString() };
+  },
+  async setTransmit() {}, async removeParticipant() {}, async closeChannel() {}, async health() { return "available"; }
+};
+const mediaAdapter = process.env.MEDIA_TEST_URL === undefined ? fakeMediaAdapter : new LiveKitLocalMediaProviderAdapter({
+  apiUrl: process.env.MEDIA_TEST_URL,
+  websocketUrl: process.env.MEDIA_TEST_URL.replace(/^http/u, "ws"),
+  apiKey: "devkey",
+  apiSecret: "secret",
+  adapterDigest: `sha256:${"e".repeat(64)}`,
+  allowedHosts: ["127.0.0.1"],
+  allowInsecureLoopback: true
+});
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
   principalId: fixture.people[key],
@@ -25,6 +47,8 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 const api = createRuntimeHttpHandler({
   pool,
   deploymentId: fixture.deploymentId,
+  mediaAdapter,
+  floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
   authenticate: async (request, correlationId) => {
     const authorization = request.headers.authorization;
     const principal = typeof authorization === "string" && authorization.startsWith("Bearer ")

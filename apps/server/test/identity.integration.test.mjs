@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,6 +43,9 @@ import {
   getEffectProposals,
   exportExtensionProvenance,
   executePendingModelRun,
+  computeBuiltInTally,
+  getPollProjection,
+  getPollResult,
   submitPluginArtifact,
   verifyImportedPackage,
   withOrganizationTransaction
@@ -134,7 +137,8 @@ async function applyMigrations() {
     "apps/server/migrations/009_runtime_capabilities.sql",
     "apps/server/migrations/010_information_messages_injects.sql",
     "apps/server/migrations/011_extension_registry.sql",
-    "apps/server/migrations/012_extension_runs_approvals.sql"
+    "apps/server/migrations/012_extension_runs_approvals.sql",
+    "apps/server/migrations/013_voting_core.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1060,4 +1064,114 @@ test("EXT-06/07/08/09/10/17/18/20 isolates runs and applies one approved effect 
     exportExtensionProvenance(app, principal, ids.sessionB, "23000000-0000-4000-8000-00000000001e"),
     (error) => error?.envelope?.error?.code === "TARGET_NOT_FOUND"
   );
+});
+
+test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, recount and certification invariants", async () => {
+  const pollId = "24000000-0000-4000-8000-000000000001";
+  const secretPollId = "24000000-0000-4000-8000-000000000002";
+  const voteRevisionId = "24000000-0000-4000-8000-000000000003";
+  const voteReleaseId = "24000000-0000-4000-8000-000000000004";
+  const pollDefinition = {
+    id: "resolution-vote", scope: "session", question: "Adopt the synthetic resolution?",
+    options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }, { id: "abstain", label: "Abstain" }],
+    pollType: "yes_no_abstain", tallyMethod: "builtin_count", tallyMethodVersion: "builtin-count-v1",
+    electoratePolicyId: "voters", oneBallotPer: "seat_assignment", allowRevote: false, secrecy: "open",
+    thresholdRule: { kind: "simple_majority", denominator: "valid_votes", abstentionCountsTowardDenominator: false },
+    quorumRule: { basis: "electorate_at_open", minimum: 1, abstentionCountsTowardParticipation: true },
+    weights: [{ seatId: "seat-a", weight: 2 }], vetoRule: { holderSeatIds: [] }, tieRule: "no_decision",
+    openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
+    resultVisibilityPolicyId: "results", certificationPolicy: { certifierSessionRoleIds: ["role-c"] }
+  };
+  const coreDesign = {
+    polls: [pollDefinition, { ...pollDefinition, id: "secret-resolution", secrecy: "secret_ballot" }],
+    informationPolicies: [
+      { id: "voters", grants: [{ audience: { sessionRoleIds: ["role-c"] } }] },
+      { id: "results", grants: [{ audience: { sessionRoleIds: ["role-c", "role-c-viewer"] } }] }
+    ],
+    sessionRoles: [{ id: "role-c", isControlRole: true }, { id: "role-c-viewer" }],
+    seats: [{ id: "seat-a", sessionRoleIds: ["role-c"] }, { id: "seat-c-viewer", sessionRoleIds: ["role-c-viewer"] }]
+  };
+  await owner.query(`INSERT INTO studio.definition_revisions
+    (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+    VALUES ($1,$2,$3,$4::jsonb,repeat('2',64),'v1',$5)`,
+    [voteRevisionId, ids.orgA, ids.projectA, JSON.stringify({ coreDesign }), ids.personA]);
+  await owner.query(`INSERT INTO registry.releases
+    (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
+    VALUES ($1,$2,$3,$4,2,'Voting fixture','1','1',repeat('2',64),'voting-fixture',$5)`,
+    [voteReleaseId, ids.orgA, ids.projectA, voteRevisionId, ids.personA]);
+  await owner.query(`INSERT INTO runtime.release_activations
+    (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+    VALUES ('24000000-0000-4000-8000-000000000005',$1,$2,$3,$4,2,'{}',$5)`,
+    [ids.orgA, ids.projectA, ids.sessionA, voteReleaseId, ids.personA]);
+  const context = { authenticationSessionId: "fixture", principalId: ids.personA, principalType: "person",
+    organizationId: ids.orgA, sessionId: ids.sessionA, sessionStatus: "active", participantId: ids.participantA,
+    seatAssignmentIds: [ids.assignmentA], activeSessionRoleId: "role-c", seatId: "seat-a", organizationRoles: ["operator"],
+    activeReleaseId: voteReleaseId, authenticationStrength: "mfa", featureFlags: [], authorityEpoch: 1, accessRevision: 2, deviceId: ids.deviceA };
+  const observer = { ...context, principalId: ids.personC, participantId: ids.participantC, seatAssignmentIds: [ids.assignmentC],
+    activeSessionRoleId: "role-c-viewer", seatId: "seat-c-viewer", organizationRoles: [], deviceId: ids.deviceC, accessRevision: 1 };
+  const command = (commandId, operationType, aggregateId, expectedAggregateVersion, payload, actor = context) => ({
+    commandId, deviceId: actor.deviceId, operationType, aggregateId, expectedAggregateVersion, governingReleaseId: voteReleaseId,
+    activeSessionRoleId: actor.activeSessionRoleId, payload
+  });
+
+  const opened = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000010", "poll.open", pollId, 0,
+    { definitionId: "resolution-vote", definitionRevision: 1 }), "24000000-0000-4000-8000-000000000011", ids.deploymentA);
+  assert.equal(opened.status, "accepted");
+  const participantPoll = (await withOrganizationTransaction(app, ids.orgA, (client) => getPollProjection(client, context)))[0];
+  assert.equal(participantPoll.eligible, true);
+  assert.equal(typeof participantPoll.ballotCapability, "string");
+  const observerPoll = (await withOrganizationTransaction(app, ids.orgA, (client) => getPollProjection(client, observer)))[0];
+  assert.equal(observerPoll.eligible, false);
+  assert.equal(observerPoll.ballotCapability, null);
+  assert.equal(observerPoll.tally, null);
+  await assert.rejects(getPollResult(app, observer, pollId, "24000000-0000-4000-8000-000000000012"),
+    (error) => error?.envelope?.error?.code === "RESULT_NOT_RELEASED");
+
+  const ballotPayload = { pollDefinitionRevision: 1, ballotCapability: participantPoll.ballotCapability, optionIds: ["yes"] };
+  const castA = command("24000000-0000-4000-8000-000000000020", "ballot.cast", pollId, 1, ballotPayload);
+  const castB = command("24000000-0000-4000-8000-000000000021", "ballot.cast", pollId, 1, ballotPayload);
+  const concurrent = await Promise.all([
+    submitRuntimeCommand(app, context, castA, "24000000-0000-4000-8000-000000000022", ids.deploymentA),
+    submitRuntimeCommand(app, context, castB, "24000000-0000-4000-8000-000000000023", ids.deploymentA)
+  ]);
+  assert.deepEqual(concurrent.map(({ status }) => status).sort(), ["accepted", "rejected"]);
+  assert.equal(concurrent.find(({ status }) => status === "rejected")?.errorCode, "ALREADY_VOTED");
+  const acceptedCommand = concurrent.find(({ status }) => status === "accepted")?.commandId;
+  const replay = await submitRuntimeCommand(app, context, acceptedCommand === castA.commandId ? castA : castB,
+    "24000000-0000-4000-8000-000000000024", ids.deploymentA);
+  assert.equal(replay.replayed, true);
+  assert.equal((await owner.query("SELECT count(*) FROM voting.ballots WHERE poll_id=$1", [pollId])).rows[0].count, "1");
+  const eventBody = (await owner.query("SELECT body FROM evidence.events WHERE aggregate_id=$1 AND event_type='ballot.accepted'", [pollId])).rows[0].body;
+  assert.equal(JSON.stringify(eventBody).includes("yes"), false);
+  await assert.rejects(withOrganizationTransaction(app, ids.orgA, (client) =>
+    client.query("UPDATE voting.poll_options SET label='Changed' WHERE poll_id=$1", [pollId])), /permission denied|immutable/u);
+
+  const closed = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000030", "poll.close", pollId, 1, {}),
+    "24000000-0000-4000-8000-000000000031", ids.deploymentA);
+  assert.equal(closed.status, "accepted");
+  const late = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000032", "ballot.cast", pollId, 2, ballotPayload),
+    "24000000-0000-4000-8000-000000000033", ids.deploymentA);
+  assert.equal(late.errorCode, "DEADLINE_EXPIRED");
+  const tallied = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000040", "poll.tally", pollId, 2, {}),
+    "24000000-0000-4000-8000-000000000041", ids.deploymentA);
+  assert.equal(tallied.status, "accepted");
+  const stored = (await owner.query("SELECT ballot_set_sha256,result_sha256 FROM voting.tallies WHERE poll_id=$1", [pollId])).rows[0];
+  const source = (await owner.query(`SELECT ballot.id,ballot.ballot_revision,ballot.choices,ballot.accepted_sequence,member.weight,member.veto
+    FROM voting.ballot_receipts receipt JOIN voting.ballots ballot ON ballot.id=receipt.ballot_id
+    JOIN voting.electorate_members member ON member.id=receipt.eligibility_consumption_id WHERE receipt.poll_id=$1 AND receipt.is_current`, [pollId])).rows;
+  const recount = computeBuiltInTally(pollDefinition, source, 1, new Date("2026-01-01T00:00:00.000Z"));
+  assert.equal(recount.ballotSetSha256, stored.ballot_set_sha256);
+  assert.equal(recount.resultSha256, stored.result_sha256);
+
+  const certify = (id) => submitRuntimeCommand(app, context, command(id, "poll.certify", pollId, 3, { resultSha256: stored.result_sha256 }),
+    randomUUID(), ids.deploymentA);
+  const certifications = await Promise.all([certify("24000000-0000-4000-8000-000000000050"), certify("24000000-0000-4000-8000-000000000051")]);
+  assert.deepEqual(certifications.map(({ status }) => status).sort(), ["accepted", "needs_reconciliation"]);
+  assert.equal((await owner.query("SELECT count(*) FROM voting.certifications WHERE poll_id=$1 AND is_current", [pollId])).rows[0].count, "1");
+  const released = await getPollResult(app, observer, pollId, "24000000-0000-4000-8000-000000000052");
+  assert.equal(released.tally.resultSha256, stored.result_sha256);
+
+  const secret = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000060", "poll.open", secretPollId, 0,
+    { definitionId: "secret-resolution", definitionRevision: 1 }), "24000000-0000-4000-8000-000000000061", ids.deploymentA);
+  assert.equal(secret.errorCode, "CAPABILITY_UNAVAILABLE");
 });

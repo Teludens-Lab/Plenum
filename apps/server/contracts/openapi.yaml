@@ -183,7 +183,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
-      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1]
+      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1, poll-command-v1, ballot-command-v1, certification-v1]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -306,6 +306,63 @@ paths:
               schema: { $ref: "#/components/schemas/RuntimeProjectionV1" }
         "403": { description: Participant, Device, Seat Assignment, or Interface Profile is not authorized. }
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+  /v1/sessions/{sessionId}/polls:
+    get:
+      operationId: getPolls
+      x-contract-ids: [poll-command-v1, ballot-command-v1, certification-v1]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Poll projections scoped to the trusted Participant and active Seat Assignment.
+          content: { application/json: { schema: { type: object, required: [polls], properties: { polls: { type: array, items: { $ref: "#/components/schemas/RuntimePollV1" } } } } } }
+        "403": { description: Participant, Device, or active Session Role is unavailable. }
+  /v1/sessions/{sessionId}/polls/{pollId}:
+    get:
+      operationId: getPoll
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: pollId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Participant-scoped Poll projection., content: { application/json: { schema: { $ref: "#/components/schemas/RuntimePollV1" } } } }
+        "404": { description: Poll is absent from the authorized Session projection. }
+  /v1/sessions/{sessionId}/polls/{pollId}/my-receipt:
+    get:
+      operationId: getMyBallotReceipt
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: pollId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: The caller's current Ballot receipt; choices are omitted. }
+        "404": { description: No current receipt exists for the trusted Seat Assignment. }
+  /v1/sessions/{sessionId}/polls/{pollId}/result:
+    get:
+      operationId: getPollResult
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: pollId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Certified result allowed by the frozen result visibility policy. }
+        "403": { description: RESULT_NOT_RELEASED before Certification or when visibility policy denies access. }
+  /v1/sessions/{sessionId}/polls/{pollId}/audit:
+    get:
+      operationId: getPollAudit
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: pollId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Restricted definition, Tally hashes, and Certification correction chain; Ballot choices and voter identities are omitted. }
+        "403": { description: Certification permission is absent. }
   /v1/operator/sessions/{sessionId}:
     get:
       operationId: getOperatorProjection
@@ -605,7 +662,7 @@ components:
     RuntimeProjectionV1:
       type: object
       additionalProperties: false
-      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, activeTeamId, activeTeamLabel, currentStageId, currentStageLabel, currentStageStatus, stageStartedAt, stageDeadlineAt, stageRemainingSeconds, interfaceProfileId, layout, modules, createTasks, artifacts, messages, injects]
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, activeTeamId, activeTeamLabel, currentStageId, currentStageLabel, currentStageStatus, stageStartedAt, stageDeadlineAt, stageRemainingSeconds, interfaceProfileId, layout, modules, createTasks, artifacts, messages, injects, polls]
       properties:
         contractId: { const: runtime-projection-v1 }
         sessionId: { type: string, format: uuid }
@@ -630,6 +687,33 @@ components:
         artifacts: { type: array, items: { $ref: "#/components/schemas/RuntimeArtifactV1" } }
         messages: { type: array, items: { type: object } }
         injects: { type: array, items: { type: object } }
+        polls: { type: array, items: { $ref: "#/components/schemas/RuntimePollV1" } }
+    RuntimePollV1:
+      type: object
+      additionalProperties: false
+      required: [id, definitionId, definitionRevision, question, options, pollType, minSelections, maxSelections, secrecy, status, version, governingReleaseId, deadlineAt, eligible, hasVoted, ballotCapability, receipt, canManage, canCertify, tally, certification]
+      properties:
+        id: { type: string, format: uuid }
+        definitionId: { type: string, minLength: 1 }
+        definitionRevision: { type: integer, minimum: 1 }
+        question: { type: string, minLength: 1 }
+        options: { type: array, minItems: 2, items: { type: object, required: [id, label], properties: { id: { type: string }, label: { type: string } } } }
+        pollType: { type: string, enum: [single_choice, multiple_choice, yes_no_abstain, opinion] }
+        minSelections: { type: [integer, "null"] }
+        maxSelections: { type: [integer, "null"] }
+        secrecy: { type: string, enum: [open, secret_ballot, anonymous_survey] }
+        status: { type: string, enum: [open, closed, tallied, certified, voided, correction_issued] }
+        version: { type: integer, minimum: 1 }
+        governingReleaseId: { type: string, format: uuid }
+        deadlineAt: { type: [string, "null"], format: date-time }
+        eligible: { type: boolean }
+        hasVoted: { type: boolean }
+        ballotCapability: { type: [string, "null"], format: uuid }
+        receipt: { type: [object, "null"] }
+        canManage: { type: boolean }
+        canCertify: { type: boolean }
+        tally: { type: [object, "null"] }
+        certification: { type: [object, "null"] }
     OperatorProjectionV1:
       type: object
       additionalProperties: false

@@ -59,17 +59,17 @@ The target stack is the Platform Architecture v1.3 §23 table plus ADR-006 to AD
 |---|---|---|---|
 | Frontend | React + TypeScript (reference slice stays HTML/CSS/vanilla JS) | ADR-007 | **Approved** |
 | Backend runtime | Node.js 26 LTS target, 24 LTS floor; TypeScript monorepo | ADR-008 | Proposed |
-| Topology | One modular monolith; PostgreSQL schemas `identity`, `studio`, `registry`, `runtime`, `sync`, `evidence` + `extension`, `voting`, `comms`; PostgreSQL-backed job queue; no broker/cache/service split until measured | ADR-005, ADR-016 | Proposed |
+| Topology | One modular monolith; PostgreSQL schemas `identity`, `studio`, `registry`, `runtime`, `sync`, `evidence` + `extension`, `voting`, `comms`; PostgreSQL-backed job queue; no broker/cache/service split until measured | ADR-005, ADR-016 | ADR-005 Proposed; ADR-016 Confirmed |
 | Database | PostgreSQL 18 minimum in every profile (slice currently verified on 16 — see migration task) | ADR-009 | Proposed |
 | Object storage | S3-compatible API only; Garage/SeaweedFS/Ceph RGW self-hosted; MinIO CE excluded | ADR-011 | Proposed |
 | Identity | OIDC relying party; Keycloak bundled for self-hosted/air-gapped; **no Supabase in any profile** | ADR-006 (Approved), ADR-012 | Mixed |
 | Realtime | Commands over HTTPS POST with idempotent receipts; Runtime deltas over SSE (resume ID = projection cursor, HTTP/2); Studio CRDT over authenticated WebSocket; polling-delta fallback | ADR-010 | Proposed |
 | CRDT | Yjs candidate, Studio drafts only; Runtime commands are never CRDT-merged | ADR-002 | Proposed |
 | Voice media | Self-hosted WebRTC SFU (LiveKit candidate) + TURN behind the Media Provider Adapter; approved exception to ADR-005/ADR-013, confined to the media-provider boundary, never writing Plenum PostgreSQL (internal media datastores such as Redis are allowed inside that boundary) | DEC-49, ADR-017 | Exception Confirmed; product choice Proposed |
-| Plugin isolation | Hardened rootless containers, read-only images, default-deny egress; WASM/WASI additional target for deterministic models; hosts never get DB/object-store/secret access; Python and native scientific-model sandbox approval is OPEN-022 | ADR-018 | Proposed |
+| Plugin isolation | Hardened rootless containers, read-only images, default-deny egress; WASM/WASI additional target for deterministic models; hosts never get DB/object-store/secret access; Python and native scientific-model targets remain deferred | ADR-018 | Confirmed |
 | Packaging | One OCI image set for all profiles; Compose/Podman reference single-node; Kubernetes optional; reverse proxy terminates TLS/HTTP/2; images also carry Extension Host, media server, TURN | ADR-013 | Proposed |
 | Persistence depth | Relational current state + append-only Evidence journal; no full event sourcing | ADR-014 | Proposed |
-| Tenant isolation | Server-context tenant identity; RLS as defense in depth under a non-owner role without BYPASSRLS; application policy engine for in-Session asymmetry | ADR-015 | Proposed |
+| Tenant isolation | Server-context tenant identity; RLS as defense in depth under a non-owner role without BYPASSRLS; application policy engine for in-Session asymmetry | ADR-015 | Confirmed |
 
 Code organization follows Platform §4: `apps/` (studio, runtime-web, operator-console, admin, server) and `packages/` (simulation-schema, validation-engine, release-compiler, policy-engine, workflow-engine, form-renderer, event-contracts, sync-client, plugin-sdk, extension-host, media-adapter, reporting-engine, design-system), with `references/plenum-runtime-slice/` retained. **Code topology is not deployment topology**: these folders build into one deployable server plus static frontends; do not read them as microservices.
 

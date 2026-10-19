@@ -76,6 +76,51 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.close();
   });
 
+  test("@a11y VOTE-01 VOTE-15 casts and certifies an accessible authoritative Poll", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const control = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    const participant = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    const controlDevice = (await (await control.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+    const participantDevice = (await (await participant.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+    const projection = async (current, deviceId) => (await current.context.request.get(
+      `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": deviceId } }
+    )).json();
+    const controlProjection = await projection(control, controlDevice);
+    const opened = await control.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+      commandId: crypto.randomUUID(), deviceId: controlDevice, operationType: "poll.open", aggregateId: fixture.pollId,
+      expectedAggregateVersion: 0, governingReleaseId: controlProjection.releaseId,
+      activeSessionRoleId: controlProjection.activeSessionRoleId,
+      payload: { definitionId: "synthetic-resolution", definitionRevision: 1 }
+    } });
+    expect(opened.status()).toBe(200);
+
+    await participant.page.goto(runtimeUrl());
+    const poll = participant.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
+    await expect(poll).toBeVisible();
+    await poll.getByLabel("Yes").check();
+    await poll.getByRole("button", { name: "Cast Ballot" }).click();
+    await expect(poll.getByText(/Ballot accepted at/u)).toBeVisible();
+    expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+
+    await control.page.goto(runtimeUrl());
+    const managed = control.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
+    await expect(managed.getByRole("button", { name: "Close Poll" })).toBeVisible();
+    await control.context.setOffline(true);
+    await managed.getByRole("button", { name: "Close Poll" }).click();
+    await expect(control.page.getByText("Poll management requires the live Session Authority and was not queued.")).toBeVisible();
+    await expect(managed.getByText("open", { exact: true })).toBeVisible();
+    await control.context.setOffline(false);
+    await managed.getByRole("button", { name: "Close Poll" }).click();
+    await expect(managed.getByRole("button", { name: "Compute Tally" })).toBeVisible();
+    await managed.getByRole("button", { name: "Compute Tally" }).click();
+    await expect(managed.getByRole("button", { name: "Certify result" })).toBeVisible();
+    await managed.getByRole("button", { name: "Certify result" }).click();
+    await expect(managed.getByRole("heading", { name: "Certified result" })).toBeVisible();
+    await expect(managed.getByText(/Quorum met.*Passed/u)).toBeVisible();
+    expect((await new AxeBuilder({ page: control.page }).analyze()).violations).toEqual([]);
+    await Promise.all([control.context.close(), participant.context.close()]);
+  });
+
   test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
     const { context, page } = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
@@ -451,6 +496,21 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": deviceId } }
     )).json();
     const controlProjection = await projection(control, devices[0]);
+    if (controlProjection.currentStageStatus === "not_started") {
+      const started = await control.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+        commandId: crypto.randomUUID(), deviceId: devices[0], operationType: "stage.start", aggregateId: fixture.sessionId,
+        expectedAggregateVersion: 0, governingReleaseId: controlProjection.releaseId,
+        activeSessionRoleId: controlProjection.activeSessionRoleId, payload: { reason: "Prepare isolated proposal test" }
+      } });
+      expect(started.status()).toBe(200);
+      const advanced = await control.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+        commandId: crypto.randomUUID(), deviceId: devices[0], operationType: "stage.advance", aggregateId: fixture.sessionId,
+        expectedAggregateVersion: 1, governingReleaseId: controlProjection.releaseId,
+        activeSessionRoleId: controlProjection.activeSessionRoleId,
+        payload: { reason: "Open move-one Artifact availability", targetStageId: "m1-deliberation" }
+      } });
+      expect(advanced.status()).toBe(200);
+    }
     await control.page.goto(runtimeUrl());
     await expect(control.page.getByRole("heading", { name: "Proposal custody" })).toBeVisible();
     await expect(control.page.getByRole("heading", { name: "Messages" })).toBeVisible();

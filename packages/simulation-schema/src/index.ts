@@ -216,6 +216,46 @@ export interface RuntimeInjectDefinitionV1 {
   controlNotesContentId?: string;
 }
 
+export interface RuntimePollDefinitionV1 {
+  id: string;
+  scope: "session" | "team" | "stage";
+  scopeReference?: string;
+  question: string;
+  options: Array<{ id: string; label: string }>;
+  pollType: "single_choice" | "multiple_choice" | "yes_no_abstain" | "opinion";
+  minSelections?: number;
+  maxSelections?: number;
+  tallyMethod: "builtin_count" | "voting_method_adapter";
+  votingMethodAdapterBindingId?: string;
+  tallyMethodVersion: string;
+  electoratePolicyId: string;
+  oneBallotPer: "seat_assignment";
+  allowRevote: boolean;
+  finalBallotRule?: "latest_accepted";
+  secrecy: "open" | "secret_ballot" | "anonymous_survey";
+  thresholdRule: {
+    kind: "simple_majority" | "supermajority" | "unanimity" | "plurality" | "none";
+    fraction?: number;
+    denominator: "valid_votes" | "votes_cast" | "electorate";
+    abstentionCountsTowardDenominator: boolean;
+  };
+  quorumRule: {
+    basis: "electorate_at_open" | "custom_snapshot";
+    minimum: number;
+    abstentionCountsTowardParticipation: boolean;
+  };
+  weights: Array<{ seatId: string; weight: number }>;
+  vetoRule: { holderSeatIds: string[] };
+  tieRule: "no_decision" | "chair_decides" | "reissue";
+  openTrigger: { mode: "manual" | "scheduled" | "stage_entry" | "gate"; stageId?: string; offsetSeconds?: number; gate?: Record<string, unknown> };
+  closeTrigger: { mode: "manual" | "scheduled" | "stage_exit" | "gate"; stageId?: string; offsetSeconds?: number; gate?: Record<string, unknown> };
+  deadlinePolicy: { graceSeconds: number };
+  resultVisibilityPolicyId: string;
+  certificationPolicy: { certifierSessionRoleIds?: string[]; certifierOrganizationRoles?: Array<"Admin" | "Operator"> };
+  onCertifiedWorkflowId?: string;
+  retentionPolicyId?: string;
+}
+
 export interface RuntimeTeamCellDefinitionV1 {
   id: string;
   teamId: string;
@@ -336,6 +376,7 @@ export interface RuntimeCoreDesignV1 {
     routes: Array<{ id: string; channelId: string; sender: RuntimeActorSelectorV1; recipient: RuntimeActorSelectorV1; approvalWorkflowId?: string; informationPolicyId?: string; activeStageIds?: string[] }>;
     voiceChannels: unknown[];
   };
+  polls?: RuntimePollDefinitionV1[];
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
   pluginBindings: PluginBindingV1[];
@@ -591,6 +632,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   const resources = uniqueIds(runtime.resources ?? [], "Resource");
   const seats = uniqueIds(runtime.seats, "Seat");
   const stageGroups = uniqueIds(runtime.stageGroups, "Stage Group");
+  uniqueIds(runtime.polls ?? [], "Poll Definition");
   uniqueIds(runtime.reports, "Report");
 
   const reference = (ids: Set<string>, id: string, label: string): void => {
@@ -641,6 +683,50 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     if (seat.minOccupancy < 0 || (seat.maxOccupancy !== null && seat.maxOccupancy < seat.minOccupancy)) {
       throw new Error(`Seat ${seat.id} has invalid occupancy bounds`);
     }
+  }
+  for (const poll of runtime.polls ?? []) {
+    const optionIds = uniqueIds(poll.options, `Poll ${poll.id} option`);
+    if (poll.question.trim().length === 0 || optionIds.size < 2 || poll.oneBallotPer !== "seat_assignment") {
+      throw new Error(`Poll ${poll.id} has an incomplete definition`);
+    }
+    reference(policies, poll.electoratePolicyId, `Poll ${poll.id} Electorate`);
+    reference(policies, poll.resultVisibilityPolicyId, `Poll ${poll.id} result visibility`);
+    if ((poll.scope === "team" || poll.scope === "stage") && poll.scopeReference === undefined) {
+      throw new Error(`Poll ${poll.id} has no scope reference`);
+    }
+    if (poll.scope === "team") reference(teams, poll.scopeReference!, `Poll ${poll.id}`);
+    if (poll.scope === "stage") reference(stages, poll.scopeReference!, `Poll ${poll.id}`);
+    if (poll.pollType === "multiple_choice" && (!Number.isSafeInteger(poll.minSelections) || !Number.isSafeInteger(poll.maxSelections) ||
+        Number(poll.minSelections) < 1 || Number(poll.maxSelections) < Number(poll.minSelections) || Number(poll.maxSelections) > optionIds.size)) {
+      throw new Error(`Poll ${poll.id} has invalid selection bounds`);
+    }
+    if (poll.pollType === "yes_no_abstain" && !["yes", "no", "abstain"].every((id) => optionIds.has(id))) {
+      throw new Error(`Poll ${poll.id} must define yes, no and abstain options`);
+    }
+    if (poll.allowRevote !== (poll.finalBallotRule === "latest_accepted")) {
+      throw new Error(`Poll ${poll.id} has an incomplete revote rule`);
+    }
+    if (poll.tallyMethod === "voting_method_adapter" && poll.votingMethodAdapterBindingId === undefined) {
+      throw new Error(`Poll ${poll.id} has no Voting Method Adapter binding`);
+    }
+    if (poll.tallyMethodVersion.trim().length === 0 || poll.quorumRule === undefined || poll.weights === undefined || poll.vetoRule === undefined ||
+        !Number.isFinite(poll.quorumRule.minimum) || poll.quorumRule.minimum < 0 || !Number.isInteger(poll.deadlinePolicy.graceSeconds) || poll.deadlinePolicy.graceSeconds < 0) {
+      throw new Error(`Poll ${poll.id} must explicitly define quorum, weights, vetoes and deadline grace`);
+    }
+    if (poll.thresholdRule.kind === "supermajority" &&
+        (poll.thresholdRule.fraction === undefined || poll.thresholdRule.fraction <= 0.5 || poll.thresholdRule.fraction > 1)) {
+      throw new Error(`Poll ${poll.id} has an invalid supermajority fraction`);
+    }
+    const weightedSeats = new Set<string>();
+    for (const weight of poll.weights) {
+      reference(seats, weight.seatId, `Poll ${poll.id} weight`);
+      if (!Number.isFinite(weight.weight) || weight.weight <= 0 || weightedSeats.has(weight.seatId)) {
+        throw new Error(`Poll ${poll.id} has invalid Seat weights`);
+      }
+      weightedSeats.add(weight.seatId);
+    }
+    poll.vetoRule.holderSeatIds.forEach((id) => reference(seats, id, `Poll ${poll.id} veto`));
+    poll.certificationPolicy.certifierSessionRoleIds?.forEach((id) => reference(roles, id, `Poll ${poll.id} certification`));
   }
   for (const stage of runtime.stages) {
     stage.transitions.forEach((transition) => reference(stages, transition.targetStageId, `Stage ${stage.id}`));

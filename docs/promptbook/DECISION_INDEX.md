@@ -16,8 +16,8 @@ Pointer table only. Decision text and status live exclusively in `03_Governance_
 | ADR-001..005 | ADR-001/003 confirmed; CRDT, live activation, and monolith dependencies remain Proposed | PS-120, PS-200, PS-300, PS-420, PS-510 |
 | ADR-006..007 | Exclude Supabase; use React/TypeScript while retaining vanilla slice | PS-100, PS-110, PS-150 |
 | ADR-008..010 | Proposed Node/TS/Pg18/realtime stack; verify before milestone exit | PS-001, PS-100, PS-140, PS-300 |
-| ADR-011..015 | Proposed storage, identity, packaging, persistence, tenant layering | PS-110, PS-130, PS-530 |
-| ADR-016..018 | Capability schemas and media adapter Proposed; ADR-018 Extension Host isolation confirmed | PS-220, PS-230, PS-240, PS-250 |
+| ADR-011..015 | Storage, identity, packaging and persistence Proposed; ADR-015 tenant layering confirmed | PS-110, PS-130, PS-530 |
+| ADR-016..018 | ADR-016 capability schemas and ADR-018 Extension Host isolation confirmed; ADR-017 media adapter Proposed | PS-220, PS-230, PS-240, PS-250 |
 | OPEN-001..002 | Formal ratification and ADR-001..005 approval | PS-120, PS-350, PS-550 |
 | OPEN-003 | Resolved; the official snapshot pins source identity but does not itself prove parity | PS-000, PS-200, PS-350 |
 | OPEN-004..013 | Methodology, Stage/workflow/form/compatibility/publication policy gates | PS-300, PS-310, PS-400, PS-410, PS-420 |

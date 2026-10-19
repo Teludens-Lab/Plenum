@@ -13,6 +13,7 @@ import {
   type RuntimeInjectV1,
   type RuntimeMessageV1,
   type RuntimeModuleV1,
+  type RuntimePollV1,
   type RuntimeProjectionV1
 } from "@plenum/event-contracts";
 import {
@@ -527,6 +528,49 @@ function ProposalThreads({ module, projection, disabled, send }: {
   </section>;
 }
 
+type SendPoll = (operationType: string, poll: RuntimePollV1, payload: JsonObject) => void;
+
+function PollCard({ poll, disabled, send }: { poll: RuntimePollV1; disabled: boolean; send: SendPoll }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const multiple = poll.pollType === "multiple_choice";
+  const choose = (optionId: string, checked: boolean) => setSelected(multiple
+    ? checked ? [...selected, optionId] : selected.filter((id) => id !== optionId)
+    : [optionId]);
+  const valid = multiple ? selected.length >= Number(poll.minSelections) && selected.length <= Number(poll.maxSelections) : selected.length === 1;
+  const result = poll.tally;
+  return <article className="card poll-card" aria-labelledby={`poll-${poll.id}`}>
+    <div className="card-heading"><h3 id={`poll-${poll.id}`}>{poll.question}</h3><span className="badge badge-state">{poll.status}</span></div>
+    {poll.deadlineAt === null ? null : <p className="hint">Ballots close <time dateTime={poll.deadlineAt}>{new Date(poll.deadlineAt).toLocaleString()}</time>.</p>}
+    {poll.status === "open" && poll.eligible && !poll.hasVoted ? <form onSubmit={(event) => {
+      event.preventDefault();
+      if (valid && poll.ballotCapability !== null) send("ballot.cast", poll, {
+        pollDefinitionRevision: poll.definitionRevision, ballotCapability: poll.ballotCapability, optionIds: selected
+      });
+    }}>
+      <fieldset disabled={disabled}><legend>{multiple ? `Choose ${poll.minSelections} to ${poll.maxSelections} options` : "Choose one option"}</legend>
+        {poll.options.map((option) => <label className="choice" key={option.id}>
+          <input type={multiple ? "checkbox" : "radio"} name={`poll-${poll.id}`} value={option.id}
+            checked={selected.includes(option.id)} onChange={(event) => choose(option.id, event.target.checked)} />
+          <span>{option.label}</span>
+        </label>)}
+      </fieldset>
+      <button className="btn-primary" type="submit" disabled={disabled || !valid}>Cast Ballot</button>
+    </form> : null}
+    {poll.hasVoted && poll.receipt !== null ? <p className="status-success" role="status">Ballot accepted at <time dateTime={poll.receipt.acceptedAt}>{new Date(poll.receipt.acceptedAt).toLocaleString()}</time>. Receipt revision {poll.receipt.ballotRevision}.</p> : null}
+    {!poll.eligible && poll.status === "open" ? <p className="hint">Your active Seat Assignment is not in this Electorate.</p> : null}
+    {result === null ? null : <section aria-labelledby={`poll-${poll.id}-result`}><h4 id={`poll-${poll.id}-result`}>{poll.certification === null ? "Unofficial tally" : "Certified result"}</h4>
+      <dl className="poll-results">{poll.options.map((option) => <div key={option.id}><dt>{option.label}</dt><dd>{result.counts[option.id] ?? 0}</dd></div>)}</dl>
+      <p>{result.quorumMet ? "Quorum met" : "Quorum not met"} · {result.passed ? "Passed" : "Not passed"}</p>
+      {poll.certification === null ? null : <p className="hint">Certified {new Date(poll.certification.certifiedAt).toLocaleString()} · result <code>{poll.certification.resultSha256.slice(0, 12)}</code></p>}
+    </section>}
+    {!poll.canManage || !["open", "closed", "tallied"].includes(poll.status) ? null : <div className="actions" role="group" aria-label="Poll management">
+      {poll.status === "open" ? <button className="btn-secondary" type="button" disabled={disabled} onClick={() => send("poll.close", poll, {})}>Close Poll</button> : null}
+      {poll.status === "closed" ? <button className="btn-secondary" type="button" disabled={disabled} onClick={() => send("poll.tally", poll, {})}>Compute Tally</button> : null}
+      {poll.status === "tallied" && result !== null ? <button className="btn-primary" type="button" disabled={disabled} onClick={() => send("poll.certify", poll, { resultSha256: result.resultSha256 })}>Certify result</button> : null}
+    </div>}
+  </article>;
+}
+
 function RuntimeView() {
   const id = sessionId();
   const [connection, setConnection] = useState<ConnectionState>("loading");
@@ -632,6 +676,18 @@ function RuntimeView() {
     });
   };
 
+  const sendPoll: SendPoll = (operationType, poll, payload) => {
+    if (projection === null || deviceId === null) return;
+    if (operationType.startsWith("poll.") && !navigator.onLine) {
+      setConnection("offline");
+      setNotice("Poll management requires the live Session Authority and was not queued.");
+      return;
+    }
+    void post({ commandId: crypto.randomUUID(), deviceId, operationType, aggregateId: poll.id,
+      expectedAggregateVersion: poll.version, governingReleaseId: poll.governingReleaseId,
+      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload });
+  };
+
   const decideEffect = async (proposal: EffectProposalV1, decision: "approve" | "reject" | "return", reason: string) => {
     if (id === null || projection === null || deviceId === null) return;
     if (!navigator.onLine) { setConnection("offline"); setNotice("Approval Decisions require a live Session Authority and were not queued."); return; }
@@ -704,6 +760,10 @@ function RuntimeView() {
         disabled={pending !== null} send={sendInformation} />)}
       {injectModules.map((module) => <InjectInbox key={module.id} module={module} projection={projection}
         disabled={pending !== null} send={sendInformation} />)}
+      {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
+        <div className="section-heading"><p className="eyebrow">Authoritative voting</p><h2 id="polls-heading">Polls</h2></div>
+        <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={pending !== null} send={sendPoll} />)}</div>
+      </section>}
       <EffectProposalReview proposals={effectProposals} disabled={pending !== null} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>

@@ -48,7 +48,8 @@ export const fixture = {
     greenReviewer: "ps210-green-reviewer",
     redReviewer: "ps210-red-reviewer"
   },
-  proposalArtifactId: "61000000-0000-4000-8000-000000000001"
+  proposalArtifactId: "61000000-0000-4000-8000-000000000001",
+  pollId: "62000000-0000-4000-8000-000000000001"
 };
 
 export function runtimeUrl() {

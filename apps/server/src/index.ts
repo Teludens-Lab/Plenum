@@ -18,6 +18,7 @@ export * from "./registry/object-store.js";
 export * from "./registry/publication.js";
 export * from "./extensions/registry.js";
 export * from "./extensions/runtime.js";
+export * from "./voting/polls.js";
 export * from "./http/runtime-http.js";
 
 /** Identity and authority values created by authenticated server middleware. */

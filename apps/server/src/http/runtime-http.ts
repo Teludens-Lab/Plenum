@@ -18,6 +18,7 @@ import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
+import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -31,9 +32,10 @@ export interface RuntimeHttpOptions {
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
   if (code === "UNAUTHENTICATED" || code === "AUTH_EXPIRED") return 401;
-  if (["PERMISSION_DENIED", "ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED"].includes(code)) return 403;
+  if (["PERMISSION_DENIED", "RESULT_NOT_RELEASED", "ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED"].includes(code)) return 403;
   if (["NOT_FOUND", "TARGET_NOT_FOUND"].includes(code)) return 404;
-  if (["STALE_AGGREGATE_VERSION", "INCOMPATIBLE_RELEASE", "IDEMPOTENCY_COLLISION", "INVALID_TRANSITION", "TARGET_EXISTS"].includes(code)) return 409;
+  if (["STALE_AGGREGATE_VERSION", "INCOMPATIBLE_RELEASE", "IDEMPOTENCY_COLLISION", "INVALID_TRANSITION", "TARGET_EXISTS", "ALREADY_VOTED", "DEADLINE_EXPIRED", "CAPABILITY_UNAVAILABLE"].includes(code)) return 409;
+  if (code === "AUTHORITY_UNAVAILABLE") return 503;
   if (code === "TOO_LARGE") return 413;
   if (["INVALID_ID", "INVALID_JSON"].includes(code)) return 400;
   if (["INVALID_COMMAND", "VALIDATION_FAILED", "REFERENCE_INVALID"].includes(code)) return 422;
@@ -142,6 +144,30 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           deviceId: deviceHeader(request, correlationId),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/polls$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        send(response, 200, await getPolls(options.pool, context));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/polls\/([^/]+)\/(my-receipt|result|audit)$/u))) {
+        const sessionId = pathId(match[1], correlationId), pollId = pathId(match[2], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        const result = match[3] === "my-receipt" ? await getMyReceipt(options.pool, context, pollId, correlationId) :
+          match[3] === "result" ? await getPollResult(options.pool, context, pollId, correlationId) :
+            await getPollAudit(options.pool, context, pollId, correlationId);
+        send(response, 200, result);
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/polls\/([^/]+)$/u))) {
+        const sessionId = pathId(match[1], correlationId), pollId = pathId(match[2], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        send(response, 200, await getPoll(options.pool, context, pollId, correlationId));
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/commands$/u))) {

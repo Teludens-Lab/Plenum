@@ -29,6 +29,7 @@ import {
   type CommandExecutionContext
 } from "./commands/processor.js";
 import { executeInformationCommand, getInformationProjection, releaseStageInjects } from "./information-flow.js";
+import { executeVotingCommand, getPollProjection } from "../voting/polls.js";
 
 interface RuntimeFieldDefinition {
   id: string;
@@ -777,6 +778,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     const role = definition.sessionRoles.find((candidate) => candidate.id === context.activeSessionRoleId);
     if (role === undefined) throw new Error(`Release lacks Session Role ${context.activeSessionRoleId}`);
     const information = await getInformationProjection(client, context, actor, input.correlationId);
+    const polls = await getPollProjection(client, context);
     return {
       contractId: RUNTIME_PROJECTION_CONTRACT_ID,
       sessionId: context.sessionId,
@@ -809,7 +811,8 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       modules: [...profile.modules].sort((left, right) => left.id.localeCompare(right.id)),
       createTasks,
       artifacts,
-      ...information
+      ...information,
+      polls
     };
   });
 }
@@ -844,6 +847,7 @@ export async function submitRuntimeCommand(
       command.operationType.startsWith("message.") || command.operationType.startsWith("inject.") ? executeInformationCommand :
       command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :
       command.operationType.startsWith("effect_proposal.") ? executeEffectProposalCommand :
+      command.operationType.startsWith("poll.") || command.operationType === "ballot.cast" ? executeVotingCommand :
       async (): Promise<CommandDecision> => ({ status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE",
         message: "This configured capability is not available in the current Runtime." });
   return processSessionCommand({ pool, context, command, correlationId, deploymentId, lockAggregateAndExecute: execute });

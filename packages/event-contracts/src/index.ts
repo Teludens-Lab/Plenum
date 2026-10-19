@@ -36,6 +36,9 @@ export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
 export const MODEL_RUN_CONTRACT_ID = "model-run-v1";
 export const EFFECT_PROPOSAL_CONTRACT_ID = "effect-proposal-v1";
 export const APPROVAL_DECISION_CONTRACT_ID = "approval-decision-v1";
+export const POLL_COMMAND_CONTRACT_ID = "poll-command-v1";
+export const BALLOT_COMMAND_CONTRACT_ID = "ballot-command-v1";
+export const CERTIFICATION_CONTRACT_ID = "certification-v1";
 
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
 export const SESSION_OPERATOR_POLICY_V1 = {
@@ -237,6 +240,56 @@ export interface RuntimeInjectV1 {
   version: number;
 }
 
+export interface RuntimePollTallyV1 {
+  ballotSetSha256: string;
+  resultSha256: string;
+  method: "builtin_count";
+  methodVersion: string;
+  counts: Record<string, number>;
+  electorateSize: number;
+  participationCount: number;
+  quorumMet: boolean;
+  winningOptionIds: string[];
+  tied: boolean;
+  vetoExercised: boolean;
+  passed: boolean;
+  computedAt: string;
+}
+
+export interface CertificationV1 {
+  contractId: typeof CERTIFICATION_CONTRACT_ID;
+  id: string;
+  resultSha256: string;
+  methodVersion: string;
+  certifiedAt: string;
+  correctsCertificationId: string | null;
+  reason: string | null;
+}
+
+export interface RuntimePollV1 {
+  id: string;
+  definitionId: string;
+  definitionRevision: number;
+  question: string;
+  options: Array<{ id: string; label: string }>;
+  pollType: "single_choice" | "multiple_choice" | "yes_no_abstain" | "opinion";
+  minSelections: number | null;
+  maxSelections: number | null;
+  secrecy: "open" | "secret_ballot" | "anonymous_survey";
+  status: "open" | "closed" | "tallied" | "certified" | "voided" | "correction_issued";
+  version: number;
+  governingReleaseId: string;
+  deadlineAt: string | null;
+  eligible: boolean;
+  hasVoted: boolean;
+  ballotCapability: string | null;
+  receipt: { commandId: string; acceptedAt: string; ballotRevision: number } | null;
+  canManage: boolean;
+  canCertify: boolean;
+  tally: RuntimePollTallyV1 | null;
+  certification: CertificationV1 | null;
+}
+
 export interface RuntimeProjectionV1 {
   contractId: typeof RUNTIME_PROJECTION_CONTRACT_ID;
   sessionId: string;
@@ -261,6 +314,7 @@ export interface RuntimeProjectionV1 {
   artifacts: RuntimeArtifactV1[];
   messages: RuntimeMessageV1[];
   injects: RuntimeInjectV1[];
+  polls: RuntimePollV1[];
 }
 
 export interface OperatorProjectionV1 {
@@ -379,10 +433,27 @@ export const approvalDecisionV1Schema = {
   }
 } as const satisfies ContractSchema<ApprovalDecisionV1>;
 
+export const certificationV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: CERTIFICATION_CONTRACT_ID, title: "Certification v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "resultSha256", "methodVersion", "certifiedAt", "correctsCertificationId", "reason"],
+  properties: {
+    contractId: { const: CERTIFICATION_CONTRACT_ID },
+    id: uuidProperty,
+    resultSha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    methodVersion: { type: "string", minLength: 1 },
+    certifiedAt: utcInstantProperty,
+    correctsCertificationId: { type: ["string", "null"], format: "uuid" },
+    reason: { type: ["string", "null"] }
+  }
+} as const satisfies ContractSchema<CertificationV1>;
+
 export type ArtifactCommandV1 = CommandEnvelopeV1;
 export type StageCommandV1 = CommandEnvelopeV1;
 export type InjectCommandV1 = CommandEnvelopeV1;
 export type MessageCommandV1 = CommandEnvelopeV1;
+export type PollCommandV1 = CommandEnvelopeV1;
+export type BallotCommandV1 = CommandEnvelopeV1;
 
 export const canonicalErrorCodes = [
   "UNAUTHENTICATED",
@@ -493,6 +564,8 @@ function commandSchema(contractId: string, title: string, namespace: string) {
 export const stageCommandV1Schema = commandSchema(STAGE_COMMAND_CONTRACT_ID, "Stage Command v1", "stage");
 export const injectCommandV1Schema = commandSchema(INJECT_COMMAND_CONTRACT_ID, "Inject Command v1", "inject");
 export const messageCommandV1Schema = commandSchema(MESSAGE_COMMAND_CONTRACT_ID, "Message Command v1", "message");
+export const pollCommandV1Schema = commandSchema(POLL_COMMAND_CONTRACT_ID, "Poll Command v1", "poll");
+export const ballotCommandV1Schema = commandSchema(BALLOT_COMMAND_CONTRACT_ID, "Ballot Command v1", "ballot");
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -668,7 +741,7 @@ export const runtimeProjectionV1Schema = {
     "contractId", "sessionId", "sessionStatus", "releaseId", "releaseLabel", "participantId",
     "activeSessionRoleId", "activeSessionRoleLabel", "activeTeamId", "activeTeamLabel", "currentStageId", "currentStageLabel", "currentStageStatus",
     "stageStartedAt", "stageDeadlineAt", "stageRemainingSeconds",
-    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects"
+    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects", "polls"
   ],
   properties: {
     contractId: { const: RUNTIME_PROJECTION_CONTRACT_ID },
@@ -693,7 +766,8 @@ export const runtimeProjectionV1Schema = {
     createTasks: { type: "array", items: { type: "object" } },
     artifacts: { type: "array", items: { type: "object" } },
     messages: { type: "array", items: { type: "object" } },
-    injects: { type: "array", items: { type: "object" } }
+    injects: { type: "array", items: { type: "object" } },
+    polls: { type: "array", items: { type: "object" } }
   }
 } as const satisfies ContractSchema<RuntimeProjectionV1>;
 
@@ -709,6 +783,7 @@ const irregularPastParticiples = new Set(["cast", "held", "left", "sent", "set"]
 
 export function isCommandOperationType(value: string): boolean {
   if (!dotCaseName.test(value)) return false;
+  if (value === "ballot.cast") return true;
   const action = value.slice(value.indexOf(".") + 1);
   return !action.endsWith("ed") && !irregularPastParticiples.has(action);
 }

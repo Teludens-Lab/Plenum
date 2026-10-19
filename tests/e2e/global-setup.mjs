@@ -19,7 +19,8 @@ const migrations = [
   "apps/server/migrations/009_runtime_capabilities.sql",
   "apps/server/migrations/010_information_messages_injects.sql",
   "apps/server/migrations/011_extension_registry.sql",
-  "apps/server/migrations/012_extension_runs_approvals.sql"
+  "apps/server/migrations/012_extension_runs_approvals.sql",
+  "apps/server/migrations/013_voting_core.sql"
 ];
 
 export default async function globalSetup() {
@@ -31,7 +32,17 @@ export default async function globalSetup() {
     const release = JSON.parse(await readFile(
       new URL("../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"
     ));
-    const definition = { coreDesign: release.coreDesign, scenario: release.scenario };
+    const definition = { coreDesign: { ...release.coreDesign, polls: [{
+      id: "synthetic-resolution", scope: "session", question: "Adopt the synthetic accessibility resolution?",
+      options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }, { id: "abstain", label: "Abstain" }],
+      pollType: "yes_no_abstain", tallyMethod: "builtin_count", tallyMethodVersion: "builtin-count-v1",
+      electoratePolicyId: "policy-public", oneBallotPer: "seat_assignment", allowRevote: false, secrecy: "open",
+      thresholdRule: { kind: "simple_majority", denominator: "valid_votes", abstentionCountsTowardDenominator: false },
+      quorumRule: { basis: "electorate_at_open", minimum: 1, abstentionCountsTowardParticipation: true },
+      weights: [], vetoRule: { holderSeatIds: [] }, tieRule: "no_decision",
+      openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
+      resultVisibilityPolicyId: "policy-public", certificationPolicy: { certifierSessionRoleIds: ["white_cell"] }
+    }] }, scenario: release.scenario };
     const people = Object.values(fixture.people);
     await owner.query("BEGIN");
     await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-150 synthetic organization')", [fixture.organizationId]);

@@ -17,7 +17,8 @@ This consolidates pointers and implementation consequences. It is not a parallel
 | Extension isolation | Rootless containers; WASM/WASI additional target | ADR-018 | Confirmed and implemented for local OCI Plugins | PS-220, PS-230 | Python/native remains deferred under resolved OPEN-022 baseline |
 | Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Proposed | PS-530 | Kubernetes optional only |
 | Persistence | Relational current state + append-only evidence | ADR-014 | Proposed | PS-120 | No full event sourcing |
-| Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Implemented and tested; ADR still Proposed | PS-110 | DB-01 passes with pooled real app role on Pg18.6 |
+| Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Confirmed, implemented and tested | PS-110 | DB-01 passes with pooled real app role on Pg18.6 |
+| Capability schemas | `extension`, `voting`, and `comms` in the modular-monolith PostgreSQL cluster | ADR-016 | Confirmed; `extension` implemented, `voting` next, `comms` later | PS-220, PS-230, PS-240, PS-250 | Schema ownership does not create separate services or databases |
 | Router/query/state/forms | React Router, TanStack Query, Zustand, React Hook Form | Platform section 23 | Candidates | PS-150/310 | Use only when slice needs them; pin in lockfile |
 | Validation | Dependency-free JSON Schema 2020-12 objects coupled to TypeScript property keys; Zod compatibility remains open | Platform section 23; OPEN-022 | Implemented kernel / Open product policy | PS-100/310 | Do not add a second schema authority |
 | Interaction editors | dnd-kit, React Flow | Platform section 23 | Candidates | PS-310/330 | Prefer native/simple controls until needed |

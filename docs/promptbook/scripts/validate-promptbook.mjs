@@ -143,9 +143,9 @@ for (const id of samples) {
 }
 
 const ready = tasks.filter((task) => task.ready_to_execute).map((task) => task.id);
-const expectedReady = ['PS-000', 'PS-001'];
+const expectedReady = ['PS-000', 'PS-001', 'PS-240'];
 if (ready.length !== expectedReady.length || ready.some((id, index) => id !== expectedReady[index])) {
-  warnings.push(`Expected PS-000 and PS-001 as first runnable tasks; found ${ready.join(', ') || 'none'}`);
+  warnings.push(`Expected the recorded runnable tasks ${expectedReady.join(', ')}; found ${ready.join(', ') || 'none'}`);
 }
 
 const status = failures.length ? 'FAIL' : 'PASS';

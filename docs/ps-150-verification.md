@@ -50,5 +50,5 @@ No migration was added. The HTTP boundary composes existing PostgreSQL and polic
 ## Open governance and QA limits
 
 - ADR-007 and ADR-008 remain Proposed in the source Decision Register; the project owner's instruction accepts their React/Node directions for this build. OPEN-001 remains unresolved.
-- Automated axe, keyboard navigation, responsive screenshots and text scaling passed. Manual NVDA/JAWS/VoiceOver testing and an independent accessibility review were not run, so this is not release approval.
+- Automated axe, keyboard navigation, responsive screenshots and text scaling passed. The exact human listening procedure is recorded in `docs/ps-150-manual-screen-reader-review.md`, but its eight checks remain NOT RUN because this environment has no Computer Use session or speech-output observer. Manual assistive-technology acceptance and an independent accessibility review therefore remain outside the verified evidence, so this is not release approval.
 - Production OIDC composition, TLS/proxy behavior, sustained connections, load, deployment, backup/restore and Node 26 were not tested here. Their owning later tasks remain unchanged.

@@ -25,7 +25,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `OPEN-004`, `OPEN-005`, `OPEN-006`, `OPEN-026`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `OPEN-004`, `OPEN-005`, `OPEN-006`.
 
 ## Prerequisites
 

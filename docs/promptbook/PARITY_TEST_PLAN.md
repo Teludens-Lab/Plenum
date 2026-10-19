@@ -2,15 +2,15 @@
 
 ## Status and authority
 
-Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. PS-000 inventory implementation is **COMPLETE**: `docs/reference-audit/PS-000_REFERENCE_AUDIT.md` and `definitions/fractured-order/reference-inventory.json` classify every capability in the two pinned fail-closed source manifests and define source-backed parity targets. Methodology approval is **BLOCKED** on the rows marked for Methodology Lead review under `OPEN-026`. Behavioral parity remains **NOT RUN** until PS-200 performs extraction and AC-09 comparison. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
+Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. PS-200 compiled the configuration Release and executed the available generic Runtime evidence. After PS-210 RFI and communications closure, the machine-readable matrix records 9 `PASS`, 0 `BLOCKED`, and 8 `OUT_OF_SCOPE` targets. `AC-09` remains **BLOCKED** because the eight later-phase parity targets have not been executed; none was waived. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
 
 ## Pinning protocol
 
 1. **PASS:** Product Owner supplied and approved the exact immutable commit SHA.
 2. **PASS:** `references/fractured-order.snapshot.json` records retrieval method, commit, tree, archive digest, file count, size, exclusions, and verification.
 3. **PASS:** `references/fractured-order/` preserves the clean tracked-file snapshot without Git metadata, secrets, dependencies, build output, coverage, or caches.
-4. **IMPLEMENTED; APPROVAL BLOCKED:** PS-000 classified observed behavior, defined intentional differences and routed the Strategic Orientation/game-control/decision-trace rows to the Methodology Lead under `OPEN-026`.
-5. **PENDING PS-200:** run old and new implementations from clean, version-pinned environments against the same deterministic scenarios.
+4. **PASS:** `OPEN-026` classifies reusable Orientation/coverage-gate, Control and decision-trace mechanics as platform options and keeps Fractured Order-specific substance in Release configuration. Unexecuted Orientation and Control parity scenarios remain assigned to later phases.
+5. **PARTIAL:** PS-200 extracted the complete decision forms, distinct Scribe/Facilitator/White Cell custody, configurable per-Industry modal and progression contracts, unbounded per-Team role seats, explicit Action resubmission, accepted-proposal Action evidence, Facilitator Present mode, and the closed per-recipient proposal protocol. PS-210 now executes explicit proposal Routes, route denial, policy-filtered Message projection, Stage-entry Inject release/acknowledgement, the full RFI return/edit/resubmit/answer lifecycle, stale-answer and cross-Team denial, release-owned Message/proposal/Inject modules, direct/broadcast delivery, receipt replay and reconnect deduplication, multi-round custody approval, acceptance evidence and explicit two-sided closure. Scheduled/Gate Inject publication fails closed until a Release needs and specifies those semantics; later-prompt rows remain out of scope in `tests/parity/fractured-order-fixture-plan.json`.
 
 ## Parity dimensions
 
@@ -30,7 +30,7 @@ Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a
 - `docs/reference-audit/PS-000_REFERENCE_AUDIT.md` is the readable route, service, data, realtime, hard-coding and coverage audit.
 - `definitions/fractured-order/reference-inventory.json` is the machine-readable classification inventory keyed by commit, tree and archive digest.
 - `tests/parity/fractured-order-fixture-plan.json` defines 17 deterministic parity targets, including unauthorized, disconnected, stale and partial-failure cases.
-- `node tests/parity/validate-reference-inventory.mjs` validates the pin, exact capability-manifest coverage, source evidence anchors, Canon categories, review blocks and fixture targets. It does not execute AC-09 behavior.
+- `node tests/parity/validate-reference-inventory.mjs` validates the pin, exact capability-manifest coverage, source evidence anchors, Canon categories, the resolved `OPEN-026` boundary, fixture targets, explicit execution status and evidence/future ownership. It reports but does not override the blocked `AC-09` approval gate.
 
 ## Required scenarios
 

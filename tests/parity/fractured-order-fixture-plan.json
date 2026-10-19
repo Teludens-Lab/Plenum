@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "taskId": "PS-000",
-  "status": "planned",
+  "status": "partially_executed",
   "referenceCommit": "ae5d5065bc04a53631815b1b1715a54e21e3ef5b",
   "referenceTree": "771510b6180bd4826dc5688789d131f2109eeb62",
   "rules": {
@@ -14,104 +14,136 @@
   "targets": [
     {
       "id": "PARITY-ENTRY-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["docs/ps-110-verification.md", "output/playwright/ps-150/"],
       "title": "Identity, authorization, role routing and seat persistence",
       "scenarios": ["authorized join and reload", "invalid session code", "cross-role denial", "cross-tenant denial", "expired or removed seat"],
       "evidence": ["screen/state capture", "authorization denial", "projection hash"]
     },
     {
       "id": "PARITY-ORIENTATION-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-350/PS-430",
       "title": "Team-specific Strategic Orientation and pre-Move 1 gate",
       "scenarios": ["four team forms", "missing required narrative", "handoff", "return/edit/resubmit", "gate closed", "gate opens after all required artifacts"],
-      "evidence": ["artifact history", "ordered event transcript", "control-state capture"],
-      "approvalGate": "Methodology Lead review under OPEN-026"
+      "evidence": ["artifact history", "ordered event transcript", "control-state capture"]
     },
     {
       "id": "PARITY-ARTIFACT-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["PS-200-T01", "PS-200-T02", "CMD-PLATFORM-E2E"],
       "title": "Action and proposal authoring",
       "scenarios": ["Blue action", "Red action", "Green proposal", "Industry proposal", "invalid conditional fields", "draft recovery", "duplicate handoff"],
       "evidence": ["artifact payload", "validation result", "workflow history"]
     },
     {
       "id": "PARITY-REVIEW-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-E2E", "DEC-42"],
       "title": "White Cell artifact review",
       "scenarios": ["complete without forced outcome", "return with required rationale", "stale review denial", "revision history retained"],
       "evidence": ["command/receipt/event transcript", "artifact versions"]
     },
     {
       "id": "PARITY-PROPOSAL-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["PS-210-T02", "CMD-PLATFORM-E2E"],
       "title": "Recipient-isolated proposal threads",
       "scenarios": ["independent recipient decision", "multi-round negotiation", "cross-recipient denial", "duplicate response", "closed-thread denial"],
       "evidence": ["thread projection hashes", "append-only history", "authorization denial"]
     },
     {
       "id": "PARITY-RFI-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["PS-210-RFI-E2E", "CMD-PLATFORM-E2E"],
       "title": "Request for information lifecycle",
       "scenarios": ["create", "return", "edit", "resubmit", "answer", "stale answer race", "cross-team denial"],
       "evidence": ["request versions", "response receipt", "event transcript"]
     },
     {
       "id": "PARITY-COMMS-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["PS-210-COMMS-E2E", "CMD-PLATFORM-E2E"],
       "title": "Communications, notifications and journal delivery",
       "scenarios": ["direct", "broadcast", "forbidden route", "startup history does not re-notify", "disconnect/reconnect", "duplicate delivery"],
       "evidence": ["recipient projections", "unread state", "deduplication log"]
     },
     {
       "id": "PARITY-NOTES-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-340",
       "title": "Notetaker operational record",
       "scenarios": ["two-seat concurrent notes", "autosave", "quick capture", "reload", "cross-seat and cross-team isolation"],
       "evidence": ["seat-scoped records", "timeline projection", "authorization denial"]
     },
     {
       "id": "PARITY-CONTROL-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-400/PS-430",
       "title": "Stage, move and timer controls",
       "scenarios": ["start/pause/reset", "per-mark allocation", "advance and return", "unauthorized control", "stale control", "reconnect"],
-      "evidence": ["authoritative state", "controlled-clock transcript", "denial receipt"],
-      "approvalGate": "Methodology Lead review of Fractured Order-specific gate semantics under OPEN-026"
+      "evidence": ["authoritative state", "controlled-clock transcript", "denial receipt"]
     },
     {
       "id": "PARITY-ADMIN-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-340",
       "title": "Session and participant administration",
       "scenarios": ["create", "filter roster", "bulk removal", "archive", "delete", "rejoin denial", "retained audit evidence"],
       "evidence": ["operator state", "join denial", "audit record"]
     },
     {
       "id": "PARITY-EXPORT-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-520",
       "title": "Evidence and research exports",
       "scenarios": ["JSON and CSV", "research ZIP", "HTML report", "formal-report source", "cross-session archive", "captured/reconstructed labeling", "source reconciliation"],
       "evidence": ["manifest", "file hashes", "source-row reconciliation"]
     },
     {
       "id": "PARITY-SYNC-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-INTEGRATION", "CMD-PLATFORM-E2E"],
       "title": "Realtime degradation and reconciliation",
       "scenarios": ["disconnect", "bounded retry exhaustion", "reconnect", "stale cursor", "reordered changes", "duplicate changes", "partial failure around state/evidence/receipt/outbox"],
       "evidence": ["SYNC transcript", "projection hash", "atomicity proof"]
     },
     {
       "id": "PARITY-PLI-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-220/PS-230",
       "title": "PLI and SME procedures",
       "scenarios": ["matching-seat review", "wrong-seat denial", "override rationale", "Macro unlock", "finalized copy packet", "White Cell read-only"],
       "evidence": ["plugin input/output hashes", "review record", "authorization denial"]
     },
     {
       "id": "PARITY-PLUGIN-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-220/PS-250",
       "title": "Intercom and session recorder plugin behavior",
       "scenarios": ["enable/disable", "small and large audio", "start/pause/resume/stop", "participant notice", "storage failure", "unavailable plugin"],
       "evidence": ["plugin lifecycle record", "artifact metadata", "failure state"]
     },
     {
       "id": "PARITY-UI-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-E2E", "CMD-PLATFORM-A11Y"],
       "title": "Familiar role workspaces and accessible interaction",
       "scenarios": ["workspace navigation", "focus-managed alerts", "keyboard operation", "390px viewport", "200% text", "empty/error/retry", "reduced motion"],
       "evidence": ["semantic assertions", "screenshots", "accessibility results"]
     },
     {
       "id": "PARITY-SCENARIO-01",
+      "executionStatus": "OUT_OF_SCOPE",
+      "scopeOwner": "PS-220",
       "title": "Scenario briefs, decks and media",
       "scenarios": ["asset identity", "authorized availability", "missing asset", "offline package"],
       "evidence": ["content hashes", "access result", "offline manifest"]
     },
     {
       "id": "PARITY-LEGACY-01",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-TEST", "scripts/contract-lint.mjs"],
       "title": "Intentional non-parity for classified defects",
       "scenarios": ["legacy route aliases remain readable where required", "new identifiers use canonical role semantics", "new events use past-tense dot-case", "no named Team or Session Role branch in platform core"],
       "evidence": ["compatibility test", "contract lint", "generalization source scan"],

@@ -14,7 +14,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
-import { getRuntimeProjection, submitArtifactCommand } from "../runtime/artifact-workflow.js";
+import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 
@@ -153,7 +153,7 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
             ...(command.activeSessionRoleId === undefined ? {} : { requestedActiveSessionRoleId: command.activeSessionRoleId }),
             correlationId
           }));
-        const receipt = await submitArtifactCommand(
+        const receipt = await submitRuntimeCommand(
           options.pool, context, command, correlationId, options.deploymentId
         );
         send(response, receipt.status === "accepted" ? 200 : 409, receipt);

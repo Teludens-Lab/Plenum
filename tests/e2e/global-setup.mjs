@@ -15,7 +15,9 @@ const migrations = [
   "apps/server/migrations/005_identity_oidc_context.sql",
   "apps/server/migrations/006_command_kernel.sql",
   "apps/server/migrations/007_release_packages.sql",
-  "apps/server/migrations/008_projection_cursors.sql"
+  "apps/server/migrations/008_projection_cursors.sql",
+  "apps/server/migrations/009_runtime_capabilities.sql",
+  "apps/server/migrations/010_information_messages_injects.sql"
 ];
 
 export default async function globalSetup() {
@@ -24,15 +26,17 @@ export default async function globalSetup() {
     for (const migration of migrations) {
       await owner.query(await readFile(new URL(`../../${migration}`, import.meta.url), "utf8"));
     }
-    const definition = JSON.parse(await readFile(
-      new URL("../../definitions/fractured-order/s1-runtime-release.json", import.meta.url), "utf8"
+    const release = JSON.parse(await readFile(
+      new URL("../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"
     ));
+    const definition = { coreDesign: release.coreDesign, scenario: release.scenario };
     const people = Object.values(fixture.people);
     await owner.query("BEGIN");
     await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-150 synthetic organization')", [fixture.organizationId]);
     await owner.query(
       `INSERT INTO identity.persons(id,display_name) VALUES
-       ($1,'Synthetic author'),($2,'Synthetic reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator')`,
+       ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
+       ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer')`,
       people
     );
     await owner.query(
@@ -74,20 +78,38 @@ export default async function globalSetup() {
     );
     await owner.query(
       `INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES
-       ($1,$2,$3,$4),($5,$2,$3,$6),($7,$2,$3,$8)`,
+       ($1,$2,$3,$4),($5,$2,$3,$6),($7,$2,$3,$8),($9,$2,$3,$10),($11,$2,$3,$12),($13,$2,$3,$14)`,
       [fixture.participants.author, fixture.organizationId, fixture.sessionId, fixture.people.author,
         fixture.participants.reviewer, fixture.people.reviewer,
-        fixture.participants.finalReviewer, fixture.people.finalReviewer]
+        fixture.participants.finalReviewer, fixture.people.finalReviewer,
+        fixture.participants.redAuthor, fixture.people.redAuthor,
+        fixture.participants.greenReviewer, fixture.people.greenReviewer,
+        fixture.participants.redReviewer, fixture.people.redReviewer]
     );
     await owner.query(
       `INSERT INTO runtime.seat_assignments
        (id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by) VALUES
-       ($1,$2,$3,$4,'scribe','seat-author',$5),
-       ($6,$2,$3,$7,'facilitator','seat-reviewer',$5),
-       ($8,$2,$3,$9,'white_cell','seat-final-reviewer',$5)`,
+       ($1,$2,$3,$4,'scribe','blue-scribe',$5),
+       ($6,$2,$3,$7,'facilitator','blue-facilitator',$5),
+       ($8,$2,$3,$9,'white_cell','control',$5),
+       ($10,$2,$3,$11,'scribe','red-scribe',$5),
+       ($12,$2,$3,$13,'facilitator','green-facilitator',$5),
+       ($14,$2,$3,$15,'facilitator','red-facilitator',$5)`,
       [fixture.assignments.author, fixture.organizationId, fixture.sessionId, fixture.participants.author,
         fixture.people.operator, fixture.assignments.reviewer, fixture.participants.reviewer,
-        fixture.assignments.finalReviewer, fixture.participants.finalReviewer]
+        fixture.assignments.finalReviewer, fixture.participants.finalReviewer,
+        fixture.assignments.redAuthor, fixture.participants.redAuthor,
+        fixture.assignments.greenReviewer, fixture.participants.greenReviewer,
+        fixture.assignments.redReviewer, fixture.participants.redReviewer]
+    );
+    await owner.query(
+      `INSERT INTO runtime.artifact_instances
+         (id,organization_id,session_id,governing_release_id,artifact_type_key,workflow_key,form_version,
+          creator_participant_id,owner_team_id,state,payload,visible_role_ids,version)
+       VALUES ($1,$2,$3,$4,'green_proposal','proposal','1.0.0',$5,'green','recipient_threads',
+         '{"recipientTeams":["red"],"title":"Synthetic recipient-isolation proof"}'::jsonb,
+         ARRAY['facilitator','white_cell'],4)`,
+      [fixture.proposalArtifactId, fixture.organizationId, fixture.sessionId, fixture.releaseId, fixture.participants.greenReviewer]
     );
     for (const participantId of Object.values(fixture.participants)) {
       await owner.query(

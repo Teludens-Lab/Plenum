@@ -14,13 +14,15 @@
   "scripts": {
     "lint": "npm run build --silent && node scripts/contract-lint.mjs",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit --pretty false",
-    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs packages/policy-engine/test/policy.test.mjs packages/release-compiler/test/compiler.test.mjs packages/sync-client/test/sync-client.test.mjs apps/server/test/identity.unit.test.mjs",
+    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs tests/platform/fractured-order-release.test.mjs packages/policy-engine/test/policy.test.mjs packages/release-compiler/test/compiler.test.mjs packages/workflow-engine/test/workflow.test.mjs packages/sync-client/test/sync-client.test.mjs apps/server/test/identity.unit.test.mjs",
     "test:integration": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs apps/server/test/object-store.integration.test.mjs",
     "test:db": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs",
     "test:s3": "npm run build --silent && node --test apps/server/test/object-store.integration.test.mjs",
-    "test:e2e": "playwright test --config tests/e2e/playwright.config.mjs",
-    "test:a11y": "playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
-    "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web"
+    "test:e2e": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs",
+    "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
+    "test:load:information": "npm run build --silent && node tests/load/information-flow-load.mjs",
+    "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web",
+    "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

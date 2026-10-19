@@ -19,7 +19,7 @@
         </svg>
         <div>
           <div class="brand-name">TELUDENS</div>
-          <div class="brand-sub">Interface System · v1.0</div>
+          <div class="brand-sub">Interface System · v1.3</div>
         </div>
       </div>
 
@@ -36,7 +36,15 @@
         <a href="#overlays" class="nav-link"><span>09</span> Panels & Overlays</a>
         <a href="#operational" class="nav-link"><span>10</span> Operational</a>
         <a href="#plenum" class="nav-link"><span>11</span> Plenum Slice</a>
-        <a href="#guidance" class="nav-link"><span>12</span> Guidance</a>
+        <a href="#interaction-states" class="nav-link"><span>12</span> Interaction States</a>
+        <a href="#spatial-layout" class="nav-link"><span>13</span> Spatial Layout</a>
+        <a href="#analytics" class="nav-link"><span>14</span> Data & Analytics</a>
+        <a href="#feedback" class="nav-link"><span>15</span> Feedback & Recovery</a>
+        <a href="#iconography" class="nav-link"><span>16</span> Iconography</a>
+        <a href="#accessibility" class="nav-link"><span>17</span> Accessibility & Input</a>
+        <a href="#governance" class="nav-link"><span>18</span> Documentation & Governance</a>
+        <a href="#institutional" class="nav-link"><span>19</span> Institutional Grammar</a>
+        <a href="#guidance" class="nav-link"><span>20</span> Guidance</a>
       </nav>
 
       <div class="sidebar-footer">
@@ -60,7 +68,7 @@
           <button class="selected" data-density-value="standard">Standard</button>
           <button data-density-value="operations">Operations</button>
         </div>
-        <button class="icon-button" id="themeToggle" aria-label="Toggle dark theme" title="Toggle theme">
+        <button class="icon-button" id="themeToggle" aria-label="Toggle dark theme" aria-pressed="false" title="Toggle theme">
           <span class="theme-icon" aria-hidden="true">◐</span>
         </button>
       </div>
@@ -72,8 +80,8 @@
         <div class="hero-grid">
           <div class="hero-copy">
             <p class="section-kicker">TELUDENS INTERFACE SYSTEM</p>
-            <h1>Precision computational instruments for strategic thought.</h1>
-            <p class="hero-lede">A product design language built around calm computational power, professional-tool architecture, and a proprietary grammar for actors, decisions, branches, paths, gates, states, consequences, evidence, and time.</p>
+            <h1>A disciplined environment for strategic thought.</h1>
+            <p class="hero-lede">A contained institutional instrument: precise materials, documentary rigor, resilient workspaces, and a semantic grammar for decisions, evidence, consequence, and time.</p>
             <div class="hero-actions">
               <a class="button primary" href="#controls">Explore components</a>
               <a class="button secondary" href="#plenum">Open reference slice</a>
@@ -119,10 +127,10 @@
         </div>
       </section>
 
-      <section id="color" class="catalog-section searchable" data-search="color electric vermilion semantic materials signal cobalt green amber crimson graphite light dark palette tokens">
+      <section id="color" class="catalog-section searchable" data-search="color graphite mineral sage semantic materials neutral selection focus contrast light dark palette tokens">
         <div class="section-heading">
           <div><p class="section-kicker">02 · COLOR</p><h2>Material first. Signal second.</h2></div>
-          <p>Warm neutral materials create the working environment. Electric Vermilion is scarce and consequential. Brand signal, error, status, and information never collapse into one color.</p>
+          <p>Graphite establishes the working environment. Mineral Sage is reserved for consequential decisions and meaningful relationships. Neutral selection and accessible focus remain distinct from semantic status signals.</p>
         </div>
         <div class="subsection">
           <div class="subsection-title"><h3>Primitive ramps</h3><span>Click any swatch to copy its value</span></div>
@@ -134,7 +142,7 @@
         </div>
         <div class="signal-rule">
           <div class="signal-swatch"></div>
-          <div><span class="eyebrow">SIGNAL / DECISION</span><h3>Electric Vermilion is not “the primary color.”</h3><p>It marks the current path, active decision, execution point, or meaningful brand moment. Generic primary actions remain neutral; destructive actions remain Crimson.</p></div>
+          <div><span class="eyebrow">SIGNAL / DECISION</span><h3>Mineral Sage is not the focus color.</h3><p>Mineral Sage marks consequential paths, committed decisions, and approved state transitions. Selection uses neutral tonal emphasis; keyboard focus uses a dedicated high-contrast ring. Generic primary actions remain graphite; destructive actions remain crimson.</p></div>
         </div>
       </section>
 
@@ -267,12 +275,12 @@
               <path class="grammar-path" data-path="c" d="M310 220 C420 220 390 340 535 340"/>
               <path class="grammar-path" data-path="d" d="M570 100H755"/>
               <path class="grammar-path" data-path="e" d="M570 340H755"/>
-              <circle class="grammar-node active" data-node="Decision" cx="105" cy="220" r="15"/>
-              <circle class="grammar-node" data-node="Branch" cx="300" cy="220" r="12"/>
-              <rect class="grammar-gate" data-node="Gate" x="530" y="78" width="44" height="44" rx="5"/>
-              <circle class="grammar-node state active" data-node="State" cx="770" cy="100" r="16"/>
-              <circle class="grammar-node" data-node="Alternate" cx="550" cy="340" r="12"/>
-              <circle class="grammar-node state" data-node="State" cx="770" cy="340" r="14"/>
+              <circle class="grammar-node active" data-node="Decision" cx="105" cy="220" r="15" tabindex="0" role="button" aria-label="Decision node"/>
+              <circle class="grammar-node" data-node="Branch" cx="300" cy="220" r="12" tabindex="0" role="button" aria-label="Branch node"/>
+              <rect class="grammar-gate" data-node="Gate" x="530" y="78" width="44" height="44" rx="5" tabindex="0" role="button" aria-label="Gate"/>
+              <circle class="grammar-node state active" data-node="State" cx="770" cy="100" r="16" tabindex="0" role="button" aria-label="State on current path"/>
+              <circle class="grammar-node" data-node="Alternate" cx="550" cy="340" r="12" tabindex="0" role="button" aria-label="Alternate node"/>
+              <circle class="grammar-node state" data-node="State" cx="770" cy="340" r="14" tabindex="0" role="button" aria-label="State on alternate path"/>
               <text x="75" y="268">DECISION</text><text x="270" y="268">BRANCH</text><text x="527" y="64">GATE</text><text x="747" y="142">STATE</text><text x="510" y="383">ALTERNATE</text>
             </svg>
             <div class="grammar-readout"><span class="status-dot"></span><span id="grammarReadout">Current path: Decision → Gate → State</span></div>
@@ -358,6 +366,7 @@
           <div><p class="section-kicker">11 · PLENUM REFERENCE SLICE</p><h2>The canonical baseline.</h2></div>
           <p>This slice defines how the system behaves when multiple Teludens patterns coexist. Shared Plenum patterns should reconcile against this baseline before propagation.</p>
         </div>
+        <div class="plenum-stage" id="plenumStage">
         <div class="reference-toolbar">
           <div class="reference-toolbar-primary">
             <div class="segmented reference-options" aria-label="Plenum slice option">
@@ -372,6 +381,7 @@
               <button data-ref-state="voice">Voice / Radio</button>
             </div>
             <span class="reference-note" id="referenceNote">Facilitator workspace · review, RFI, submit</span>
+            <button class="button secondary reference-expand" id="plenumExpand" type="button" aria-pressed="false">Expand</button>
           </div>
           <div class="reference-rolebar" id="referenceRolebar">
             <span>ROLE SURFACE</span>
@@ -606,25 +616,93 @@
           </section>
 
           <div class="p-scrim" id="pScrim"></div>
-          <div class="p-dialog" id="pDialog"><span class="eyebrow">STATE TRANSITION</span><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review. Proposal history remains unchanged.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary" data-close-overlay>Cancel</button><button class="button decision" data-close-overlay>Forward</button></div></div>
-          <div class="p-command" id="pCommand"><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>S</kbd> Open Scribe workspace</div><div class="command-row"><kbd>M</kbd> Open SME assessment</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div><div class="command-row"><kbd>X</kbd> Open model runs</div><div class="command-row"><kbd>V</kbd> Open active poll</div><div class="command-row"><kbd>C</kbd> Open voice channels</div><div class="command-row"><kbd>R</kbd> Show unresolved RFIs</div><div class="command-row"><kbd>L</kbd> Open activity log</div></div>
+          <div class="p-dialog" id="pDialog" role="dialog" aria-label="Forward proposal to White Cell" inert><span class="eyebrow">STATE TRANSITION</span><h3>Forward proposal to White Cell</h3><p>P-142 will move from Facilitator Review to White Cell Review. Proposal history remains unchanged.</p><div class="handoff"><span>Facilitator</span><b>→</b><span>White Cell</span></div><div class="dialog-actions"><button class="button secondary" data-close-overlay>Cancel</button><button class="button decision" data-close-overlay>Forward</button></div></div>
+          <div class="p-command" id="pCommand" role="dialog" aria-label="Command palette" tabindex="-1" inert><div class="command-input">⌘K <span>Type a command or search…</span></div><div class="command-row selected"><kbd>G</kbd> Go to current move</div><div class="command-row"><kbd>S</kbd> Open Scribe workspace</div><div class="command-row"><kbd>M</kbd> Open SME assessment</div><div class="command-row"><kbd>P</kbd> Find proposal</div><div class="command-row"><kbd>A</kbd> Find actor/team</div><div class="command-row"><kbd>X</kbd> Open model runs</div><div class="command-row"><kbd>V</kbd> Open active poll</div><div class="command-row"><kbd>C</kbd> Open voice channels</div><div class="command-row"><kbd>R</kbd> Show unresolved RFIs</div><div class="command-row"><kbd>L</kbd> Open activity log</div></div>
+        </div>
         </div>
       </section>
 
+
+      <!-- TELUDENS v1.1: operational design system expansion -->
+      <section id="interaction-states" class="catalog-section searchable" data-search="interaction states idle hover focus active selected editing saving saved pending stale conflicting rejected locked disabled offline state machine">
+        <div class="section-heading"><div><p class="section-kicker">12 · INTERACTION STATES</p><h2>State is a contract, not a color.</h2></div><p>Every component separates interaction, data freshness, asynchronous operation, access and connectivity. The specimen lets you inspect all sixteen canonical states without conflating them.</p></div>
+        <div class="system-demo-grid">
+          <div class="system-surface"><div class="demo-header"><div><span class="eyebrow">STATE INSPECTOR</span><h3 id="stateDemoTitle">Idle</h3></div><span class="cap-state" id="stateDemoSignal">READY</span></div><div id="stateOptions" class="state-options" role="group" aria-label="Select interaction state"></div></div>
+          <div class="system-surface"><span class="eyebrow">SELECTED STATE / BEHAVIOR</span><div class="state-example" id="stateExample"><label for="stateDemoInput">Proposal name</label><input id="stateDemoInput" type="text" value="Port access guarantees"/><button class="button primary" id="stateDemoAction">Save changes</button></div><dl class="state-readout"><div><dt>Meaning</dt><dd id="stateMeaning">Resting, usable state.</dd></div><div><dt>Input</dt><dd id="stateInput">Enabled</dd></div><div><dt>Recovery</dt><dd id="stateRecovery">No recovery necessary.</dd></div></dl></div>
+        </div>
+        <div class="rule-line"><b>State axes</b><span>Interaction: idle / hover / focus / active / selected / editing · Operation: saving / saved / pending / rejected · Data: stale / conflicting · Authority: locked / disabled · Connectivity: offline. Multiple axes may be true simultaneously; do not flatten every combination into one CSS class.</span></div>
+      </section>
+      <section id="spatial-layout" class="catalog-section searchable" data-search="spatial layout adaptive split views responsive docking resizable panes collapse inspector workspace persistence overflow">
+        <div class="section-heading"><div><p class="section-kicker">13 · SPATIAL LAYOUT</p><h2>A workspace that adapts without losing context.</h2></div><p>Navigation, canvas and inspector remain conceptually stable while their dimensions and presentation adapt. Resize the inspector, collapse panes or restore a saved local layout.</p></div>
+        <div class="spatial-controls"><button class="button secondary" id="toggleSpatialNav" aria-pressed="true">Toggle navigation</button><button class="button secondary" id="toggleSpatialInspector" aria-pressed="true">Toggle inspector</button><button class="button secondary" id="toggleSpatialDock" aria-pressed="false">Dock inspector below</button><button class="button quiet" id="resetSpatial">Reset layout</button></div>
+        <div class="spatial-shell" id="spatialShell" style="--inspector-width:260px"><nav class="spatial-nav" aria-label="Demo workspace navigation"><b>WORKSPACE</b><span>Overview</span><span class="current">Proposals</span><span>Evidence</span><span>Timeline</span></nav><div class="spatial-canvas"><div class="demo-header"><div><span class="eyebrow">MOVE 02</span><h3>Decision workspace</h3></div><span class="cap-state">SYNCHRONIZED</span></div><div class="spatial-rows"><div>Port access guarantees <small>P-142</small></div><div>Tariff relief <small>P-143</small></div><div>Fuel allocation <small>P-144</small></div></div><p class="demo-detail">The center pane shrinks first. Long records truncate in rows and remain readable in the inspector.</p></div><div class="spatial-resizer" id="spatialResizer" role="separator" aria-label="Resize inspector" aria-orientation="vertical" tabindex="0" aria-valuemin="200" aria-valuemax="460" aria-valuenow="260"></div><aside class="spatial-inspector"><span class="eyebrow">INSPECTOR</span><h3>P-142</h3><p>Port access guarantees and emergency logistics corridor</p><dl class="state-readout"><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Move</dt><dd>02</dd></div><div><dt>Status</dt><dd>In review</dd></div></dl></aside></div>
+        <div class="rule-line"><b>Layout constraints</b><span>Pane widths are bounded. The workspace has min-width:0. Resizing supports pointer and arrow keys. At narrow widths, panes become optional drawers rather than silently disappearing. Persist preferences per device without implying server synchronization.</span></div>
+      </section>
+      <section id="analytics" class="catalog-section searchable" data-search="data analytics table filter sort chart node relationship graph evidence uncertainty confidence timeline source provenance geospatial">
+        <div class="section-heading"><div><p class="section-kicker">14 · DATA & ANALYTICS</p><h2>Evidence before visual spectacle.</h2></div><p>Structured records, relational views and measured uncertainty use one analytical language. Switch between an accessible table, a relationship graph and an evidence timeline.</p></div>
+        <div class="analytics-toolbar"><div class="segmented" role="group" aria-label="Analytics view"><button class="selected" data-analytics-view="table" aria-pressed="true">Table</button><button data-analytics-view="graph" aria-pressed="false">Graph</button><button data-analytics-view="timeline" aria-pressed="false">Timeline</button></div><label class="analytics-search">Search records <input id="analyticsFilter" type="search" placeholder="Search entities or relations"/></label></div>
+        <div class="system-surface analytics-panel" id="analyticsPanel"><div id="analyticsTableView"><table class="analytics-table"><thead><tr><th><button data-sort="entity">Entity ↕</button></th><th><button data-sort="kind">Kind ↕</button></th><th>Relationship</th><th><button data-sort="confidence">Confidence ↕</button></th></tr></thead><tbody id="analyticsRows"></tbody></table><p class="demo-detail" id="analyticsCount" aria-live="polite"></p></div><div id="analyticsGraphView" hidden><svg class="analytics-graph" viewBox="0 0 760 260" role="img" aria-label="Illustrative relationship graph: an agency connects to two counterparties"><path d="M168 130H370M390 130L570 64M390 130L570 195" stroke="currentColor" stroke-opacity=".35" stroke-width="2" fill="none"/><g><rect x="18" y="100" width="150" height="60" rx="6" class="graph-node active"/><text x="34" y="128">Provincial agency</text><text x="34" y="145" class="graph-sub">public institution</text></g><g><rect x="370" y="100" width="150" height="60" rx="6" class="graph-node"/><text x="385" y="128">Award A</text><text x="385" y="145" class="graph-sub">contract</text></g><g><rect x="570" y="34" width="170" height="60" rx="6" class="graph-node"/><text x="585" y="62">Supplier One</text><text x="585" y="78" class="graph-sub">reported counterparty</text></g><g><rect x="570" y="165" width="170" height="60" rx="6" class="graph-node"/><text x="585" y="193">Supplier Two</text><text x="585" y="209" class="graph-sub">unverified link</text></g></svg><p class="demo-detail">Illustrative relationships, not actual entities or findings. Solid evidence and hypothetical links must use different link styles in production.</p></div><div id="analyticsTimelineView" hidden><ol class="timeline-list"><li><time>09:12</time><div><b>Record ingested</b><span>Source preserved · hash recorded</span></div></li><li><time>09:18</time><div><b>Entity match proposed</b><span>Candidate match · analyst review required</span></div></li><li><time>09:23</time><div><b>Link reviewed</b><span>Source-linked finding · confidence recorded</span></div></li></ol></div></div>
+        <div class="analytics-legend"><span><i class="evidence-mark verified"></i>Source-supported</span><span><i class="evidence-mark inferred"></i>Inferred</span><span><i class="evidence-mark unknown"></i>Unverified</span><span>Confidence is not authority, certainty or truth.</span></div>
+        <div class="rule-line"><b>Analytical contract</b><span>Include provenance, measurement unit, temporal grain, filtering semantics, zero versus missing, uncertainty and the difference between observed, inferred and simulated outcomes. Geospatial views require legends, coordinate system, precision, attribution and a non-map equivalent.</span></div>
+      </section>
+      <section id="feedback" class="catalog-section searchable" data-search="feedback errors validation undo retry conflict recovery permission denied notifications toast banner inline offline">
+        <div class="section-heading"><div><p class="section-kicker">15 · FEEDBACK & RECOVERY</p><h2>Every consequential action has a recovery path.</h2></div><p>Notifications must convey what happened, whether anything changed, and what can happen next. Test inline validation, recoverable failures, undo and permission denial.</p></div>
+        <div class="feedback-demo system-surface"><div class="feedback-actions"><button class="button secondary" data-feedback="validation">Validation</button><button class="button secondary" data-feedback="network">Network failure</button><button class="button secondary" data-feedback="conflict">Edit conflict</button><button class="button secondary" data-feedback="permission">Permission denied</button><button class="button primary" data-feedback="success">Save with undo</button></div><div class="feedback-result" id="feedbackResult" role="status" aria-live="polite"><strong>Ready to inspect</strong><p>Choose an event to see the appropriate level of feedback and recovery.</p></div><div class="feedback-footer"><button class="button secondary" id="feedbackRetry" hidden>Retry</button><button class="button secondary" id="feedbackUndo" hidden>Undo</button><span id="feedbackAudit">No authoritative change</span></div></div>
+        <div class="rule-line"><b>Feedback hierarchy</b><span>Inline for field errors · local status for async actions · toast for reversible acknowledgment · persistent banner for blocked work · confirmation dialog for irreversible consequences. Never mark an action successful before the server confirms it.</span></div>
+      </section>
+      <section id="iconography" class="catalog-section searchable" data-search="iconography symbols role signal action icon size stroke optical alignment 16 20 24">
+        <div class="section-heading"><div><p class="section-kicker">16 · ICONOGRAPHY & SYMBOLS</p><h2>Symbols must carry stable meaning.</h2></div><p>One restrained outline vocabulary, with controlled optical weight. Distinguish action, object, state and role without relying on color alone.</p></div>
+        <div class="symbol-controls"><div class="segmented" role="group" aria-label="Icon specimen size"><button class="selected" data-icon-size="16" aria-pressed="true">16</button><button data-icon-size="20" aria-pressed="false">20</button><button data-icon-size="24" aria-pressed="false">24</button></div><span class="demo-detail">Consistent 24×24 viewBox · round joins/caps · 1.75 stroke · no decorative fills</span></div>
+        <div class="symbol-grid" id="symbolGrid"></div><div class="rule-line"><b>Semantic rules</b><span>Action icons use verbs; entity icons identify nouns; role authority is conveyed by a labeled role indicator; state uses shape + text, with color as reinforcement. Icons do not replace labels for consequential operations.</span></div>
+      </section>
+      <section id="accessibility" class="catalog-section searchable" data-search="accessibility keyboard screen reader focus reduced motion contrast zoom pointer targets touch input">
+        <div class="section-heading"><div><p class="section-kicker">17 · ACCESSIBILITY & INPUT</p><h2>Expert speed, universal access.</h2></div><p>Keyboard interaction, focus, accessible naming, contrast, reduced motion and zoom resilience are foundational behavior—not a final compliance pass.</p></div>
+        <div class="system-demo-grid"><div class="system-surface"><span class="eyebrow">KEYBOARD PATTERN</span><h3>Roving selection</h3><p class="demo-detail">Tab into the group; use arrow keys to move; Home and End jump to boundaries.</p><div class="a11y-choice" id="a11yChoice" role="radiogroup" aria-label="Review priority"><button role="radio" aria-checked="true" tabindex="0">Immediate</button><button role="radio" aria-checked="false" tabindex="-1">Next move</button><button role="radio" aria-checked="false" tabindex="-1">Archive</button></div><p class="demo-detail" id="a11yStatus" role="status">Immediate selected</p></div><div class="system-surface"><span class="eyebrow">ACCESS SETTINGS</span><h3>Local preview</h3><label class="a11y-check"><input type="checkbox" id="a11yHighContrast"/> High contrast preview</label><label class="a11y-check"><input type="checkbox" id="a11yReduceMotion"/> Reduce motion preview</label><p class="demo-detail">System preferences remain authoritative by default. These switches demonstrate user overrides within this catalog only.</p><button class="button secondary" id="a11yReset">Restore defaults</button></div></div>
+        <div class="rule-line"><b>Acceptance gates</b><span>WCAG 2.2 AA target, visible focus, operable dialogs, text alternatives, screen reader naming, 200%/400% zoom checks, 44×44 px touch targets where feasible, and meaningful reduced-motion alternatives.</span></div>
+      </section>
+      <section id="governance" class="catalog-section searchable" data-search="documentation governance component contract tokens versioning changelog deprecation release acceptance tests storybook">
+        <div class="section-heading"><div><p class="section-kicker">18 · DOCUMENTATION & GOVERNANCE</p><h2>Rules must survive implementation.</h2></div><p>The library must describe not only appearance, but also contracts, ownership, maturity, compatibility and evidence of quality across all adopting products.</p></div>
+        <div class="system-demo-grid"><div class="system-surface"><span class="eyebrow">COMPONENT CONTRACT / EXAMPLE</span><h3>Inspector Panel</h3><table class="contract-table"><tbody><tr><th scope="row">Anatomy</th><td>Heading, content, footer, close affordance, resize boundary</td></tr><tr><th scope="row">Variants</th><td>Persistent, collapsible, overlay</td></tr><tr><th scope="row">States</th><td>Open, closed, loading, error, stale, read-only</td></tr><tr><th scope="row">Input</th><td>Pointer resize; keyboard resize; Escape only in overlay mode</td></tr><tr><th scope="row">A11y</th><td>Landmark and label; focus retained in persistent mode</td></tr><tr><th scope="row">Responsive</th><td>Pane → drawer; never hide record access</td></tr><tr><th scope="row">Validation</th><td>Visual, keyboard, responsive, reduced motion, unit tests</td></tr></tbody></table></div><div class="system-surface"><span class="eyebrow">LIFECYCLE</span><h3>Release policy</h3><ol class="governance-steps"><li><b>Proposed</b><span>Spec, use cases, alternatives</span></li><li><b>Experimental</b><span>API tested in a reference workflow</span></li><li><b>Stable</b><span>Accessibility and regression gates passed</span></li><li><b>Deprecated</b><span>Replacement, migration notes and removal release</span></li></ol><p class="demo-detail">Semantic versioning, changelogs, ADRs and release review should accompany any production component package.</p></div></div>
+        <div class="rule-line"><b>Canonical artifacts</b><span>tokens.json · COMPONENT_CONTRACT.md · INTERACTION_STATES.md · SPATIAL_LAYOUT.md · ANALYTICS_LANGUAGE.md · FEEDBACK_RECOVERY.md · ICONOGRAPHY.md · ACCESSIBILITY.md · CONTRIBUTING.md · CHANGELOG.md</span></div>
+      </section>
+
+
+<section id="institutional" class="catalog-section searchable" data-search="institutional grammar containment composition optical hierarchy typography instrument panel documents assessments report printable material depth subtraction audit workspace presets">
+<div class="section-heading"><div><p class="section-kicker">19 · INSTITUTIONAL GRAMMAR</p><h2>Composed like an instrument. Read like a record.</h2></div><p>Institutional authority comes from stable geometry, aligned typography, controlled luminance and traceable evidence—never decorative accents or gratuitous depth.</p></div>
+<div class="institutional-controls" role="group" aria-label="Institutional surface specimens"><button class="button secondary selected" data-institutional-view="instrument" aria-pressed="true">Instrument workspace</button><button class="button secondary" data-institutional-view="record" aria-pressed="false">Assessment record</button><button class="button secondary" data-institutional-view="materials" aria-pressed="false">Material & type</button><button class="button secondary" data-institutional-view="audit" aria-pressed="false">Subtraction audit</button></div>
+<div class="institutional-stage" id="institutionalStage">
+<section id="instInstrument" class="inst-screen" aria-label="Instrument workspace">
+<div class="inst-top"><div class="inst-lockup"><b>TELUDENS</b><span>OPERATIONS / WORKSPACE 02</span></div><div class="inst-session">ARES PASSAGE <span>·</span> MOVE 02 <span>·</span> SYNCHRONIZED</div></div>
+<div class="inst-shell"><nav class="inst-side" aria-label="Instrument specimen navigation"><span class="inst-overline">SIMULATION</span><button class="selected" data-inst-nav="Proposals">Proposals <span>06</span></button><button data-inst-nav="Evidence">Evidence <span>12</span></button><button data-inst-nav="Timeline">Timeline</button><button data-inst-nav="Analysis">Analysis</button><div class="inst-side-foot">ASI-026 / R03<br>INSTITUTIONAL CLOUD</div></nav>
+<div class="inst-working"><div class="inst-heading"><div><span class="inst-overline">BLUE / INDUSTRY</span><h3 id="instHeading">Proposals</h3></div><span class="inst-measure">06 RECORDS <span>·</span> 03 ACTIVE</span></div><div class="inst-table" role="group" aria-label="Illustrative proposal records"><button class="inst-record selected" data-inst-record="P-142"><span class="inst-id">P-142</span><span><b>Port access guarantees</b><small>Submitted 14:08 · Industry</small></span><em>IN REVIEW</em></button><button class="inst-record" data-inst-record="P-143"><span class="inst-id">P-143</span><span><b>Regional logistics continuity</b><small>Submitted 14:12 · Industry</small></span><em>SUBMITTED</em></button><button class="inst-record" data-inst-record="P-144"><span class="inst-id">P-144</span><span><b>Fuel allocation priority</b><small>Submitted 14:18 · Industry</small></span><em>PENDING</em></button></div><div class="inst-bottom-line"><span>Instrument / selected record persists across view changes</span><span>REVISION 03</span></div></div>
+<aside class="inst-inspector"><span class="inst-overline">RECORD INSPECTOR</span><h3 id="instRecordId">P-142</h3><p id="instRecordTitle">Port access guarantees</p><dl><div><dt>Owner</dt><dd>Facilitator</dd></div><div><dt>Stage</dt><dd>Action</dd></div><div><dt>Confidence</dt><dd>Source-linked</dd></div><div><dt>Last event</dt><dd>14:08</dd></div></dl><div class="inst-inspector-foot"><span>Evidence available</span><span class="inst-authority">NOT YET ADJUDICATED</span></div></aside></div>
+</section>
+<section id="instRecord" class="inst-screen" hidden aria-label="Assessment record"><article class="inst-document"><header><span>TELUDENS LAB / ANALYSIS RECORD</span><span>TL-AR-026 / R03</span></header><div class="inst-doc-rule"></div><p class="inst-overline">RESEARCH / OPERATIONS / PROVISIONAL</p><h3>Strategic Assessment</h3><p class="inst-doc-deck">Regional logistics continuity and bounded operational consequences</p><div class="inst-doc-metadata"><span>Session<br><b>ASI-026</b></span><span>Move<br><b>02 / ACTION</b></span><span>Authority<br><b>WHITE CELL</b></span><span>Version<br><b>03</b></span></div><h4>01 / Assessment summary</h4><p>The proposed action introduces a bounded shift in regional logistics posture, subject to White Cell review and confirmed dependencies. This is demonstration content, not a verified assessment.</p><h4>02 / Evidence basis</h4><div class="inst-evidence"><b>E-014</b><span>Source-linked scenario observation</span><span>PROVISIONAL</span></div><div class="inst-evidence"><b>E-015</b><span>Facilitator proposal record</span><span>RECORDED</span></div><footer><span>INTERNAL TRAINING SPECIMEN · NOT AN AUTHORITATIVE RULING</span><button class="button secondary" id="instPrint" type="button">Print record</button></footer></article></section>
+<section id="instMaterials" class="inst-screen" hidden aria-label="Materials and typography"><div class="inst-material-grid"><div class="inst-material"><span>00 / ENVIRONMENT</span><div class="inst-material-chip environment"></div><b>Foundational canvas</b><small>Quiet, continuous, unembellished.</small></div><div class="inst-material"><span>01 / WORKING SURFACE</span><div class="inst-material-chip working"></div><b>Contained instrument</b><small>Fine boundaries; nearly flat elevation.</small></div><div class="inst-material"><span>02 / TRANSIENT AUTHORITY</span><div class="inst-material-chip authority"></div><b>Interruption surface</b><small>Reserved for temporary controls.</small></div></div><div class="inst-type-spec"><div><span>INSTITUTIONAL</span><b class="inst-brand-sample">TELUDENS LAB</b></div><div><span>INTERFACE</span><b>Proposal requires review</b></div><div><span>INSTRUMENT</span><b class="inst-instrument-sample">P-142 / 14:08 / R03</b></div></div></section>
+<section id="instAudit" class="inst-screen" hidden aria-label="Subtraction audit"><div class="inst-audit-intro"><span class="inst-overline">DISCIPLINE OF SUBTRACTION</span><h3>Remove anything that does not convey function.</h3><p>Use the audit as a review gate for every new operational screen. Interactive checklist state is local to this demonstration.</p></div><div class="inst-audit-list" id="instAuditList"><label><input type="checkbox"> Every divider marks a meaningful structural boundary.</label><label><input type="checkbox"> No label repeats context already available nearby.</label><label><input type="checkbox"> Focus, selection and authority remain visually distinct.</label><label><input type="checkbox"> The screen stays intelligible with color and animation removed.</label><label><input type="checkbox"> No critical information disappears at narrow widths.</label><label><input type="checkbox"> All operational copy uses readable sizes.</label></div><div class="inst-audit-result" id="instAuditResult" role="status">0 / 6 checks complete</div></section>
+</div>
+<div class="rule-line"><b>Institutional contract</b><span>Three material levels maximum · consistent optical alignments · typographic priority over color · canonical record IDs and provenance · consequential actions state their authority · never shrink operations metadata below the legibility floor.</span></div>
+</section>
+
       <section id="guidance" class="catalog-section searchable" data-search="guidance anti patterns qa documentation implementation source files accessibility reduced motion runtime">
         <div class="section-heading">
-          <div><p class="section-kicker">12 · GUIDANCE</p><h2>Rules that protect the system.</h2></div>
+          <div><p class="section-kicker">20 · GUIDANCE</p><h2>Rules that protect the system.</h2></div>
           <p>A design system is a behavior contract, not a screenshot archive. The catalog exposes the reusable rules; runtime products still need accessibility, performance, keyboard, responsive, and reduced-motion validation.</p>
         </div>
         <div class="guidance-grid">
           <article><span class="eyebrow">DO</span><h3>Preserve object continuity.</h3><p>Selection, inspector context, scroll position, and proposal identity should survive state transitions whenever the mental model survives them.</p></article>
-          <article><span class="eyebrow">DO</span><h3>Reserve signal.</h3><p>Strong color and motion should mean something. A0–A2 content does not get promoted with animation.</p></article>
+          <article><span class="eyebrow">DO</span><h3>Reserve signal.</h3><p>Strong color and motion should mean something. Focus and selection should not be mistaken for commitment. A0–A2 content does not get promoted with animation.</p></article>
           <article><span class="eyebrow warning">AVOID</span><h3>Card mosaics.</h3><p>Prefer continuous working surfaces, aligned lists, panels, tables, rails, and contextual inspectors over repeated floating rectangles.</p></article>
           <article><span class="eyebrow warning">AVOID</span><h3>Generic motion.</h3><p>No scale-on-hover, persistent floating, decorative bounce, queued transitions, or motion without causality.</p></article>
         </div>
         <div class="source-files">
           <div><span class="eyebrow">SOURCE PACKAGE</span><h3>Design-system documents</h3></div>
           <div class="source-links">
+            <a href="docs/INSTITUTIONAL_VISUAL_GRAMMAR.md">Institutional Visual Grammar <span>↗</span></a>
+<a href="docs/WORKSPACE_ARCHITECTURE.md">Workspace Architecture <span>↗</span></a>
+<a href="docs/TYPOGRAPHY_AND_SYMBOLS.md">Typography And Symbols <span>↗</span></a>
+<a href="docs/OPERATIONAL_INTERACTION_PHYSICS.md">Operational Interaction Physics <span>↗</span></a>
+<a href="docs/INSTITUTIONAL_DOCUMENT_LANGUAGE.md">Institutional Document Language <span>↗</span></a>
             <a href="docs/TELUDENS_DESIGN_LANGUAGE.md">Design Language <span>↗</span></a>
             <a href="docs/EXPERIENCE_PHYSICS.md">Experience Physics <span>↗</span></a>
             <a href="docs/SPATIAL_GRAMMAR.md">Spatial Grammar <span>↗</span></a>
@@ -640,7 +718,7 @@
       </section>
 
       <footer class="catalog-footer">
-        <span>TELUDENS LAB</span><span>Interface System v1.0</span><span>Structure before decoration · Signal scarcity · Causal motion</span>
+        <span>TELUDENS LAB</span><span>Interface System v1.3</span><span>Structure before decoration · Signal scarcity · Causal motion</span>
       </footer>
     </main>
   </div>

@@ -9,6 +9,7 @@
       "@plenum/policy-engine": ["packages/policy-engine/src/index.ts"],
       "@plenum/release-compiler": ["packages/release-compiler/src/index.ts"],
       "@plenum/simulation-schema": ["packages/simulation-schema/src/index.ts"],
+      "@plenum/workflow-engine": ["packages/workflow-engine/src/index.ts"],
       "@plenum/sync-client": ["packages/sync-client/src/index.ts"],
       "@plenum/server": ["apps/server/src/index.ts"],
       "@plenum/runtime-web": ["apps/runtime-web/src/index.ts"]

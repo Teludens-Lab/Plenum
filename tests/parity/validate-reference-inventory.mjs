@@ -39,6 +39,13 @@ assert.deepEqual(
 
 const fixtureTargets = new Set(fixtures.targets.map(({ id }) => id));
 assert.equal(fixtureTargets.size, fixtures.targets.length, 'Parity target IDs must be unique.');
+const executionStatuses = new Set(['PASS', 'BLOCKED', 'OUT_OF_SCOPE']);
+for (const target of fixtures.targets) {
+    assert(executionStatuses.has(target.executionStatus), `${target.id} needs an explicit execution status.`);
+    if (target.executionStatus === 'PASS') assert(target.evidenceRefs?.length > 0, `${target.id} needs evidence.`);
+    if (target.executionStatus === 'BLOCKED') assert(target.approvalGate, `${target.id} needs an approval gate.`);
+    if (target.executionStatus === 'OUT_OF_SCOPE') assert(target.scopeOwner, `${target.id} needs a future owner.`);
+}
 
 function assertCompleteClassification(sourceName, sourceCapabilities, classifications) {
     assert.deepEqual(
@@ -86,6 +93,8 @@ for (const item of inventory.additionalObservedItems) {
     if (item.reviewState === 'blocked') {
         assert.equal(item.reviewOwner, 'Methodology Lead');
         assert.equal(item.dependency, 'OPEN-026');
+    } else if (item.reviewState !== undefined) {
+        assert.equal(item.reviewState, 'classified');
     }
 }
 
@@ -101,8 +110,14 @@ for (const item of inventory.hardCodingRegister) {
     if (item.reviewState === 'blocked') {
         assert.equal(item.reviewOwner, 'Methodology Lead');
         assert.equal(item.dependency, 'OPEN-026');
+    } else if (item.reviewState !== undefined) {
+        assert.equal(item.reviewState, 'classified');
     }
 }
+
+assert.equal(inventory.classifications.roleCapabilityMatrix['white_cell.controls'].category, 'PLATFORM-SERVICE');
+assert.equal(inventory.classifications.operationalFeatureManifest['white_cell.game_controls'].category, 'PLATFORM-SERVICE');
+assert.equal(inventory.classifications.roleCapabilityMatrix['scribe.orientation'].category, 'FO-CONFIGURATION');
 
 assert(SHIPPED_ROLE_PROFILES.length > 0, 'No shipped role profiles were observed.');
 assert(OPERATIONAL_SCOPE_EXCLUSIONS.every(({ id }) => id.startsWith('pli.')));
@@ -117,6 +132,10 @@ const blocked = [
     ...inventory.additionalObservedItems,
     ...inventory.hardCodingRegister
 ].filter(({ reviewState }) => reviewState === 'blocked').length;
+const parityStatus = Object.fromEntries([...executionStatuses].map((status) => [
+    status, fixtures.targets.filter((target) => target.executionStatus === status).length
+]));
+assert.equal(blocked, 0, 'OPEN-026 is resolved; no methodology classification may remain blocked.');
 
 console.log(JSON.stringify({
     result: 'PASS',
@@ -127,5 +146,7 @@ console.log(JSON.stringify({
     operationalCapabilities: Object.keys(SHIPPED_NON_PLI_OPERATIONAL_FEATURES).length,
     hardCodingItems: inventory.hardCodingRegister.length,
     parityTargets: fixtures.targets.length,
+    parityStatus,
+    ac09: parityStatus.BLOCKED === 0 && parityStatus.OUT_OF_SCOPE === 0 ? 'PASS' : 'BLOCKED',
     methodologyReviewBlocks: blocked
 }, null, 2));

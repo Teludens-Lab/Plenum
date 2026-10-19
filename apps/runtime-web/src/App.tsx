@@ -9,8 +9,18 @@ import {
   type RuntimeArtifactV1,
   type RuntimeCreateTaskV1,
   type RuntimeFormV1,
+  type RuntimeInjectV1,
+  type RuntimeMessageV1,
+  type RuntimeModuleV1,
   type RuntimeProjectionV1
 } from "@plenum/event-contracts";
+import {
+  runtimeFieldConditionMatches,
+  runtimeFormValue,
+  setRuntimeFormValue,
+  validateRuntimeFormPayload,
+  type RuntimeFormDefinitionV1
+} from "@plenum/simulation-schema";
 
 type ConnectionState = "loading" | "online" | "offline" | "error";
 
@@ -81,43 +91,184 @@ function StatePage({ connection, title, message, retry }: {
   </Shell>;
 }
 
-function FieldEditor({ form, initial, disabled, onSubmit, submitLabel }: {
+type FieldEditorProps = {
   form: RuntimeFormV1;
   initial?: JsonObject;
   disabled: boolean;
   onSubmit(payload: JsonObject): void;
   submitLabel: string;
-}) {
-  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(
-    form.fields.map((field) => [field.key, typeof initial?.[field.key] === "string" ? initial[field.key] as string : ""])
+};
+
+function FieldEditor(props: FieldEditorProps) {
+  return props.form.sections.some((section) => section.repeatable === true)
+    ? <RepeatableFieldEditor {...props} />
+    : <FlatFieldEditor {...props} />;
+}
+
+function FlatFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
+  const [values, setValues] = useState<Record<string, string | string[] | number>>(() => Object.fromEntries(
+    form.fields.map((field) => {
+      const value = runtimeFormValue(initial ?? {}, field.key);
+      const supported = typeof value === "string" || typeof value === "number" ||
+        (Array.isArray(value) && value.every((item) => typeof item === "string"));
+      return [field.key, supported ? value : field.type === "multi_select" || field.type === "artifact_reference" ? [] : ""];
+    })
   ));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const payload = (): JsonObject => {
+    const result: JsonObject = {};
+    for (const field of form.fields) {
+      const value = values[field.key];
+      setRuntimeFormValue(result, field.key, field.type === "number" && value !== "" ? Number(value) : value);
+    }
+    return result;
+  };
+  const canonicalForm = (): RuntimeFormDefinitionV1 => ({
+    ...form,
+    sections: form.sections.map((section) => ({ ...section, fields: section.fields.map((field) => ({
+      ...field, id: `${form.id}-${field.key}`, type: field.type === "text" ? "short_text" : field.type
+    })) }))
+  });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const nextErrors = Object.fromEntries(form.fields.flatMap((field) =>
-      field.required && (values[field.key] ?? "").trim().length === 0 ? [[field.key, `${field.label} is required.`]] : []));
+    const content = payload();
+    const nextErrors = Object.fromEntries(validateRuntimeFormPayload(canonicalForm(), content).map((issue) => [issue.field, issue.message]));
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length === 0) onSubmit(values);
+    if (Object.keys(nextErrors).length === 0) onSubmit(content);
   };
   return <form onSubmit={submit} noValidate>
-    {form.fields.map((field) => {
+    {form.sections.map((section) => <fieldset key={section.id}>
+      {section.title === undefined ? null : <legend>{section.title}</legend>}
+      {section.fields.filter((field) => runtimeFieldConditionMatches(field.visibleWhen, payload())).map((field) => {
       const id = `${form.id}-${field.key}`;
       const error = errors[field.key];
+      const required = field.required || (field.requiredWhen !== undefined && runtimeFieldConditionMatches(field.requiredWhen, payload()));
       const describedBy = [field.helpText === undefined ? null : `${id}-help`, error === undefined ? null : `${id}-error`]
         .filter(Boolean).join(" ") || undefined;
       return <div className="field" key={field.key}>
-        <label htmlFor={id}>{field.label}{field.required ? <span aria-hidden="true"> *</span> : null}</label>
+        <label htmlFor={id}>{field.label}{required ? <span aria-hidden="true"> *</span> : null}</label>
         {field.type === "long_text"
-          ? <textarea id={id} name={field.key} rows={4} value={values[field.key] ?? ""} disabled={disabled}
-              required={field.required} aria-invalid={error !== undefined} aria-describedby={describedBy}
+          ? <textarea id={id} name={field.key} rows={4} value={typeof values[field.key] === "string" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
+              required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
               onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} />
-          : <input id={id} name={field.key} value={values[field.key] ?? ""} disabled={disabled}
-              required={field.required} aria-invalid={error !== undefined} aria-describedby={describedBy}
+          : field.type === "single_select"
+            ? <select id={id} name={field.key} value={typeof values[field.key] === "string" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
+                required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
+                onChange={(event) => setValues({ ...values, [field.key]: event.target.value })}>
+                <option value="">Select an option</option>
+                {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            : field.type === "multi_select" || field.type === "artifact_reference"
+              ? <select id={id} name={field.key} multiple value={Array.isArray(values[field.key]) ? values[field.key] : []}
+                  disabled={disabled || field.readOnly === true} required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
+                  onChange={(event) => setValues({ ...values, [field.key]: [...event.target.selectedOptions].map((option) => option.value) })}>
+                  {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              : <input id={id} name={field.key} type={field.type === "number" ? "number" : "text"}
+              value={typeof values[field.key] === "string" || typeof values[field.key] === "number" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
+              required={required} min={field.validation?.min} max={field.validation?.max} minLength={field.validation?.minLength} maxLength={field.validation?.maxLength}
+              aria-invalid={error !== undefined} aria-describedby={describedBy}
               onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} />}
         {field.helpText === undefined ? null : <p id={`${id}-help`} className="hint">{field.helpText}</p>}
         {error === undefined ? null : <p id={`${id}-error`} className="field-error" role="alert">Error: {error}</p>}
       </div>;
-    })}
+    })}</fieldset>)}
+    <button className="btn-primary" type="submit" disabled={disabled}>{submitLabel}</button>
+  </form>;
+}
+
+function RepeatableFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
+  const blankItem = (section: RuntimeFormV1["sections"][number]): JsonObject => Object.fromEntries(
+    section.fields.map((field) => [field.key, field.type === "multi_select" || field.type === "artifact_reference" ? [] : ""])
+  ) as JsonObject;
+  const [values, setValues] = useState<JsonObject>(() => {
+    const result = structuredClone(initial ?? {}) as JsonObject;
+    for (const section of form.sections) {
+      if (section.repeatable === true) {
+        if (!Array.isArray(result[section.id])) result[section.id] = Array.from({ length: section.minItems ?? 0 }, () => blankItem(section));
+      } else {
+        for (const field of section.fields) {
+          if (runtimeFormValue(result, field.key) === undefined) setRuntimeFormValue(result, field.key, field.type === "multi_select" || field.type === "artifact_reference" ? [] : "");
+        }
+      }
+    }
+    return result;
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const setValue = (path: string, value: unknown) => {
+    const next = structuredClone(values) as JsonObject;
+    setRuntimeFormValue(next, path, value);
+    setValues(next);
+  };
+  const content = (): JsonObject => {
+    const result = structuredClone(values) as JsonObject;
+    for (const section of form.sections) {
+      const entries = section.repeatable === true && Array.isArray(result[section.id])
+        ? result[section.id] as JsonObject[] : [result];
+      entries.forEach((entry) => section.fields.filter((field) => field.type === "number").forEach((field) => {
+        const value = runtimeFormValue(entry, field.key);
+        if (value !== "") setRuntimeFormValue(entry, field.key, Number(value));
+      }));
+    }
+    return result;
+  };
+  const canonicalForm = (): RuntimeFormDefinitionV1 => ({
+    ...form,
+    sections: form.sections.map((section) => ({ ...section, fields: section.fields.map((field) => ({
+      ...field, id: `${form.id}-${section.id}-${field.key}`, type: field.type === "text" ? "short_text" : field.type
+    })) }))
+  });
+  const renderField = (field: RuntimeFormV1["fields"][number], context: JsonObject, path: string, id: string) => {
+    if (!runtimeFieldConditionMatches(field.visibleWhen, context)) return null;
+    const value = runtimeFormValue(values, path);
+    const error = errors[path];
+    const required = field.required || (field.requiredWhen !== undefined && runtimeFieldConditionMatches(field.requiredWhen, context));
+    const describedBy = [field.helpText === undefined ? null : `${id}-help`, error === undefined ? null : `${id}-error`].filter(Boolean).join(" ") || undefined;
+    const common = { disabled: disabled || field.readOnly === true, required, "aria-invalid": error !== undefined, "aria-describedby": describedBy };
+    return <div className="field" key={path}>
+      <label htmlFor={id}>{field.label}{required ? <span aria-hidden="true"> *</span> : null}</label>
+      {field.type === "long_text" ? <textarea {...common} id={id} name={path} rows={4} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(path, event.target.value)} />
+        : field.type === "single_select" ? <select {...common} id={id} name={path} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(path, event.target.value)}>
+            <option value="">Select an option</option>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        : field.type === "multi_select" || field.type === "artifact_reference" ? <select {...common} id={id} name={path} multiple value={Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []}
+            onChange={(event) => setValue(path, [...event.target.selectedOptions].map((option) => option.value))}>
+            {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        : <input {...common} id={id} name={path} type={field.type === "number" ? "number" : "text"} value={typeof value === "string" || typeof value === "number" ? value : ""}
+            min={field.validation?.min} max={field.validation?.max} minLength={field.validation?.minLength} maxLength={field.validation?.maxLength}
+            onChange={(event) => setValue(path, event.target.value)} />}
+      {field.helpText === undefined ? null : <p id={`${id}-help`} className="hint">{field.helpText}</p>}
+      {error === undefined ? null : <p id={`${id}-error`} className="field-error" role="alert">Error: {error}</p>}
+    </div>;
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const payload = content();
+    const nextErrors = Object.fromEntries(validateRuntimeFormPayload(canonicalForm(), payload).map((issue) => [issue.field, issue.message]));
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length === 0) onSubmit(payload);
+  };
+  return <form onSubmit={submit} noValidate>
+    {form.sections.map((section) => section.repeatable === true ? <fieldset key={section.id}>
+      {section.title === undefined ? null : <legend>{section.title}</legend>}
+      {section.description === undefined ? null : <p className="hint">{section.description}</p>}
+      {(Array.isArray(values[section.id]) ? values[section.id] as JsonObject[] : []).map((entry, index) => <fieldset className="repeatable-item" key={index}>
+        <legend>{section.itemLabel ?? "Item"} {index + 1}</legend>
+        {section.fields.map((field) => renderField(field, entry, `${section.id}.${index}.${field.key}`, `${form.id}-${section.id}-${index}-${field.key.replaceAll(".", "-")}`))}
+        <button className="btn-secondary" type="button" disabled={disabled || (values[section.id] as JsonObject[]).length <= (section.minItems ?? 0)} onClick={() => {
+          const entries = [...(values[section.id] as JsonObject[])]; entries.splice(index, 1); setValues({ ...values, [section.id]: entries });
+        }}>Remove {section.itemLabel ?? "item"}</button>
+      </fieldset>)}
+      <button className="btn-secondary" type="button" disabled={disabled || (section.maxItems !== undefined && (values[section.id] as JsonObject[]).length >= section.maxItems)} onClick={() => {
+        setValues({ ...values, [section.id]: [...(values[section.id] as JsonObject[]), blankItem(section)] });
+      }}>Add {section.itemLabel ?? "item"}</button>
+      {errors[section.id] === undefined ? null : <p className="field-error" role="alert">Error: {errors[section.id]}</p>}
+    </fieldset> : <fieldset key={section.id}>
+      {section.title === undefined ? null : <legend>{section.title}</legend>}
+      {section.description === undefined ? null : <p className="hint">{section.description}</p>}
+      {section.fields.map((field) => renderField(field, values, field.key, `${form.id}-${field.key.replaceAll(".", "-")}`))}
+    </fieldset>)}
     <button className="btn-primary" type="submit" disabled={disabled}>{submitLabel}</button>
   </form>;
 }
@@ -134,12 +285,42 @@ function CreateTask({ task, disabled, send }: {
   </section>;
 }
 
+function DisplayFields({ fields, payload }: { fields: RuntimeFormV1["fields"]; payload: JsonObject }) {
+  return <dl className="artifact-content">{fields.map((field) => {
+    const value = runtimeFormValue(payload, field.key);
+    const display = Array.isArray(value) ? value.join(", ") : String(value ?? "Not provided");
+    return <div key={field.key}><dt>{field.label}</dt><dd>{display || "Not provided"}</dd></div>;
+  })}</dl>;
+}
+
+function ArtifactContent({ form, payload }: { form: RuntimeFormV1; payload: JsonObject }) {
+  return <div className="artifact-sections">{form.sections.map((section) => {
+    if (section.repeatable !== true) return <DisplayFields key={section.id} fields={section.fields} payload={payload} />;
+    const entries = Array.isArray(payload[section.id]) ? payload[section.id] as JsonObject[] : [];
+    return <section key={section.id} aria-labelledby={`${form.id}-${section.id}-content`}>
+      {section.title === undefined ? null : <h4 id={`${form.id}-${section.id}-content`}>{section.title}</h4>}
+      {entries.length === 0 ? <p>Not provided</p> : entries.map((entry, index) => <section className="repeatable-item" key={index}>
+        <h5>{section.itemLabel ?? "Item"} {index + 1}</h5>
+        <DisplayFields fields={section.fields} payload={entry} />
+      </section>)}
+    </section>;
+  })}</div>;
+}
+
 function ArtifactCard({ artifact, disabled, send }: {
   artifact: RuntimeArtifactV1; disabled: boolean;
   send(action: RuntimeActionV1, artifact: RuntimeArtifactV1, content?: JsonObject): void;
 }) {
   const edit = artifact.actions.find((action) => action.requiresForm);
   const actions = artifact.actions.filter((action) => !action.requiresForm);
+  const { rules: _rules, ...formWithoutRules } = artifact.form;
+  const editForm = edit?.editableFieldKeys === undefined ? artifact.form : {
+    ...formWithoutRules,
+    fields: artifact.form.fields.filter((field) => edit.editableFieldKeys?.includes(field.key)),
+    sections: artifact.form.sections.map((section) => ({
+      ...section, fields: section.fields.filter((field) => edit.editableFieldKeys?.includes(field.key))
+    })).filter((section) => section.fields.length > 0)
+  };
   return <article className="card artifact" aria-labelledby={`artifact-${artifact.id}`}>
     <div className="card-heading">
       <div>
@@ -149,9 +330,8 @@ function ArtifactCard({ artifact, disabled, send }: {
       <span className="badge badge-state">{artifact.stateLabel}</span>
     </div>
     <dl className="metadata"><div><dt>Version</dt><dd>{artifact.version}</dd></div><div><dt>Form</dt><dd>{artifact.form.formVersion}</dd></div></dl>
-    {edit === undefined ? <dl className="artifact-content">{artifact.form.fields.map((field) =>
-      <div key={field.key}><dt>{field.label}</dt><dd>{String(artifact.payload[field.key] ?? "Not provided")}</dd></div>)}</dl>
-      : <FieldEditor form={artifact.form} initial={artifact.payload} disabled={disabled} submitLabel={edit.label}
+    {edit === undefined ? <ArtifactContent form={artifact.form} payload={artifact.payload} />
+      : <FieldEditor form={editForm} initial={artifact.payload} disabled={disabled} submitLabel={edit.label}
           onSubmit={(content) => send(edit, artifact, content)} />}
     {actions.length === 0 ? null : <div className="actions" aria-label={`${artifact.title} workflow actions`}>
       {actions.map((action, index) => <button key={action.operationType}
@@ -159,6 +339,153 @@ function ArtifactCard({ artifact, disabled, send }: {
         onClick={() => send(action, artifact)}>{action.label}</button>)}
     </div>}
   </article>;
+}
+
+type SendInformation = (operationType: string, aggregateId: string, expectedVersion: number, payload: JsonObject) => void;
+
+function messageSummary(message: RuntimeMessageV1): string {
+  for (const key of ["text", "body", "title"]) {
+    const value = message.content[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return message.operationType.replaceAll("_", " ").replace("message.", "");
+}
+
+function MessageInbox({ module, projection, disabled, send }: {
+  module: RuntimeModuleV1; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
+}) {
+  const [text, setText] = useState("");
+  const channelIds = Array.isArray(module.configuration.channelIds)
+    ? module.configuration.channelIds.filter((id): id is string => typeof id === "string") : [];
+  const routeId = typeof module.configuration.sendRouteId === "string" ? module.configuration.sendRouteId : null;
+  const messages = projection.messages.filter((message) => channelIds.includes(message.channelId));
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const value = text.trim();
+    if (routeId === null || value.length === 0) return;
+    send("message.send", crypto.randomUUID(), 0, { routeId, content: { text: value } });
+    setText("");
+  };
+  return <section aria-labelledby={`${module.id}-heading`}>
+    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    {module.mode !== "write" || routeId === null ? null : <form className="card" onSubmit={submit}>
+      <div className="field"><label htmlFor={`${module.id}-text`}>Message</label>
+        <textarea id={`${module.id}-text`} rows={3} required value={text} disabled={disabled}
+          onChange={(event) => setText(event.target.value)} /></div>
+      <button className="btn-primary" type="submit" disabled={disabled || text.trim().length === 0}>Send Message</button>
+    </form>}
+    {messages.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <ol className="event-list">
+      {messages.map((message) => <li key={message.id}><span>{messageSummary(message)}</span>
+        <time dateTime={message.sentAt}>{new Date(message.sentAt).toLocaleString()}</time></li>)}
+    </ol>}
+  </section>;
+}
+
+function InjectCard({ inject, disabled, send }: { inject: RuntimeInjectV1; disabled: boolean; send: SendInformation }) {
+  const [artifactId, setArtifactId] = useState("");
+  const body = typeof inject.content.body === "string" ? inject.content.body : "No details were provided.";
+  return <article className="card" aria-labelledby={`inject-${inject.id}`}>
+    <div className="card-heading"><h3 id={`inject-${inject.id}`}>{inject.title}</h3><span className="badge badge-state">{inject.state}</span></div>
+    <p>{body}</p>
+    {inject.acknowledgedAt === null ? <button className="btn-primary" type="button" disabled={disabled}
+      onClick={() => send("inject.acknowledge", inject.id, inject.version, {})}>Acknowledge</button> : null}
+    {inject.requiredResponseArtifactTypeId === null || inject.acknowledgedAt === null || inject.respondedAt !== null ? null : <form onSubmit={(event) => {
+      event.preventDefault();
+      if (artifactId.trim().length > 0) send("inject.respond", inject.id, inject.version, { artifactId: artifactId.trim() });
+    }}>
+      <div className="field"><label htmlFor={`inject-${inject.id}-artifact`}>Response Artifact ID</label>
+        <input id={`inject-${inject.id}-artifact`} required value={artifactId} disabled={disabled}
+          onChange={(event) => setArtifactId(event.target.value)} /></div>
+      <button className="btn-primary" type="submit" disabled={disabled || artifactId.trim().length === 0}>Submit response</button>
+    </form>}
+  </article>;
+}
+
+function InjectInbox({ module, projection, disabled, send }: {
+  module: RuntimeModuleV1; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
+}) {
+  return <section aria-labelledby={`${module.id}-heading`}>
+    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    {projection.injects.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <div className="card-grid">
+      {projection.injects.map((inject) => <InjectCard key={inject.id} inject={inject} disabled={disabled} send={send} />)}
+    </div>}
+  </section>;
+}
+
+function ProposalThreadCard({ messages, projection, disabled, send }: {
+  messages: RuntimeMessageV1[]; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
+}) {
+  const [text, setText] = useState("");
+  const latest = messages.at(-1);
+  if (latest?.threadId === null || latest === undefined) return null;
+  const sourceTeam = typeof latest.content.sourceTeam === "string" ? latest.content.sourceTeam : null;
+  const recipientTeam = typeof latest.content.recipientTeam === "string" ? latest.content.recipientTeam : null;
+  const side = projection.activeTeamId === sourceTeam ? "source" : projection.activeTeamId === recipientTeam ? "recipient" : null;
+  const version = latest.threadVersion ?? 0;
+  const submitText = (operationType: string) => {
+    const value = text.trim();
+    if (value.length === 0) return;
+    send(operationType, latest.threadId!, version, { content: { text: value } });
+    setText("");
+  };
+  return <article className="card" aria-labelledby={`thread-${latest.threadId}`}>
+    <div className="card-heading"><h3 id={`thread-${latest.threadId}`}>{sourceTeam ?? "Source"} to {recipientTeam ?? "recipient"}</h3>
+      <span className="badge badge-state">{latest.threadState ?? "open"}</span></div>
+    <ol className="event-list">{messages.map((message) => <li key={message.id}>
+      <span>{messageSummary(message)}{message.approvedAt === null ? " (awaiting Control approval)" : ""}</span>
+      <time dateTime={message.sentAt}>{new Date(message.sentAt).toLocaleString()}</time>
+    </li>)}</ol>
+    {side === null || latest.threadState === "closed" ? null : <>
+      {latest.threadState === "open" ? <div className="field"><label htmlFor={`thread-${latest.threadId}-text`}>Negotiation message</label>
+        <textarea id={`thread-${latest.threadId}-text`} rows={3} value={text} disabled={disabled}
+          onChange={(event) => setText(event.target.value)} /></div> : null}
+      <div className="actions">
+        {side === "recipient" && latest.threadState === "open" ? <>
+          <button className="btn-primary" type="button" disabled={disabled} onClick={() => send("message.proposal_accept", latest.threadId!, version, { content: {} })}>Accept</button>
+          <button className="btn-secondary" type="button" disabled={disabled} onClick={() => send("message.proposal_reject", latest.threadId!, version, { content: {} })}>Not Interested</button>
+          <button className="btn-secondary" type="button" disabled={disabled || text.trim().length === 0} onClick={() => submitText("message.proposal_negotiate")}>Negotiate</button>
+        </> : null}
+        {side === "source" && latest.threadState === "open" ? <button className="btn-primary" type="button" disabled={disabled || text.trim().length === 0}
+          onClick={() => submitText("message.proposal_reply")}>Reply with next round</button> : null}
+        <button className="btn-secondary" type="button" disabled={disabled}
+          onClick={() => send(`message.proposal_close_${side}`, latest.threadId!, version, { content: {} })}>Close thread</button>
+      </div>
+    </>}
+  </article>;
+}
+
+function ProposalThreads({ module, projection, disabled, send }: {
+  module: RuntimeModuleV1; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
+}) {
+  const channelId = typeof module.configuration.channelId === "string" ? module.configuration.channelId : "";
+  const actorMode = module.configuration.actorMode;
+  const messages = projection.messages.filter((message) => message.channelId === channelId && message.threadId !== null);
+  const threads = [...new Set(messages.map(({ threadId }) => threadId!))].map((threadId) =>
+    messages.filter((message) => message.threadId === threadId));
+  const openable = actorMode === "custodian" ? projection.artifacts.flatMap((artifact) => {
+    if (artifact.state !== "recipient_threads") return [];
+    const teams = Array.isArray(artifact.payload.recipientTeams)
+      ? artifact.payload.recipientTeams.filter((team): team is string => typeof team === "string") : [];
+    return teams.filter((team) => !messages.some((message) => message.content.sourceArtifactId === artifact.id && message.content.recipientTeam === team))
+      .map((team) => ({ artifact, team }));
+  }) : [];
+  const pending = actorMode === "custodian" ? messages.filter((message) => message.approvedAt === null) : [];
+  return <section aria-labelledby={`${module.id}-heading`}>
+    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    {openable.length === 0 ? null : <div className="card"><h3>Open approved recipient threads</h3><div className="actions">
+      {openable.map(({ artifact, team }) => <button key={`${artifact.id}-${team}`} className="btn-secondary" type="button" disabled={disabled}
+        onClick={() => send("message.proposal_forward", crypto.randomUUID(), 0, { sourceArtifactId: artifact.id, recipientTeamId: team })}>
+        {artifact.title}: forward to {team}</button>)}
+    </div></div>}
+    {pending.length === 0 ? null : <div className="card"><h3>Rounds awaiting approval</h3><div className="actions">
+      {pending.map((message) => <button key={message.id} className="btn-primary" type="button" disabled={disabled}
+        onClick={() => send("message.proposal_approve_round", message.threadId!, message.threadVersion ?? 0, { messageId: message.id })}>
+        Approve {messageSummary(message)}</button>)}
+    </div></div>}
+    {threads.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <div className="card-grid">
+      {threads.map((thread) => <ProposalThreadCard key={thread[0]?.threadId} messages={thread} projection={projection} disabled={disabled} send={send} />)}
+    </div>}
+  </section>;
 }
 
 function RuntimeView() {
@@ -250,6 +577,15 @@ function RuntimeView() {
     void post(command);
   };
 
+  const sendInformation: SendInformation = (operationType, aggregateId, expectedAggregateVersion, payload) => {
+    if (projection === null || deviceId === null) return;
+    void post({
+      commandId: crypto.randomUUID(), deviceId, operationType, aggregateId, expectedAggregateVersion,
+      governingReleaseId: projection.releaseId, activeSessionRoleId: projection.activeSessionRoleId,
+      deviceObservedAt: new Date().toISOString(), payload
+    });
+  };
+
   const retryPending = async () => {
     if (pending === null || id === null) return;
     setNotice("Checking for the original server receipt before retrying.");
@@ -269,11 +605,14 @@ function RuntimeView() {
   }
   const taskModule = projection.modules.find((module) => module.type === "task_list");
   const formModule = projection.modules.find((module) => module.type === "artifact_form");
+  const messageModules = projection.modules.filter((module) => module.type === "message_inbox");
+  const proposalModules = projection.modules.filter((module) => module.type === "proposal_thread");
+  const injectModules = projection.modules.filter((module) => module.type === "inject_inbox");
   return <Shell connection={connection}>
     <main id="main-content" className={`runtime-layout layout-${projection.layout}`} ref={main} tabIndex={-1}>
       <section className="hero" aria-labelledby="runtime-title">
         <p className="eyebrow">{projection.releaseLabel}</p>
-        <h1 id="runtime-title">{projection.activeSessionRoleLabel} workspace</h1>
+        <h1 id="runtime-title">{projection.activeTeamLabel === null ? projection.activeSessionRoleLabel : `${projection.activeTeamLabel} ${projection.activeSessionRoleLabel}`} workspace</h1>
         <p>{projection.currentStageLabel ?? "Session workspace"} · Session {projection.sessionStatus}</p>
       </section>
       <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
@@ -293,6 +632,12 @@ function RuntimeView() {
           : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
               artifact={artifact} disabled={pending !== null} send={send} />)}</div>}
       </section>}
+      {messageModules.map((module) => <MessageInbox key={module.id} module={module} projection={projection}
+        disabled={pending !== null} send={sendInformation} />)}
+      {proposalModules.map((module) => <ProposalThreads key={module.id} module={module} projection={projection}
+        disabled={pending !== null} send={sendInformation} />)}
+      {injectModules.map((module) => <InjectInbox key={module.id} module={module} projection={projection}
+        disabled={pending !== null} send={sendInformation} />)}
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>
   </Shell>;

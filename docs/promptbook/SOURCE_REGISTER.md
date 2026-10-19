@@ -9,7 +9,7 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | `references/fractured-order.snapshot.json` and `references/fractured-order/` | `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` | Official immutable golden reference | Product Owner | Yes | Tree `771510b6180bd4826dc5688789d131f2109eeb62`; 1,111 files; 151,409,464 bytes; archive SHA-256 recorded in manifest |
 | `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` | 1.0.1 | Controlled draft | Product Owner | Yes | Sole terminology authority; DEC-51 replacement name remains Assumed |
 | `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.3 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; not ratified |
-| `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.1 | Draft reconstructed | Methodology Lead | Yes | Substance gated by OPEN-026 |
+| `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-026 resolved; formal ratification remains OPEN-001/DEC-22 |
 | `docs/corpus/02_Updated_Architecture/02_PLATFORM_ARCHITECTURE_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns topology and stack; many ADRs Proposed |
 | `docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review | Technical + Methodology Leads | Yes | Owns portable design types; compatibility OPEN-012 |
 | `docs/corpus/02_Updated_Architecture/09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns event and error catalogs |

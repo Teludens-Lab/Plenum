@@ -11,6 +11,7 @@ import {
   completeOidcLogin,
   createDatabasePool,
   exportReleasePackage,
+  getOperatorProjection,
   getRuntimeDeltas,
   getRuntimeSnapshot,
   getRuntimeSse,
@@ -67,7 +68,7 @@ const principalC = {
   organizationId: ids.orgA,
   organizationRoles: [],
   authenticationStrength: "mfa",
-  expiresAt: new Date("2026-10-19T00:00:00.000Z")
+  expiresAt: new Date("2099-01-01T00:00:00.000Z")
 };
 
 const releaseMaterialization = {
@@ -106,7 +107,9 @@ async function applyMigrations() {
     "apps/server/migrations/005_identity_oidc_context.sql",
     "apps/server/migrations/006_command_kernel.sql",
     "apps/server/migrations/007_release_packages.sql",
-    "apps/server/migrations/008_projection_cursors.sql"
+    "apps/server/migrations/008_projection_cursors.sql",
+    "apps/server/migrations/009_runtime_capabilities.sql",
+    "apps/server/migrations/010_information_messages_injects.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -144,7 +147,7 @@ async function seed() {
     await client.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3),($4,$5,$6)", [ids.deviceA, ids.orgA, ids.personA, ids.deviceC, ids.orgA, ids.personC]);
     await client.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2),($3,$4)", [ids.sessionA, ids.orgA, ids.sessionB, ids.orgB]);
     await client.query("INSERT INTO identity.federated_identities(id,organization_id,person_id,issuer,subject,provider_type) VALUES ('c0000000-0000-4000-8000-000000000001',$1,$2,'https://issuer.example','operator-a','oidc')", [ids.orgA, ids.personA]);
-    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2026-10-19T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
+    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2099-01-01T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
     await client.query("INSERT INTO sync.projection_grants(id,organization_id,session_id,participant_id,policy_revision,access_revision,expires_at) VALUES ('d0000000-0000-4000-8000-000000000001',$1,$2,$3,'policy-decision-v1',1,now()+interval '1 hour')", [ids.orgA, ids.sessionA, ids.participantA]);
     await client.query("COMMIT");
   } catch (error) {
@@ -221,6 +224,29 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
   await assert.rejects(
     withOrganizationTransaction(app, ids.orgA, (client) => client.query("SELECT * FROM evidence.audit_records")),
     /permission denied/
+  );
+});
+
+test("Game Master projection requires Operator authorization and remains tenant/Session scoped", async () => {
+  const projection = await getOperatorProjection(
+    app, principal, ids.sessionA, "e0000000-0000-4000-8000-000000000010"
+  );
+  assert.equal(projection.sessionId, ids.sessionA);
+  assert.equal(projection.releaseId, ids.releaseA);
+
+  await assert.rejects(
+    getOperatorProjection(
+      app, { ...principal, organizationId: ids.orgB, principalId: ids.personB }, ids.sessionA,
+      "e0000000-0000-4000-8000-000000000011"
+    ),
+    (error) => error?.envelope?.error?.code === "NOT_FOUND"
+  );
+  await assert.rejects(
+    getOperatorProjection(
+      app, { ...principal, organizationRoles: [] }, ids.sessionA,
+      "e0000000-0000-4000-8000-000000000012"
+    ),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
   );
 });
 

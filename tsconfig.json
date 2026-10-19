@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/event-contracts" },
     { "path": "packages/simulation-schema" },
+    { "path": "packages/workflow-engine" },
     { "path": "packages/policy-engine" },
     { "path": "packages/release-compiler" },
     { "path": "packages/sync-client" },

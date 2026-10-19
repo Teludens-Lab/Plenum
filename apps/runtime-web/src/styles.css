@@ -78,8 +78,9 @@ a { color: var(--color-text-link); }
 .card-heading { display: flex; justify-content: space-between; gap: var(--space-4); align-items: start; }
 .field { margin-block: var(--space-4); }
 .field label { display: block; margin-bottom: var(--space-2); font-weight: var(--weight-medium); }
-.field input, .field textarea { width: 100%; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-bg-elevated); color: var(--color-text-primary); padding: var(--space-3); }
-.field input:focus, .field textarea:focus { border-color: var(--color-border-focus); }
+.field input, .field textarea, .field select { width: 100%; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-bg-elevated); color: var(--color-text-primary); padding: var(--space-3); }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--color-border-focus); }
+.repeatable-item { margin-block: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
 .field [aria-invalid="true"] { border-color: var(--color-status-danger); }
 .hint, .field-error { margin: var(--space-2) 0 0; font-size: var(--text-sm); }
 .hint { color: var(--color-text-secondary); }
@@ -95,12 +96,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .badge-loading { color: var(--color-status-info); background: var(--color-status-info-bg); }
 .badge-offline, .badge-error { color: var(--color-status-danger); background: var(--color-status-danger-bg); }
 .badge-state { color: var(--color-status-warning); background: var(--color-status-warning-bg); }
-.metadata, .artifact-content { margin: var(--space-4) 0; }
+.metadata, .artifact-content, .artifact-sections { margin: var(--space-4) 0; }
 .metadata { display: flex; flex-wrap: wrap; gap: var(--space-5); }
 .metadata div, .artifact-content div { display: grid; gap: var(--space-1); }
 dt { color: var(--color-text-secondary); font-size: var(--text-sm); }
 dd { margin: 0; overflow-wrap: anywhere; }
 .artifact-content { display: grid; gap: var(--space-3); }
+.artifact-sections { display: grid; gap: var(--space-5); }
+.artifact-sections h4, .artifact-sections h5 { margin-bottom: var(--space-3); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-5); }
 .empty-state { padding: var(--space-6); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-text-secondary); }
 .status-panel { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); padding: var(--space-4); border-radius: var(--radius-md); }

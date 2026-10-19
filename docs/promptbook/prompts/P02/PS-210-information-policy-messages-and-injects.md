@@ -97,7 +97,7 @@ Also prohibited: destructive production operations, production secret changes, p
 ## Acceptance
 
 - Given the documented preconditions, when the task behavior is exercised, then forbidden routes and fields are denied at the server
-- Given the documented preconditions, when the task behavior is exercised, then each trigger type releases exactly once
+- Given the documented preconditions, when the task behavior is exercised, then each trigger mode implemented by the active Release releases exactly once; scheduled and Gate modes remain publication-blocked until a Release needs and defines their approved semantics
 - Given the documented preconditions, when the task behavior is exercised, then acknowledgement and response are distinct
 - Given the documented preconditions, when the task behavior is exercised, then classification filtering applies to exports and plugin snapshots
 

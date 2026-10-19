@@ -12,5 +12,6 @@
     { "path": "../../packages/policy-engine" },
     { "path": "../../packages/release-compiler" },
     { "path": "../../packages/simulation-schema" }
+    ,{ "path": "../../packages/workflow-engine" }
   ]
 }

@@ -10,6 +10,7 @@ import {
   RUNTIME_SSE_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
+  SESSION_OPERATOR_POLICY_V1,
   commandEnvelopeV1Schema,
   commandReceiptV1Schema,
   canonicalizeJson,
@@ -152,4 +153,20 @@ test("PS-100-T02: client-supplied or incomplete identity context is denied", () 
     () => authorizeCommandRole(trusted, { ...command, activeSessionRoleId: "other-role" }, ids.correlationId),
     (error) => error instanceof AuthorizationError && error.envelope.error.code === "PERMISSION_DENIED"
   );
+});
+
+test("Game Master authorization is Organization- and Session-scoped without a Participant Seat", () => {
+  assert.equal(SESSION_OPERATOR_POLICY_V1.displayLabel, "Game Master");
+  assert.equal(SESSION_OPERATOR_POLICY_V1.organizationRole, "operator");
+  assert.deepEqual(SESSION_OPERATOR_POLICY_V1.scope, ["organization", "session"]);
+  assert.equal(SESSION_OPERATOR_POLICY_V1.participantSeat, "forbidden");
+  assert.ok(SESSION_OPERATOR_POLICY_V1.consequentialOperations.includes("session.archive"));
+  assert.ok(SESSION_OPERATOR_POLICY_V1.consequentialOperations.includes("participant.reassign"));
+  assert.ok(SESSION_OPERATOR_POLICY_V1.consequentialOperations.includes("plugin_binding.enable"));
+  assert.ok(SESSION_OPERATOR_POLICY_V1.consequentialOperations.includes("export.request"));
+  assert.deepEqual(SESSION_OPERATOR_POLICY_V1.recording, {
+    accepted: "command_receipt_evidence_event_and_immutable_audit_record",
+    rejected: "command_receipt_and_evidence_event",
+    recovery: "compensating_record_preserving_original"
+  });
 });

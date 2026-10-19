@@ -10,7 +10,7 @@ Decisions live **only** in `03_Governance_and_Reconciliation/DECISION_REGISTER_v
 Document precedence (from the corpus README; a higher document wins):
 1. Decision Register + Glossary.
 2. `01_Product_and_PRD/01_PRD_v0.7.md` — top product authority; owns REQ-001…REQ-094, INV-001…INV-028, AC-01…AC-13. The original enterprise PRD v0.6 is **unavailable** (DEC-21, OPEN-023); do not cite it and do not treat its absence as a gap to invent around.
-3. `08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` (methodology; substance pending OPEN-026).
+3. `08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` (methodology; OPEN-026 classification boundary resolved, formal ratification still open).
 4. `02_PLATFORM_ARCHITECTURE_v1.3.md` → `03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` → `09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` → `04_DESIGN_STUDIO_SPECIFICATION_v1.3.md`, `05_RUNTIME_AND_ADJUDICATION_v1.3.md`, `06_DATA_SECURITY_REPORTING_v1.3.md` → `10_EXTENSION_FRAMEWORK_v1.1.md`, `11_LIVE_POLLING_AND_VOTING_v1.1.md`, `12_VOICE_AND_RADIO_v1.1.md`.
 5. `Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/` (Proposed; gated on OPEN-002).
 6. `references/plenum-runtime-slice/` v0.2.0 — the **observed implementation baseline**: an executable Phase 1 spike, non-authoritative under DEC-27, never methodology law.

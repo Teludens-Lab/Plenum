@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import {
   COMMAND_ENVELOPE_CONTRACT_ID,
   ARTIFACT_COMMAND_CONTRACT_ID,
+  STAGE_COMMAND_CONTRACT_ID,
+  INJECT_COMMAND_CONTRACT_ID,
+  MESSAGE_COMMAND_CONTRACT_ID,
   COMMAND_RECEIPT_CONTRACT_ID,
   DOMAIN_EVENT_CONTRACT_ID,
   ERROR_ENVELOPE_CONTRACT_ID,
@@ -16,6 +19,9 @@ import {
   SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
   artifactCommandV1Schema,
+  stageCommandV1Schema,
+  injectCommandV1Schema,
+  messageCommandV1Schema,
   commandReceiptV1Schema,
   domainEventV1Schema,
   errorEnvelopeV1Schema,
@@ -76,6 +82,9 @@ async function readPackageGraph() {
 
 assert.equal(commandEnvelopeV1Schema.$id, COMMAND_ENVELOPE_CONTRACT_ID);
 assert.equal(artifactCommandV1Schema.$id, ARTIFACT_COMMAND_CONTRACT_ID);
+assert.equal(stageCommandV1Schema.$id, STAGE_COMMAND_CONTRACT_ID);
+assert.equal(injectCommandV1Schema.$id, INJECT_COMMAND_CONTRACT_ID);
+assert.equal(messageCommandV1Schema.$id, MESSAGE_COMMAND_CONTRACT_ID);
 assert.equal(commandReceiptV1Schema.$id, COMMAND_RECEIPT_CONTRACT_ID);
 assert.equal(domainEventV1Schema.$id, DOMAIN_EVENT_CONTRACT_ID);
 assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
@@ -85,7 +94,8 @@ assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 
-const contractSchemas = [artifactCommandV1Schema, commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
+const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
+  commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
   syncDeltasV1Schema, syncSnapshotV1Schema];
 for (const schema of contractSchemas) {

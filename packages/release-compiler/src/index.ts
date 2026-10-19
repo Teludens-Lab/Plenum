@@ -3,6 +3,8 @@ import { canonicalizeJson, type JsonObject, type JsonValue } from "@plenum/event
 import {
   RELEASE_MANIFEST_CONTRACT_ID,
   SIMULATION_SCHEMA_VERSION,
+  assertRuntimeCoreDesign,
+  assertRuntimeScenario,
   hasPinnedPluginDigest,
   type CoreDesignV1,
   type ReleaseManifestV1,
@@ -148,6 +150,13 @@ function assertPinnedDependencies(coreDesign: CoreDesignV1): void {
   }
 }
 
+function assertExecutableRuntimeDesign(coreDesign: CoreDesignV1, scenario: ScenarioV1): void {
+  if (coreDesign.teams !== undefined) {
+    assertRuntimeCoreDesign(coreDesign);
+    assertRuntimeScenario(coreDesign, scenario);
+  }
+}
+
 function validateInput(input: CompileReleaseInput): void {
   for (const id of [input.releaseId, input.projectId, input.definitionRevisionId, input.publishedBy, input.validationReportId]) {
     if (!uuidPattern.test(id)) throw new Error("Release identifiers must be UUIDs");
@@ -169,6 +178,7 @@ function validateInput(input: CompileReleaseInput): void {
   }
   assertPortable(asJson(input.materialization));
   assertPinnedDependencies(input.materialization.coreDesign);
+  assertExecutableRuntimeDesign(input.materialization.coreDesign, input.materialization.scenario);
 }
 
 export function compileRelease(input: CompileReleaseInput): CompiledRelease {
@@ -235,6 +245,7 @@ export function verifyReleasePackage(bytes: Uint8Array, expectedPackageDigest: s
   if (contentDigest !== pkg.manifest.contentDigest) throw new Error("Release content digest mismatch");
   assertPortable(asJson({ coreDesign: pkg.coreDesign, scenario: pkg.scenario }));
   assertPinnedDependencies(pkg.coreDesign);
+  assertExecutableRuntimeDesign(pkg.coreDesign, pkg.scenario);
   return {
     release: { manifest: pkg.manifest, coreDesign: pkg.coreDesign, scenario: pkg.scenario },
     bytes,

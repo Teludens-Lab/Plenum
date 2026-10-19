@@ -21,7 +21,7 @@ Acceptance evidence: `AC-09` planning only; parity execution remains `NOT RUN` u
 
 The exported reference tree was independently re-indexed on 2026-10-18 with `core.autocrlf=false`; the calculated tree was `771510b6180bd4826dc5688789d131f2109eeb62`, exactly matching the snapshot. The reference directory was not changed. The pin is immutable and parity evidence is keyed by both commit and archive digest.
 
-Authority: Decision Register and Glossary, then PRD, Canon, architecture/contracts, capability specifications, Proposed Data Model/Sync, and finally the observed reference. `OPEN-001`, `DEC-22`, and `OPEN-026` remain labeled; this audit does not treat draft methodology as ratified.
+Authority: Decision Register and Glossary, then PRD, Canon, architecture/contracts, capability specifications, Proposed Data Model/Sync, and finally the observed reference. `OPEN-026` is resolved; `OPEN-001` and `DEC-22` remain labeled, so this audit does not treat the full draft methodology as ratified.
 
 ## Classification method and completeness boundary
 
@@ -48,7 +48,7 @@ The source location for each row is the named manifest plus the capability key. 
 | `entry.game_master` | PLATFORM-SERVICE | `PARITY-ENTRY-01` | Classified |
 | `entry.white_cell_lead` | PLATFORM-SERVICE | `PARITY-ENTRY-01` | Classified |
 | `entry.sme` | PLUGIN | `PARITY-PLI-01` | Classified |
-| `scribe.orientation` | FO-CONFIGURATION | `PARITY-ORIENTATION-01` | **BLOCKED — Methodology Lead / OPEN-026** |
+| `scribe.orientation` | FO-CONFIGURATION | `PARITY-ORIENTATION-01` | Classified |
 | `scribe.blue_action` | FO-CONFIGURATION | `PARITY-ARTIFACT-01` | Classified |
 | `scribe.red_action` | FO-CONFIGURATION | `PARITY-ARTIFACT-01` | Classified |
 | `scribe.green_proposal` | FO-CONFIGURATION | `PARITY-ARTIFACT-01` | Classified |
@@ -64,7 +64,7 @@ The source location for each row is the named manifest plus the capability key. 
 | `game_master.session_admin` | PLATFORM-SERVICE | `PARITY-ADMIN-01` | Classified |
 | `game_master.participants` | PLATFORM-SERVICE | `PARITY-ADMIN-01` | Classified |
 | `game_master.exports_plugins` | PLATFORM-SERVICE | `PARITY-EXPORT-01` | Classified; Plugin behavior is separately classified |
-| `white_cell.controls` | FO-CONFIGURATION | `PARITY-CONTROL-01` | **BLOCKED — Methodology Lead / OPEN-026** |
+| `white_cell.controls` | PLATFORM-SERVICE | `PARITY-CONTROL-01` | Classified; Release selects/configures operations |
 | `white_cell.review` | FO-CONFIGURATION | `PARITY-REVIEW-01` | Classified |
 | `white_cell.rfi_communications` | PLATFORM-SERVICE | `PARITY-RFI-01` | Classified |
 | `white_cell.admin_exports` | PLATFORM-SERVICE | `PARITY-ADMIN-01` | Classified |
@@ -80,7 +80,7 @@ The source location for each row is the named manifest plus the capability key. 
 | Capability | Canon classification | Parity target | Review |
 |---|---|---|---|
 | `identity.session_topology` | PLATFORM-SERVICE | `PARITY-ENTRY-01` | Classified |
-| `team.strategic_orientation` | FO-CONFIGURATION | `PARITY-ORIENTATION-01` | **BLOCKED — Methodology Lead / OPEN-026** |
+| `team.strategic_orientation` | FO-CONFIGURATION | `PARITY-ORIENTATION-01` | Classified |
 | `team.artifact_authoring` | FO-CONFIGURATION | `PARITY-ARTIFACT-01` | Classified |
 | `facilitator.presentation_decks` | PARITY-UI | `PARITY-UI-01` | Classified; deck payloads are Scenario content |
 | `white_cell.artifact_review` | PLATFORM-SERVICE | `PARITY-REVIEW-01` | Classified |
@@ -88,7 +88,7 @@ The source location for each row is the named manifest plus the capability key. 
 | `rfi.lifecycle` | PLATFORM-SERVICE | `PARITY-RFI-01` | Classified |
 | `communications.notifications_realtime` | PLATFORM-SERVICE | `PARITY-COMMS-01` | Classified |
 | `notetaker.operational_record` | PLATFORM-SERVICE | `PARITY-NOTES-01` | Classified |
-| `white_cell.game_controls` | FO-CONFIGURATION | `PARITY-CONTROL-01` | **BLOCKED — Methodology Lead / OPEN-026** |
+| `white_cell.game_controls` | PLATFORM-SERVICE | `PARITY-CONTROL-01` | Classified; Release selects/configures operations |
 | `plugins.intercom_recorder` | PLUGIN | `PARITY-PLUGIN-01` | Classified |
 | `operator.participant_session_admin` | PLATFORM-SERVICE | `PARITY-ADMIN-01` | Classified |
 | `exports.evidence_bundle` | PLATFORM-SERVICE | `PARITY-EXPORT-01` | Classified |
@@ -99,7 +99,7 @@ The source location for each row is the named manifest plus the capability key. 
 
 | Item | Source | Classification | Parity target | Review |
 |---|---|---|---|---|
-| Decision-record trace across exports | `src/features/export/researchExport.js` | METHODOLOGY-CORE | `PARITY-EXPORT-01` | **BLOCKED — Methodology Lead / OPEN-026** |
+| Decision-record trace across exports | `src/features/export/researchExport.js` | METHODOLOGY-CORE | `PARITY-EXPORT-01` | Classified; Release selects/configures use |
 | Briefs, decks, images, audio and video | `Plenum Briefing/`, `decks/` | SCENARIO-CONTENT | `PARITY-SCENARIO-01` | Classified |
 | Route/semantic inversion | `src/core/teamContext.js` | LEGACY-DEFECT | `PARITY-LEGACY-01` | Do not reproduce |
 | Noncanonical upper-snake event names | `src/core/enums.js` and role controllers | LEGACY-DEFECT | `PARITY-LEGACY-01` | Do not reproduce |
@@ -181,15 +181,9 @@ Observed automated assets at the pin: 106 `src/**/*.test.js` files, 42 `tests/un
 | Reports | Research-export unit and E2E reconciliation anchors | `PARITY-EXPORT-01` | NOT RUN |
 | Accessibility/UI | Source/unit/E2E assertions | `PARITY-UI-01` including keyboard, zoom and reduced motion | NOT RUN |
 
-## Ambiguous classifications and approval gate
+## Resolved classification boundary
 
-The following rows have a single proposed Canon category so the inventory is complete, but are explicitly **blocked** from ratification:
-
-1. Strategic Orientation form semantics and the pre-Move 1 completion gate — proposed `FO-CONFIGURATION`.
-2. White Cell game-control gate semantics — proposed `FO-CONFIGURATION`.
-3. Decision-record trace semantics inferred from the export — proposed `METHODOLOGY-CORE`.
-
-The Methodology Lead must confirm or change these under `OPEN-026`. `DEC-22` remains Assumed and `OPEN-001` still blocks formal corpus ratification. No ambiguous behavior may be moved into platform core or described as approved methodology before that review.
+`OPEN-026` resolves the previously ambiguous rows. Generic Orientation/coverage gates, bounded Control operations and decision-trace capabilities are reusable platform options available to every simulation. Each Release chooses whether to use them and owns the exact roles, forms, labels, timing, ordering, required combinations and gate rules. Fractured Order's observed Orientation content and exact control setup remain `FO-CONFIGURATION`; reusable control execution is `PLATFORM-SERVICE`; decision-trace meaning remains `METHODOLOGY-CORE`. `DEC-22` remains Assumed and `OPEN-001` still blocks formal corpus ratification.
 
 ## Recovery and change implications
 

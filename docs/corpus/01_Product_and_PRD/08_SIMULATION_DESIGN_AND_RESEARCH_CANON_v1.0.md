@@ -6,9 +6,9 @@
 |---|---|
 | Document ID | CANON |
 | Number | 08 |
-| Version | 1.0.1 |
-| Date | 2026-10-17 |
-| Status | Draft — reconstructed (DEC-22, Assumed). Methodology substance requires Methodology Lead approval (OPEN-026). |
+| Version | 1.0.2 |
+| Date | 2026-10-19 |
+| Status | Draft — reconstructed (DEC-22, Assumed). OPEN-026 is resolved; formal corpus ratification remains governed by OPEN-001. |
 | Owner | Methodology Lead |
 | Approvers | Methodology Lead; Product Owner (role placeholders — OPEN-001) |
 | Reads from | 01 PRD; Decision Register; Glossary |
@@ -76,7 +76,7 @@ A Core Design is methodologically complete for Publication when, in addition to 
 6. every Control Intervention power available to a role declares its category (§7);
 7. if research exports are enabled, every Measurement Definition is linked to a Research Question.
 
-Owed by the Methodology Lead: any further SSG-specific completeness rules (OPEN-026).
+OPEN-026 establishes the boundary: the platform supplies reusable Orientation/coverage gates, bounded Control operations and decision-trace capabilities as options for every simulation. Each Release chooses and configures its required forms, roles, timing, ordering, labels, required combinations and gate rules.
 
 ## 4. Decision-centric design
 
@@ -231,7 +231,7 @@ This table merges the Foundation's categories (methodology core, FO configuratio
 
 ## 13. Open methodology questions
 
-OPEN-004 (concept activation and dependencies), OPEN-005 (Stage structures), OPEN-006 (workflow expressiveness), OPEN-008 (in-flight migration and authority), OPEN-010 (form constraints), OPEN-018 (schema modeling questions), OPEN-026 (SSG doctrine content for this Canon).
+OPEN-004 (concept activation and dependencies), OPEN-005 (Stage structures), OPEN-006 (workflow expressiveness), OPEN-008 (in-flight migration and authority), OPEN-010 (form constraints), OPEN-018 (schema modeling questions).
 
 ## Change log
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PolicyDeniedError, projectResource } from "@plenum/policy-engine";
+import { audienceAllows, PolicyDeniedError, projectResource } from "@plenum/policy-engine";
 
 const context = {
   organizationId: "10000000-0000-4000-8000-000000000001",
@@ -44,4 +44,41 @@ test("PS-110-T02: projections fail closed across Organizations and omit hidden f
     }),
     (error) => error instanceof PolicyDeniedError && error.code === "PERMISSION_DENIED"
   );
+});
+
+test("PS-200-T07: Team audiences require the owner Team and preserve Control access", () => {
+  const blueFacilitator = { ...context, activeSessionRoleId: "facilitator", activeTeamId: "blue", isControlRole: false };
+  const redFacilitator = { ...blueFacilitator, activeTeamId: "red" };
+  const whiteCell = { ...context, activeSessionRoleId: "white-cell", isControlRole: true };
+  const audience = { ownerTeam: true, sessionRoleIds: ["scribe", "facilitator"] };
+
+  assert.equal(audienceAllows(blueFacilitator, audience, "blue"), true);
+  assert.equal(audienceAllows(redFacilitator, audience, "blue"), false);
+  assert.equal(audienceAllows({ ...blueFacilitator, activeSessionRoleId: "observer" }, audience, "blue"), false);
+  assert.equal(audienceAllows(whiteCell, { includeControlRoles: true }, "blue"), true);
+  assert.equal(audienceAllows(redFacilitator, { payloadTeamField: "recipientTeams", sessionRoleIds: ["facilitator"] },
+    "green", { recipientTeams: ["red"] }), true);
+  assert.equal(audienceAllows(blueFacilitator, { payloadTeamField: "recipientTeams", sessionRoleIds: ["facilitator"] },
+    "green", { recipientTeams: ["red"] }), false);
+});
+
+test("PS-210-T01: export and Plugin projections enforce their classification ceiling", () => {
+  const resource = {
+    organizationId: context.organizationId,
+    sessionId: context.sessionId,
+    resourceType: "external_snapshot",
+    fields: {
+      publicSummary: { classification: "public", audience: { public: true }, value: "shareable" },
+      internalDetail: { classification: "internal", audience: { public: true }, value: "organization only" },
+      restrictedDetail: { classification: "restricted", audience: { public: true }, value: "never exported" }
+    }
+  };
+
+  assert.deepEqual(projectResource(context, resource, { maximumClassification: "public" }), {
+    publicSummary: "shareable"
+  });
+  assert.deepEqual(projectResource(context, resource, { maximumClassification: "internal" }), {
+    publicSummary: "shareable",
+    internalDetail: "organization only"
+  });
 });

@@ -28,8 +28,34 @@ export const RUNTIME_SSE_CONTRACT_ID = "runtime-sse-v1";
 export const SYNC_DELTAS_CONTRACT_ID = "sync-deltas-v1";
 export const SYNC_SNAPSHOT_CONTRACT_ID = "sync-snapshot-v1";
 export const ARTIFACT_COMMAND_CONTRACT_ID = "artifact-command-v1";
+export const STAGE_COMMAND_CONTRACT_ID = "stage-command-v1";
+export const INJECT_COMMAND_CONTRACT_ID = "inject-command-v1";
+export const MESSAGE_COMMAND_CONTRACT_ID = "message-command-v1";
 export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
 export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
+
+/** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
+export const SESSION_OPERATOR_POLICY_V1 = {
+  displayLabel: "Game Master",
+  organizationRole: "operator",
+  scope: ["organization", "session"],
+  participantSeat: "forbidden",
+  readOperations: ["session.monitor", "report.view"],
+  consequentialOperations: [
+    "session.create", "session.configure", "session.ready", "session.open", "session.start",
+    "session.pause", "session.resume", "session.complete", "session.lock", "session.archive",
+    "participant.assign", "participant.reassign", "participant.readiness_override", "principal.revoke",
+    "stage.start", "stage.end", "stage.reopen", "stage.extend", "stage.skip", "stage.return",
+    "timer.pause", "timer.resume", "timer.extend", "inject.release", "inject.cancel",
+    "adjudication.route", "plugin_binding.enable", "plugin_binding.disable", "export.request",
+    "delivery.retry", "session.recover", "authority.transfer"
+  ],
+  recording: {
+    accepted: "command_receipt_evidence_event_and_immutable_audit_record",
+    rejected: "command_receipt_and_evidence_event",
+    recovery: "compensating_record_preserving_original"
+  }
+} as const;
 
 export interface CommandEnvelopeV1 {
   commandId: string;
@@ -111,9 +137,14 @@ export interface RuntimeSseV1 {
 export interface RuntimeFormFieldV1 {
   key: string;
   label: string;
-  type: "text" | "long_text";
+  type: "text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
   required: boolean;
+  requiredWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
+  visibleWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
   helpText?: string;
+  options?: Array<{ value: string; label: string }>;
+  readOnly?: boolean;
+  validation?: { minLength?: number; maxLength?: number; min?: number; max?: number; integer?: boolean; minItems?: number; maxItems?: number; uniqueItems?: boolean };
 }
 
 export interface RuntimeFormV1 {
@@ -121,12 +152,25 @@ export interface RuntimeFormV1 {
   name: string;
   formVersion: string;
   fields: RuntimeFormFieldV1[];
+  sections: Array<{
+    id: string;
+    title?: string;
+    description?: string;
+    fields: RuntimeFormFieldV1[];
+    repeatable?: boolean;
+    itemLabel?: string;
+    itemKeyField?: string;
+    minItems?: number;
+    maxItems?: number;
+  }>;
+  rules?: Array<{ kind: "distinct"; fields: string[]; message: string }>;
 }
 
 export interface RuntimeActionV1 {
   operationType: string;
   label: string;
   requiresForm: boolean;
+  editableFieldKeys?: string[];
 }
 
 export interface RuntimeArtifactV1 {
@@ -152,10 +196,42 @@ export interface RuntimeCreateTaskV1 {
 
 export interface RuntimeModuleV1 {
   id: string;
-  type: "session_status" | "artifact_form" | "task_list";
+  type: "session_status" | "artifact_form" | "task_list" | "artifact_presentation" | "slide_deck" |
+    "message_inbox" | "proposal_thread" | "inject_inbox";
   title: string;
   mode: "read" | "write";
   emptyStateText: string;
+  configuration: JsonObject;
+}
+
+export interface RuntimeMessageV1 {
+  id: string;
+  channelId: string;
+  routeId: string;
+  threadId: string | null;
+  senderParticipantId: string;
+  senderSessionRoleId: string;
+  operationType: string;
+  content: JsonObject;
+  sentAt: string;
+  approvedAt: string | null;
+  approvalRouteId: string | null;
+  threadState: "open" | "accepted_terms" | "closed" | null;
+  threadVersion: number | null;
+  deliveryState: "released" | "delivered" | "read";
+}
+
+export interface RuntimeInjectV1 {
+  id: string;
+  definitionId: string;
+  title: string;
+  content: JsonObject;
+  state: "released" | "acknowledged" | "responded" | "closed";
+  releasedAt: string;
+  acknowledgedAt: string | null;
+  respondedAt: string | null;
+  requiredResponseArtifactTypeId: string | null;
+  version: number;
 }
 
 export interface RuntimeProjectionV1 {
@@ -167,13 +243,21 @@ export interface RuntimeProjectionV1 {
   participantId: string;
   activeSessionRoleId: string;
   activeSessionRoleLabel: string;
+  activeTeamId: string | null;
+  activeTeamLabel: string | null;
   currentStageId: string | null;
   currentStageLabel: string | null;
+  currentStageStatus: "not_started" | "active" | "paused" | "completed";
+  stageStartedAt: string | null;
+  stageDeadlineAt: string | null;
+  stageRemainingSeconds: number | null;
   interfaceProfileId: string;
   layout: "single_column" | "main_with_sidebar" | "dashboard_grid" | "workspace_tabs";
   modules: RuntimeModuleV1[];
   createTasks: RuntimeCreateTaskV1[];
   artifacts: RuntimeArtifactV1[];
+  messages: RuntimeMessageV1[];
+  injects: RuntimeInjectV1[];
 }
 
 export interface OperatorProjectionV1 {
@@ -190,6 +274,9 @@ export interface OperatorProjectionV1 {
 }
 
 export type ArtifactCommandV1 = CommandEnvelopeV1;
+export type StageCommandV1 = CommandEnvelopeV1;
+export type InjectCommandV1 = CommandEnvelopeV1;
+export type MessageCommandV1 = CommandEnvelopeV1;
 
 export const canonicalErrorCodes = [
   "UNAUTHENTICATED",
@@ -288,6 +375,22 @@ export const artifactCommandV1Schema = {
     operationType: { type: "string", pattern: "^artifact\\.[a-z][a-z0-9_]*$" }
   }
 } as const satisfies ContractSchema<ArtifactCommandV1>;
+
+function commandSchema(contractId: string, title: string, namespace: string) {
+  return {
+    ...commandEnvelopeV1Schema,
+    $id: contractId,
+    title,
+    properties: {
+      ...commandEnvelopeV1Schema.properties,
+      operationType: { type: "string", pattern: `^${namespace}\\.[a-z][a-z0-9_]*$` }
+    }
+  } as const;
+}
+
+export const stageCommandV1Schema = commandSchema(STAGE_COMMAND_CONTRACT_ID, "Stage Command v1", "stage");
+export const injectCommandV1Schema = commandSchema(INJECT_COMMAND_CONTRACT_ID, "Inject Command v1", "inject");
+export const messageCommandV1Schema = commandSchema(MESSAGE_COMMAND_CONTRACT_ID, "Message Command v1", "message");
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -461,8 +564,9 @@ export const runtimeProjectionV1Schema = {
   additionalProperties: false,
   required: [
     "contractId", "sessionId", "sessionStatus", "releaseId", "releaseLabel", "participantId",
-    "activeSessionRoleId", "activeSessionRoleLabel", "currentStageId", "currentStageLabel",
-    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts"
+    "activeSessionRoleId", "activeSessionRoleLabel", "activeTeamId", "activeTeamLabel", "currentStageId", "currentStageLabel", "currentStageStatus",
+    "stageStartedAt", "stageDeadlineAt", "stageRemainingSeconds",
+    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects"
   ],
   properties: {
     contractId: { const: RUNTIME_PROJECTION_CONTRACT_ID },
@@ -473,13 +577,21 @@ export const runtimeProjectionV1Schema = {
     participantId: uuidProperty,
     activeSessionRoleId: { type: "string", minLength: 1 },
     activeSessionRoleLabel: { type: "string", minLength: 1 },
+    activeTeamId: { type: ["string", "null"] },
+    activeTeamLabel: { type: ["string", "null"] },
     currentStageId: { type: ["string", "null"] },
     currentStageLabel: { type: ["string", "null"] },
+    currentStageStatus: { type: "string", enum: ["not_started", "active", "paused", "completed"] },
+    stageStartedAt: { type: ["string", "null"], format: "date-time" },
+    stageDeadlineAt: { type: ["string", "null"], format: "date-time" },
+    stageRemainingSeconds: { type: ["integer", "null"], minimum: 0 },
     interfaceProfileId: { type: "string", minLength: 1 },
     layout: { type: "string", enum: ["single_column", "main_with_sidebar", "dashboard_grid", "workspace_tabs"] },
     modules: { type: "array", items: { type: "object" } },
     createTasks: { type: "array", items: { type: "object" } },
-    artifacts: { type: "array", items: { type: "object" } }
+    artifacts: { type: "array", items: { type: "object" } },
+    messages: { type: "array", items: { type: "object" } },
+    injects: { type: "array", items: { type: "object" } }
   }
 } as const satisfies ContractSchema<RuntimeProjectionV1>;
 

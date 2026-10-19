@@ -15,6 +15,7 @@
     "@plenum/policy-engine": "0.1.0",
     "@plenum/release-compiler": "0.1.0",
     "@plenum/simulation-schema": "0.1.0",
+    "@plenum/workflow-engine": "0.1.0",
     "jose": "6.2.12",
     "pg": "8.23.1"
   }

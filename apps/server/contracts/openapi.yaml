@@ -69,7 +69,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
-      x-contract-id: artifact-command-v1
+      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -155,6 +155,10 @@ paths:
     get:
       operationId: getOperatorProjection
       x-contract-id: operator-projection-v1
+      x-authorized-organization-role: operator
+      x-operator-display-label: Game Master
+      x-authorization-scope: [organization, session]
+      x-participant-seat: forbidden
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -350,18 +354,40 @@ components:
       properties:
         key: { type: string, minLength: 1 }
         label: { type: string, minLength: 1 }
-        type: { type: string, enum: [text, long_text] }
+        type: { type: string, enum: [text, long_text, number, single_select, multi_select] }
         required: { type: boolean }
+        requiredWhen: { type: object }
+        visibleWhen: { type: object }
         helpText: { type: string }
+        validation: { type: object }
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [value, label]
+            properties:
+              value: { type: string }
+              label: { type: string }
     RuntimeFormV1:
       type: object
       additionalProperties: false
-      required: [id, name, formVersion, fields]
+      required: [id, name, formVersion, fields, sections]
       properties:
         id: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
         formVersion: { type: string, minLength: 1 }
         fields: { type: array, items: { $ref: "#/components/schemas/RuntimeFormFieldV1" } }
+        sections:
+          type: array
+          items:
+            type: object
+            required: [id, fields]
+            properties:
+              id: { type: string, minLength: 1 }
+              title: { type: string }
+              fields: { type: array, items: { $ref: "#/components/schemas/RuntimeFormFieldV1" } }
+        rules: { type: array, items: { type: object } }
     RuntimeActionV1:
       type: object
       additionalProperties: false
@@ -370,6 +396,7 @@ components:
         operationType: { type: string, pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" }
         label: { type: string, minLength: 1 }
         requiresForm: { type: boolean }
+        editableFieldKeys: { type: array, items: { type: string, minLength: 1 } }
     RuntimeArtifactV1:
       type: object
       additionalProperties: false
@@ -389,7 +416,7 @@ components:
     RuntimeProjectionV1:
       type: object
       additionalProperties: false
-      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, currentStageId, currentStageLabel, interfaceProfileId, layout, modules, createTasks, artifacts]
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantId, activeSessionRoleId, activeSessionRoleLabel, activeTeamId, activeTeamLabel, currentStageId, currentStageLabel, currentStageStatus, stageStartedAt, stageDeadlineAt, stageRemainingSeconds, interfaceProfileId, layout, modules, createTasks, artifacts, messages, injects]
       properties:
         contractId: { const: runtime-projection-v1 }
         sessionId: { type: string, format: uuid }
@@ -399,13 +426,21 @@ components:
         participantId: { type: string, format: uuid }
         activeSessionRoleId: { type: string, minLength: 1 }
         activeSessionRoleLabel: { type: string, minLength: 1 }
+        activeTeamId: { type: [string, "null"] }
+        activeTeamLabel: { type: [string, "null"] }
         currentStageId: { type: [string, "null"] }
         currentStageLabel: { type: [string, "null"] }
+        currentStageStatus: { type: string, enum: [not_started, active, paused, completed] }
+        stageStartedAt: { type: [string, "null"], format: date-time }
+        stageDeadlineAt: { type: [string, "null"], format: date-time }
+        stageRemainingSeconds: { type: [integer, "null"], minimum: 0 }
         interfaceProfileId: { type: string, minLength: 1 }
         layout: { type: string, enum: [single_column, main_with_sidebar, dashboard_grid, workspace_tabs] }
         modules: { type: array, items: { type: object } }
         createTasks: { type: array, items: { type: object } }
         artifacts: { type: array, items: { $ref: "#/components/schemas/RuntimeArtifactV1" } }
+        messages: { type: array, items: { type: object } }
+        injects: { type: array, items: { type: object } }
     OperatorProjectionV1:
       type: object
       additionalProperties: false

@@ -13,7 +13,7 @@
 | Folder | Document | Version | Status |
 |---|---|---|---|
 | 01_Product_and_PRD | `01_PRD_v0.7.md` | 0.7.3 | Draft; replaces Foundation v0.2 and the v0.6a amendment |
-| 01_Product_and_PRD | `08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.1 | Draft; methodology substance needs Methodology Lead approval (OPEN-026) |
+| 01_Product_and_PRD | `08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft; OPEN-026 resolved, formal ratification remains open |
 | 02_Updated_Architecture | `02_PLATFORM_ARCHITECTURE_v1.3.md` | 1.3.1 | Draft for review |
 | 02_Updated_Architecture | `03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review |
 | 02_Updated_Architecture | `04_DESIGN_STUDIO_SPECIFICATION_v1.3.md` | 1.3.2 | Draft for review |

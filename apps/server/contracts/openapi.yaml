@@ -183,7 +183,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
-      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1]
+      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -228,6 +228,47 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CommandReceiptV1" }
         "404": { description: Missing and unauthorized receipts share NOT_FOUND semantics. }
+  /v1/sessions/{sessionId}/effect-proposals:
+    get:
+      operationId: getEffectProposals
+      x-contract-id: effect-proposal-v1
+      description: Returns only proposals reviewable by the trusted active Session Role. Approval is never queued offline.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Tenant-, Session-, and role-scoped Effect Proposals.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [proposals]
+                properties:
+                  proposals: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/EffectProposalV1" } }
+        "403": { description: Current Participant, Device, or active Session Role is unavailable. }
+  /v1/sessions/{sessionId}/extension-provenance:
+    get:
+      operationId: exportExtensionProvenance
+      x-contract-ids: [model-run-v1, effect-proposal-v1, approval-decision-v1]
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Complete run-to-effect provenance retained independently of Plugin lifecycle. }
+        "403": { description: Operator authority is absent. }
   /v1/devices:
     post:
       operationId: registerDevice
@@ -604,6 +645,30 @@ components:
         artifactsByState: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         activeTasks: { type: array, items: { type: object } }
         recentEvents: { type: array, items: { type: object } }
+    EffectProposalV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, id, modelRunId, proposalHash, targetAggregateId, targetStateVariableId, scopeReference, operation, value, rationale, status, expectedStateVersion, governingReleaseId, authorityEpoch, pluginDigest, configurationDigest, inputDigest, outputDigest, version]
+      properties:
+        contractId: { const: effect-proposal-v1 }
+        id: { type: string, format: uuid }
+        modelRunId: { type: string, format: uuid }
+        proposalHash: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        targetAggregateId: { type: string, format: uuid }
+        targetStateVariableId: { type: string, minLength: 1 }
+        scopeReference: { type: string }
+        operation: { type: string, enum: [set, adjust] }
+        value: {}
+        rationale: { type: string, minLength: 1 }
+        status: { type: string, enum: [staged, in_review, applied, rejected, returned, stale, failed] }
+        expectedStateVersion: { type: integer, minimum: 0 }
+        governingReleaseId: { type: string, format: uuid }
+        authorityEpoch: { type: integer, minimum: 1 }
+        pluginDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        configurationDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        inputDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        outputDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        version: { type: integer, minimum: 1 }
     RuntimeDeltaV1:
       type: object
       additionalProperties: false

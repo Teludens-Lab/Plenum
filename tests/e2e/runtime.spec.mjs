@@ -76,6 +76,27 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.close();
   });
 
+  test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
+    const { context, page } = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    await page.goto(runtimeUrl());
+    const proposal = page.getByRole("article", { name: "synthetic risk" });
+    await expect(proposal).toBeVisible();
+    await expect(proposal.getByText("in review")).toBeVisible();
+    await proposal.getByLabel("Decision reason").fill("Reviewed against current authoritative state");
+    await context.setOffline(true);
+    await proposal.getByRole("button", { name: "Approve effect" }).click();
+    await expect(page.getByText("Approval Decisions require a live Session Authority and were not queued.")).toBeVisible();
+    await expect(proposal.getByText("in review")).toBeVisible();
+    await context.setOffline(false);
+    await proposal.getByRole("button", { name: "Approve effect" }).click();
+    await expect(page.getByText("The server accepted the Command.")).toBeVisible();
+    await expect(proposal.getByText("applied")).toBeVisible();
+    await expect(proposal.getByRole("button", { name: "Approve effect" })).toHaveCount(0);
+    const accessibility = await new AxeBuilder({ page }).analyze();
+    expect(accessibility.violations).toEqual([]);
+    await context.close();
+  });
+
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
     test.setTimeout(60_000);
     const author = await actor(browser, fixture.tokens.author);

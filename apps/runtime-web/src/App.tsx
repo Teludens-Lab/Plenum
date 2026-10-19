@@ -3,6 +3,7 @@ import {
   type CommandEnvelopeV1,
   type CommandReceiptV1,
   type ErrorEnvelopeV1,
+  type EffectProposalV1,
   type JsonObject,
   type OperatorProjectionV1,
   type RuntimeActionV1,
@@ -343,6 +344,44 @@ function ArtifactCard({ artifact, disabled, send }: {
 
 type SendInformation = (operationType: string, aggregateId: string, expectedVersion: number, payload: JsonObject) => void;
 
+function EffectProposalReview({ proposals, disabled, decide }: {
+  proposals: EffectProposalV1[];
+  disabled: boolean;
+  decide(proposal: EffectProposalV1, decision: "approve" | "reject" | "return", reason: string): void;
+}) {
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  if (proposals.length === 0) return null;
+  return <section aria-labelledby="effect-proposals-title">
+    <div className="section-heading"><p className="eyebrow">Human approval required</p><h2 id="effect-proposals-title">Effect Proposals</h2></div>
+    <p className="hint">Plugin output is staged only. Authoritative state changes only after an approved Command receives a server receipt.</p>
+    <div className="card-grid">{proposals.map((proposal) => {
+      const reason = reasons[proposal.id] ?? "";
+      return <article className="card effect-proposal" key={proposal.id} aria-labelledby={`effect-${proposal.id}`}>
+        <div className="card-heading"><h3 id={`effect-${proposal.id}`}>{proposal.targetStateVariableId.replaceAll("_", " ")}</h3>
+          <span className="badge badge-state">{proposal.status.replaceAll("_", " ")}</span></div>
+        <dl className="metadata"><div><dt>Operation</dt><dd>{proposal.operation}</dd></div><div><dt>Proposed value</dt><dd><code>{JSON.stringify(proposal.value)}</code></dd></div></dl>
+        <p>{proposal.rationale}</p>
+        <details><summary>Provenance</summary><dl className="proposal-provenance">
+          <div><dt>Plugin digest</dt><dd><code>{proposal.pluginDigest}</code></dd></div>
+          <div><dt>Input digest</dt><dd><code>{proposal.inputDigest}</code></dd></div>
+          <div><dt>Proposal hash</dt><dd><code>{proposal.proposalHash}</code></dd></div>
+        </dl></details>
+        {proposal.status !== "in_review" ? null : <>
+          <div className="field"><label htmlFor={`reason-${proposal.id}`}>Decision reason</label>
+            <textarea id={`reason-${proposal.id}`} value={reason} maxLength={2000} disabled={disabled}
+              onChange={(event) => setReasons((current) => ({ ...current, [proposal.id]: event.target.value }))} />
+            <p className="hint">Required for approve, reject, or return.</p></div>
+          <div className="actions" aria-label={`Decision for ${proposal.targetStateVariableId}`}>
+            <button className="btn-primary" type="button" disabled={disabled || reason.trim().length === 0} onClick={() => decide(proposal, "approve", reason.trim())}>Approve effect</button>
+            <button className="btn-secondary" type="button" disabled={disabled || reason.trim().length === 0} onClick={() => decide(proposal, "return", reason.trim())}>Return for review</button>
+            <button className="btn-secondary" type="button" disabled={disabled || reason.trim().length === 0} onClick={() => decide(proposal, "reject", reason.trim())}>Reject effect</button>
+          </div>
+        </>}
+      </article>;
+    })}</div>
+  </section>;
+}
+
 function messageSummary(message: RuntimeMessageV1): string {
   for (const key of ["text", "body", "title"]) {
     const value = message.content[key];
@@ -493,6 +532,7 @@ function RuntimeView() {
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [projection, setProjection] = useState<RuntimeProjectionV1 | null>(null);
+  const [effectProposals, setEffectProposals] = useState<EffectProposalV1[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string>("");
   const [pending, setPending] = useState<PendingCommand | null>(null);
@@ -505,7 +545,13 @@ function RuntimeView() {
     try {
       const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };
       setDeviceId(registered.deviceId);
-      setProjection(await api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers: { "x-device-id": registered.deviceId } }));
+      const headers = { "x-device-id": registered.deviceId };
+      const [nextProjection, proposalResponse] = await Promise.all([
+        api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers }),
+        api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers })
+      ]);
+      setProjection(nextProjection);
+      setEffectProposals(proposalResponse.proposals);
       setConnection("online");
     } catch (cause) {
       setConnection(navigator.onLine ? "error" : "offline");
@@ -586,6 +632,26 @@ function RuntimeView() {
     });
   };
 
+  const decideEffect = async (proposal: EffectProposalV1, decision: "approve" | "reject" | "return", reason: string) => {
+    if (id === null || projection === null || deviceId === null) return;
+    if (!navigator.onLine) { setConnection("offline"); setNotice("Approval Decisions require a live Session Authority and were not queued."); return; }
+    setNotice("Submitting the Approval Decision to the Session Authority.");
+    try {
+      const response = await fetch(`/v1/sessions/${id}/commands`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        commandId: crypto.randomUUID(), deviceId, operationType: `effect_proposal.${decision}`, aggregateId: proposal.id,
+        expectedAggregateVersion: proposal.version, governingReleaseId: proposal.governingReleaseId,
+        activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(),
+        payload: { proposalHash: proposal.proposalHash, reason }
+      } satisfies CommandEnvelopeV1) });
+      const receipt: unknown = await response.json();
+      if (!isCommandReceipt(receipt)) throw new Error(`Approval Decision returned an invalid response with status ${response.status}`);
+      await handleReceipt(receipt);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? `Approval Decision was not queued: ${cause.message}` : "Approval Decision was not queued.");
+      await load();
+    }
+  };
+
   const retryPending = async () => {
     if (pending === null || id === null) return;
     setNotice("Checking for the original server receipt before retrying.");
@@ -638,6 +704,7 @@ function RuntimeView() {
         disabled={pending !== null} send={sendInformation} />)}
       {injectModules.map((module) => <InjectInbox key={module.id} module={module} projection={projection}
         disabled={pending !== null} send={sendInformation} />)}
+      <EffectProposalReview proposals={effectProposals} disabled={pending !== null} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>
   </Shell>;

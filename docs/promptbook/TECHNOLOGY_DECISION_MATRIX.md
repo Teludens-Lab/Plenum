@@ -14,7 +14,7 @@ This consolidates pointers and implementation consequences. It is not a parallel
 | Studio collaboration | Authenticated WebSocket + CRDT | ADR-002, ADR-010 | Proposed | PS-300 | CRDT never merges Runtime Commands |
 | CRDT library | Yjs | Platform section 23 | Candidate | PS-300 | Pin only after compatibility spike |
 | Media | Self-hosted WebRTC SFU + TURN behind adapter | DEC-49, ADR-017 | Exception Confirmed; adapter Proposed | PS-250, PS-530 | LiveKit remains candidate, not dependency |
-| Extension isolation | Rootless containers; WASM/WASI additional target | ADR-018 | Proposed | PS-220, PS-230 | Python/native waits for OPEN-022 |
+| Extension isolation | Rootless containers; WASM/WASI additional target | ADR-018 | Confirmed and implemented for local OCI Plugins | PS-220, PS-230 | Python/native remains deferred under resolved OPEN-022 baseline |
 | Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Proposed | PS-530 | Kubernetes optional only |
 | Persistence | Relational current state + append-only evidence | ADR-014 | Proposed | PS-120 | No full event sourcing |
 | Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Implemented and tested; ADR still Proposed | PS-110 | DB-01 passes with pooled real app role on Pg18.6 |

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["seed", "pressure", "effectId", "targetAggregateId"],
+  "properties": {
+    "seed": { "type": "integer", "minimum": 0 },
+    "pressure": { "type": "number", "minimum": 0, "maximum": 100 },
+    "effectId": { "type": "string", "pattern": "^[0-9a-f-]{36}$" },
+    "targetAggregateId": { "type": "string", "pattern": "^[0-9a-f-]{36}$" }
+  }
+}

@@ -39,6 +39,10 @@ import {
   resolveSessionAccessContext,
   revokeAuthenticationSession,
   revokePluginArtifact,
+  submitRuntimeCommand,
+  getEffectProposals,
+  exportExtensionProvenance,
+  executePendingModelRun,
   submitPluginArtifact,
   verifyImportedPackage,
   withOrganizationTransaction
@@ -129,7 +133,8 @@ async function applyMigrations() {
     "apps/server/migrations/008_projection_cursors.sql",
     "apps/server/migrations/009_runtime_capabilities.sql",
     "apps/server/migrations/010_information_messages_injects.sql",
-    "apps/server/migrations/011_extension_registry.sql"
+    "apps/server/migrations/011_extension_registry.sql",
+    "apps/server/migrations/012_extension_runs_approvals.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -863,4 +868,196 @@ test("EXT-01/02/16 separates Plugin submit, approval, install, bind, run authori
     [submitted.artifactId, installationId, bindingId, ids.orgB]
   );
   assert.deepEqual(retained.rows[0], { artifacts: "1", installations: "1", bindings: "1", audits: "12" });
+});
+
+test("EXT-06/07/08/09/10/17/18/20 isolates runs and applies one approved effect through the Command kernel", async () => {
+  const publisherId = "23000000-0000-4000-8000-000000000001";
+  const artifactId = "23000000-0000-4000-8000-000000000002";
+  const installationId = "23000000-0000-4000-8000-000000000003";
+  const bindingId = "23000000-0000-4000-8000-000000000004";
+  const compositionRunId = "23000000-0000-4000-8000-000000000005";
+  const modelRunId = "23000000-0000-4000-8000-000000000006";
+  const stateValueId = "23000000-0000-4000-8000-000000000007";
+  const proposalId = "23000000-0000-4000-8000-000000000008";
+  const trustRootId = "23000000-0000-4000-8000-000000000017";
+  const revocationListId = "23000000-0000-4000-8000-000000000018";
+  const digest = `sha256:${"3".repeat(64)}`;
+  const configurationDigest = `sha256:${"4".repeat(64)}`;
+  const inputDigest = `sha256:${"5".repeat(64)}`;
+  const outputDigest = `sha256:${"6".repeat(64)}`;
+  const proposalHash = `sha256:${"7".repeat(64)}`;
+  const manifest = {
+    contractId: "plugin-manifest-v1", manifestVersion: "1.0.0", pluginId: "org.ssg.fixtures.effect", version: "1.0.0",
+    digest, artifactPath: "plugin.mjs", publisher: { id: publisherId, signatureKeyId: "fixture" }, categories: ["world_and_simulation"],
+    capabilities: ["compute", "propose_effect"], execution: { mode: "container", entrypoint: "plugin.mjs", rootless: true, readOnlyRoot: true },
+    connectivity: "offline_capable", contracts: { inputSchema: "input.json", outputSchema: "output.json" },
+    compatibility: { hostApi: ">=1.0.0 <2.0.0", releaseSchema: ">=1.3.0 <2.0.0" },
+    limits: { timeoutSeconds: 5, memoryMiB: 64, cpuMillis: 1000, outputBytes: 8192 },
+    requestedPermissions: ["state_values.read:mapped", "effects.propose"], dataClassificationMaximum: "internal",
+    reproducibility: { deterministic: true, seedInput: "seed" }, dependencies: [], provenance: { sourceRevision: "fixture", buildSystem: "none" }, license: "fixture"
+  };
+  await owner.query("BEGIN");
+  try {
+    await owner.query(`INSERT INTO extension.publishers(id,organization_id,principal_id,display_name,signature_key_id,public_key_pem,status,approved_by)
+      VALUES ($1,$2,$3,'Fixture','fixture','fixture','approved',$3)`, [publisherId, ids.orgA, ids.personA]);
+    await owner.query(`INSERT INTO extension.trust_roots
+      (id,organization_id,publisher_id,publisher_key_id,publisher_public_key_pem,revocation_key_id,revocation_public_key_pem,provisioned_by)
+      VALUES ($1,$2,$3,'fixture','fixture','fixture-revocation','fixture',$4)`,
+      [trustRootId, ids.orgA, publisherId, ids.personA]);
+    await owner.query(`INSERT INTO extension.revocation_lists
+      (id,organization_id,publisher_id,trust_root_id,document,document_sha256,generated_at,imported_by)
+      VALUES ($1,$2,$3,$4,$5::jsonb,$6,now(),$7)`,
+      [revocationListId, ids.orgA, publisherId, trustRootId, JSON.stringify({
+        contractId: "plugin-revocations-v1", generatedAt: new Date().toISOString(), publisherId,
+        revokedKeyIds: [], revokedDigests: [], signature: { algorithm: "Ed25519", keyId: "fixture-revocation", value: "fixture" }
+      }), `sha256:${"e".repeat(64)}`, ids.personA]);
+    await owner.query(`INSERT INTO extension.plugin_artifacts
+      (id,organization_id,publisher_id,plugin_id,version,digest,manifest_digest,bundle_digest,object_key,manifest,supply_chain,lifecycle_status,submitted_by,approved_by,approved_at)
+      VALUES ($1,$2,$3,'org.ssg.fixtures.effect','1.0.0',$4,$5,$6,'fixture',$7::jsonb,'{}','approved',$8,$8,now())`,
+      [artifactId, ids.orgA, publisherId, digest, `sha256:${"8".repeat(64)}`, `sha256:${"9".repeat(64)}`, JSON.stringify(manifest), ids.personA]);
+    await owner.query(`INSERT INTO extension.plugin_installations
+      (id,organization_id,deployment_id,artifact_id,artifact_digest,status,permitted_permissions,installed_by)
+      VALUES ($1,$2,$3,$4,$5,'enabled',ARRAY['state_values.read:mapped','effects.propose'],$6)`,
+      [installationId, ids.orgA, ids.deploymentA, artifactId, digest, ids.personA]);
+    await owner.query(`INSERT INTO extension.plugin_bindings
+      (id,organization_id,project_id,definition_revision_id,installation_id,artifact_digest,configuration_digest,deployment_profile,status,bound_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'air_gapped','enabled',$8)`,
+      [bindingId, ids.orgA, ids.projectA, ids.revisionA, installationId, digest, configurationDigest, ids.personA]);
+    await owner.query(`INSERT INTO runtime.state_values
+      (id,organization_id,session_id,governing_release_id,state_variable_id,scope_reference,value,version)
+      VALUES ($1,$2,$3,$4,'synthetic_risk','','10',1)`, [stateValueId, ids.orgA, ids.sessionA, ids.releaseA]);
+    await owner.query(`INSERT INTO extension.composition_runs
+      (id,organization_id,session_id,governing_release_id,trigger_command_id,graph_digest,input_snapshot_id,input_snapshot,input_digest,execution_policy,authority_epoch,status,correlation_id,completed_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'{"pressure":10}',$8,'{"reviewerSessionRoleIds":["role-c"],"allowedEffects":[]}',1,'completed',$9,now())`,
+      [compositionRunId, ids.orgA, ids.sessionA, ids.releaseA, "23000000-0000-4000-8000-000000000009", `sha256:${"a".repeat(64)}`,
+        "23000000-0000-4000-8000-00000000000a", inputDigest, "23000000-0000-4000-8000-00000000000b"]);
+    await owner.query(`INSERT INTO extension.model_runs
+      (id,organization_id,session_id,composition_run_id,binding_id,artifact_digest,configuration_digest,governing_release_id,input_snapshot_id,input_digest,output_digest,environment_digest,seed,status,completed_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,42,'completed',now())`,
+      [modelRunId, ids.orgA, ids.sessionA, compositionRunId, bindingId, digest, configurationDigest, ids.releaseA,
+        "23000000-0000-4000-8000-00000000000a", inputDigest, outputDigest, `sha256:${"b".repeat(64)}`]);
+    await owner.query(`INSERT INTO extension.effect_proposals
+      (id,organization_id,session_id,model_run_id,proposal_hash,target_aggregate_id,target_state_variable_id,scope_reference,operation,value,rationale,reviewer_role_ids,lifecycle_status,expected_state_version,governing_release_id,authority_epoch,artifact_digest,configuration_digest,input_digest,output_digest)
+      VALUES ($1,$2,$3,$4,$5,$6,'synthetic_risk','','adjust','5','Synthetic effect',ARRAY['role-c'],'in_review',1,$7,1,$8,$9,$10,$11)`,
+      [proposalId, ids.orgA, ids.sessionA, modelRunId, proposalHash, stateValueId, ids.releaseA, digest, configurationDigest, inputDigest, outputDigest]);
+    await owner.query("COMMIT");
+  } catch (error) { await owner.query("ROLLBACK"); throw error; }
+
+  const context = {
+    authenticationSessionId: "fixture", principalId: ids.personA, organizationId: ids.orgA, sessionId: ids.sessionA,
+    sessionStatus: "active", participantId: ids.participantA, seatAssignmentIds: [ids.assignmentA], activeSessionRoleId: "role-c",
+    seatId: "seat-a", organizationRoles: ["operator"], activeReleaseId: ids.releaseA, authenticationStrength: "mfa",
+    featureFlags: [], authorityEpoch: 1, accessRevision: 1, deviceId: ids.deviceA
+  };
+  assert.equal((await owner.query("SELECT value FROM runtime.state_values WHERE id=$1", [stateValueId])).rows[0].value, 10);
+  assert.equal((await getEffectProposals(app, context)).length, 1);
+
+  const failedRunId = "23000000-0000-4000-8000-000000000013";
+  await owner.query(`INSERT INTO runtime.state_values
+    (id,organization_id,session_id,governing_release_id,state_variable_id,scope_reference,value,version)
+    VALUES ('23000000-0000-4000-8000-000000000014',$1,$2,$3,'hidden_secret','','"must-not-leak"',1)`,
+    [ids.orgA, ids.sessionA, ids.releaseA]);
+  const plan = {
+    id: "malformed-output-plan", governingReleaseId: ids.releaseA, bindingId, graphDigest: `sha256:${"c".repeat(64)}`,
+    seed: 42, triggerSessionRoleIds: ["role-c"], reviewerSessionRoleIds: ["role-c"],
+    inputMappings: [{ inputKey: "pressure", stateVariableId: "synthetic_risk", scopeReference: "" }],
+    allowedEffects: [{ stateVariableId: "synthetic_risk", scopeReference: "", operations: ["set"] }]
+  };
+  const started = await submitRuntimeCommand(app, context, {
+    commandId: "23000000-0000-4000-8000-000000000015", deviceId: ids.deviceA, operationType: "composition_run.start",
+    aggregateId: failedRunId, expectedAggregateVersion: 0, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c",
+    payload: { planId: plan.id }
+  }, "23000000-0000-4000-8000-000000000016", ids.deploymentA, new Map([[plan.id, plan]]));
+  assert.equal(started.status, "accepted");
+  await executePendingModelRun(app, ids.orgA, failedRunId, {
+    plans: new Map([[plan.id, plan]]),
+    loadArtifact: async () => ({ manifest, pluginDirectory: ".", inputSchema: {}, outputSchema: {} }),
+    execute: async () => ({ outputs: {}, outputDigest, environmentDigest: `sha256:${"d".repeat(64)}`, durationMs: 1 })
+  });
+  const failed = await owner.query(`SELECT composition.input_snapshot,run.status,run.failure_code,
+    (SELECT count(*) FROM extension.effect_proposals WHERE model_run_id=run.id) proposals
+    FROM extension.composition_runs composition JOIN extension.model_runs run ON run.composition_run_id=composition.id
+    WHERE composition.id=$1`, [failedRunId]);
+  assert.deepEqual(failed.rows[0], { input_snapshot: { seed: 42, pressure: 10 }, status: "failed", failure_code: "output_invalid", proposals: "0" });
+
+  const timeoutRunId = "23000000-0000-4000-8000-000000000020";
+  const timeoutStarted = await submitRuntimeCommand(app, context, {
+    commandId: "23000000-0000-4000-8000-000000000021", deviceId: ids.deviceA, operationType: "composition_run.start",
+    aggregateId: timeoutRunId, expectedAggregateVersion: 0, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c",
+    payload: { planId: plan.id }
+  }, "23000000-0000-4000-8000-000000000022", ids.deploymentA, new Map([[plan.id, plan]]));
+  assert.equal(timeoutStarted.status, "accepted");
+  await executePendingModelRun(app, ids.orgA, timeoutRunId, {
+    plans: new Map([[plan.id, plan]]),
+    loadArtifact: async () => ({ manifest, pluginDirectory: ".", inputSchema: {}, outputSchema: {} }),
+    execute: async () => { throw new Error("Plugin execution timed out"); }
+  });
+  assert.deepEqual((await owner.query(`SELECT run.status,run.failure_code,
+    (SELECT count(*) FROM extension.effect_proposals WHERE model_run_id=run.id) proposals
+    FROM extension.model_runs run WHERE run.composition_run_id=$1`, [timeoutRunId])).rows[0],
+  { status: "failed", failure_code: "timeout", proposals: "0" });
+
+  const unauthorized = await submitRuntimeCommand(app, { ...context, principalId: ids.personC, participantId: ids.participantC,
+    seatAssignmentIds: [ids.assignmentC], activeSessionRoleId: "role-c-viewer", deviceId: ids.deviceC, organizationRoles: [] }, {
+    commandId: "23000000-0000-4000-8000-00000000000c", deviceId: ids.deviceC, operationType: "effect_proposal.approve",
+    aggregateId: proposalId, expectedAggregateVersion: 1, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c-viewer",
+    payload: { proposalHash, reason: "Unauthorized attempt" }
+  }, "23000000-0000-4000-8000-00000000000d", ids.deploymentA);
+  assert.equal(unauthorized.errorCode, "PERMISSION_DENIED");
+  const blankReason = await submitRuntimeCommand(app, context, {
+    commandId: "23000000-0000-4000-8000-000000000023", deviceId: ids.deviceA, operationType: "effect_proposal.approve",
+    aggregateId: proposalId, expectedAggregateVersion: 1, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c",
+    payload: { proposalHash, reason: "   " }
+  }, "23000000-0000-4000-8000-000000000024", ids.deploymentA);
+  assert.equal(blankReason.errorCode, "VALIDATION_FAILED");
+
+  const command = (commandId) => ({ commandId, deviceId: ids.deviceA, operationType: "effect_proposal.approve", aggregateId: proposalId,
+    expectedAggregateVersion: 1, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c", payload: { proposalHash, reason: "Reviewed fixture" } });
+  const [first, second] = await Promise.all([
+    submitRuntimeCommand(app, context, command("23000000-0000-4000-8000-00000000000e"), "23000000-0000-4000-8000-000000000010", ids.deploymentA),
+    submitRuntimeCommand(app, context, command("23000000-0000-4000-8000-00000000000f"), "23000000-0000-4000-8000-000000000011", ids.deploymentA)
+  ]);
+  assert.deepEqual([first.status, second.status].sort(), ["accepted", "rejected"]);
+  const acceptedCommandId = first.status === "accepted" ? first.commandId : second.commandId;
+  const replayed = await submitRuntimeCommand(app, context, command(acceptedCommandId), "23000000-0000-4000-8000-000000000012", ids.deploymentA);
+  assert.equal(replayed.replayed, true);
+  const outcome = await owner.query(`SELECT
+    (SELECT value FROM runtime.state_values WHERE id=$1) value,
+    (SELECT count(*) FROM extension.approval_decisions WHERE proposal_id=$2) decisions,
+    (SELECT count(*) FROM extension.effect_receipts WHERE proposal_id=$2) effects,
+    (SELECT count(*) FROM evidence.events WHERE aggregate_id=$2 AND event_type='effect_proposal.applied') events`, [stateValueId, proposalId]);
+  assert.deepEqual(outcome.rows[0], { value: 15, decisions: "1", effects: "1", events: "1" });
+
+  const staleProposalId = "23000000-0000-4000-8000-000000000019";
+  const staleProposalHash = `sha256:${"f".repeat(64)}`;
+  await owner.query(`INSERT INTO extension.effect_proposals
+    (id,organization_id,session_id,model_run_id,proposal_hash,target_aggregate_id,target_state_variable_id,scope_reference,operation,value,rationale,reviewer_role_ids,lifecycle_status,expected_state_version,governing_release_id,authority_epoch,artifact_digest,configuration_digest,input_digest,output_digest)
+    VALUES ($1,$2,$3,$4,$5,$6,'synthetic_risk','','set','20','Stale synthetic effect',ARRAY['role-c'],'in_review',1,$7,1,$8,$9,$10,$11)`,
+    [staleProposalId, ids.orgA, ids.sessionA, modelRunId, staleProposalHash, stateValueId, ids.releaseA, digest, configurationDigest, inputDigest, outputDigest]);
+  const stale = await submitRuntimeCommand(app, context, {
+    commandId: "23000000-0000-4000-8000-00000000001a", deviceId: ids.deviceA, operationType: "effect_proposal.approve",
+    aggregateId: staleProposalId, expectedAggregateVersion: 1, governingReleaseId: ids.releaseA, activeSessionRoleId: "role-c",
+    payload: { proposalHash: staleProposalHash, reason: "This approval is stale" }
+  }, "23000000-0000-4000-8000-00000000001b", ids.deploymentA);
+  assert.equal(stale.status, "needs_reconciliation");
+  assert.equal(stale.errorCode, "STALE_PROPOSAL");
+  assert.equal((await owner.query("SELECT value FROM runtime.state_values WHERE id=$1", [stateValueId])).rows[0].value, 15);
+
+  await owner.query("UPDATE extension.plugin_artifacts SET lifecycle_status='revoked',revoked_at=now() WHERE id=$1", [artifactId]);
+  const provenance = await exportExtensionProvenance(
+    app, principal, ids.sessionA, "23000000-0000-4000-8000-00000000001c"
+  );
+  assert.equal(provenance.runs.length, 3);
+  assert.equal(provenance.runs.some((run) => run.status === "failed" && run.failure_code === "output_invalid"), true);
+  assert.equal(provenance.runs.some((run) => run.status === "failed" && run.failure_code === "timeout"), true);
+  assert.equal(provenance.proposals.length, 2);
+  assert.equal(provenance.proposals.some((proposal) => proposal.evidence_sequence !== null), true);
+  await assert.rejects(
+    exportExtensionProvenance(app, { ...principal, organizationRoles: [] }, ids.sessionA, "23000000-0000-4000-8000-00000000001d"),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await assert.rejects(
+    exportExtensionProvenance(app, principal, ids.sessionB, "23000000-0000-4000-8000-00000000001e"),
+    (error) => error?.envelope?.error?.code === "TARGET_NOT_FOUND"
+  );
 });

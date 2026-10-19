@@ -17,7 +17,9 @@ const migrations = [
   "apps/server/migrations/007_release_packages.sql",
   "apps/server/migrations/008_projection_cursors.sql",
   "apps/server/migrations/009_runtime_capabilities.sql",
-  "apps/server/migrations/010_information_messages_injects.sql"
+  "apps/server/migrations/010_information_messages_injects.sql",
+  "apps/server/migrations/011_extension_registry.sql",
+  "apps/server/migrations/012_extension_runs_approvals.sql"
 ];
 
 export default async function globalSetup() {
@@ -111,6 +113,48 @@ export default async function globalSetup() {
          ARRAY['facilitator','white_cell'],4)`,
       [fixture.proposalArtifactId, fixture.organizationId, fixture.sessionId, fixture.releaseId, fixture.participants.greenReviewer]
     );
+    const extensionIds = {
+      publisher: "24000000-0000-4000-8000-000000000001", artifact: "24000000-0000-4000-8000-000000000002",
+      installation: "24000000-0000-4000-8000-000000000003", binding: "24000000-0000-4000-8000-000000000004",
+      compositionRun: "24000000-0000-4000-8000-000000000005", modelRun: "24000000-0000-4000-8000-000000000006",
+      stateValue: "24000000-0000-4000-8000-000000000007", proposal: "24000000-0000-4000-8000-000000000008"
+    };
+    const artifactDigest = `sha256:${"3".repeat(64)}`;
+    const configurationDigest = `sha256:${"4".repeat(64)}`;
+    const inputDigest = `sha256:${"5".repeat(64)}`;
+    const outputDigest = `sha256:${"6".repeat(64)}`;
+    await owner.query(`INSERT INTO extension.publishers(id,organization_id,principal_id,display_name,signature_key_id,public_key_pem,status,approved_by)
+      VALUES ($1,$2,$3,'PS-230 fixture','fixture','fixture','approved',$3)`, [extensionIds.publisher, fixture.organizationId, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.plugin_artifacts
+      (id,organization_id,publisher_id,plugin_id,version,digest,manifest_digest,bundle_digest,object_key,manifest,supply_chain,lifecycle_status,submitted_by,approved_by,approved_at)
+      VALUES ($1,$2,$3,'org.ssg.fixtures.effect','1.0.0',$4,$5,$6,'fixture','{}','{}','approved',$7,$7,now())`,
+      [extensionIds.artifact, fixture.organizationId, extensionIds.publisher, artifactDigest, `sha256:${"8".repeat(64)}`, `sha256:${"9".repeat(64)}`, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.plugin_installations
+      (id,organization_id,deployment_id,artifact_id,artifact_digest,status,permitted_permissions,installed_by)
+      VALUES ($1,$2,$3,$4,$5,'enabled',ARRAY['effects.propose'],$6)`,
+      [extensionIds.installation, fixture.organizationId, fixture.deploymentId, extensionIds.artifact, artifactDigest, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.plugin_bindings
+      (id,organization_id,project_id,definition_revision_id,installation_id,artifact_digest,configuration_digest,deployment_profile,status,bound_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'air_gapped','enabled',$8)`,
+      [extensionIds.binding, fixture.organizationId, fixture.projectId, fixture.revisionId, extensionIds.installation, artifactDigest, configurationDigest, fixture.people.operator]);
+    await owner.query(`INSERT INTO runtime.state_values
+      (id,organization_id,session_id,governing_release_id,state_variable_id,scope_reference,value,version)
+      VALUES ($1,$2,$3,$4,'synthetic_risk','','10',1)`, [extensionIds.stateValue, fixture.organizationId, fixture.sessionId, fixture.releaseId]);
+    await owner.query(`INSERT INTO extension.composition_runs
+      (id,organization_id,session_id,governing_release_id,trigger_command_id,graph_digest,input_snapshot_id,input_snapshot,input_digest,execution_policy,authority_epoch,status,correlation_id,completed_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'{"pressure":10}',$8,'{"reviewerSessionRoleIds":["white_cell"],"allowedEffects":[]}',1,'completed',$9,now())`,
+      [extensionIds.compositionRun, fixture.organizationId, fixture.sessionId, fixture.releaseId, "24000000-0000-4000-8000-000000000009", `sha256:${"a".repeat(64)}`,
+        "24000000-0000-4000-8000-00000000000a", inputDigest, "24000000-0000-4000-8000-00000000000b"]);
+    await owner.query(`INSERT INTO extension.model_runs
+      (id,organization_id,session_id,composition_run_id,binding_id,artifact_digest,configuration_digest,governing_release_id,input_snapshot_id,input_digest,output_digest,environment_digest,seed,status,completed_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,42,'completed',now())`,
+      [extensionIds.modelRun, fixture.organizationId, fixture.sessionId, extensionIds.compositionRun, extensionIds.binding, artifactDigest, configurationDigest,
+        fixture.releaseId, "24000000-0000-4000-8000-00000000000a", inputDigest, outputDigest, `sha256:${"b".repeat(64)}`]);
+    await owner.query(`INSERT INTO extension.effect_proposals
+      (id,organization_id,session_id,model_run_id,proposal_hash,target_aggregate_id,target_state_variable_id,scope_reference,operation,value,rationale,reviewer_role_ids,lifecycle_status,expected_state_version,governing_release_id,authority_epoch,artifact_digest,configuration_digest,input_digest,output_digest)
+      VALUES ($1,$2,$3,$4,$5,$6,'synthetic_risk','','adjust','5','Deterministic synthetic fixture result',ARRAY['white_cell'],'in_review',1,$7,1,$8,$9,$10,$11)`,
+      [extensionIds.proposal, fixture.organizationId, fixture.sessionId, extensionIds.modelRun, `sha256:${"7".repeat(64)}`,
+        extensionIds.stateValue, fixture.releaseId, artifactDigest, configurationDigest, inputDigest, outputDigest]);
     for (const participantId of Object.values(fixture.participants)) {
       await owner.query(
         "INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3)",

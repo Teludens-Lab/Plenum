@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outputs", "effectProposals"],
+  "properties": {
+    "outputs": {
+      "type": "object", "additionalProperties": false, "required": ["syntheticScore"],
+      "properties": { "syntheticScore": { "type": "number", "minimum": 0, "maximum": 100 } }
+    },
+    "effectProposals": {
+      "type": "array", "minItems": 1, "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["effectId", "targetAggregateId", "targetStateVariableId", "scopeReference", "operation", "value", "rationale"],
+        "properties": {
+          "effectId": { "type": "string", "pattern": "^[0-9a-f-]{36}$" },
+          "targetAggregateId": { "type": "string", "pattern": "^[0-9a-f-]{36}$" },
+          "targetStateVariableId": { "const": "synthetic_risk" },
+          "scopeReference": { "const": "" },
+          "operation": { "const": "set" },
+          "value": { "type": "number", "minimum": 0, "maximum": 100 },
+          "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    }
+  }
+}

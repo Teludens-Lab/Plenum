@@ -33,6 +33,9 @@ export const INJECT_COMMAND_CONTRACT_ID = "inject-command-v1";
 export const MESSAGE_COMMAND_CONTRACT_ID = "message-command-v1";
 export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
 export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
+export const MODEL_RUN_CONTRACT_ID = "model-run-v1";
+export const EFFECT_PROPOSAL_CONTRACT_ID = "effect-proposal-v1";
+export const APPROVAL_DECISION_CONTRACT_ID = "approval-decision-v1";
 
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
 export const SESSION_OPERATOR_POLICY_V1 = {
@@ -273,6 +276,109 @@ export interface OperatorProjectionV1 {
   recentEvents: Array<{ type: string; recordedAt: string; aggregateId: string | null }>;
 }
 
+export type EffectProposalStatus = "staged" | "in_review" | "applied" | "rejected" | "returned" | "stale" | "failed";
+
+export interface ModelRunV1 {
+  contractId: typeof MODEL_RUN_CONTRACT_ID;
+  id: string;
+  compositionRunId: string;
+  sessionId: string;
+  governingReleaseId: string;
+  pluginDigest: string;
+  configurationDigest: string;
+  inputSnapshotId: string;
+  inputDigest: string;
+  outputDigest: string | null;
+  environmentDigest: string | null;
+  seed: number;
+  status: "pending" | "running" | "completed" | "failed";
+  failureCode: "timeout" | "output_invalid" | "execution_failed" | null;
+}
+
+export interface EffectProposalV1 {
+  contractId: typeof EFFECT_PROPOSAL_CONTRACT_ID;
+  id: string;
+  modelRunId: string;
+  proposalHash: string;
+  targetAggregateId: string;
+  targetStateVariableId: string;
+  scopeReference: string;
+  operation: "set" | "adjust";
+  value: JsonValue;
+  rationale: string;
+  status: EffectProposalStatus;
+  expectedStateVersion: number;
+  governingReleaseId: string;
+  authorityEpoch: number;
+  pluginDigest: string;
+  configurationDigest: string;
+  inputDigest: string;
+  outputDigest: string;
+  version: number;
+}
+
+export interface ApprovalDecisionV1 {
+  contractId: typeof APPROVAL_DECISION_CONTRACT_ID;
+  id: string;
+  proposalId: string;
+  proposalHash: string;
+  reviewerPersonId: string;
+  reviewerSessionRoleId: string;
+  decision: "approve" | "reject" | "return";
+  reason: string;
+  governingReleaseId: string;
+  authorityEpoch: number;
+  expectedStateVersion: number;
+  commandId: string;
+  decidedAt: string;
+}
+
+const uuidProperty = { type: "string", format: "uuid" } as const;
+const utcInstantProperty = { type: "string", format: "date-time" } as const;
+const jsonObjectProperty = { type: "object" } as const;
+
+export const modelRunV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: MODEL_RUN_CONTRACT_ID, title: "Model Run v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "compositionRunId", "sessionId", "governingReleaseId", "pluginDigest", "configurationDigest", "inputSnapshotId", "inputDigest", "outputDigest", "environmentDigest", "seed", "status", "failureCode"],
+  properties: {
+    contractId: { const: MODEL_RUN_CONTRACT_ID }, id: uuidProperty, compositionRunId: uuidProperty, sessionId: uuidProperty,
+    governingReleaseId: uuidProperty, pluginDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    configurationDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, inputSnapshotId: uuidProperty,
+    inputDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, outputDigest: { type: ["string", "null"], pattern: "^sha256:[0-9a-f]{64}$" },
+    environmentDigest: { type: ["string", "null"], pattern: "^sha256:[0-9a-f]{64}$" }, seed: { type: "integer", minimum: 0 },
+    status: { enum: ["pending", "running", "completed", "failed"] }, failureCode: { enum: ["timeout", "output_invalid", "execution_failed", null] }
+  }
+} as const satisfies ContractSchema<ModelRunV1>;
+
+export const effectProposalV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: EFFECT_PROPOSAL_CONTRACT_ID, title: "Effect Proposal v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "modelRunId", "proposalHash", "targetAggregateId", "targetStateVariableId", "scopeReference", "operation", "value", "rationale", "status", "expectedStateVersion", "governingReleaseId", "authorityEpoch", "pluginDigest", "configurationDigest", "inputDigest", "outputDigest", "version"],
+  properties: {
+    contractId: { const: EFFECT_PROPOSAL_CONTRACT_ID }, id: uuidProperty, modelRunId: uuidProperty,
+    proposalHash: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, targetAggregateId: uuidProperty,
+    targetStateVariableId: { type: "string", minLength: 1 }, scopeReference: { type: "string" }, operation: { enum: ["set", "adjust"] },
+    value: {}, rationale: { type: "string", minLength: 1 }, status: { enum: ["staged", "in_review", "applied", "rejected", "returned", "stale", "failed"] },
+    expectedStateVersion: { type: "integer", minimum: 0 }, governingReleaseId: uuidProperty, authorityEpoch: { type: "integer", minimum: 1 },
+    pluginDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, configurationDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    inputDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, outputDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, version: { type: "integer", minimum: 1 }
+  }
+} as const satisfies ContractSchema<EffectProposalV1>;
+
+export const approvalDecisionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: APPROVAL_DECISION_CONTRACT_ID, title: "Approval Decision v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "proposalId", "proposalHash", "reviewerPersonId", "reviewerSessionRoleId", "decision", "reason", "governingReleaseId", "authorityEpoch", "expectedStateVersion", "commandId", "decidedAt"],
+  properties: {
+    contractId: { const: APPROVAL_DECISION_CONTRACT_ID }, id: uuidProperty, proposalId: uuidProperty,
+    proposalHash: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, reviewerPersonId: uuidProperty,
+    reviewerSessionRoleId: { type: "string", minLength: 1 }, decision: { enum: ["approve", "reject", "return"] }, reason: { type: "string", minLength: 1 },
+    governingReleaseId: uuidProperty, authorityEpoch: { type: "integer", minimum: 1 }, expectedStateVersion: { type: "integer", minimum: 0 },
+    commandId: uuidProperty, decidedAt: utcInstantProperty
+  }
+} as const satisfies ContractSchema<ApprovalDecisionV1>;
+
 export type ArtifactCommandV1 = CommandEnvelopeV1;
 export type StageCommandV1 = CommandEnvelopeV1;
 export type InjectCommandV1 = CommandEnvelopeV1;
@@ -333,10 +439,6 @@ export interface ErrorDetailV1 {
 export interface ErrorEnvelopeV1 {
   error: ErrorDetailV1;
 }
-
-const uuidProperty = { type: "string", format: "uuid" } as const;
-const utcInstantProperty = { type: "string", format: "date-time" } as const;
-const jsonObjectProperty = { type: "object" } as const;
 
 export const commandEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

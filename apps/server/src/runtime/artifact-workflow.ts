@@ -22,6 +22,7 @@ import {
   type SessionAccessContextV1
 } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { createCompositionRunExecutor, executeEffectProposalCommand, type ExtensionRunPlan } from "../extensions/runtime.js";
 import {
   processSessionCommand,
   type CommandDecision,
@@ -835,11 +836,14 @@ export async function submitRuntimeCommand(
   context: SessionAccessContextV1,
   command: CommandEnvelopeV1,
   correlationId: string,
-  deploymentId: string
+  deploymentId: string,
+  extensionRunPlans: ReadonlyMap<string, ExtensionRunPlan> = new Map()
 ) {
   const execute = command.operationType.startsWith("stage.") ? executeStageCommand :
     command.operationType.startsWith("artifact.") ? executeArtifactCommand :
       command.operationType.startsWith("message.") || command.operationType.startsWith("inject.") ? executeInformationCommand :
+      command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :
+      command.operationType.startsWith("effect_proposal.") ? executeEffectProposalCommand :
       async (): Promise<CommandDecision> => ({ status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE",
         message: "This configured capability is not available in the current Runtime." });
   return processSessionCommand({ pool, context, command, correlationId, deploymentId, lockAggregateAndExecute: execute });

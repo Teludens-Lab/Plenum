@@ -48,7 +48,7 @@ ADR-001 through ADR-005 keep the meanings they had in the earlier governing-deci
 The following entries rest on recommended defaults or recommendations and are not yet in force, except where a dated Product Owner confirmation is recorded below:
 
 - **Assumed decisions:** DEC-21 to DEC-27 and DEC-30 to DEC-40. Questions 1–22 of the 2026-10-17 questionnaire came back without visible selections, so the recommended options were applied as stated in that questionnaire.
-- **Proposed ADRs:** ADR-001 to ADR-005 (questionnaire item 8 unanswered), ADR-008 to ADR-015 (recommendations the Product Owner requested) and ADR-016 to ADR-017 (technical detail for the 2026-10-17 feature specifications). ADR-018 was confirmed by Product Owner direction on 2026-10-19.
+- **Proposed ADRs:** ADR-002, ADR-004 and ADR-005 (questionnaire item 8 unanswered), ADR-008 to ADR-015 (recommendations the Product Owner requested) and ADR-016 to ADR-017 (technical detail for the 2026-10-17 feature specifications). ADR-001, ADR-003 and ADR-018 were confirmed by Product Owner direction on 2026-10-19.
 - **Replacement term:** the name **Message Channel** in DEC-51 was chosen by the editor; the Product Owner confirmed only that "Voice Channel" keeps its name.
 - **Approver identities:** OPEN-001.
 
@@ -171,9 +171,9 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 
 | ID | Decision | Status | Approvers still required | Maps from |
 |---|---|---|---|---|
-| ADR-001 | **Single session authority.** Each Session has exactly one authoritative Runtime writer, identified by deployment ID and a monotonically increasing authority epoch. Stale epochs are rejected on every consequential write. Authority transfer is an explicit, operator-run, fenced procedure. No automatic cloud-to-LAN failover. | Proposed | Technical Lead, Operations Owner | Old ADR-001; GOV-009; Upstream DEC-10; Q8 item 3 |
+| ADR-001 | **Confirmed 2026-10-19 by Product Owner direction. Single session authority.** Each Session has exactly one authoritative Runtime writer, identified by deployment ID and a monotonically increasing authority epoch. Stale epochs are rejected on every consequential write. Authority transfer is an explicit, operator-run, fenced procedure. No automatic cloud-to-LAN failover. | Confirmed | Product Owner | Old ADR-001; GOV-009; Upstream DEC-10; Q8 item 3 |
 | ADR-002 | **Two synchronization domains.** Studio drafts converge through a CRDT (Yjs is the candidate library); publication freezes and fully validates the merged draft. Runtime commands are server-authoritative, idempotent and replay-safe; they are never CRDT-merged. | Proposed | Technical Lead | Old ADR-002; GOV-010; Upstream DEC-09; Q8 items 2 and 6 |
-| ADR-003 | **Evidence integrity.** Every committed Runtime change writes an Evidence Event in the same transaction. Signed checkpoints over canonicalized event ranges are anchored with an independent custodian. | Proposed | Security Owner, research governance | Old ADR-003; GOV-006 mechanism; Upstream DEC-11; Q8 item 5 |
+| ADR-003 | **Confirmed 2026-10-19 by Product Owner direction. Evidence integrity.** Every committed Runtime change writes an Evidence Event in the same transaction. Signed checkpoints over canonicalized event ranges are anchored with an independent custodian. | Confirmed | Product Owner | Old ADR-003; GOV-006 mechanism; Upstream DEC-11; Q8 item 5 |
 | ADR-004 | **Live release activation.** In-flight workflow instances stay pinned to their Governing Release; harmless changes apply going forward; consequential changes require impact analysis and approval. No blind migration of live instances. | Proposed | Methodology Lead | Old ADR-004; GOV-007; Upstream DEC-07; Q8 item 4 |
 | ADR-005 | **Application and storage topology.** One modular monolith; one PostgreSQL cluster with schemas `identity`, `studio`, `registry`, `runtime`, `sync`, `evidence`; S3-compatible object storage; a background worker using a PostgreSQL-backed job queue. No message broker, cache tier or service split until measurements justify it. Schema list extended by ADR-016; media-stack exception DEC-49. | Proposed | Technical Lead, Operations Owner | Old ADR-005; GOV-008; Upstream DEC-08; Q8 item 1 |
 | ADR-006 | **No Supabase.** All profiles use self-hostable PostgreSQL, built-in authentication with optional OIDC/SAML single sign-on, and a realtime service operated with the application. | Approved | — | Q25; retires Platform §17 backend list |
@@ -211,7 +211,7 @@ In the Origin column, section numbers refer to the superseded source documents k
 | ID | Question | Blocks | Owner | Origin |
 |---|---|---|---|---|
 | OPEN-001 | Names or titles for the Product Owner, Methodology Lead, Technical Lead, Security Owner and Operations Owner roles. | Formal ratification of any document | Product Owner | Q9 |
-| OPEN-002 | Owner approval of ADR-001 to ADR-005. | Data model v1.1 and Synchronization Protocol v1.1 leaving Proposed status | Product Owner | Q8 |
+| OPEN-002 | Owner approval of ADR-002, ADR-004 and ADR-005. ADR-001 and ADR-003 were confirmed 2026-10-19 by Product Owner direction. | Data model v1.1 and Synchronization Protocol v1.1 leaving Proposed status | Product Owner | Q8 |
 | OPEN-003 | Pin a Fractured Order commit SHA as the golden reference. **Resolved 2026-10-17: the Product Owner confirmed `ae5d5065bc04a53631815b1b1715a54e21e3ef5b`; the verified snapshot record is `references/fractured-order.snapshot.json`.** | — | Product Owner | Q5; Foundation §3 |
 | OPEN-004 | Which methodology concepts are always enabled versus optional, and their dependency matrix. | Publication dependency validation (DEC-01) | Methodology Lead | Foundation §13.1 |
 | OPEN-005 | Permitted Stage structures: sequential, parallel, nested, conditional, continuously timed. | Stage engine contract | Methodology Lead | Foundation §13.2 |
@@ -309,3 +309,4 @@ These collided with the Foundation's DEC-01 to DEC-20 and are retired.
 | 1.0.4 | 2026-10-17 | Resolved OPEN-003 by recording the Product Owner's confirmation of Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official golden reference. |
 | 1.0.5 | 2026-10-19 | Resolved OPEN-026: reusable Orientation, Control and decision-trace mechanics are platform options; release-specific substance remains Release configuration. |
 | 1.0.6 | 2026-10-19 | Product Owner confirmed ADR-018 and resolved OPEN-020, OPEN-022 and OPEN-029 for the Plugin implementation baseline. |
+| 1.0.7 | 2026-10-19 | Product Owner direction confirmed ADR-001 and ADR-003 for the PS-230 authority and evidence baseline. |

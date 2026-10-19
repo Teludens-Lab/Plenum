@@ -17,6 +17,7 @@ import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
+import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -25,6 +26,7 @@ export interface RuntimeHttpOptions {
   pool: Pool;
   deploymentId: string;
   authenticate(request: IncomingMessage, correlationId: string): Promise<AuthenticatedPrincipal>;
+  extensionRuntime?: ExtensionRuntime;
 }
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
@@ -154,9 +156,24 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
             correlationId
           }));
         const receipt = await submitRuntimeCommand(
-          options.pool, context, command, correlationId, options.deploymentId
+          options.pool, context, command, correlationId, options.deploymentId, options.extensionRuntime?.plans
         );
+        if (receipt.status === "accepted" && command.operationType === "composition_run.start" && options.extensionRuntime !== undefined) {
+          await executePendingModelRun(options.pool, principal.organizationId, command.aggregateId, options.extensionRuntime);
+        }
         send(response, receipt.status === "accepted" ? 200 : 409, receipt);
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/effect-proposals$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        send(response, 200, { proposals: await getEffectProposals(options.pool, context) });
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/extension-provenance$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        send(response, 200, await exportExtensionProvenance(options.pool, principal, sessionId, correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/commands\/([^/]+)$/u))) {

@@ -15,6 +15,9 @@ import {
   EVENT_ENVELOPE_CONTRACT_ID,
   RUNTIME_SSE_CONTRACT_ID,
   RUNTIME_PROJECTION_CONTRACT_ID,
+  MODEL_RUN_CONTRACT_ID,
+  EFFECT_PROPOSAL_CONTRACT_ID,
+  APPROVAL_DECISION_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
@@ -28,6 +31,9 @@ import {
   eventEnvelopeV1Schema,
   runtimeSseV1Schema,
   runtimeProjectionV1Schema,
+  modelRunV1Schema,
+  effectProposalV1Schema,
+  approvalDecisionV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
   isCommandOperationType,
@@ -95,6 +101,9 @@ assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
 assert.equal(errorEnvelopeV1Schema.$id, ERROR_ENVELOPE_CONTRACT_ID);
 assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
 assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
+assert.equal(modelRunV1Schema.$id, MODEL_RUN_CONTRACT_ID);
+assert.equal(effectProposalV1Schema.$id, EFFECT_PROPOSAL_CONTRACT_ID);
+assert.equal(approvalDecisionV1Schema.$id, APPROVAL_DECISION_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
@@ -102,7 +111,8 @@ assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
-  syncDeltasV1Schema, syncSnapshotV1Schema, pluginManifestV1Schema];
+  syncDeltasV1Schema, syncSnapshotV1Schema, modelRunV1Schema, effectProposalV1Schema,
+  approvalDecisionV1Schema, pluginManifestV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }

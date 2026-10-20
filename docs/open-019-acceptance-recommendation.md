@@ -1,6 +1,6 @@
 # OPEN-019 measurable acceptance recommendation
 
-Status: **PROPOSED for Technical Lead and Operations Owner approval**. These numbers are recommended acceptance criteria, not current SLOs or verified capacity claims.
+Status: **APPROVED by Product Owner direction on 2026-10-20; Technical Lead and Operations Owner sign-offs remain required**. These numbers are accepted criteria, not current SLOs or verified capacity claims.
 
 ## Named baseline
 

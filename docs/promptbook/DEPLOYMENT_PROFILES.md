@@ -1,6 +1,6 @@
 # Deployment profiles
 
-Profile behavior follows DEC-19 and the Proposed ADR-013. All profiles use the same application image digests; configuration and locally provided dependencies differ.
+Profile behavior follows DEC-19 and Approved ADR-013. All profiles use the same application image digests; configuration and locally provided dependencies differ.
 
 | Capability | Cloud | Institutional self-hosted | Air-gapped | Verification task |
 |---|---|---|---|---|
@@ -24,4 +24,4 @@ Profile behavior follows DEC-19 and the Proposed ADR-013. All profiles use the s
 - `external_required` Plugins and external transcription engines fail validation without a verified local replacement.
 - Air-gapped accreditation remains institution-specific and is never claimed by this promptbook.
 
-The PS-250 candidate profile and operational checks are in `deploy/media/livekit.yaml` and `docs/media-runbook.md`. ADR-017 remains Proposed; a future provider evaluation may replace LiveKit without changing Plenum's credential or Floor contracts.
+The PS-250 candidate profile and operational checks are in `deploy/media/livekit.yaml` and `docs/media-runbook.md`. ADR-017 is Approved; a future provider evaluation may replace LiveKit without changing Plenum's credential or Floor contracts.

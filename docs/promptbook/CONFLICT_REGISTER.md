@@ -4,7 +4,7 @@ Working log only. It is not decision authority. Consequential contradictions are
 
 ## Current normative conflicts
 
-None discovered during generation. The current corpus consistently distinguishes Confirmed product direction, Assumed governance/vocabulary, Proposed technical design, and observed spike behavior.
+None discovered during generation. The current corpus consistently distinguishes Confirmed product direction, Assumed governance/vocabulary, Product Owner-approved technical design with any named specialist sign-offs still pending, and observed spike behavior.
 
 ## Observed gaps that are not normative conflicts
 

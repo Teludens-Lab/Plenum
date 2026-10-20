@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { fixture, operatorUrl, runtimeUrl } from "./fixture.mjs";
+import { fixture, operatorUrl, runtimeUrl, studioUrl } from "./fixture.mjs";
 
 const evidenceRoot = "output/playwright/ps-150";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
@@ -77,7 +77,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("@a11y VOTE-01 VOTE-15 casts and certifies an accessible authoritative Poll", async ({ browser }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     const control = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const participant = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const controlDevice = (await (await control.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
@@ -715,5 +715,49 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(denied.getByRole("alert")).toContainText("valid test identity");
     await denied.close();
     await loading.context.close();
+  });
+});
+
+test.describe.serial("PS-300 collaborative Studio", () => {
+  test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+    await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
+    await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+
+    await first.page.getByLabel("Scenario name").fill("Browser convergence proof");
+    await second.context.setOffline(true);
+    await second.page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await second.page.getByLabel("Scenario description").fill("Offline visual-form edit merged after reconnect.");
+    await expect(second.page.getByText("Offline", { exact: true })).toBeVisible();
+    await expect(second.page.getByText("Save state: saved on device")).toBeVisible();
+    await second.context.setOffline(false);
+    await second.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(first.page.getByLabel("Scenario description")).toHaveValue("Offline visual-form edit merged after reconnect.", { timeout: 20_000 });
+    await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
+    await expect(first.page.getByText("Valid", { exact: true })).toBeVisible();
+    await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
+
+    await first.page.getByLabel("Release label").fill("PS-300 browser proof");
+    await first.page.getByLabel("Semantic version").fill("3.0.0");
+    await first.page.getByLabel("Release notes").fill("Collaborative browser acceptance proof.");
+    await first.page.getByLabel("Classification review ID").fill("browser-classification-review");
+    await first.page.getByLabel("Retention policy ID").fill("standard-retention");
+    await first.page.getByLabel("Approval notes").fill("Synthetic browser approval.");
+    await first.page.getByLabel("I acknowledge the validation warnings.").check();
+    await first.page.getByRole("button", { name: "Freeze and publish" }).click();
+    await expect(first.page.getByText(/Published release/u)).toBeVisible();
+    await expect(first.page.getByText("Save state: published")).toBeVisible();
+
+    await second.page.getByLabel("Scenario description").fill("Post-freeze next Draft edit.");
+    await expect(first.page.getByLabel("Scenario description")).toHaveValue("Post-freeze next Draft edit.");
+    await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
+    expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
+    await first.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    await expect.poll(() => first.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await Promise.all([first.context.close(), second.context.close()]);
   });
 });

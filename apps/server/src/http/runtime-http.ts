@@ -21,6 +21,8 @@ import { getOperatorProjection } from "../runtime/operator-projection.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
+import type { ObjectStore } from "../registry/object-store.js";
+import { getCollaborativeDraft, publishCollaborativeDraft, type CollaborativePublishInput } from "../studio/collaboration/service.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -32,6 +34,30 @@ export interface RuntimeHttpOptions {
   extensionRuntime?: ExtensionRuntime;
   mediaAdapter?: MediaProviderAdapter;
   floorTokenSecret?: string;
+  objectStore?: ObjectStore;
+}
+
+function collaborativePublishInput(body: JsonObject, correlationId: string): CollaborativePublishInput {
+  const allowed = new Set(["freezeId", "releaseLabel", "semanticVersion", "methodologyVersion", "releaseNotes",
+    "warningsAcknowledged", "classificationReviewId", "accessibilityReviewStatus", "retentionPolicyId", "approvalNotes"]);
+  if (Object.keys(body).some((field) => !allowed.has(field))) {
+    throw authorizationError("VALIDATION_FAILED", "The publication request contains an unknown field.", correlationId);
+  }
+  const stringFields = ["releaseLabel", "semanticVersion", "methodologyVersion", "releaseNotes", "classificationReviewId",
+    "accessibilityReviewStatus", "retentionPolicyId", "approvalNotes"] as const;
+  for (const field of stringFields) {
+    if (typeof body[field] !== "string" || body[field].length === 0 || body[field].length > 4_000) {
+      throw authorizationError("VALIDATION_FAILED", `Publication field ${field} is required.`, correlationId);
+    }
+  }
+  if (body.warningsAcknowledged !== true ||
+      (body.freezeId !== undefined && (typeof body.freezeId !== "string" || !uuid.test(body.freezeId)))) {
+    throw authorizationError("VALIDATION_FAILED", "Publication controls are incomplete.", correlationId);
+  }
+  if (!/^\d+\.\d+\.\d+$/u.test(String(body.semanticVersion))) {
+    throw authorizationError("VALIDATION_FAILED", "The semantic version must use major.minor.patch.", correlationId);
+  }
+  return body as unknown as CollaborativePublishInput;
 }
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
@@ -138,6 +164,22 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       let match: RegExpMatchArray | null;
       if (request.method === "POST" && url.pathname === "/v1/devices") {
         send(response, 201, await registerDevice(options.pool, principal));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/draft$/u))) {
+        send(response, 200, await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/validate$/u))) {
+        const draft = await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId);
+        send(response, draft.validation.valid ? 200 : 422, draft.validation);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publish$/u))) {
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Publication storage is not configured.", correlationId);
+        const projectId = pathId(match[1], correlationId);
+        send(response, 201, await publishCollaborativeDraft(options.pool, options.objectStore, principal, projectId,
+          collaborativePublishInput(await readBody(request, correlationId), correlationId), correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-projection$/u))) {

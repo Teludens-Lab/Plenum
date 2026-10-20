@@ -9,8 +9,10 @@
     { "path": "packages/plugin-sdk" },
     { "path": "packages/extension-host" },
     { "path": "packages/media-adapter" },
+    { "path": "packages/validation-engine" },
     { "path": "packages/sync-client" },
     { "path": "apps/server" },
-    { "path": "apps/runtime-web" }
+    { "path": "apps/runtime-web" },
+    { "path": "apps/studio" }
   ]
 }

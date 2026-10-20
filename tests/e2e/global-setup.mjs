@@ -21,7 +21,8 @@ const migrations = [
   "apps/server/migrations/011_extension_registry.sql",
   "apps/server/migrations/012_extension_runs_approvals.sql",
   "apps/server/migrations/013_voting_core.sql",
-  "apps/server/migrations/014_comms_voice_core.sql"
+  "apps/server/migrations/014_comms_voice_core.sql",
+  "apps/server/migrations/015_collaboration_runtime.sql"
 ];
 
 export default async function globalSetup() {
@@ -50,7 +51,8 @@ export default async function globalSetup() {
     await owner.query(
       `INSERT INTO identity.persons(id,display_name) VALUES
        ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
-       ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer')`,
+       ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer'),
+       ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher')`,
       people
     );
     await owner.query(
@@ -58,8 +60,17 @@ export default async function globalSetup() {
       [fixture.organizationId, fixture.people.operator]
     );
     await owner.query(
+      `INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES
+       ($1,$2,'designer'),($1,$3,'designer'),($1,$4,'designer'),($1,$4,'publisher')`,
+      [fixture.organizationId, fixture.people.designerA, fixture.people.designerB, fixture.people.publisher]
+    );
+    await owner.query(
       "INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'PS-150 S1 proof',$3)",
       [fixture.projectId, fixture.organizationId, fixture.people.operator]
+    );
+    await owner.query(
+      "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
+      [fixture.organizationId, fixture.projectId, JSON.stringify(definition), fixture.people.designerA]
     );
     await owner.query(
       `INSERT INTO studio.definition_revisions

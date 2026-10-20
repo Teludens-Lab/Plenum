@@ -7,7 +7,7 @@
 - Goal: Execute a pinned local Plugin, stage Effect Proposals, and commit approved effects exactly once.
 - User outcome: A reviewer can inspect a model result and no authoritative state changes until a valid Approval Decision commits it.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; `implementation_state: verified`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/10_EXTENSION_FRAMEWORK_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. PS-230 has no remaining unratified-decision dependency: ADR-001, ADR-003 and ADR-018 are confirmed, and OPEN-022 and OPEN-029 are resolved for this baseline.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -128,7 +128,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Approval cannot be queued offline
 - Provenance survives Plugin removal
 
-The approval gate is: formal Security Owner review of the isolation profile. The accepted OPEN-029 trust baseline is implemented, but implementation completion is not release approval.
+The approval gate is: Formal Security Owner review of the isolation profile. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -169,4 +169,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-018 changes; a deferred execution target is approved; Composition semantics expand.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-018 changes; A deferred execution target is approved; Composition semantics expand.

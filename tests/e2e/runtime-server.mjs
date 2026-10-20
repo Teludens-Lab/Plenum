@@ -1,12 +1,15 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   authorizationError,
+  createStudioCollaborationGateway,
   createDatabasePool,
-  createRuntimeHttpHandler
+  createRuntimeHttpHandler,
+  LocalObjectStore
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { fixture } from "./fixture.mjs";
@@ -35,40 +38,48 @@ const mediaAdapter = process.env.MEDIA_TEST_URL === undefined ? fakeMediaAdapter
   allowedHosts: ["127.0.0.1"],
   allowInsecureLoopback: true
 });
+const roles = { operator: ["operator"], designerA: ["designer"], designerB: ["designer"], publisher: ["designer", "publisher"] };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
   principalId: fixture.people[key],
   organizationId: fixture.organizationId,
-  organizationRoles: key === "operator" ? ["operator"] : [],
+  organizationRoles: roles[key] ?? [],
   authenticationStrength: "mfa",
   expiresAt: new Date("2099-01-01T00:00:00.000Z")
 }]));
 
+const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
+const authenticate = async (request, correlationId) => {
+  const authorization = request.headers.authorization;
+  const principal = typeof authorization === "string" && authorization.startsWith("Bearer ")
+    ? principals[authorization.slice(7)]
+    : undefined;
+  if (principal === undefined) throw authorizationError("UNAUTHENTICATED", "A valid test identity is required.", correlationId);
+  return principal;
+};
 const api = createRuntimeHttpHandler({
   pool,
   deploymentId: fixture.deploymentId,
   mediaAdapter,
+  objectStore: new LocalObjectStore(objectRoot),
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
-  authenticate: async (request, correlationId) => {
-    const authorization = request.headers.authorization;
-    const principal = typeof authorization === "string" && authorization.startsWith("Bearer ")
-      ? principals[authorization.slice(7)]
-      : undefined;
-    if (principal === undefined) throw authorizationError("UNAUTHENTICATED", "A valid test identity is required.", correlationId);
-    return principal;
-  }
+  authenticate
 });
+const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
+const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
 
 const server = createServer(async (request, response) => {
   if (await api(request, response)) return;
   try {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-    const relative = pathname.startsWith("/assets/") ? normalize(pathname.slice(1)) : "index.html";
+    const studio = pathname.startsWith("/studio/");
+    const relative = pathname.startsWith("/assets/") ? normalize(pathname.slice(1)) :
+      studio && pathname.startsWith("/studio/assets/") ? normalize(pathname.slice("/studio/".length)) : "index.html";
     if (relative.startsWith("..")) throw new Error("Unsafe static path");
-    const file = await readFile(join(webRoot, relative));
+    const file = await readFile(join(studio ? studioRoot : webRoot, relative));
     response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream" });
     response.end(file);
   } catch {
@@ -76,12 +87,17 @@ const server = createServer(async (request, response) => {
     response.end("Not found");
   }
 });
+server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade(request, socket, head).then((handled) => {
+  if (!handled) socket.destroy();
+}));
 
 server.listen(4173, "127.0.0.1", () => console.log("PS-150 browser fixture listening on http://127.0.0.1:4173"));
 
 async function close() {
   server.close();
+  await collaboration.close();
   await pool.end();
+  await rm(objectRoot, { recursive: true, force: true });
 }
 process.on("SIGTERM", () => void close());
 process.on("SIGINT", () => void close());

@@ -28,7 +28,7 @@ Observed source evidence:
 - references/plenum-runtime-slice/contracts/openapi.yaml
 - references/plenum-runtime-slice/package-lock.json
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `ADR-008`, `OPEN-012`, `OPEN-022`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-008`, `OPEN-012`, `OPEN-022`.
 
 ## Prerequisites
 
@@ -127,7 +127,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No simulation-specific names in platform packages
 - Glossary lint passes
 
-The approval gate is: Technical Lead approval before treating ADR-008 as ratified. A task may be implementation-complete without being release-approved.
+The approval gate is: ADR-008 is Product Owner Approved; named Technical Lead sign-off remains. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -156,13 +156,13 @@ Verification:
 Compatibility / migrations:
 - No data migration.
 Risks / follow-up:
-- ADR-008 remains Proposed.
+- Named Technical Lead sign-off for Approved ADR-008 remains.
 Refs: PS-100, REQ-070, ADR-008
 ```
 
 Proposed PR description:
 
-Summary: creates the shared TypeScript kernel. Risks: toolchain choice is Proposed. Migration: none. Evidence: clean build. Rollback: remove new workspace files and keep the reference slice.
+Summary: creates the shared TypeScript kernel. Risks: named Technical Lead sign-off for the approved toolchain remains. Migration: none. Evidence: clean build. Rollback: remove new workspace files and keep the reference slice.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

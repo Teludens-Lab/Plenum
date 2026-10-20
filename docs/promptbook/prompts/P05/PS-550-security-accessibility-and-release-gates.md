@@ -25,7 +25,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `OPEN-001`, `OPEN-009`, `OPEN-014`, `OPEN-017`, `OPEN-019`, `OPEN-024`, `OPEN-027`, `OPEN-028`, `OPEN-029`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-001`, `OPEN-009`, `OPEN-014`, `OPEN-017`, `OPEN-019`, `OPEN-024`, `OPEN-027`, `OPEN-028`, `OPEN-029`.
 
 ## Prerequisites
 

@@ -8,7 +8,7 @@
 | Number | 12 |
 | Version | 1.1.0 |
 | Date | 2026-10-17 |
-| Status | Product direction Confirmed (DEC-47 to DEC-51, DEC-59); technical design Proposed (ADR-017). First-release scope. |
+| Status | Product direction Confirmed (DEC-47 to DEC-51, DEC-59); technical design Approved by Product Owner direction on 2026-10-20 (ADR-017). First-release scope. |
 | Owner | Technical Lead |
 | Approvers | Product Owner; Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
 | Reads from | 01 PRD; 02 Platform; 03 Schema; 05 Runtime; 06 Data and Security; 09 Contracts; Data Model v1.1; Sync v1.1; Decision Register; Glossary |

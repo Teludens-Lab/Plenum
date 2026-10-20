@@ -71,7 +71,7 @@ Levels: public, internal, confidential, restricted (extensions for classified de
 
 ## 10. Evidence integrity
 
-Implements DEC-20 under ADR-003 (Proposed).
+Implements DEC-20 under confirmed ADR-003.
 
 - A Session state change and its Evidence Event commit atomically, with a strictly increasing per-Session Evidence Sequence (REQ-053).
 - Evidence rows cannot be updated or deleted: enforced by database privileges and immutability triggers, not only by application convention.

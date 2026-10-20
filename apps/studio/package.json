@@ -1,0 +1,15 @@
+{
+  "name": "@plenum/studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "vite build --base=/studio/ --outDir dist/web"
+  },
+  "dependencies": {
+    "@plenum/event-contracts": "0.1.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "yjs": "13.6.33"
+  }
+}

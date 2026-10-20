@@ -44,6 +44,6 @@ The platform install and checks ran in a disposable Node 24 container with a ded
 
 ## Open governance and QA limits
 
-- `ADR-008` remains Proposed. Technical Lead approval is required before treating the Node/TypeScript choice as ratified.
+- `ADR-008` was Approved by Product Owner direction on 2026-10-20. Named Technical Lead sign-off remains required.
 - `OPEN-012` compatibility policy and `OPEN-022` remaining engine choices are unresolved.
 - Node 26 target execution, browser/UI, PostgreSQL integration, performance, and deployment checks are NOT RUN because PS-100 creates no UI, persistence, or deployable service. The relevant later tasks own those gates.

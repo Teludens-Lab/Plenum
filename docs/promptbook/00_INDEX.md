@@ -38,7 +38,7 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 - Approved: ADR-006 no-Supabase principle; ADR-007 React/TypeScript frontend.
 - Confirmed product scope: DEC-01..20 and DEC-41..60, including collaboration, offline/LAN, single authority, voting, voice, and the whole Extension Framework.
 - Assumed: DEC-21..27 and DEC-30..40; tasks may design against them but phase exits remain labeled.
-- Proposed: ADR-001..005 and ADR-008..018; no prompt calls them approved.
+- Approved 2026-10-20: ADR-002, ADR-004/005, ADR-008..014 and ADR-017. ADR-006/007 were already Approved; ADR-001/003/015/016/018 remain Confirmed. Named specialist sign-offs remain explicit.
 - Candidates: Yjs, LiveKit, React Router, TanStack Query, Zustand, React Hook Form, Zod, dnd-kit, React Flow, Vitest, Playwright, Vite, Radix, Tailwind, Tiptap, Kysely, IndexedDB/Dexie, structured logging, OpenTelemetry. A task must pin only what it actually uses.
 
 ## Coverage and exclusions

@@ -16,7 +16,7 @@ This is a maturity view, not a release declaration. Current status is derived fr
 | Voice Channels | Yes | No evidence | No | No | No | No | No | No |
 | Offline Participants / S2 | Yes | No evidence | No | No | No | No | No | No |
 | Evidence/reporting / S5 | Yes | Partial slice | Partial reference | No | No | No | No | No |
-| Deployment profiles / S6 | Proposed architecture | Slice container config | No current daemon | No | No | No | No | No |
+| Deployment profiles / S6 | Approved architecture; specialist sign-offs pending | Slice container config | No current daemon | No | No | No | No | No |
 | Load/reliability / S7 | Targets partly open | No evidence | No | No | No | No | No | No |
 
 ## Current objective evidence
@@ -30,7 +30,7 @@ This is a maturity view, not a release declaration. Current status is derived fr
 
 ## Release blockers
 
-- OPEN-001 approver roles and OPEN-002 proposed ADR ratification.
+- OPEN-001 approver roles; OPEN-002 was resolved by Product Owner approval on 2026-10-20, while named specialist sign-offs remain.
 - Fractured Order classification and AC-09 parity evidence against the official pinned snapshot; OPEN-003 source identity is resolved.
 - Decision Register section 3 Assumed decisions that affect release behavior.
 - OPEN-027 recording/transcription consent, OPEN-028 secret-ballot custody, and OPEN-029 Plugin trust.

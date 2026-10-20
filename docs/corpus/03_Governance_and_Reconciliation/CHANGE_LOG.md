@@ -2,6 +2,10 @@
 
 This log replaces the four separate change logs and reconciliation records that the corpus previously carried (Foundation, Upstream, Alignment and per-document addenda). Those records are kept unchanged under `archive/03_Governance_and_Reconciliation/`. Each document still keeps its own change log table at the end.
 
+## 2026-10-20 — Proposed documents approved
+
+The Product Owner directed that every current Proposed governing document be accepted as Approved. Decision Register v1.0.9 records ADR-002, ADR-004, ADR-005, ADR-008 to ADR-014 and ADR-017 as Approved and resolves OPEN-002. The Data Model, Synchronization Protocol, feature-specification document controls and OPEN-019 acceptance recommendation now reflect that approval. Named specialist sign-offs, Assumed decisions and unrelated OPEN items remain unchanged; OPEN-019 remains open until its Technical Lead and Operations Owner sign-offs are complete.
+
 ## 2026-10-17 — Fractured Order golden reference
 
 The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference. OPEN-003 is resolved in Decision Register v1.0.4. The immutable export and verification metadata are recorded under `references/`; parity classification and AC-09 execution remain pending work.
@@ -96,4 +100,4 @@ Moved unchanged to `archive/` at their original relative paths: Foundation v0.2;
 
 ## Still awaiting confirmation
 
-See Decision Register §3 (Assumed decisions and Proposed ADRs) and OPEN-001 (approver identities).
+See Decision Register §3 (Assumed decisions and outstanding specialist sign-offs) and OPEN-001 (approver identities).

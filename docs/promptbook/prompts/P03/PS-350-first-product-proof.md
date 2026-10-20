@@ -27,7 +27,7 @@ Observed source evidence:
 - docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md
 - references/plenum-runtime-slice/test/smoke.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `OPEN-001`, `ADR-001`, `ADR-002`, `ADR-003`, `ADR-004`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-001`, `ADR-001`, `ADR-002`, `ADR-003`, `ADR-004`.
 
 ## Prerequisites
 

@@ -42,6 +42,50 @@ export const CERTIFICATION_CONTRACT_ID = "certification-v1";
 export const VOICE_COMMAND_CONTRACT_ID = "voice-command-v1";
 export const MEDIA_CREDENTIAL_CONTRACT_ID = "media-credential-v1";
 export const FLOOR_LEASE_CONTRACT_ID = "floor-lease-v1";
+export const STUDIO_CRDT_CONTRACT_ID = "studio-crdt-v1";
+export const STUDIO_PUBLISH_CONTRACT_ID = "studio-publish-v1";
+
+export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
+
+export interface StudioValidationIssueV1 extends JsonObject {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  path: string;
+  elementId: string | null;
+}
+
+export interface StudioValidationReportV1 extends JsonObject {
+  contractId: "studio-validation-v1";
+  valid: boolean;
+  issues: StudioValidationIssueV1[];
+  reportDigest: string;
+}
+
+export interface StudioCrdtV1 {
+  contractId: typeof STUDIO_CRDT_CONTRACT_ID;
+  type: "sync" | "update" | "ack" | "remote_update" | "error";
+  documentId: string;
+  generation: number;
+  updateId: string | null;
+  update: string | null;
+  stateVector: string | null;
+  saveState: StudioSaveStateV1 | null;
+  unsynchronizedChanges: number;
+  validation: StudioValidationReportV1 | null;
+  message: string | null;
+}
+
+export interface StudioPublishV1 {
+  contractId: typeof STUDIO_PUBLISH_CONTRACT_ID;
+  freezeId: string;
+  releaseId: string;
+  definitionRevisionId: string;
+  contentDigest: string;
+  manifestDigest: string;
+  packageDigest: string;
+  saveState: "published";
+}
 
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
 export const SESSION_OPERATOR_POLICY_V1 = {
@@ -654,6 +698,37 @@ export const floorLeaseV1Schema = {
     queuePosition: { type: ["integer", "null"], minimum: 1 }
   }
 } as const satisfies ContractSchema<FloorLeaseV1>;
+
+export const studioCrdtV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: STUDIO_CRDT_CONTRACT_ID, title: "Studio CRDT envelope v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "type", "documentId", "generation", "updateId", "update", "stateVector", "saveState", "unsynchronizedChanges", "validation", "message"],
+  properties: {
+    contractId: { const: STUDIO_CRDT_CONTRACT_ID },
+    type: { enum: ["sync", "update", "ack", "remote_update", "error"] },
+    documentId: uuidProperty,
+    generation: { type: "integer", minimum: 1 },
+    updateId: { type: ["string", "null"], format: "uuid" },
+    update: { type: ["string", "null"], contentEncoding: "base64" },
+    stateVector: { type: ["string", "null"], contentEncoding: "base64" },
+    saveState: { type: ["string", "null"], enum: ["saved_on_device", "synchronized", "validation_required", "published", null] },
+    unsynchronizedChanges: { type: "integer", minimum: 0 },
+    validation: { type: ["object", "null"] },
+    message: { type: ["string", "null"] }
+  }
+} as const satisfies ContractSchema<StudioCrdtV1>;
+
+export const studioPublishV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: STUDIO_PUBLISH_CONTRACT_ID, title: "Studio publish result v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "freezeId", "releaseId", "definitionRevisionId", "contentDigest", "manifestDigest", "packageDigest", "saveState"],
+  properties: {
+    contractId: { const: STUDIO_PUBLISH_CONTRACT_ID }, freezeId: uuidProperty, releaseId: uuidProperty,
+    definitionRevisionId: uuidProperty, contentDigest: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    manifestDigest: { type: "string", pattern: "^[0-9a-f]{64}$" }, packageDigest: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    saveState: { const: "published" }
+  }
+} as const satisfies ContractSchema<StudioPublishV1>;
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

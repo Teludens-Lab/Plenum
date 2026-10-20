@@ -4,21 +4,21 @@ This consolidates pointers and implementation consequences. It is not a parallel
 
 | Concern | Current choice | Authority | Status | Pinning task | Exit implication |
 |---|---|---|---|---|---|
-| Frontend | React 19.3.1 + TypeScript 5.9.3 + Vite 8.3.4; retain vanilla reference slice | ADR-007 | Implemented and browser-tested; direction owner-accepted for build while source ADR remains Proposed | PS-100, PS-150 | Keep Runtime modules Release-driven; add UI dependencies only in their owning slice |
-| Backend | Node 26 target, 24 floor; npm 11.19.1 workspace monorepo; TypeScript 5.9.3 | ADR-008 | Proposed; PS-100 verified on Node 24.22.0 | PS-001, PS-100 | Technical Lead must ratify; Node 26 remains untested |
-| Topology | Modular monolith and Pg-backed jobs | ADR-005 | Proposed | PS-100, PS-120 | No broker/cache/service split without measurements |
-| Database | PostgreSQL 18 minimum | ADR-009 | Proposed | PS-001 | Phase 1 exit needs Pg18 evidence and approval |
-| Object storage | AWS SDK 3.1152.0 S3 adapter plus local-filesystem development adapter; SeaweedFS 4.48 interoperability verified | ADR-011 | S3-compatible direction owner-accepted for build; source ADR remains Proposed | PS-130, PS-530 | PS-530 selects and validates the deployment-profile product and operations; no multi-cloud layer |
-| Identity | OIDC relying party implemented with `jose` 6.2.12; Keycloak remains the local-profile candidate | ADR-006, ADR-012 | Implemented local-issuer contract; Proposed product | PS-110, PS-530 | No Supabase; remote issuer/production use needs security approval |
-| Runtime realtime | HTTPS Commands plus authorized SSE deltas, opaque cursor catch-up, snapshot reset and polling fallback | ADR-010 | Implemented and tested through the PS-150 HTTP/browser boundary; direction owner-accepted for build while source ADR remains Proposed | PS-140, PS-150 | WebSocket is not Runtime transport; measured reconnect load remains PS-540 |
-| Studio collaboration | Authenticated WebSocket + CRDT | ADR-002, ADR-010 | Proposed | PS-300 | CRDT never merges Runtime Commands |
-| CRDT library | Yjs | Platform section 23 | Candidate | PS-300 | Pin only after compatibility spike |
-| Media | Self-hosted WebRTC SFU + TURN behind adapter | DEC-49, ADR-017 | Exception Confirmed; adapter Proposed | PS-250, PS-530 | LiveKit remains candidate, not dependency |
+| Frontend | React 19.3.1 + TypeScript 5.9.3 + Vite 8.3.4; retain vanilla reference slice | ADR-007 | Approved, implemented and browser-tested | PS-100, PS-150 | Keep Runtime modules Release-driven; add UI dependencies only in their owning slice |
+| Backend | Node 26 target, 24 floor; npm 11.19.1 workspace monorepo; TypeScript 5.9.3 | ADR-008 | Approved; PS-100 verified on Node 24.22.0 | PS-001, PS-100 | Named Technical Lead sign-off remains; Node 26 remains untested |
+| Topology | Modular monolith and Pg-backed jobs | ADR-005 | Approved | PS-100, PS-120 | No broker/cache/service split without measurements |
+| Database | PostgreSQL 18 minimum | ADR-009 | Approved | PS-001 | Named Technical Lead/Operations Owner sign-off remains |
+| Object storage | AWS SDK 3.1152.0 S3 adapter plus local-filesystem development adapter; SeaweedFS 4.48 interoperability verified | ADR-011 | Approved S3-compatible direction | PS-130, PS-530 | PS-530 selects and validates the deployment-profile product and operations; no multi-cloud layer |
+| Identity | OIDC relying party implemented with `jose` 6.2.12; Keycloak remains the local-profile candidate | ADR-006, ADR-012 | Approved; local-issuer contract implemented | PS-110, PS-530 | No Supabase; remote issuer/production use needs Security Owner sign-off |
+| Runtime realtime | HTTPS Commands plus authorized SSE deltas, opaque cursor catch-up, snapshot reset and polling fallback | ADR-010 | Approved, implemented and tested through the PS-150 HTTP/browser boundary | PS-140, PS-150 | WebSocket is not Runtime transport; measured reconnect load remains PS-540 |
+| Studio collaboration | Authenticated WebSocket + CRDT with per-operation authorization and fenced publication | ADR-002, ADR-010 | Approved, implemented and tested in PS-300 | PS-300 | CRDT never merges Runtime Commands; measured collaboration load remains PS-540 |
+| CRDT library | Yjs 13.6.33; `ws` 8.22.0 server transport | Platform section 23 | Implemented and lockfile-pinned in PS-300 | PS-300 | Revisit on CRDT compatibility break or ADR-002 change |
+| Media | Self-hosted WebRTC SFU + TURN behind adapter | DEC-49, ADR-017 | Approved; LiveKit adapter remains replaceable | PS-250, PS-530 | LiveKit remains candidate, not dependency |
 | Extension isolation | Rootless containers; WASM/WASI additional target | ADR-018 | Confirmed and implemented for local OCI Plugins | PS-220, PS-230 | Python/native remains deferred under resolved OPEN-022 baseline |
-| Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Proposed | PS-530 | Kubernetes optional only |
-| Persistence | Relational current state + append-only evidence | ADR-014 | Proposed | PS-120 | No full event sourcing |
+| Packaging | One OCI image set; Compose/Podman reference | ADR-013 | Approved | PS-530 | Kubernetes optional only |
+| Persistence | Relational current state + append-only evidence | ADR-014 | Approved | PS-120 | No full event sourcing |
 | Tenant isolation | Server context + forced RLS defense in depth | ADR-015 | Confirmed, implemented and tested | PS-110 | DB-01 passes with pooled real app role on Pg18.6 |
-| Capability schemas | `extension`, `voting`, and `comms` in the modular-monolith PostgreSQL cluster | ADR-016 | Confirmed; `extension` implemented, `voting` next, `comms` later | PS-220, PS-230, PS-240, PS-250 | Schema ownership does not create separate services or databases |
+| Capability schemas | `extension`, `voting`, `comms`, and `studio` in the modular-monolith PostgreSQL cluster | ADR-016 | Confirmed; extension, voting, communications and collaborative Studio persistence implemented | PS-220, PS-230, PS-240, PS-250, PS-300 | Schema ownership does not create separate services or databases |
 | Router/query/state/forms | React Router, TanStack Query, Zustand, React Hook Form | Platform section 23 | Candidates | PS-150/310 | Use only when slice needs them; pin in lockfile |
 | Validation | Dependency-free JSON Schema 2020-12 objects coupled to TypeScript property keys; Zod compatibility remains open | Platform section 23; OPEN-022 | Implemented kernel / Open product policy | PS-100/310 | Do not add a second schema authority |
 | Interaction editors | dnd-kit, React Flow | Platform section 23 | Candidates | PS-310/330 | Prefer native/simple controls until needed |

@@ -23,6 +23,6 @@ Date: 2026-10-18. Mode: production-oriented contract slice, not production appro
 ## Gates and limits
 
 - Security Owner approval: PENDING; required before production identity use.
-- ADR-012 and ADR-015: still Proposed.
+- ADR-012 is Approved as of 2026-10-20 and ADR-015 is Confirmed; named Security Owner sign-off for ADR-012 remains.
 - OPEN-007 (federation variants/MFA/passwordless) and OPEN-025 (additional Organization Roles): unresolved and not invented here.
 - Node 26, a real Keycloak/remote issuer, browser cookie/CSRF behavior, performance, deployment and recovery: NOT RUN.

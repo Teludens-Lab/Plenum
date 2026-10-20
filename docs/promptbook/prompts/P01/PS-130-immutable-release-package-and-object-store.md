@@ -27,7 +27,7 @@ Observed source evidence:
 - references/plenum-runtime-slice/src/server.mjs
 - references/plenum-runtime-slice/migrations/001_core.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `ADR-011`, `ADR-014`, `OPEN-012`, `OPEN-013`, `OPEN-020`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-011`, `ADR-014`, `OPEN-012`, `OPEN-013`, `OPEN-020`.
 
 ## Prerequisites
 
@@ -132,7 +132,7 @@ The approval gate is: Package signing for production is blocked by OPEN-020. A t
 ## Docs and continuity
 
 - Update compatibility and migration matrices
-- Record object-store choice as Proposed
+- Record the Approved S3-compatible direction and candidate provider
 - Update PROJECT_STATE.md
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.

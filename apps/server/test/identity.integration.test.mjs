@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test, { after, before } from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
+import * as Y from "yjs";
 
 import {
   createOfflinePluginBundle,
@@ -47,6 +48,9 @@ import {
   getPollProjection,
   getPollResult,
   issueMediaCredential,
+  applyStudioUpdate,
+  getCollaborativeDraft,
+  publishCollaborativeDraft,
   requestFloor,
   releaseFloor,
   submitPluginArtifact,
@@ -64,6 +68,7 @@ const ids = {
   personB: "20000000-0000-4000-8000-000000000002",
   personC: "20000000-0000-4000-8000-000000000003",
   personD: "20000000-0000-4000-8000-000000000004",
+  personE: "20000000-0000-4000-8000-000000000005",
   projectA: "30000000-0000-4000-8000-000000000001",
   projectB: "30000000-0000-4000-8000-000000000002",
   revisionA: "40000000-0000-4000-8000-000000000001",
@@ -96,6 +101,24 @@ const principalC = {
   principalId: ids.personC,
   organizationId: ids.orgA,
   organizationRoles: [],
+  authenticationStrength: "mfa",
+  expiresAt: new Date("2099-01-01T00:00:00.000Z")
+};
+
+const principalD = {
+  authenticationSessionId: "e1000000-0000-4000-8000-000000000004",
+  principalId: ids.personD,
+  organizationId: ids.orgA,
+  organizationRoles: ["admin", "designer", "publisher"],
+  authenticationStrength: "mfa",
+  expiresAt: new Date("2099-01-01T00:00:00.000Z")
+};
+
+const principalE = {
+  authenticationSessionId: "e1000000-0000-4000-8000-000000000005",
+  principalId: ids.personE,
+  organizationId: ids.orgA,
+  organizationRoles: ["designer"],
   authenticationStrength: "mfa",
   expiresAt: new Date("2099-01-01T00:00:00.000Z")
 };
@@ -142,23 +165,31 @@ async function applyMigrations() {
     "apps/server/migrations/011_extension_registry.sql",
     "apps/server/migrations/012_extension_runs_approvals.sql",
     "apps/server/migrations/013_voting_core.sql",
-    "apps/server/migrations/014_comms_voice_core.sql"
+    "apps/server/migrations/014_comms_voice_core.sql",
+    "apps/server/migrations/015_collaboration_runtime.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
 }
 
 async function seed() {
+  const collaborativeMaterialization = JSON.parse(await readFile(
+    new URL("../../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"
+  ));
   const client = await owner.connect();
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
-    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D')", [ids.personA, ids.personB, ids.personC, ids.personD]);
-    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD]);
+    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D'),($5,'Designer E')", [ids.personA, ids.personB, ids.personC, ids.personD, ids.personE]);
+    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin'),($3,$6,'designer'),($3,$6,'publisher'),($1,$5,'designer'),($1,$6,'designer'),($1,$6,'publisher'),($1,$7,'designer')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD, ids.personE]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
     await client.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
       [ids.orgB, ids.projectB, JSON.stringify(releaseMaterialization), ids.personB]
+    );
+    await client.query(
+      "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
+      [ids.orgA, ids.projectA, JSON.stringify(collaborativeMaterialization), ids.personC]
     );
     await client.query(`INSERT INTO studio.definition_revisions
       (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
@@ -181,6 +212,8 @@ async function seed() {
     await client.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2),($3,$4)", [ids.sessionA, ids.orgA, ids.sessionB, ids.orgB]);
     await client.query("INSERT INTO identity.federated_identities(id,organization_id,person_id,issuer,subject,provider_type) VALUES ('c0000000-0000-4000-8000-000000000001',$1,$2,'https://issuer.example','operator-a','oidc')", [ids.orgA, ids.personA]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2099-01-01T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
+    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','publisher-d','mfa','2099-01-01T00:00:00.000Z')", [principalD.authenticationSessionId, ids.orgA, ids.personD]);
+    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','designer-e','mfa','2099-01-01T00:00:00.000Z')", [principalE.authenticationSessionId, ids.orgA, ids.personE]);
     await client.query("INSERT INTO sync.projection_grants(id,organization_id,session_id,participant_id,policy_revision,access_revision,expires_at) VALUES ('d0000000-0000-4000-8000-000000000001',$1,$2,$3,'policy-decision-v1',1,now()+interval '1 hour')", [ids.orgA, ids.sessionA, ids.participantA]);
     await client.query("COMMIT");
   } catch (error) {
@@ -1291,4 +1324,151 @@ test("VOICE-01..05 enforce grants, one live Floor, preemption, deduplication and
   await assert.rejects(issueMediaCredential(app,{...context,organizationId:ids.orgB},channelId,media,randomUUID()),
     error=>error?.envelope?.error?.code==="TARGET_NOT_FOUND");
   assert.equal(Number((await owner.query("SELECT count(*) FROM evidence.events WHERE aggregate_id=$1 AND event_type='floor_lease.preempted'",[channelId])).rows[0].count)>=1,true);
+});
+
+function collaborativeDocument(update) {
+  const document = new Y.Doc();
+  Y.applyUpdate(document, Buffer.from(update, "base64"), "server");
+  return document;
+}
+
+function captureUpdate(document, change) {
+  let update;
+  const listener = (value, origin) => { if (origin !== "server") update = value; };
+  document.on("update", listener);
+  change();
+  document.off("update", listener);
+  assert.ok(update instanceof Uint8Array);
+  return Buffer.from(update).toString("base64");
+}
+
+test("PS-300 SYNC-01 SYNC-02 AC-01 concurrent offline edits converge byte-for-byte and invalid merges cannot publish", async () => {
+  await owner.query(
+    "DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='designer'",
+    [ids.orgA, principalE.principalId]
+  );
+  await assert.rejects(
+    getCollaborativeDraft(app, principalE, ids.projectA, randomUUID()),
+    (error) => error.envelope?.error?.code === "ACCESS_REVOKED"
+  );
+  await owner.query(
+    "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'designer')",
+    [ids.orgA, principalE.principalId]
+  );
+  const initial = await getCollaborativeDraft(app, principalE, ids.projectA, randomUUID());
+  await assert.rejects(
+    applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+      expectedGeneration: initial.generation, update: Buffer.alloc(256 * 1024 + 1).toString("base64") }, randomUUID()),
+    (error) => error.envelope?.error?.code === "TOO_LARGE"
+  );
+  const first = collaborativeDocument(initial.update);
+  const second = collaborativeDocument(initial.update);
+  const firstScenario = first.getMap("draft").get("scenario");
+  const secondScenario = second.getMap("draft").get("scenario");
+  assert.ok(firstScenario instanceof Y.Map && secondScenario instanceof Y.Map);
+  const firstUpdate = captureUpdate(first, () => firstScenario.set("name", "Joint planning exercise"));
+  const secondUpdate = captureUpdate(second, () => secondScenario.set("description", "Merged while both Designers were offline."));
+
+  await applyStudioUpdate(app, principalD, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+    expectedGeneration: initial.generation, update: secondUpdate }, randomUUID());
+  const firstUpdateId = randomUUID();
+  await applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: firstUpdateId, connectionId: randomUUID(),
+    expectedGeneration: initial.generation, update: firstUpdate }, randomUUID());
+  await applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: firstUpdateId, connectionId: randomUUID(),
+    expectedGeneration: initial.generation, update: firstUpdate }, randomUUID());
+
+  const merged = await getCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
+  const reconnectedA = collaborativeDocument(merged.update);
+  const reconnectedB = collaborativeDocument(merged.update);
+  assert.deepEqual(Buffer.from(Y.encodeStateAsUpdate(reconnectedA)), Buffer.from(Y.encodeStateAsUpdate(reconnectedB)));
+  assert.equal(reconnectedA.getMap("draft").toJSON().scenario.name, "Joint planning exercise");
+  assert.equal(reconnectedA.getMap("draft").toJSON().scenario.description, "Merged while both Designers were offline.");
+  assert.equal(merged.validation.valid, true);
+
+  const workflows = reconnectedA.getMap("draft").get("coreDesign").get("workflows");
+  assert.ok(workflows instanceof Y.Array);
+  const workflow = workflows.get(0);
+  assert.ok(workflow instanceof Y.Map);
+  const invalidUpdate = captureUpdate(reconnectedA, () => workflow.set("initialState", "missing-state"));
+  const invalid = await applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+    expectedGeneration: merged.generation, update: invalidUpdate }, randomUUID());
+  assert.equal(invalid.validation.valid, false);
+  assert.ok(invalid.validation.issues.some(({ path }) => path.includes("workflow-team-review")));
+  await assert.rejects(
+    publishCollaborativeDraft(app, objectStore, principalD, ids.projectA, {
+      releaseLabel: "Rejected invalid merge", semanticVersion: "1.0.0", methodologyVersion: "1.3.1", releaseNotes: "test",
+      warningsAcknowledged: true, classificationReviewId: "class-review", accessibilityReviewStatus: "reviewed",
+      retentionPolicyId: "standard", approvalNotes: "synthetic test"
+    }, randomUUID()),
+    (error) => error.envelope?.error?.code === "VALIDATION_FAILED"
+  );
+});
+
+test("PS-300 AC-02 publication freezes one valid state vector and later edits remain in the next Draft", async () => {
+  const invalid = await getCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
+  const repairedDocument = collaborativeDocument(invalid.update);
+  const workflows = repairedDocument.getMap("draft").get("coreDesign").get("workflows");
+  const workflow = workflows.get(0);
+  assert.ok(workflow instanceof Y.Map);
+  const repair = captureUpdate(repairedDocument, () => workflow.set("initialState", "draft"));
+  const ready = await applyStudioUpdate(app, principalD, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+    expectedGeneration: invalid.generation, update: repair }, randomUUID());
+  assert.equal(ready.validation.valid, true);
+  const frozenDescription = ready.materialization.scenario.description;
+
+  let signalUpload;
+  let releaseUpload;
+  const uploading = new Promise((resolve) => { signalUpload = resolve; });
+  const continueUpload = new Promise((resolve) => { releaseUpload = resolve; });
+  const delayedStore = {
+    async putImmutable(...args) { signalUpload(); await continueUpload; return objectStore.putImmutable(...args); },
+    get: objectStore.get.bind(objectStore),
+    deleteIfDigest: objectStore.deleteIfDigest.bind(objectStore)
+  };
+  const publishing = publishCollaborativeDraft(app, delayedStore, principalD, ids.projectA, {
+    releaseLabel: "Frozen collaboration proof", semanticVersion: "2.0.0", methodologyVersion: "1.3.1",
+    releaseNotes: "PS-300 publication fence proof", warningsAcknowledged: true, classificationReviewId: "class-review",
+    accessibilityReviewStatus: "reviewed", retentionPolicyId: "standard", approvalNotes: "synthetic test"
+  }, randomUUID());
+  await uploading;
+
+  const afterFreeze = await getCollaborativeDraft(app, principalE, ids.projectA, randomUUID());
+  assert.equal(afterFreeze.generation, ready.generation + 1);
+  const nextDocument = collaborativeDocument(afterFreeze.update);
+  const scenario = nextDocument.getMap("draft").get("scenario");
+  assert.ok(scenario instanceof Y.Map);
+  const laterUpdate = captureUpdate(nextDocument, () => scenario.set("description", "This edit belongs only to the next Draft."));
+  await applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+    expectedGeneration: ready.generation, update: laterUpdate }, randomUUID());
+  releaseUpload();
+  const published = await publishing;
+
+  const evidence = await owner.query(
+    `SELECT r.snapshot,r.source_freeze_id,f.generation
+       FROM studio.definition_revisions r JOIN studio.publication_freezes f ON f.id=r.source_freeze_id
+      WHERE r.id=$1`, [published.definitionRevisionId]
+  );
+  assert.equal(evidence.rows[0].snapshot.scenario.description, frozenDescription);
+  assert.equal(evidence.rows[0].source_freeze_id, published.freezeId);
+  assert.equal(Number(evidence.rows[0].generation), ready.generation);
+  const nextDraft = await getCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
+  assert.equal(nextDraft.materialization.scenario.description, "This edit belongs only to the next Draft.");
+  await assert.rejects(owner.query("UPDATE studio.definition_revisions SET snapshot='{}'::jsonb WHERE id=$1", [published.definitionRevisionId]), /append-only/iu);
+
+  await owner.query(
+    `INSERT INTO studio.document_updates
+       (id,organization_id,document_id,update_id,author_person_id,client_context,bytes,size_bytes,sha256,generation)
+     SELECT gen_random_uuid(),$1,$2,gen_random_uuid(),$3,'{}'::jsonb,decode('00','hex'),1,repeat('0',64),$4
+       FROM generate_series(1,120)`,
+    [ids.orgA, nextDraft.documentId, principalE.principalId, nextDraft.generation]
+  );
+  const rateLimitedDocument = collaborativeDocument(nextDraft.update);
+  const rateLimitedScenario = rateLimitedDocument.getMap("draft").get("scenario");
+  assert.ok(rateLimitedScenario instanceof Y.Map);
+  const rateLimitedUpdate = captureUpdate(rateLimitedDocument, () => rateLimitedScenario.set("description", "Rejected by rate limit."));
+  await assert.rejects(
+    applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
+      expectedGeneration: nextDraft.generation, update: rateLimitedUpdate }, randomUUID()),
+    (error) => error.envelope?.error?.code === "CAPABILITY_UNAVAILABLE"
+  );
 });

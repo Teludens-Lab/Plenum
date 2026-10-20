@@ -27,7 +27,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `ADR-013`, `ADR-017`, `OPEN-027`. ADR-016 is confirmed.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-013`, `ADR-017`, `OPEN-027`.
 
 ## Prerequisites
 
@@ -138,7 +138,7 @@ The approval gate is: Recording/transcription remains disabled until PS-320 and 
 ## Docs and continuity
 
 - Update deployment profile and media runbook
-- Record adapter choice as candidate or Proposed
+- Record the Approved media path and candidate adapter
 - Update PROJECT_STATE.md
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.

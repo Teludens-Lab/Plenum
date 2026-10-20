@@ -5,15 +5,15 @@ Overall status: **PASS — PS-001 is complete**
 
 The v0.2.0 reference slice was exercised on Node.js 24 and PostgreSQL 18 with disposable local resources. Syntax, unit, migration, seed, startup, HTTP smoke, database, and real-browser checks all passed. This verifies the slice on the supported floor; it does not make the executable spike production-ready or release-approved.
 
-The governing dependencies `ADR-008`, `ADR-009`, and `ADR-015` remain Proposed. Approver identities remain unresolved under `OPEN-001`.
+The governing dependencies `ADR-008` and `ADR-009` are Approved as of 2026-10-20, and `ADR-015` is Confirmed. Named specialist sign-offs and approver identities under `OPEN-001` remain unresolved.
 
 ## Environment
 
 | Component | Exact observed version | Notes |
 |---|---|---|
-| Node.js | `v24.22.0` | Official `node:24-alpine` image; satisfies the Node 24 floor in Proposed `ADR-008` |
+| Node.js | `v24.22.0` | Official `node:24-alpine` image; satisfies the Node 24 floor in Approved `ADR-008` |
 | npm | `11.19.1` | npm bundled in the Node image used for slice commands |
-| PostgreSQL | `18.6 (Debian 18.6-1.pgdg13+2)` | Official `postgres:18` image; tested minor recorded for Proposed `ADR-009` |
+| PostgreSQL | `18.6 (Debian 18.6-1.pgdg13+2)` | Official `postgres:18` image; tested minor recorded for Approved `ADR-009` |
 | `pg` | `8.23.1` | Exact version resolved by `package-lock.json`; `pg-pool` resolved to `3.14.0` |
 | Docker Engine | `28.5.1` | Disposable local containers |
 | Docker Compose | `v2.40.2-desktop.1` | Disposable database lifecycle |
@@ -110,8 +110,8 @@ The smoke suite preserved DEC-42 happy, return, and forbidden paths. The databas
 | `test/domain.test.mjs` and `test/smoke.mjs` | **Preserve** | 12 unit and 31 smoke checks passed |
 | `test/db.test.mjs` | **Change completed** | Setup, all seven tests, and cleanup now share one suite lifetime; 7/7 passed on Node 24/PostgreSQL 18 |
 | `package-lock.json` | **Preserve** | Deterministically resolved and tested `pg` 8.23.1 |
-| `package.json` | **Change candidate** | It declares `pg` as `^8.13.3`; decide whether Proposed `ADR-009`'s pinning rule also requires an exact direct-dependency declaration |
-| `docker-compose.yml` | **Change candidate** | It uses floating major tag `postgres:18`; pin the tested PostgreSQL 18 minor/image digest when Proposed `ADR-009` is ratified or the repository adopts that rule |
+| `package.json` | **Change candidate** | It declares `pg` as `^8.13.3`; decide whether Approved `ADR-009`'s pinning rule also requires an exact direct-dependency declaration |
+| `docker-compose.yml` | **Change candidate** | It uses floating major tag `postgres:18`; pin the tested PostgreSQL 18 minor/image digest when named specialist sign-offs complete or the repository adopts that rule |
 | `README.md` | **Change** | Replace the PostgreSQL 16-only historical record with this supported-stack result and document the reproducible real-browser command after the DB gate is repaired |
 | Any baseline file | **Deprecate: none** | No obsolete file or behavior was established by this verification |
 

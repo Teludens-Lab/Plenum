@@ -27,9 +27,9 @@ The promptbook has 31 vertical tasks across P00-P06. The final 2026-10-17 machin
 
 ## Unresolved blockers and approvals
 
-- OPEN-001 approval roles and OPEN-002 ADR approval. OPEN-003 is resolved by the official snapshot manifest.
+- OPEN-001 approval roles. OPEN-002 is resolved by Product Owner approval on 2026-10-20, and OPEN-003 is resolved by the official snapshot manifest.
 - Assumed DEC-21..27 and DEC-30..40 where affected tasks cite them.
-- Proposed ADR-001..005 and ADR-008..018 except Approved ADR-006 and ADR-007.
+- ADR-002, ADR-004/005, ADR-008..014 and ADR-017 are Product Owner Approved as of 2026-10-20; ADR-006/007 were already Approved and ADR-001/003/015/016/018 are Confirmed. Named specialist sign-offs remain explicit.
 - OPEN-027 recording/transcription consent; OPEN-028 secret-ballot custody; OPEN-029 Plugin trust.
 - Other semantic, retention, performance, and operational OPEN items are attached to the relevant task rather than hidden globally.
 
@@ -41,7 +41,7 @@ Tasks are vertical outcomes rather than file-layer work. Higher-risk tasks PS-20
 
 - Approved: ADR-006 and ADR-007 only.
 - Confirmed scope: DEC-01..20 and DEC-41..60.
-- Assumed/Proposed choices remain labeled in prompt metadata and matrices; no task may call them ratified.
+- Assumed choices, OPEN items and outstanding named specialist sign-offs remain labeled in prompt metadata and matrices; no task may call them resolved.
 - Candidate libraries are suggestions until the owning task records necessity, compatibility, maintenance/security/license checks, version pin, and deletion/migration path.
 - No application, deployment, or production-readiness claim is made by this generator.
 

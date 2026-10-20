@@ -7,7 +7,7 @@
 | Document ID | SYNC |
 | Version | 1.1.1 |
 | Date | 2026-10-17 |
-| Status | Proposed. Depends on ADR-001, ADR-002 and ADR-010 (Proposed; OPEN-002). Detailed design produced ahead of approval under DEC-27. |
+| Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001, ADR-002 and ADR-010; named specialist sign-offs remain required. OPEN-002 is resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner (role placeholders — OPEN-001) |
 | Reads from | 01 PRD; 02 Platform; 05 Runtime; 06 Data, Security and Reporting; 09 Contracts; 10 Extension Framework; 11 Polling and Voting; 12 Voice and Radio; PostgreSQL Logical Data Model v1.1; Decision Register; Glossary |

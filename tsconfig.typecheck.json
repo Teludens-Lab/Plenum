@@ -12,11 +12,13 @@
       "@plenum/extension-host": ["packages/extension-host/src/index.ts"],
       "@plenum/media-adapter": ["packages/media-adapter/src/index.ts"],
       "@plenum/media-adapter/browser": ["packages/media-adapter/src/browser.ts"],
+      "@plenum/validation-engine": ["packages/validation-engine/src/index.ts"],
       "@plenum/simulation-schema": ["packages/simulation-schema/src/index.ts"],
       "@plenum/workflow-engine": ["packages/workflow-engine/src/index.ts"],
       "@plenum/sync-client": ["packages/sync-client/src/index.ts"],
       "@plenum/server": ["apps/server/src/index.ts"],
-      "@plenum/runtime-web": ["apps/runtime-web/src/index.ts"]
+      "@plenum/runtime-web": ["apps/runtime-web/src/index.ts"],
+      "@plenum/studio": ["apps/studio/src/index.ts"]
     }
   },
   "include": [

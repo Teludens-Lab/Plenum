@@ -469,16 +469,16 @@ Retryable Commands require Command IDs. Side effects are transactional or compen
 | Concern | Choice | Decision | Status |
 |---|---|---|---|
 | Frontend | React, TypeScript | ADR-007 | Approved |
-| Backend | Node.js 26 LTS target, 24 LTS floor; TypeScript | ADR-008 | Proposed |
-| Database | PostgreSQL 18 | ADR-009 | Proposed |
-| Object storage | S3-compatible API; Garage, SeaweedFS or Ceph RGW self-hosted | ADR-011 | Proposed |
-| Identity | OIDC relying party; Keycloak bundled for self-hosted profiles | ADR-006, ADR-012 | Approved principle; Proposed product choice |
-| Realtime | SSE for Runtime; WebSocket for Studio collaboration | ADR-010 | Proposed |
-| Background jobs | PostgreSQL-backed queue | ADR-005 | Proposed |
-| Packaging | OCI images; Compose or Podman reference deployment | ADR-013 | Proposed |
-| Voice media | Self-hosted WebRTC SFU (LiveKit candidate) and TURN | DEC-49, ADR-017 | Exception approved; product choice Proposed |
-| Plugin isolation | Hardened rootless containers; WASM/WASI for deterministic models | ADR-018 | Proposed |
-| CRDT | Yjs candidate | ADR-002 | Proposed |
+| Backend | Node.js 26 LTS target, 24 LTS floor; TypeScript | ADR-008 | Approved |
+| Database | PostgreSQL 18 | ADR-009 | Approved |
+| Object storage | S3-compatible API; Garage, SeaweedFS or Ceph RGW self-hosted | ADR-011 | Approved |
+| Identity | OIDC relying party; Keycloak bundled for self-hosted profiles | ADR-006, ADR-012 | Approved |
+| Realtime | SSE for Runtime; WebSocket for Studio collaboration | ADR-010 | Approved |
+| Background jobs | PostgreSQL-backed queue | ADR-005 | Approved |
+| Packaging | OCI images; Compose or Podman reference deployment | ADR-013 | Approved |
+| Voice media | Self-hosted WebRTC SFU (LiveKit candidate) and TURN | DEC-49, ADR-017 | Approved; provider remains replaceable |
+| Plugin isolation | Hardened rootless containers; WASM/WASI for deterministic models | ADR-018 | Confirmed |
+| CRDT | Yjs candidate | ADR-002 | Approved |
 | Frontend libraries (candidates) | React Router, TanStack Query, Zustand, React Hook Form, Zod, dnd-kit, React Flow | — | Candidates; pin in implementation ADRs |
 | Testing | Vitest (unit and contract), Playwright (full Session), schema compatibility, permission matrix, synthetic rehearsal | — | Candidates |
 
@@ -494,7 +494,7 @@ The DEC-16 workload (500 Participants per Session, 10 concurrent Sessions, up to
 
 ## 26. Open technical decisions
 
-OPEN-002 (approval of ADR-001 to ADR-005), OPEN-012 (compatibility and compiler determinism), OPEN-016 (authority transfer), OPEN-020 (Package signing), OPEN-022 (JSON Schema compatibility, workflow engine, policy engine, scientific-model sandboxes, report generation), OPEN-029 (plugin trust operations). OPEN-021 is resolved by DEC-59 and DEC-60.
+OPEN-012 (compatibility and compiler determinism), OPEN-016 (authority transfer), OPEN-020 (Package signing), OPEN-022 (JSON Schema compatibility, workflow engine, policy engine, scientific-model sandboxes, report generation), OPEN-029 (plugin trust operations). OPEN-002 is resolved by Product Owner approval on 2026-10-20; OPEN-021 is resolved by DEC-59 and DEC-60.
 
 ## Change log
 

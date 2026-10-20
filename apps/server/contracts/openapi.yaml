@@ -3,6 +3,78 @@ info:
   title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/projects/{projectId}/collaboration:
+    get:
+      operationId: connectStudioCollaboration
+      x-websocket: true
+      x-contract-id: studio-crdt-v1
+      x-authorized-organization-role: designer
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "101": { description: Authenticated CRDT stream; access is rechecked for every accepted update and broadcast. }
+        "401": { description: Authentication Session is invalid, expired, or revoked. }
+        "403": { description: Designer authority is absent. }
+  /v1/projects/{projectId}/draft:
+    get:
+      operationId: getCollaborativeDraft
+      x-contract-id: studio-crdt-v1
+      x-authorized-organization-roles: [designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Authoritative CRDT snapshot, state vector, deterministic materialization and validation report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollaborativeDraftV1" }
+        "403": { description: Studio authority is absent or was revoked. }
+  /v1/projects/{projectId}/validate:
+    post:
+      operationId: validateCollaborativeDraft
+      x-contract-id: studio-validation-v1
+      x-authorized-organization-roles: [designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Current merged Draft is valid. }
+        "422": { description: Current merged Draft has actionable validation issues. }
+  /v1/projects/{projectId}/publish:
+    post:
+      operationId: freezeAndPublishCollaborativeDraft
+      x-contract-id: studio-publish-v1
+      x-authorized-organization-role: publisher
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudioPublishRequestV1" }
+      responses:
+        "201":
+          description: Exact validated state vector frozen and published as an immutable Definition Revision and Release.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudioPublishV1" }
+        "403": { description: Publisher authority is absent or was revoked. }
+        "422": { description: Validation or publication controls failed. }
   /v1/plugins/submissions:
     post:
       operationId: submitPluginArtifact
@@ -576,6 +648,67 @@ paths:
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
   schemas:
+    StudioValidationReportV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, valid, issues, reportDigest]
+      properties:
+        contractId: { const: studio-validation-v1 }
+        valid: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, severity, message, path, elementId]
+            properties:
+              code: { type: string, minLength: 1 }
+              severity: { type: string, enum: [error, warning] }
+              message: { type: string, minLength: 1 }
+              path: { type: string, minLength: 1 }
+              elementId: { type: [string, "null"] }
+        reportDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+    CollaborativeDraftV1:
+      type: object
+      additionalProperties: false
+      required: [projectId, projectTitle, documentId, generation, update, stateVector, materialization, validation]
+      properties:
+        projectId: { type: string, format: uuid }
+        projectTitle: { type: string, minLength: 1 }
+        documentId: { type: string, format: uuid }
+        generation: { type: integer, minimum: 1 }
+        update: { type: string, contentEncoding: base64 }
+        stateVector: { type: string, contentEncoding: base64 }
+        materialization: { type: object }
+        validation: { $ref: "#/components/schemas/StudioValidationReportV1" }
+    StudioPublishRequestV1:
+      type: object
+      additionalProperties: false
+      required: [releaseLabel, semanticVersion, methodologyVersion, releaseNotes, warningsAcknowledged, classificationReviewId, accessibilityReviewStatus, retentionPolicyId, approvalNotes]
+      properties:
+        freezeId: { type: string, format: uuid }
+        releaseLabel: { type: string, minLength: 1, maxLength: 4000 }
+        semanticVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        methodologyVersion: { type: string, minLength: 1, maxLength: 4000 }
+        releaseNotes: { type: string, minLength: 1, maxLength: 4000 }
+        warningsAcknowledged: { const: true }
+        classificationReviewId: { type: string, minLength: 1, maxLength: 4000 }
+        accessibilityReviewStatus: { type: string, minLength: 1, maxLength: 4000 }
+        retentionPolicyId: { type: string, minLength: 1, maxLength: 4000 }
+        approvalNotes: { type: string, minLength: 1, maxLength: 4000 }
+    StudioPublishV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, freezeId, releaseId, definitionRevisionId, contentDigest, manifestDigest, packageDigest, saveState]
+      properties:
+        contractId: { const: studio-publish-v1 }
+        freezeId: { type: string, format: uuid }
+        releaseId: { type: string, format: uuid }
+        definitionRevisionId: { type: string, format: uuid }
+        contentDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        manifestDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        packageDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        saveState: { const: published }
     PluginArtifactV1:
       type: object
       additionalProperties: false

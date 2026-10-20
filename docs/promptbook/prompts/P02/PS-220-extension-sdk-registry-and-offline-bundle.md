@@ -7,7 +7,7 @@
 - Goal: Let approved publishers build, validate, submit, install, and bind digest-pinned Plugins.
 - User outcome: Institutions can install a verified local Plugin, including without Internet, before any Session run uses it.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/10_EXTENSION_FRAMEWORK_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. PS-220 has no remaining unratified-decision dependency: ADR-018 is confirmed and OPEN-020, OPEN-022, and OPEN-029 are resolved for the accepted implementation baseline.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -61,11 +61,11 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 ## Implementation
 
-- Use the Product Owner-accepted implementation baseline recorded in the Decision Register and `PROJECT_STATE.md`.
-- Use hardened rootless containers for the first-release execution target; defer WASM/WASI until later security validation and defer Python/native.
-- Use canonical digest-complete manifests and detached Ed25519 signatures; verify against institution-provisioned trust roots that are independent of Packages.
-- Use JSON Schema 2020-12 and the existing workflow/policy engines; leave report generation to PS-520.
-- Apply restricted publisher keys, signed revocation data with a 30-day freshness limit for new installations/bindings, SBOM/vulnerability checks, and Organization license acceptance.
+- Use the Product Owner-confirmed implementation baseline recorded in the Decision Register and PROJECT_STATE.md
+- Use hardened rootless containers for the first-release execution target; defer WASM/WASI until later security validation and defer Python/native
+- Use canonical digest-complete manifests and detached Ed25519 signatures; verify against institution-provisioned trust roots that are independent of Packages
+- Use JSON Schema 2020-12 and the existing workflow/policy engines; leave report generation to PS-520
+- Apply restricted publisher keys, signed revocation data with a 30-day freshness limit, SBOM/vulnerability checks, and Organization license acceptance
 - Canonicalize and verify manifest plus dependency closure
 - Separate publisher, artifact, install, binding, and run authorization
 - Reject digest reuse and incompatible host ranges
@@ -95,6 +95,7 @@ Pin Governing Release, schema, contract, Plugin, and Platform Adapter versions w
 
 - Do not create a public marketplace
 - Do not let Plugins define trust roots
+- Do not enable Python/native execution
 
 Also prohibited: destructive production operations, production secret changes, paid service creation, `git add .`, force push, destructive reset, invented commands, and completion claims after a failed gate.
 
@@ -127,10 +128,10 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 ## Regression and quality gates
 
 - No Plugin receives DB, object-store, or ambient secret access
-- SBOM/signing gaps remain explicit
+- Invalid signatures, stale revocation data, missing SBOM, critical vulnerabilities, and unaccepted licenses block approval
 - Audit Records remain Participant-inaccessible
 
-The approval gate is: production artifacts must pass the accepted signature, revocation, SBOM, vulnerability, and license checks. A task may be implementation-complete without being release-approved.
+The approval gate is: Production artifacts must pass the accepted signature, revocation, SBOM, vulnerability, and license checks. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -159,7 +160,7 @@ Verification:
 Compatibility / migrations:
 - Adds 011 extension registry.
 Risks / follow-up:
-- Apply the accepted Plugin trust baseline; preserve revocation and artifact history.
+- Apply the accepted trust baseline; preserve revocation and artifact history.
 Refs: PS-220, REQ-094, DEC-52
 ```
 
@@ -171,4 +172,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: the accepted trust baseline changes; a new execution target is approved.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The accepted trust baseline changes; A new execution target is approved.

@@ -1,6 +1,6 @@
 # Local voice media runbook
 
-Status: candidate implementation for Proposed ADR-017. Recording and transcription remain disabled until PS-320 and OPEN-027 are resolved.
+Status: candidate implementation for Approved ADR-017. Recording and transcription remain disabled until PS-320 and OPEN-027 are resolved.
 
 ## Deployment boundary
 

@@ -1,6 +1,6 @@
 # Plenum Studio — Document Set
 
-**Rebuilt:** 2026-10-17. Every document below is a draft or proposal. None is ratified until the owners confirm the items in Decision Register §3 and name the approvers (OPEN-001).
+**Rebuilt:** 2026-10-17. **Approval update:** 2026-10-20. The Product Owner accepted every current Proposed document as Approved. Draft documents and explicitly named specialist sign-offs remain subject to their recorded gates; approver identities remain OPEN-001.
 
 ## Where to start
 
@@ -21,14 +21,14 @@
 | 02_Updated_Architecture | `06_DATA_SECURITY_REPORTING_v1.3.md` | 1.3.1 | Draft for review |
 | 02_Updated_Architecture | `07_IMPLEMENTATION_ROADMAP_v1.3.md` | 1.3.2 | Draft for review |
 | 02_Updated_Architecture | `09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` | 1.3.1 | Draft for review |
-| 02_Updated_Architecture | `10_EXTENSION_FRAMEWORK_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Proposed; first release |
-| 02_Updated_Architecture | `11_LIVE_POLLING_AND_VOTING_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Proposed; first release |
-| 02_Updated_Architecture | `12_VOICE_AND_RADIO_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Proposed; first release |
-| 03_Governance_and_Reconciliation | `DECISION_REGISTER_v1.0.md` | 1.0.4 | Controlled |
+| 02_Updated_Architecture | `10_EXTENSION_FRAMEWORK_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Approved; first release |
+| 02_Updated_Architecture | `11_LIVE_POLLING_AND_VOTING_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Approved; first release |
+| 02_Updated_Architecture | `12_VOICE_AND_RADIO_v1.1.md` | 1.1.0 | Product decisions Confirmed; technical design Approved; first release |
+| 03_Governance_and_Reconciliation | `DECISION_REGISTER_v1.0.md` | 1.0.9 | Controlled |
 | 03_Governance_and_Reconciliation | `GLOSSARY_AND_CROSSWALK_v1.0.md` | 1.0.1 | Controlled draft |
 | 03_Governance_and_Reconciliation | `CHANGE_LOG.md` | — | Consolidated history of the corpus |
-| Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1 | `POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md` | 1.1.1 | Proposed (depends on ADRs awaiting approval, OPEN-002) |
-| Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1 | `SYNCHRONIZATION_PROTOCOL_v1.1.md` | 1.1.1 | Proposed (OPEN-002) |
+| Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1 | `POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md` | 1.1.1 | Approved 2026-10-20; named specialist sign-offs remain |
+| Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1 | `SYNCHRONIZATION_PROTOCOL_v1.1.md` | 1.1.1 | Approved 2026-10-20; named specialist sign-offs remain |
 | Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1 | `README.md` | — | Folder guide |
 | `references/plenum-runtime-slice/` | Reference code slice, v0.2.0 | 0.2.0 | Executable spike; not production code (see its README) |
 | archive | Superseded files, unchanged | — | For reference only |
@@ -65,6 +65,6 @@ A higher document wins over a lower one. Any conflict found is recorded in the D
 
 - Confirm or change the Assumed decisions (Decision Register §3).
 - Name the five approver roles (OPEN-001).
-- Approve ADR-001 to ADR-005 (OPEN-002), the recommended stack ADR-008 to ADR-015, and the feature ADRs ADR-016 to ADR-018.
+- Complete the named specialist sign-offs for Approved ADRs; Product Owner approval is recorded and OPEN-002 is resolved.
 - Confirm "Message Channel" as the new name for the old Communication Channel (DEC-51).
 - Consent, legal basis and retention for recording and transcription (OPEN-027); secret-ballot key custody (OPEN-028); plugin signing and trust operations (OPEN-029).

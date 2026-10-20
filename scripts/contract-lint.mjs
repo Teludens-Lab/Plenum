@@ -21,6 +21,8 @@ import {
   VOICE_COMMAND_CONTRACT_ID,
   MEDIA_CREDENTIAL_CONTRACT_ID,
   FLOOR_LEASE_CONTRACT_ID,
+  STUDIO_CRDT_CONTRACT_ID,
+  STUDIO_PUBLISH_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
@@ -40,6 +42,8 @@ import {
   voiceCommandV1Schema,
   mediaCredentialV1Schema,
   floorLeaseV1Schema,
+  studioCrdtV1Schema,
+  studioPublishV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
   isCommandOperationType,
@@ -113,6 +117,8 @@ assert.equal(approvalDecisionV1Schema.$id, APPROVAL_DECISION_CONTRACT_ID);
 assert.equal(voiceCommandV1Schema.$id, VOICE_COMMAND_CONTRACT_ID);
 assert.equal(mediaCredentialV1Schema.$id, MEDIA_CREDENTIAL_CONTRACT_ID);
 assert.equal(floorLeaseV1Schema.$id, FLOOR_LEASE_CONTRACT_ID);
+assert.equal(studioCrdtV1Schema.$id, STUDIO_CRDT_CONTRACT_ID);
+assert.equal(studioPublishV1Schema.$id, STUDIO_PUBLISH_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
@@ -122,6 +128,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
   syncDeltasV1Schema, syncSnapshotV1Schema, modelRunV1Schema, effectProposalV1Schema,
   approvalDecisionV1Schema, voiceCommandV1Schema, mediaCredentialV1Schema, floorLeaseV1Schema,
+  studioCrdtV1Schema, studioPublishV1Schema,
   pluginManifestV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);

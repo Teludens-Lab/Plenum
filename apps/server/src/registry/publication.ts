@@ -103,31 +103,22 @@ async function cleanupUnreferenced(
   }
 }
 
-export async function publishRelease(
+interface FrozenMaterialization {
+  materialization: { coreDesign: CoreDesignV1; scenario: ScenarioV1 };
+  draftVersion?: number;
+  sourceFreezeId?: string;
+}
+
+async function publishMaterialization(
   pool: Pool,
   store: ObjectStore,
   principal: AuthenticatedPrincipal,
   input: PublishReleaseInput,
+  frozen: FrozenMaterialization,
   now = new Date()
 ): Promise<PublishedRelease> {
-  requirePublisher(principal, input.correlationId);
-  validateControls(principal, input.controls, input.policy, input.correlationId);
   const releaseId = randomUUID();
   const definitionRevisionId = randomUUID();
-  const frozen = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    const result = await client.query<{ document: { coreDesign: CoreDesignV1; scenario: ScenarioV1 }; version: string }>(
-      `SELECT draft.document, draft.version
-         FROM studio.drafts draft
-         JOIN studio.simulation_projects project
-           ON project.organization_id=draft.organization_id AND project.id=draft.project_id
-        WHERE draft.organization_id=$1 AND draft.project_id=$2
-        FOR UPDATE OF draft`,
-      [principal.organizationId, input.projectId]
-    );
-    const row = result.rows[0];
-    if (row === undefined) throw authorizationError("NOT_FOUND", "The Draft was not found.", input.correlationId);
-    return { materialization: row.document, draftVersion: Number(row.version) };
-  });
   let compiled: CompiledRelease;
   try {
     compiled = compileRelease({
@@ -163,12 +154,21 @@ export async function publishRelease(
       if (publisher.rowCount !== 1) {
         throw authorizationError("ACCESS_REVOKED", "Publisher access is no longer active.", input.correlationId);
       }
-      const draft = await client.query<{ version: string }>(
-        "SELECT version FROM studio.drafts WHERE organization_id=$1 AND project_id=$2 FOR UPDATE",
-        [principal.organizationId, input.projectId]
-      );
-      if (Number(draft.rows[0]?.version) !== frozen.draftVersion) {
-        throw authorizationError("VERSION_CONFLICT", "The Draft changed during Publication.", input.correlationId);
+      if (frozen.sourceFreezeId === undefined) {
+        const draft = await client.query<{ version: string }>(
+          "SELECT version FROM studio.drafts WHERE organization_id=$1 AND project_id=$2 FOR UPDATE",
+          [principal.organizationId, input.projectId]
+        );
+        if (Number(draft.rows[0]?.version) !== frozen.draftVersion) {
+          throw authorizationError("VERSION_CONFLICT", "The Draft changed during Publication.", input.correlationId);
+        }
+      } else {
+        const freeze = await client.query(
+          `SELECT 1 FROM studio.publication_freezes
+            WHERE organization_id=$1 AND project_id=$2 AND id=$3`,
+          [principal.organizationId, input.projectId, frozen.sourceFreezeId]
+        );
+        if (freeze.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", input.correlationId);
       }
       const duplicate = await client.query<{ release_id: string }>(
         `SELECT release.id AS release_id
@@ -199,10 +199,11 @@ export async function publishRelease(
       );
       await client.query(
         `INSERT INTO studio.definition_revisions
-           (id,organization_id,project_id,parent_revision_id,snapshot,snapshot_sha256,methodology_version,author_id)
-         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`,
+           (id,organization_id,project_id,parent_revision_id,snapshot,snapshot_sha256,methodology_version,author_id,source_freeze_id)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)`,
         [definitionRevisionId, principal.organizationId, input.projectId, parent.rows[0]?.id ?? null,
-          JSON.stringify(frozen.materialization), compiled.contentDigest, input.methodologyVersion, principal.principalId]
+          JSON.stringify(frozen.materialization), compiled.contentDigest, input.methodologyVersion, principal.principalId,
+          frozen.sourceFreezeId ?? null]
       );
       await client.query(
         `INSERT INTO registry.releases
@@ -230,6 +231,13 @@ export async function publishRelease(
           JSON.stringify(compiled.release.manifest), compiled.manifestDigest, compiled.packageDigest,
           JSON.stringify(input.controls)]
       );
+      await client.query(
+        `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+         VALUES ($1,$2,$3,'registry.release_published',$4,$5::jsonb)`,
+        [randomUUID(), principal.organizationId, principal.principalId, `release:${releaseId}`,
+          JSON.stringify({ correlationId: input.correlationId, projectId: input.projectId,
+            definitionRevisionId, sourceFreezeId: frozen.sourceFreezeId ?? null, contentDigest: compiled.contentDigest })]
+      );
     });
   } catch (error) {
     await cleanupUnreferenced(pool, store, principal.organizationId, objectKey, compiled.packageDigest);
@@ -238,6 +246,57 @@ export async function publishRelease(
   return { releaseId, definitionRevisionId, releaseLabel: input.releaseLabel,
     contentDigest: compiled.contentDigest, manifestDigest: compiled.manifestDigest,
     packageDigest: compiled.packageDigest };
+}
+
+export async function publishRelease(
+  pool: Pool,
+  store: ObjectStore,
+  principal: AuthenticatedPrincipal,
+  input: PublishReleaseInput,
+  now = new Date()
+): Promise<PublishedRelease> {
+  requirePublisher(principal, input.correlationId);
+  validateControls(principal, input.controls, input.policy, input.correlationId);
+  const frozen = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ document: { coreDesign: CoreDesignV1; scenario: ScenarioV1 }; version: string }>(
+      `SELECT draft.document, draft.version
+         FROM studio.drafts draft
+         JOIN studio.simulation_projects project
+           ON project.organization_id=draft.organization_id AND project.id=draft.project_id
+        WHERE draft.organization_id=$1 AND draft.project_id=$2
+        FOR UPDATE OF draft`,
+      [principal.organizationId, input.projectId]
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw authorizationError("NOT_FOUND", "The Draft was not found.", input.correlationId);
+    return { materialization: row.document, draftVersion: Number(row.version) };
+  });
+  return publishMaterialization(pool, store, principal, input, frozen, now);
+}
+
+export async function publishReleaseFromFreeze(
+  pool: Pool,
+  store: ObjectStore,
+  principal: AuthenticatedPrincipal,
+  freezeId: string,
+  input: PublishReleaseInput,
+  now = new Date()
+): Promise<PublishedRelease> {
+  requirePublisher(principal, input.correlationId);
+  validateControls(principal, input.controls, input.policy, input.correlationId);
+  const frozen = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ materialization: { coreDesign: CoreDesignV1; scenario: ScenarioV1 }; project_id: string }>(
+      `SELECT materialization,project_id FROM studio.publication_freezes
+        WHERE organization_id=$1 AND id=$2`,
+      [principal.organizationId, freezeId]
+    );
+    const row = result.rows[0];
+    if (row === undefined || row.project_id !== input.projectId) {
+      throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", input.correlationId);
+    }
+    return { materialization: row.materialization, sourceFreezeId: freezeId };
+  });
+  return publishMaterialization(pool, store, principal, input, frozen, now);
 }
 
 export async function exportReleasePackage(

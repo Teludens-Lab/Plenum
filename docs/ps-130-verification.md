@@ -30,11 +30,11 @@ Migration `007_release_packages.sql` is additive. It adds append-only approval a
 
 The object-store boundary now has a real AWS SDK S3 adapter plus the local filesystem development adapter. The S3 adapter uses conditional create, digest metadata verification and ETag-conditional delete; the live SeaweedFS test proves the required API behavior without adding a multi-cloud layer. Object bytes are written before the registry commit; a failed known transaction deletes only an unreferenced object with the expected digest, while an ambiguous cleanup failure intentionally leaves an orphan rather than risking deletion of a committed Release.
 
-The project owner accepted ADR-011's Proposed S3-compatible direction for this build. SeaweedFS 4.48 is the verified interoperability target, not a final production deployment-profile selection; PS-530 still owns production configuration and operational validation.
+ADR-011's S3-compatible direction was Approved by Product Owner direction on 2026-10-20. SeaweedFS 4.48 is the verified interoperability target, not a final production deployment-profile selection; PS-530 still owns production configuration and operational validation.
 
 ## Open governance and QA limits
 
 - OPEN-020 blocks Package signing for production; no signing policy was selected and signature fields remain empty.
 - OPEN-012 leaves long-term compatibility policy unresolved, so import currently requires exact package schema, Simulation Schema, and compiler versions.
-- OPEN-013 and ADR-014 remain unresolved/unratified. The source Decision Register still labels ADR-011 Proposed, while its build direction is owner-accepted for implementation.
+- OPEN-013 remains unresolved. ADR-011 and ADR-014 are Approved as of 2026-10-20; their named specialist sign-offs remain.
 - The adapter was tested against a disposable, unauthenticated SeaweedFS service. Production IAM, TLS, encryption, lifecycle/versioning, backup/restore, HTTP handling, browser flow, load, Node 26, deployment and release approval were not tested; those are outside PS-130 or owned by later tasks.

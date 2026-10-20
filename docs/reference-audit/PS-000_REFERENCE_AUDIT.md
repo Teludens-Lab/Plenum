@@ -21,7 +21,7 @@ Acceptance evidence: `AC-09` planning only; parity execution remains `NOT RUN` u
 
 The exported reference tree was independently re-indexed on 2026-10-18 with `core.autocrlf=false`; the calculated tree was `771510b6180bd4826dc5688789d131f2109eeb62`, exactly matching the snapshot. The reference directory was not changed. The pin is immutable and parity evidence is keyed by both commit and archive digest.
 
-Authority: Decision Register and Glossary, then PRD, Canon, architecture/contracts, capability specifications, Proposed Data Model/Sync, and finally the observed reference. `OPEN-026` is resolved; `OPEN-001` and `DEC-22` remain labeled, so this audit does not treat the full draft methodology as ratified.
+Authority: Decision Register and Glossary, then PRD, Canon, architecture/contracts, capability specifications, Approved Data Model/Sync, and finally the observed reference. `OPEN-026` is resolved; `OPEN-001` and `DEC-22` remain labeled, so this audit does not treat the full draft methodology as ratified.
 
 ## Classification method and completeness boundary
 

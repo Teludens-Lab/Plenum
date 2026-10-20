@@ -4,7 +4,7 @@
 
 - ID: `PS-001`
 - Title: Verify the v0.2 slice on Node 24 and PostgreSQL 18
-- Goal: Reproduce the reference slice verification record on the supported floor and proposed database major.
+- Goal: Reproduce the reference slice verification record on the supported floor and approved database major.
 - User outcome: Engineers have a trustworthy preserve/change/deprecate baseline before platform extraction begins.
 - Risk: **MEDIUM**
 - Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
@@ -29,7 +29,7 @@ Observed source evidence:
 - references/plenum-runtime-slice/migrations/001_core.sql
 - references/plenum-runtime-slice/test/db.test.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `ADR-008`, `ADR-009`, `OPEN-001`. ADR-015 is confirmed.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-008`, `ADR-009`, `OPEN-001`.
 
 ## Prerequisites
 

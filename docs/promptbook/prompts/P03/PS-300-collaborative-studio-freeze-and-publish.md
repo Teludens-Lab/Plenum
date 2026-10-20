@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/migrations/003_collaboration.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies are unratified or unresolved and must remain labeled: `ADR-002`, `ADR-010`, `OPEN-013`, `OPEN-014`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-002`, `ADR-010`, `OPEN-013`, `OPEN-014`.
 
 ## Prerequisites
 
@@ -128,7 +128,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Validation messages link to source elements
 - No raw JSON is required from end users
 
-The approval gate is: ADR-002 remains Proposed; publication controls depend on OPEN-013. A task may be implementation-complete without being release-approved.
+The approval gate is: ADR-002 is Product Owner Approved; named Technical Lead sign-off remains and publication controls depend on OPEN-013. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 

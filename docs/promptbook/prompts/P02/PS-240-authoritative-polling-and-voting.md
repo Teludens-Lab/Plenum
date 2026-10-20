@@ -7,7 +7,7 @@
 - Goal: Implement the core voting lifecycle with explicit rules, idempotent Ballots, reproducible Tallies, and Certification.
 - User outcome: Eligible Participants can vote with clear receipts and operators can certify a reproducible result without exposing protected choices.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true` for identified/non-secret voting.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/11_LIVE_POLLING_AND_VOTING_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. ADR-003, ADR-015 and ADR-016 are confirmed. OPEN-028 remains unresolved and blocks production secret ballots only; the identified/non-secret voting slice is ready.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-028`.
 
 ## Prerequisites
 

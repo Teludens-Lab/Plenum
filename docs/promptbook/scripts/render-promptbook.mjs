@@ -66,7 +66,7 @@ Observed source evidence:
 
 ${list(task.source_evidence)}
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Proposed Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is \`${corpus}/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md\`. The following dependencies are unratified or unresolved and must remain labeled: ${task.depends_on_unratified.length ? task.depends_on_unratified.map((id) => `\`${id}\``).join(', ') : 'none'}.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is \`${corpus}/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md\`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: ${task.depends_on_unratified.length ? task.depends_on_unratified.map((id) => `\`${id}\``).join(', ') : 'none'}.
 
 ## Prerequisites
 

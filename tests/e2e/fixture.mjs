@@ -12,7 +12,10 @@ export const fixture = {
     operator: "21000000-0000-4000-8000-000000000004",
     redAuthor: "21000000-0000-4000-8000-000000000005",
     greenReviewer: "21000000-0000-4000-8000-000000000006",
-    redReviewer: "21000000-0000-4000-8000-000000000007"
+    redReviewer: "21000000-0000-4000-8000-000000000007",
+    designerA: "21000000-0000-4000-8000-000000000008",
+    designerB: "21000000-0000-4000-8000-000000000009",
+    publisher: "21000000-0000-4000-8000-00000000000a"
   },
   participants: {
     author: "31000000-0000-4000-8000-000000000001",
@@ -37,7 +40,10 @@ export const fixture = {
     operator: "51000000-0000-4000-8000-000000000004",
     redAuthor: "51000000-0000-4000-8000-000000000005",
     greenReviewer: "51000000-0000-4000-8000-000000000006",
-    redReviewer: "51000000-0000-4000-8000-000000000007"
+    redReviewer: "51000000-0000-4000-8000-000000000007",
+    designerA: "51000000-0000-4000-8000-000000000008",
+    designerB: "51000000-0000-4000-8000-000000000009",
+    publisher: "51000000-0000-4000-8000-00000000000a"
   },
   tokens: {
     author: "ps150-author",
@@ -46,7 +52,10 @@ export const fixture = {
     operator: "ps150-operator",
     redAuthor: "ps200-red-author",
     greenReviewer: "ps210-green-reviewer",
-    redReviewer: "ps210-red-reviewer"
+    redReviewer: "ps210-red-reviewer",
+    designerA: "ps300-designer-a",
+    designerB: "ps300-designer-b",
+    publisher: "ps300-publisher"
   },
   proposalArtifactId: "61000000-0000-4000-8000-000000000001",
   pollId: "62000000-0000-4000-8000-000000000001",
@@ -64,4 +73,8 @@ export function runtimeUrl() {
 
 export function operatorUrl() {
   return `/admin/dashboard?sessionId=${fixture.sessionId}`;
+}
+
+export function studioUrl() {
+  return `/studio/projects/${fixture.projectId}`;
 }

@@ -10,10 +10,10 @@ This is a maturity view, not a release declaration. Current status is derived fr
 | Reference authority slice | Yes | Yes | PS-001 PASS on Node 24/PostgreSQL 18 | Reference evidence only | Partial controls exercised | No | Disposable only | No |
 | Platform kernel / S1 | Yes | Yes | Unit, integration, browser and accessibility evidence PASS | Yes | Negative controls PASS; formal review pending | Limited measurements only | Disposable only | No |
 | Fractured Order from Release | Yes | Yes | PS-200/210 checks PASS | Yes | Formal review pending | One focused information-flow measurement | Disposable only | No; AC-09 incomplete |
-| Studio collaboration / S3 | Yes | PS-300 complete; PS-310–350 pending | PS-300 unit 40/40, integration 15/15, browser 10 PASS/1 intentional media skip | Collaboration, validation, freeze and publication integrated | Boundary tests PASS; formal review pending | Two-Designer convergence only | Disposable only | No |
+| Studio collaboration / S3 | Yes | PS-300/310/320 complete; PS-330–350 pending | Latest PS-320 unit 64/64, DB 14/14, browser 12 PASS/1 intentional media skip | Collaboration, visual Core/Poll/Voice authoring, validation, freeze and publication integrated | Boundary and consent tests PASS; formal review pending | Two-Designer convergence and 200% reflow only | Disposable only | No |
 | Extension Framework | Yes | PS-220/230 complete; authoring UI pending PS-330 | Unit, integration, browser and air-gap evidence PASS | Registry, isolation and approval integrated | Formal Security Owner review pending | Load not measured | Isolated no-egress host only | No |
-| Voting and Certification | Yes | PS-240 complete; Studio editor pending PS-320 | VOTE-01–10 PASS | Yes | Secret production profile blocked by OPEN-028 | Contention/load not measured | Disposable only | No |
-| Voice Channels | Yes | PS-250 complete; consent editor pending PS-320 | VOICE-01–07/11 PASS, including loopback media | Yes | Recording/transcription disabled pending OPEN-027 | Media capacity not measured | Institutional LAN/TLS/TURN/recovery pending | No |
+| Voting and Certification | Yes | PS-240 Runtime and PS-320 Studio editor complete | VOTE-01–10/15 PASS | Yes | Secret production profile blocked by OPEN-028 | Contention/load not measured | Disposable only | No |
+| Voice Channels | Yes | PS-250 media/Floor and PS-320 editor/consent proof complete | VOICE-01–07/09/11/13/14 PASS; earlier loopback media PASS | Yes | Production recording/transcription blocked by OPEN-027 | Media capacity not measured | Institutional LAN/TLS/TURN/recovery pending | No |
 | Offline Participants / S2 | Yes | Reconnect exists; persistent outbox pending PS-500 | Bounded reconnect replay tested | Partial | Device policy OPEN-014/015 pending | Reconnect load pending | No | No |
 | Evidence/reporting / S5 | Yes | Transactional evidence exists; signing/reports pending PS-510/520 | Command/evidence atomicity tested | Partial | Custody/retention decisions pending | No | No recovery proof | No |
 | Deployment profiles / S6 | Approved architecture; specialist sign-offs pending | Plugin air-gap harness and media profile only | No-public-egress Plugin/media fixtures PASS | Partial | Formal review pending | No | Full package and restore pending PS-530 | No |
@@ -21,8 +21,8 @@ This is a maturity view, not a release declaration. Current status is derived fr
 
 ## Current objective evidence
 
-- PS-001 through PS-300 have task-specific verification records for the implementation completed to date; `PROJECT_STATE.md` is the concise status index.
-- Latest PS-300 baseline: Node 24 lint/typecheck/build, unit 40/40 and PostgreSQL 18 integration 15/15 PASS; browser 10 PASS with one intentional real-SFU skip when `MEDIA_TEST_URL` was absent.
+- PS-001 through PS-320 have task-specific verification records for the implementation completed to date; `PROJECT_STATE.md` is the concise status index.
+- Latest PS-320 baseline: lint/typecheck/build, unit 64/64 and PostgreSQL 18 DB 14/14 PASS; browser 12 PASS with one intentional real-SFU skip when `MEDIA_TEST_URL` was absent.
 - Earlier PS-250 evidence includes a passing two-browser loopback LiveKit audio path; it is not institutional LAN/TURN/firewall proof.
 - `CMD-PARITY` currently reports 9 PASS, 0 BLOCKED and 8 OUT_OF_SCOPE; AC-09 remains incomplete until later phases deliver those targets.
 - Full persistent-offline, signed-evidence, reporting, backup/restore, deployment, load, manual assistive-technology and final security evidence remains pending in P05.
@@ -38,4 +38,4 @@ This is a maturity view, not a release declaration. Current status is derived fr
 
 ## Honest claim boundary
 
-The application is implemented through PS-300, but P03 is not complete and P04–P06 remain future work. A task may be PASS without its phase or release being approved. `RELEASE_GAP_PROMPTBOOK.md` details the remaining assurance work. Only PS-550 assembles the go/no-go package, and authorized owners must still approve release.
+The application is implemented through PS-320, but P03 is not complete and P04–P06 remain future work. A task may be PASS without its phase or release being approved. `RELEASE_GAP_PROMPTBOOK.md` details the remaining assurance work. Only PS-550 assembles the go/no-go package, and authorized owners must still approve release.

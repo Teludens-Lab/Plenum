@@ -167,7 +167,8 @@ async function applyMigrations() {
     "apps/server/migrations/012_extension_runs_approvals.sql",
     "apps/server/migrations/013_voting_core.sql",
     "apps/server/migrations/014_comms_voice_core.sql",
-    "apps/server/migrations/015_collaboration_runtime.sql"
+    "apps/server/migrations/015_collaboration_runtime.sql",
+    "apps/server/migrations/016_voice_consent_assets.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1214,7 +1215,7 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
   assert.equal(secret.errorCode, "CAPABILITY_UNAVAILABLE");
 });
 
-test("VOICE-01..05 enforce grants, one live Floor, preemption, deduplication and revocation", async () => {
+test("VOICE-01..05/09/11/13/14 enforce grants, consent, immediate withdrawal, Floor and revocation", async () => {
   const revisionId = "25000000-0000-4000-8000-000000000001";
   const releaseId = "25000000-0000-4000-8000-000000000002";
   const channelId = "25000000-0000-4000-8000-000000000003";
@@ -1226,7 +1227,7 @@ test("VOICE-01..05 enforce grants, one live Floor, preemption, deduplication and
     canTransmit: { sessionRoleIds: ["role-c", "role-c-viewer"] },
     canModerate: { sessionRoleIds: ["role-c"] },
     radio: { floorLeaseMs: 5000, queuePolicy: "priority", preemption: "authorized_emergency", maxTransmissionMs: 15000, cooldownMs: 0 },
-    recordingPolicy: "off", transcriptionPolicy: "off", mediaProviderAdapterBindingId: "adapter-1"
+    recordingPolicy: "off", transcriptionPolicy: "with_consent", retentionPolicyId: "voice-short", mediaProviderAdapterBindingId: "adapter-1"
   };
   const privateDefinition = {
     id: "private-consultation", name: "Private consultation", mode: "private_call", capacity: 4,
@@ -1276,6 +1277,18 @@ test("VOICE-01..05 enforce grants, one live Floor, preemption, deduplication and
   await assert.rejects(issueMediaCredential(app,high,channelId,media,randomUUID()),error=>error?.envelope?.error?.code==="ACCESS_REVOKED");
   assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000011","voice_channel.join",1))).status,"accepted");
   assert.equal((await submit(high,make(high,"25000000-0000-4000-8000-000000000012","voice_channel.join",1))).status,"accepted");
+  const consentRequired=await submit(context,make(context,"25000000-0000-4000-8000-000000000013","voice_transcription.start",1));
+  assert.equal(consentRequired.errorCode,"CONSENT_REQUIRED");
+  assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000014","voice_consent.give",1,{kind:"transcription"}))).status,"accepted");
+  assert.equal((await submit(high,make(high,"25000000-0000-4000-8000-000000000015","voice_consent.give",1,{kind:"transcription"}))).status,"accepted");
+  assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000016","voice_transcription.start",1))).aggregateVersion,2);
+  assert.equal((await owner.query("SELECT transcription_active FROM comms.voice_channels WHERE id=$1",[channelId])).rows[0].transcription_active,true);
+  assert.equal((await submit(high,make(high,"25000000-0000-4000-8000-000000000017","voice_consent.withdraw",2,{kind:"transcription"}))).aggregateVersion,3);
+  assert.equal((await owner.query("SELECT transcription_active FROM comms.voice_channels WHERE id=$1",[channelId])).rows[0].transcription_active,false);
+  assert.equal((await owner.query("SELECT count(*) FROM evidence.events WHERE aggregate_id=$1 AND event_type IN ('voice_consent.withdrawn','voice_transcription.stopped')",[channelId])).rows[0].count,"2");
+  assert.equal((await submit(context,make(context,"25000000-0000-4000-8000-000000000018","voice_recording.start",3))).errorCode,"INVALID_TRANSITION");
+  await assert.rejects(owner.query("UPDATE comms.consent_records SET action='given' WHERE command_id=$1",["25000000-0000-4000-8000-000000000017"]));
+  assert.equal((await owner.query("SELECT count(*) FROM comms.recording_assets WHERE channel_id=$1",[channelId])).rows[0].count,"0");
   const credential=await issueMediaCredential(app,context,channelId,media,randomUUID());
   assert.equal(credential.providerAdapterDigest,adapterDigest);
   assert.equal(credential.permissions.includes("transmit"),false);

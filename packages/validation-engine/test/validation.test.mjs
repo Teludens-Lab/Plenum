@@ -68,3 +68,42 @@ test("PS-310-T02 INV-007 template copies omit Scenario content unless explicitly
   assert.deepEqual(included.scenario.content, source.scenario.content);
   assert.notEqual(included.scenario.content, source.scenario.content);
 });
+
+test("PS-320 VOTE-15 rejects implicit Poll rules and gated ballot modes", async (context) => {
+  const cases = [
+    ["implicit denominator", "poll.counting_rule_incomplete", (poll) => { delete poll.thresholdRule.denominator; }],
+    ["implicit tie rule", "poll.counting_rule_incomplete", (poll) => { delete poll.tieRule; }],
+    ["secret ballot", "poll.secret_ballot_policy_pending", (poll) => { poll.secrecy = "secret_ballot"; }],
+    ["anonymous survey", "poll.anonymous_survey_unavailable", (poll) => { poll.secrecy = "anonymous_survey"; }]
+  ];
+  for (const [name, code, mutate] of cases) await context.test(name, async () => {
+    const draft = structuredClone(await fixture());
+    const poll = {
+      id: "vote-proof", scope: "session", question: "Proceed?", options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
+      pollType: "single_choice", minSelections: 1, maxSelections: 1, tallyMethod: "builtin_count", tallyMethodVersion: "1",
+      electoratePolicyId: draft.coreDesign.informationPolicies[0].id, oneBallotPer: "seat_assignment", allowRevote: false, secrecy: "open",
+      thresholdRule: { kind: "simple_majority", denominator: "valid_votes", abstentionCountsTowardDenominator: false },
+      quorumRule: { basis: "electorate_at_open", minimum: 0, abstentionCountsTowardParticipation: true }, weights: [], vetoRule: { holderSeatIds: [] },
+      tieRule: "no_decision", openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
+      resultVisibilityPolicyId: draft.coreDesign.informationPolicies[0].id, certificationPolicy: {}
+    };
+    mutate(poll);
+    draft.coreDesign.polls = [poll];
+    const report = validateStudioDraft(draft);
+    assert.ok(report.issues.some((item) => item.code === code), `${name} should report ${code}: ${JSON.stringify(report.issues)}`);
+  });
+});
+
+test("PS-320 VOICE-09 validates Media Provider capability per target profile", async () => {
+  const draft = structuredClone(await fixture());
+  const adapterId = draft.coreDesign.communications.voiceChannels[0].mediaProviderAdapterBindingId;
+  const adapter = draft.coreDesign.platformAdapters.find(({ id }) => id === adapterId);
+  adapter.kind = "media_provider";
+  adapter.voiceCapabilities = [
+    { profile: "cloud", modes: ["radio_ptt"], recording: false, transcription: false },
+    { profile: "institutional", modes: [], recording: false, transcription: false },
+    { profile: "air_gapped", modes: ["radio_ptt"], recording: false, transcription: false }
+  ];
+  const report = validateStudioDraft(draft);
+  assert.ok(report.issues.some(({ code, message }) => code === "voice.adapter_capability_missing" && /institutional/u.test(message)));
+});

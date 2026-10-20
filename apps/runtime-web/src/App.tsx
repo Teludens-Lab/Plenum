@@ -16,7 +16,6 @@ import {
   type RuntimePollV1,
   type RuntimeProjectionV1,
   type RuntimeVoiceChannelV1,
-  type VoiceCommandReceiptV1,
   type FloorLeaseV1
 } from "@plenum/event-contracts";
 import {
@@ -698,14 +697,15 @@ function RuntimeView() {
       activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload });
   };
 
-  const sendVoice = async (channel: RuntimeVoiceChannelV1, operation: "join" | "leave"): Promise<VoiceCommandReceiptV1 | null> => {
+  const sendVoice = async (channel: RuntimeVoiceChannelV1, operationType: string,
+    payload: JsonObject = {}): Promise<CommandReceiptV1 | null> => {
     if (projection === null || deviceId === null || !navigator.onLine) {
       setConnection("offline"); setNotice("Voice needs the live Session Authority and was not queued."); return null;
     }
-    const receipt = await post({ commandId: crypto.randomUUID(), deviceId, operationType: `voice_channel.${operation}`,
+    const receipt = await post({ commandId: crypto.randomUUID(), deviceId, operationType,
       aggregateId: channel.id, expectedAggregateVersion: channel.version, governingReleaseId: channel.governingReleaseId,
-      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload: {} }, false);
-    return receipt as VoiceCommandReceiptV1 | null;
+      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload }, false);
+    return receipt;
   };
 
   const sendFloor = async (channel: RuntimeVoiceChannelV1, action: "request" | "renew" | "release",

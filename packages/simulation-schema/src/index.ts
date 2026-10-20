@@ -43,6 +43,21 @@ export interface PluginBindingV1 {
 
 export type RuntimeFieldTypeV1 = "short_text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
 
+export type PlatformTargetProfileV1 = "cloud" | "institutional" | "air_gapped";
+export type VoiceChannelModeV1 = "radio_ptt" | "open_room" | "private_call" | "broadcast";
+
+export interface PlatformAdapterV1 {
+  id: string;
+  digest: string;
+  kind?: "media_provider" | "voting_method";
+  voiceCapabilities?: Array<{
+    profile: PlatformTargetProfileV1;
+    modes: VoiceChannelModeV1[];
+    recording: boolean;
+    transcription: boolean;
+  }>;
+}
+
 export interface RuntimeFieldOptionSourceV1 {
   kind: "team_cells";
   teamId: string;
@@ -259,7 +274,7 @@ export interface RuntimePollDefinitionV1 {
 export interface RuntimeVoiceChannelDefinitionV1 {
   id: string;
   name: string;
-  mode: "radio_ptt" | "open_room" | "private_call" | "broadcast";
+  mode: VoiceChannelModeV1;
   capacity: number;
   activeStageIds?: string[];
   language?: string;
@@ -431,7 +446,7 @@ export interface RuntimeCoreDesignV1 {
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
   pluginBindings: PluginBindingV1[];
-  platformAdapters?: Array<{ id: string; digest: string }>;
+  platformAdapters?: PlatformAdapterV1[];
   terminology?: { labels: Record<string, { singular: string; plural: string }>; customLabels: Record<string, string> };
   accessPolicy?: RuntimeAccessPolicyV1;
   identity?: { title: string; subtitle?: string; developer: string; developerLogoResourceId?: string };
@@ -812,12 +827,16 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       reference(roles, sessionRoleId, `Voice Channel ${channel.id} priority policy`);
       if (!Number.isSafeInteger(priority)) throw new Error(`Voice Channel ${channel.id} has an invalid priority`);
     });
-    if (channel.mediaProviderAdapterBindingId.trim().length === 0 ||
-        !runtime.platformAdapters?.some(({id}) => id === channel.mediaProviderAdapterBindingId)) {
+    const adapter = runtime.platformAdapters?.find(({ id }) => id === channel.mediaProviderAdapterBindingId);
+    if (channel.mediaProviderAdapterBindingId.trim().length === 0 || adapter === undefined ||
+        (adapter.kind !== undefined && adapter.kind !== "media_provider")) {
       throw new Error(`Voice Channel ${channel.id} has no pinned Media Provider Adapter binding`);
     }
-    if (channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") {
-      throw new Error(`Voice Channel ${channel.id} recording and transcription remain disabled pending OPEN-027`);
+    const incompatible = adapter.voiceCapabilities?.find(({ modes, recording, transcription }) =>
+      !modes.includes(channel.mode) || (channel.recordingPolicy !== "off" && !recording) ||
+      (channel.transcriptionPolicy !== "off" && !transcription));
+    if (incompatible !== undefined) {
+      throw new Error(`Voice Channel ${channel.id} is unsupported by Media Provider Adapter ${adapter.id} for ${incompatible.profile}`);
     }
     if (channel.mode === "radio_ptt") {
       const radio = channel.radio;

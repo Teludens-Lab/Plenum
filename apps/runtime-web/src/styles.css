@@ -135,6 +135,9 @@ code { font-family: var(--font-mono); }
 .poll-results div { display: flex; justify-content: space-between; gap: var(--space-4); }
 .status-success { padding: var(--space-3); color: var(--color-status-success); background: var(--color-status-success-bg); border-radius: var(--radius-md); }
 .voice-card .badge { text-transform: capitalize; }
+.voice-privacy { display: grid; gap: var(--space-3); margin-block: var(--space-4); }
+.voice-privacy > div { padding-block: var(--space-3); border-block-start: 1px solid var(--color-border-default); }
+.voice-privacy h4, .voice-privacy p { margin: 0 0 var(--space-2); }
 .voice-audio { position: fixed; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .floor-control[aria-pressed="true"], .floor-control:active { background: var(--color-status-danger); border-color: var(--color-status-danger); }
 

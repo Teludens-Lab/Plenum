@@ -22,7 +22,8 @@ const migrations = [
   "apps/server/migrations/012_extension_runs_approvals.sql",
   "apps/server/migrations/013_voting_core.sql",
   "apps/server/migrations/014_comms_voice_core.sql",
-  "apps/server/migrations/015_collaboration_runtime.sql"
+  "apps/server/migrations/015_collaboration_runtime.sql",
+  "apps/server/migrations/016_voice_consent_assets.sql"
 ];
 
 export default async function globalSetup() {
@@ -45,6 +46,10 @@ export default async function globalSetup() {
       openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
       resultVisibilityPolicyId: "policy-public", certificationPolicy: { certifierSessionRoleIds: ["white_cell"] }
     }] }, scenario: release.scenario };
+    const releaseDefinition = structuredClone(definition);
+    const consentChannel = releaseDefinition.coreDesign.communications.voiceChannels.find(({ id }) => id === "team-open-room");
+    consentChannel.transcriptionPolicy = "with_consent";
+    consentChannel.retentionPolicyId = "voice-short";
     const people = Object.values(fixture.people);
     await owner.query("BEGIN");
     await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-150 synthetic organization')", [fixture.organizationId]);
@@ -76,7 +81,7 @@ export default async function globalSetup() {
       `INSERT INTO studio.definition_revisions
        (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
        VALUES ($1,$2,$3,$4::jsonb,repeat('a',64),'1.3.1',$5)`,
-      [fixture.revisionId, fixture.organizationId, fixture.projectId, JSON.stringify(definition), fixture.people.operator]
+      [fixture.revisionId, fixture.organizationId, fixture.projectId, JSON.stringify(releaseDefinition), fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO registry.releases
@@ -196,7 +201,7 @@ export default async function globalSetup() {
       "INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)",
       [fixture.sessionId, fixture.organizationId]
     );
-    const voiceDefinitions = new Map(definition.coreDesign.communications.voiceChannels.map((channel) => [channel.id, channel]));
+    const voiceDefinitions = new Map(releaseDefinition.coreDesign.communications.voiceChannels.map((channel) => [channel.id, channel]));
     for (const [key, channelId] of Object.entries(fixture.voiceChannels)) {
       const definitionId = key === "openRoom" ? "team-open-room" : key === "privateCall" ? "private-consultation" :
         key === "broadcast" ? "control-broadcast" : "all-hands-radio";

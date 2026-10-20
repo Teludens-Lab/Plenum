@@ -860,7 +860,7 @@ export async function submitRuntimeCommand(
       command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :
       command.operationType.startsWith("effect_proposal.") ? executeEffectProposalCommand :
       command.operationType.startsWith("poll.") || command.operationType === "ballot.cast" ? executeVotingCommand :
-      command.operationType.startsWith("voice_") && mediaAdapter !== undefined ? createVoiceCommandExecutor(mediaAdapter) :
+      command.operationType.startsWith("voice_") ? createVoiceCommandExecutor(mediaAdapter) :
       async (): Promise<CommandDecision> => ({ status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE",
         message: "This configured capability is not available in the current Runtime." });
   return processSessionCommand({ pool, context, command, correlationId, deploymentId, lockAggregateAndExecute: execute });

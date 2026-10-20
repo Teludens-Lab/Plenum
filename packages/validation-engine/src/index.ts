@@ -164,6 +164,37 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
       }
     }
   }
+  for (const poll of records(core.polls)) {
+    const id = String(poll.id);
+    const threshold = record(poll.thresholdRule) ? poll.thresholdRule : {};
+    if (typeof threshold.denominator !== "string" || typeof poll.tieRule !== "string" ||
+        typeof threshold.abstentionCountsTowardDenominator !== "boolean") {
+      issues.push(issue("poll.counting_rule_incomplete", `Poll ${id} must explicitly define its denominator, abstention treatment and tie rule.`, `polls.${id}`, id));
+    }
+    if (poll.secrecy === "secret_ballot") {
+      issues.push(issue("poll.secret_ballot_policy_pending", `Poll ${id} uses secret ballot, which remains blocked for production by OPEN-028.`, `polls.${id}`, id));
+    }
+    if (poll.secrecy === "anonymous_survey") {
+      issues.push(issue("poll.anonymous_survey_unavailable", `Poll ${id} uses anonymous survey, which is not available in the first Runtime proof.`, `polls.${id}`, id));
+    }
+  }
+  const adapters = new Map(records(core.platformAdapters).map((adapter) => [String(adapter.id), adapter]));
+  for (const channel of records((core.communications as Record<string, unknown> | undefined)?.voiceChannels)) {
+    const id = String(channel.id);
+    if (channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") {
+      issues.push(issue("voice.consent_policy_pending", `Voice Channel ${id} enables recording or transcription, which remains blocked for production by OPEN-027.`, `communications.voiceChannels.${id}`, id));
+    }
+    const adapter = adapters.get(String(channel.mediaProviderAdapterBindingId));
+    const capabilities = records(adapter?.voiceCapabilities);
+    const unsupported = capabilities.find((profile) => !stringList(profile.modes).includes(String(channel.mode)) ||
+      (channel.recordingPolicy !== "off" && profile.recording !== true) ||
+      (channel.transcriptionPolicy !== "off" && profile.transcription !== true));
+    if (unsupported !== undefined) {
+      issues.push(issue("voice.adapter_capability_missing",
+        `Voice Channel ${id} is unsupported by its Media Provider Adapter in the ${String(unsupported.profile)} target profile.`,
+        `communications.voiceChannels.${id}`, id));
+    }
+  }
   const disabledRoles = new Set(records(core.sessionRoles).filter((role) => role.enabled === false).map((role) => String(role.id)));
   for (const seat of records(core.seats)) {
     const role = stringList(seat.sessionRoleIds).find((id) => disabledRoles.has(id));

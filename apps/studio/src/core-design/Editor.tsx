@@ -7,22 +7,25 @@ import type {
 } from "@plenum/simulation-schema";
 
 import { StudioCollaborationClient } from "../collaboration/client.js";
+import { PollEditor } from "../polls/PollEditor.js";
+import { VoiceEditor } from "../voice/VoiceEditor.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, defaultGrant, identifier
 } from "./model.js";
 
-type Path = readonly (string | number)[];
-type Option = { value: string; label: string };
+export type Path = readonly (string | number)[];
+export type Option = { value: string; label: string };
 
 const SECTIONS = [
   ["overview", "Overview & Scenario"], ["methodology", "Methodology"], ["teams", "Teams"],
   ["roles", "Session Roles"], ["seats", "Seats"], ["stages", "Stages"],
   ["forms", "Forms & Artifacts"], ["workflows", "Workflows"], ["policies", "Information Policy"],
-  ["interfaces", "Interfaces"], ["research", "Research"], ["access", "Access"], ["preview", "Role preview"]
+  ["polls", "Polls"], ["voice", "Voice Channels"], ["interfaces", "Interfaces"], ["research", "Research"],
+  ["access", "Access"], ["preview", "Role preview"]
 ] as const;
 
-function TextField({ id, label, value, path, client, multiline = false, type = "text", transform }: {
+export function TextField({ id, label, value, path, client, multiline = false, type = "text", transform }: {
   id: string; label: string; value: string | number; path: Path; client: StudioCollaborationClient;
   multiline?: boolean; type?: "text" | "number"; transform?: (value: string) => unknown;
 }) {
@@ -32,7 +35,7 @@ function TextField({ id, label, value, path, client, multiline = false, type = "
     {multiline ? <textarea {...props} rows={4} /> : <input {...props} type={type} />}</div>;
 }
 
-function SelectField({ id, label, value, options, path, client, emptyDeletes = false }: {
+export function SelectField({ id, label, value, options, path, client, emptyDeletes = false }: {
   id: string; label: string; value: string; options: readonly Option[]; path: Path; client: StudioCollaborationClient; emptyDeletes?: boolean;
 }) {
   return <div className="field"><label htmlFor={id}>{label}</label><select id={id} value={value}
@@ -41,14 +44,14 @@ function SelectField({ id, label, value, options, path, client, emptyDeletes = f
   </select></div>;
 }
 
-function CheckField({ id, label, checked, path, client }: {
+export function CheckField({ id, label, checked, path, client }: {
   id: string; label: string; checked: boolean; path: Path; client: StudioCollaborationClient;
 }) {
   return <label className="choice" htmlFor={id}><input id={id} type="checkbox" checked={checked}
     onChange={(event) => client.setAtPath(path, event.target.checked)} />{label}</label>;
 }
 
-function MultiCheck({ legend, values, options, path, client }: {
+export function MultiCheck({ legend, values, options, path, client }: {
   legend: string; values: string[]; options: readonly Option[]; path: Path; client: StudioCollaborationClient;
 }) {
   return <fieldset className="choice-group"><legend>{legend}</legend>{options.length === 0 ? <p className="hint">Add an option in its editor first.</p> : options.map((option) =>
@@ -57,7 +60,7 @@ function MultiCheck({ legend, values, options, path, client }: {
     }} />{option.label}</label>)}</fieldset>;
 }
 
-function ItemActions({ path, index, count, client, label }: {
+export function ItemActions({ path, index, count, client, label }: {
   path: Path; index: number; count: number; client: StudioCollaborationClient; label: string;
 }) {
   return <div className="item-actions">
@@ -67,12 +70,12 @@ function ItemActions({ path, index, count, client, label }: {
   </div>;
 }
 
-function Workspace({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
+export function Workspace({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
   return <section id={id} className="editor-workspace card" aria-labelledby={`${id}-title`}><div className="workspace-heading">
     <div><h2 id={`${id}-title`}>{title}</h2><p>{intro}</p></div></div>{children}</section>;
 }
 
-function AddButton({ label, onClick, disabled = false }: { label: string; onClick(): void; disabled?: boolean }) {
+export function AddButton({ label, onClick, disabled = false }: { label: string; onClick(): void; disabled?: boolean }) {
   return <button className="btn-secondary" type="button" disabled={disabled} onClick={onClick}>{label}</button>;
 }
 
@@ -417,6 +420,8 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
       <FormsEditor core={core} client={client} />
       <WorkflowEditor core={core} client={client} />
       <PolicyEditor core={core} client={client} />
+      <PollEditor core={core} client={client} />
+      <VoiceEditor core={core} client={client} />
       <InterfaceEditor core={core} client={client} />
       <ResearchEditor core={core} client={client} />
       <AccessEditor core={core} client={client} />

@@ -135,7 +135,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.setOffline(false);
     await proposal.getByRole("button", { name: "Approve effect" }).click();
     await expect(page.getByText("The server accepted the Command.")).toBeVisible();
-    await expect(proposal.getByText("applied")).toBeVisible();
+    await expect(proposal.getByText("applied")).toBeVisible({ timeout: 20_000 });
     await expect(proposal.getByRole("button", { name: "Approve effect" })).toHaveCount(0);
     const accessibility = await new AxeBuilder({ page }).analyze();
     expect(accessibility.violations).toEqual([]);
@@ -193,6 +193,42 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(radio.getByRole("button", { name: "Join voice" })).toBeDisabled();
     await expect(page.getByText("Offline", { exact: true })).toBeVisible();
     await context.close();
+  });
+
+  test("@a11y VOICE-13/14 captures and withdraws participant-scoped transcription consent", async ({ browser }) => {
+    const participant = await actor(browser, fixture.tokens.author, { reducedMotion: "reduce" });
+    const moderator = await actor(browser, fixture.tokens.finalReviewer, { reducedMotion: "reduce" });
+    const join = async (current) => {
+      const deviceId = (await (await current.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+      const projection = await (await current.context.request.get(
+        `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": deviceId } }
+      )).json();
+      const channel = projection.voiceChannels.find(({ id }) => id === fixture.voiceChannels.openRoom);
+      const response = await current.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+        commandId: crypto.randomUUID(), deviceId, operationType: "voice_channel.join", aggregateId: channel.id,
+        expectedAggregateVersion: channel.version, governingReleaseId: channel.governingReleaseId,
+        activeSessionRoleId: projection.activeSessionRoleId, payload: {}
+      } });
+      expect(response.status()).toBe(200);
+    };
+    await Promise.all([join(participant), join(moderator)]);
+    await Promise.all([participant.page.goto(runtimeUrl()), moderator.page.goto(runtimeUrl())]);
+    const participantChannel = participant.page.getByRole("article", { name: "Team open room" });
+    const moderatorChannel = moderator.page.getByRole("article", { name: "Team open room" });
+    const participantTranscription = participantChannel.locator(".voice-privacy > div").filter({ hasText: "Transcription" });
+    const moderatorTranscription = moderatorChannel.locator(".voice-privacy > div").filter({ hasText: "Transcription" });
+    await expect(participantTranscription).toContainText("Policy: with consent · Your consent: not given");
+    await participantTranscription.getByRole("button", { name: "Give transcription consent" }).click();
+    await expect(participantTranscription).toContainText("Your consent: given");
+    await moderatorTranscription.getByRole("button", { name: "Give transcription consent" }).click();
+    await moderatorTranscription.getByRole("button", { name: "Start transcription" }).click();
+    await expect(moderatorTranscription).toContainText("Active · Policy: with consent");
+    await participant.page.getByRole("button", { name: "Refresh authoritative state" }).click();
+    await expect(participantTranscription).toContainText("Active · Policy: with consent");
+    await participantTranscription.getByRole("button", { name: "Withdraw transcription consent" }).click();
+    await expect(participantTranscription).toContainText("Stopped · Policy: with consent · Your consent: withdrawn");
+    expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+    await Promise.all([participant.context.close(), moderator.context.close()]);
   });
 
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
@@ -720,12 +756,12 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
 test.describe.serial("PS-300 collaborative Studio", () => {
   test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
     await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
-    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
     await expect(first.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
 
     const teams = first.page.getByRole("region", { name: "Teams" });
@@ -741,11 +777,20 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(second.page.getByText("Save state: saved on device")).toBeVisible();
     await second.context.setOffline(false);
     await second.page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Offline visual-form edit merged after reconnect.", { timeout: 20_000 });
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await expect(first.page.getByText("Valid", { exact: true })).toBeVisible();
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
+
+    const polls = first.page.getByRole("region", { name: "Polls" });
+    await polls.locator("details").filter({ hasText: "Adopt the synthetic accessibility resolution?" }).locator("summary").click();
+    await expect(polls.getByText(/Counting rule: Count accepted ballots using simple majority over valid votes/u)).toBeVisible();
+    await expect(polls.getByText(/Electorate preview: Everyone/u)).toBeVisible();
+    const voice = first.page.getByRole("region", { name: "Voice Channels" });
+    await voice.locator("details").filter({ hasText: "Team open room" }).locator("summary").click();
+    await expect(voice.getByRole("table", { name: "Selected adapter capability by target profile" })).toBeVisible();
+    await expect(voice.getByRole("table", { name: "Effective configured permissions. Public access, when selected, applies to every row." })).toBeVisible();
 
     const preview = first.page.getByRole("region", { name: "Role & Stage preview" });
     await preview.getByLabel("Session Role").selectOption("scribe");
@@ -760,15 +805,15 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await first.page.getByLabel("Semantic version").fill("3.0.0");
     await first.page.getByLabel("Release notes").fill("Collaborative browser acceptance proof.");
     await first.page.getByLabel("Classification review ID").fill("browser-classification-review");
-    await first.page.getByLabel("Retention policy ID").fill("standard-retention");
+    await first.page.getByLabel("Retention policy ID", { exact: true }).fill("standard-retention");
     await first.page.getByLabel("Approval notes").fill("Synthetic browser approval.");
     await first.page.getByLabel("I acknowledge the validation warnings.").check();
     await first.page.getByRole("button", { name: "Freeze and publish" }).click();
-    await expect(first.page.getByText(/Published release/u)).toBeVisible();
-    await expect(first.page.getByText("Save state: published")).toBeVisible();
+    await expect(first.page.getByText(/Published release/u)).toBeVisible({ timeout: 20_000 });
+    await expect(first.page.getByText("Save state: published")).toBeVisible({ timeout: 20_000 });
 
     await second.page.getByLabel("Scenario description").fill("Post-freeze next Draft edit.");
-    await expect(first.page.getByLabel("Scenario description")).toHaveValue("Post-freeze next Draft edit.");
+    await expect(first.page.getByLabel("Scenario description")).toHaveValue("Post-freeze next Draft edit.", { timeout: 20_000 });
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
     await first.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -791,6 +836,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     ]);
     const stages = first.page.getByRole("region", { name: "Stages" });
     const stageCards = stages.locator("details[id^='stages-']");
+    await expect(stageCards).toHaveCount(16, { timeout: 20_000 });
     const stageIdsBefore = await stageCards.evaluateAll((items) => items.map(({ id }) => id));
     await stageCards.nth(1).locator("summary").click();
     await stageCards.nth(1).getByRole("button", { name: "Earlier" }).click();

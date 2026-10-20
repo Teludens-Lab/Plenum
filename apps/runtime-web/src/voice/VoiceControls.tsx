@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { FloorLeaseV1, RuntimeProjectionV1, RuntimeVoiceChannelV1, VoiceCommandReceiptV1 } from "@plenum/event-contracts";
+import type { CommandReceiptV1, FloorLeaseV1, JsonObject, RuntimeProjectionV1, RuntimeVoiceChannelV1, VoiceCommandReceiptV1 } from "@plenum/event-contracts";
 import type { BrowserMediaSession } from "@plenum/media-adapter/browser";
 
 interface VoiceControlsProps {
   projection: RuntimeProjectionV1;
   online: boolean;
   disabled: boolean;
-  command(channel: RuntimeVoiceChannelV1, operation: "join" | "leave"): Promise<VoiceCommandReceiptV1 | null>;
+  command(channel: RuntimeVoiceChannelV1, operationType: string, payload?: JsonObject): Promise<CommandReceiptV1 | null>;
   floor(channel: RuntimeVoiceChannelV1, action: "request" | "renew" | "release", body: Record<string, unknown>): Promise<FloorLeaseV1>;
   notice(message: string): void;
 }
@@ -49,7 +49,7 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
 
   const join = async (channel: RuntimeVoiceChannelV1) => {
     if (!online) { notice("Voice needs a live connection and was not queued."); return; }
-    const receipt = await command(channel, "join");
+    const receipt = await command(channel, "voice_channel.join") as VoiceCommandReceiptV1 | null;
     if (receipt?.status !== "accepted" || receipt.mediaCredential === null) return;
     try {
       if (audio.current === null) throw new Error("The audio output is unavailable");
@@ -81,7 +81,7 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
     if (floorLease?.status === "granted") await release(channel);
     await room?.setMicrophoneEnabled(false);
     room?.disconnect(); setRoom(null); setChannelId(null); setMicrophone("muted"); setRemoteAudioCount(0);
-    if (online) await command(channel, "leave");
+    if (online) await command(channel, "voice_channel.leave");
     else notice("Disconnected locally; the short-lived server grant will expire.");
   };
   const toggle = async () => {
@@ -113,6 +113,15 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
     event.currentTarget.releasePointerCapture(event.pointerId); void release(channel);
   };
 
+  const consentAction = async (channel: RuntimeVoiceChannelV1, kind: "recording" | "transcription", action: "give" | "withdraw") => {
+    if (!online) { notice("Consent changes require the live Session Authority and were not queued."); return; }
+    await command(channel, `voice_consent.${action}`, { kind });
+  };
+  const mediaAction = async (channel: RuntimeVoiceChannelV1, kind: "recording" | "transcription", action: "start" | "stop") => {
+    if (!online) { notice(`${kind === "recording" ? "Recording" : "Transcription"} control requires the live Session Authority and was not queued.`); return; }
+    await command(channel, `voice_${kind}.${action}`);
+  };
+
   return <section aria-labelledby="voice-heading">
     <div className="section-heading"><p className="eyebrow">Live media</p><h2 id="voice-heading">Voice Channels</h2></div>
     <p className="hint">Voice is live-only. Use Join, then explicitly enable the microphone. Push-to-talk: hold Space, Enter, or the Floor button; release it to stop.</p>
@@ -120,7 +129,22 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
     <div className="card-grid">{projection.voiceChannels.map((channel) => <article className="card voice-card" key={channel.id} aria-labelledby={`voice-${channel.id}`}>
       <div className="card-heading"><div><p className="eyebrow">{channel.mode.replaceAll("_", " ")}</p><h3 id={`voice-${channel.id}`}>{channel.name}</h3></div>
         <span className="badge badge-state">{channelId === channel.id ? microphone : channel.microphoneState}</span></div>
-      <p>{channel.canTransmit ? "You may listen and transmit." : "Listen-only access."} Recording and transcription are off.</p>
+      <p>{channel.canTransmit ? "You may listen and transmit." : "Listen-only access."} Text status and controls remain available without audio.</p>
+      <div className="voice-privacy" aria-label={`Privacy controls for ${channel.name}`}>
+        {(["recording", "transcription"] as const).map((kind) => {
+          const state = channel.consent[kind];
+          return <div key={kind}>
+            <h4 id={`${channel.id}-${kind}`}>{kind === "recording" ? "Recording" : "Transcription"}</h4>
+            <p role="status"><strong>{state.active ? "Active" : "Stopped"}</strong> · Policy: {state.policy.replaceAll("_", " ")} · Your consent: {state.mine.replaceAll("_", " ")}</p>
+            {state.policy === "with_consent" && <div className="actions">{state.mine === "given"
+              ? <button className="btn-secondary" type="button" disabled={disabled || !online} onClick={() => void consentAction(channel, kind, "withdraw")}>Withdraw {kind} consent</button>
+              : <button className="btn-secondary" type="button" disabled={disabled || !online} onClick={() => void consentAction(channel, kind, "give")}>Give {kind} consent</button>}
+              {channel.canModerate && <button className="btn-secondary" type="button" disabled={disabled || !online} onClick={() => void mediaAction(channel, kind, state.active ? "stop" : "start")}>{state.active ? "Stop" : "Start"} {kind}</button>}
+            </div>}
+            {state.policy === "on" && <p className="hint">Production recording is unavailable pending OPEN-027.</p>}
+          </div>;
+        })}
+      </div>
       {channelId === channel.id ? <p className="hint" role="status" aria-live="polite">{remoteAudioCount === 0
         ? "No remote audio streams." : `Receiving ${remoteAudioCount} remote audio ${remoteAudioCount === 1 ? "stream" : "streams"}.`}</p> : null}
       <div className="actions">{channelId !== channel.id

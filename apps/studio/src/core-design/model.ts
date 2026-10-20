@@ -4,7 +4,9 @@ import type {
   RuntimeFormDefinitionV1,
   RuntimeInformationGrantV1,
   RuntimeInterfaceProfileV1,
+  RuntimePollDefinitionV1,
   RuntimeStageDefinitionV1,
+  RuntimeVoiceChannelDefinitionV1,
   RuntimeWorkflowDefinitionV1
 } from "@plenum/simulation-schema";
 
@@ -67,6 +69,29 @@ export function basicInterface(name: string, sessionRoleId: string | undefined):
     id: identifier(), name, selectors: sessionRoleId === undefined ? {} : { sessionRoleIds: [sessionRoleId] },
     layout: { template: "single_column", regions: [{ id: identifier(), modules: [] }] },
     navigation: { items: [] }
+  };
+}
+
+export function basicPoll(name: string, policyId: string | undefined): RuntimePollDefinitionV1 {
+  return {
+    id: identifier(), scope: "session", question: name,
+    options: [{ id: identifier(), label: "Yes" }, { id: identifier(), label: "No" }, { id: identifier(), label: "Abstain" }],
+    pollType: "yes_no_abstain", minSelections: 1, maxSelections: 1,
+    tallyMethod: "builtin_count", tallyMethodVersion: "1", electoratePolicyId: policyId ?? "",
+    oneBallotPer: "seat_assignment", allowRevote: false, secrecy: "open",
+    thresholdRule: { kind: "simple_majority", denominator: "valid_votes", abstentionCountsTowardDenominator: false },
+    quorumRule: { basis: "electorate_at_open", minimum: 0, abstentionCountsTowardParticipation: true },
+    weights: [], vetoRule: { holderSeatIds: [] }, tieRule: "no_decision",
+    openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
+    resultVisibilityPolicyId: policyId ?? "", certificationPolicy: {}
+  };
+}
+
+export function basicVoiceChannel(name: string, adapterId: string | undefined): RuntimeVoiceChannelDefinitionV1 {
+  return {
+    id: identifier(), name, mode: "open_room", capacity: 20,
+    canListen: {}, canTransmit: {}, canModerate: {},
+    recordingPolicy: "off", transcriptionPolicy: "off", mediaProviderAdapterBindingId: adapterId ?? ""
   };
 }
 

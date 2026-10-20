@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import {
   FLOOR_LEASE_CONTRACT_ID,
   VOICE_COMMAND_CONTRACT_ID,
+  VOICE_CONSENT_CONTRACT_ID,
   type FloorLeaseV1,
   type JsonObject,
   type MediaCredentialV1,
@@ -34,6 +35,8 @@ interface ChannelRow {
   status: "open" | "closed" | "degraded" | "unavailable";
   provider_adapter_digest: string;
   invited_participant_ids: string[];
+  recording_active: boolean;
+  transcription_active: boolean;
   version: string;
 }
 
@@ -68,7 +71,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 const fail = (errorCode: "VALIDATION_FAILED" | "PERMISSION_DENIED" | "TARGET_NOT_FOUND" | "TARGET_EXISTS" |
-  "STALE_AGGREGATE_VERSION" | "INCOMPATIBLE_RELEASE" | "INVALID_TRANSITION" | "CAPABILITY_UNAVAILABLE",
+  "STALE_AGGREGATE_VERSION" | "INCOMPATIBLE_RELEASE" | "INVALID_TRANSITION" | "CAPABILITY_UNAVAILABLE" | "CONSENT_REQUIRED",
 message: string, reconcile = false): CommandDecision => ({ status: reconcile ? "needs_reconciliation" : "rejected", errorCode, message });
 
 async function readDefinition(client: PoolClient, organizationId: string, releaseId: string): Promise<VoiceDefinition> {
@@ -109,7 +112,7 @@ async function activeStageId(client: PoolClient, context: SessionAccessContextV1
 
 async function readChannel(client: PoolClient, context: SessionAccessContextV1, id: string, lock = false): Promise<ChannelRow | undefined> {
   return (await client.query<ChannelRow>(`SELECT id,governing_release_id,definition_id,definition_revision,definition,status,provider_adapter_digest,
-    invited_participant_ids,version
+    invited_participant_ids,recording_active,transcription_active,version
     FROM comms.voice_channels WHERE organization_id=$1 AND session_id=$2 AND id=$3${lock ? " FOR UPDATE" : ""}`,
   [context.organizationId, context.sessionId, id])).rows[0];
 }
@@ -118,8 +121,9 @@ function stageAllows(channel: RuntimeVoiceChannelDefinitionV1, stageId: string |
   return channel.activeStageIds === undefined || (stageId !== undefined && channel.activeStageIds.includes(stageId));
 }
 
-async function openChannel(input: CommandExecutionContext, adapter: MediaProviderAdapter): Promise<CommandDecision> {
+async function openChannel(input: CommandExecutionContext, adapter: MediaProviderAdapter | undefined): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
+  if (adapter === undefined) return fail("CAPABILITY_UNAVAILABLE", "Voice media is not configured.");
   if (command.governingReleaseId !== activeReleaseId) return fail("INCOMPATIBLE_RELEASE", "New Voice Channels use the active Release.", true);
   if (command.expectedAggregateVersion !== 0) return fail("STALE_AGGREGATE_VERSION", "A new Voice Channel starts at version zero.", true);
   const release = await readDefinition(client, context.organizationId, activeReleaseId);
@@ -148,9 +152,6 @@ async function openChannel(input: CommandExecutionContext, adapter: MediaProvide
     return fail("VALIDATION_FAILED", "Invitations apply only to private calls.");
   }
   if (!stageAllows(definition, await activeStageId(client, context))) return fail("INVALID_TRANSITION", "The Voice Channel is not available in the active Stage.");
-  if (definition.recordingPolicy !== "off" || definition.transcriptionPolicy !== "off") {
-    return fail("CAPABILITY_UNAVAILABLE", "Recording and transcription remain disabled pending OPEN-027.");
-  }
   if ((await client.query("SELECT 1 FROM comms.voice_channels WHERE organization_id=$1 AND id=$2", [context.organizationId, command.aggregateId])).rowCount !== 0) {
     return fail("TARGET_EXISTS", "The Voice Channel already exists.");
   }
@@ -170,6 +171,31 @@ async function openChannel(input: CommandExecutionContext, adapter: MediaProvide
     channelId: command.aggregateId, definitionId: definition.id, definitionRevision: revision,
     providerAdapterBindingId: definition.mediaProviderAdapterBindingId, providerAdapterDigest: digest
   } };
+}
+
+async function allActiveParticipantsConsented(client: PoolClient, context: SessionAccessContextV1, channelId: string,
+  kind: "recording" | "transcription"): Promise<boolean> {
+  const result = await client.query<{ participant_count: string; consented_count: string }>(`SELECT
+      count(DISTINCT grant_row.participant_id) AS participant_count,
+      count(DISTINCT grant_row.participant_id) FILTER (WHERE latest.action='given') AS consented_count
+    FROM comms.voice_grants grant_row
+    LEFT JOIN LATERAL (
+      SELECT action FROM comms.consent_records consent
+      WHERE consent.organization_id=grant_row.organization_id AND consent.channel_id=grant_row.channel_id
+        AND consent.participant_id=grant_row.participant_id AND consent.kind=$3
+      ORDER BY consent.recorded_at DESC,consent.id DESC LIMIT 1
+    ) latest ON true
+    WHERE grant_row.organization_id=$1 AND grant_row.channel_id=$2 AND grant_row.revoked_at IS NULL
+      AND grant_row.valid_until>transaction_timestamp()`, [context.organizationId, channelId, kind]);
+  const participants = Number(result.rows[0]?.participant_count ?? 0);
+  return participants > 0 && participants === Number(result.rows[0]?.consented_count ?? 0);
+}
+
+async function myConsent(client: PoolClient, context: SessionAccessContextV1, channelId: string,
+  kind: "recording" | "transcription"): Promise<"given" | "withdrawn" | "not_given"> {
+  return (await client.query<{ action: "given" | "withdrawn" }>(`SELECT action FROM comms.consent_records
+    WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3 AND kind=$4
+    ORDER BY recorded_at DESC,id DESC LIMIT 1`, [context.organizationId, channelId, context.participantId, kind])).rows[0]?.action ?? "not_given";
 }
 
 async function manageChannel(input: CommandExecutionContext, channel: ChannelRow): Promise<CommandDecision> {
@@ -243,12 +269,64 @@ async function manageChannel(input: CommandExecutionContext, channel: ChannelRow
       eventType: action === "remove" ? "voice_channel.left" : "intervention.recorded",
       eventPayload: { channelId: channel.id, targetParticipantId, action, reason } };
   }
-  return fail("CAPABILITY_UNAVAILABLE", "Recording and transcription remain disabled pending OPEN-027.");
+  if (command.operationType === "voice_consent.give" || command.operationType === "voice_consent.withdraw") {
+    if (!listen) return fail("PERMISSION_DENIED", "The Active Role Context cannot set consent for this Voice Channel.");
+    const kind = command.payload.kind;
+    if (kind !== "recording" && kind !== "transcription") return fail("VALIDATION_FAILED", "Voice consent requires a recording or transcription kind.");
+    const policy = kind === "recording" ? channel.definition.recordingPolicy : channel.definition.transcriptionPolicy;
+    if (policy === "off") return fail("INVALID_TRANSITION", `${kind === "recording" ? "Recording" : "Transcription"} is disabled for this Voice Channel.`);
+    const action = command.operationType === "voice_consent.give" ? "given" : "withdrawn";
+    await client.query(`INSERT INTO comms.consent_records
+      (id,organization_id,session_id,channel_id,participant_id,kind,action,command_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [randomUUID(), context.organizationId, context.sessionId, channel.id,
+      context.participantId, kind, action, command.commandId]);
+    let next = version;
+    let stopped = false;
+    if (action === "withdrawn" && ((kind === "recording" && channel.recording_active) ||
+        (kind === "transcription" && channel.transcription_active))) {
+      next += 1;
+      stopped = true;
+      const column = kind === "recording" ? "recording_active" : "transcription_active";
+      await client.query(`UPDATE comms.voice_channels SET ${column}=false,version=$3,updated_at=transaction_timestamp()
+        WHERE organization_id=$1 AND id=$2`, [context.organizationId, channel.id, next]);
+    }
+    return { status: "accepted", aggregateVersion: next, eventType: `voice_consent.${action}`,
+      eventPayload: { contractId: VOICE_CONSENT_CONTRACT_ID, channelId: channel.id, participantId: context.participantId, kind },
+      ...(stopped ? { followUpEvents: [{ eventType: `voice_${kind}.stopped`, eventPayload: {
+        channelId: channel.id, reason: "consent_withdrawn", participantId: context.participantId
+      }, aggregateVersion: next }] } : {}) };
+  }
+  const mediaKind = command.operationType.startsWith("voice_recording.") ? "recording" :
+    command.operationType.startsWith("voice_transcription.") ? "transcription" : undefined;
+  if (mediaKind !== undefined) {
+    if (!moderate) return fail("PERMISSION_DENIED", "The Active Role Context cannot control recording or transcription.");
+    const policy = mediaKind === "recording" ? channel.definition.recordingPolicy : channel.definition.transcriptionPolicy;
+    if (policy === "off") return fail("INVALID_TRANSITION", `${mediaKind === "recording" ? "Recording" : "Transcription"} is disabled for this Voice Channel.`);
+    if (mediaKind === "recording" && policy === "on") {
+      return fail("CAPABILITY_UNAVAILABLE", "Production recording remains blocked pending OPEN-027.");
+    }
+    const activeColumn = mediaKind === "recording" ? "recording_active" : "transcription_active";
+    const activeNow = mediaKind === "recording" ? channel.recording_active : channel.transcription_active;
+    const starting = command.operationType.endsWith(".start");
+    if (starting === activeNow) return fail("INVALID_TRANSITION", `${mediaKind === "recording" ? "Recording" : "Transcription"} is already ${starting ? "active" : "stopped"}.`);
+    if (starting && !(await allActiveParticipantsConsented(client, context, channel.id, mediaKind))) {
+      return fail("CONSENT_REQUIRED", `Every active Participant must consent before ${mediaKind} starts.`);
+    }
+    const next = version + 1;
+    await client.query(`UPDATE comms.voice_channels SET ${activeColumn}=$3,version=$4,updated_at=transaction_timestamp()
+      WHERE organization_id=$1 AND id=$2`, [context.organizationId, channel.id, starting, next]);
+    return { status: "accepted", aggregateVersion: next, eventType: `voice_${mediaKind}.${starting ? "started" : "stopped"}`,
+      eventPayload: { channelId: channel.id, reason: starting ? "authorized_control" : "operator_control" } };
+  }
+  return fail("CAPABILITY_UNAVAILABLE", "The Voice Command is not supported.");
 }
 
-export function createVoiceCommandExecutor(adapter: MediaProviderAdapter) {
+export function createVoiceCommandExecutor(adapter?: MediaProviderAdapter) {
   return async (input: CommandExecutionContext): Promise<CommandDecision> => {
   if (input.command.operationType === "voice_channel.open") return openChannel(input, adapter);
+  if (adapter === undefined && input.command.operationType === "voice_channel.join") {
+    return fail("CAPABILITY_UNAVAILABLE", "Voice media is not configured.");
+  }
   const channel = await readChannel(input.client, input.context, input.command.aggregateId, true);
   if (channel === undefined) return fail("TARGET_NOT_FOUND", "The Voice Channel was not found.");
   return manageChannel(input, channel);
@@ -261,7 +339,7 @@ export async function getVoiceProjection(client: PoolClient, context: SessionAcc
   if (active === undefined) return [];
   const stageId = await activeStageId(client, context);
   const rows = (await client.query<ChannelRow>(`SELECT id,governing_release_id,definition_id,definition_revision,definition,status,provider_adapter_digest,
-    invited_participant_ids,version
+    invited_participant_ids,recording_active,transcription_active,version
     FROM comms.voice_channels WHERE organization_id=$1 AND session_id=$2 AND status IN ('open','degraded','unavailable') ORDER BY opened_at,id`,
   [context.organizationId, context.sessionId])).rows;
   const projection: RuntimeVoiceChannelV1[] = [];
@@ -284,7 +362,12 @@ export async function getVoiceProjection(client: PoolClient, context: SessionAcc
       status, joined, canListen, canTransmit, canModerate,
       microphoneState: !joined ? "unavailable" : held ? "transmitting" : canTransmit ? "ready" : "muted",
       floorHeldByMe: held, floorExpiresAt: floor.rows[0]?.expires_at.toISOString() ?? null,
-      version: Number(channel.version), governingReleaseId: channel.governing_release_id });
+      version: Number(channel.version), governingReleaseId: channel.governing_release_id,
+      consent: { contractId: VOICE_CONSENT_CONTRACT_ID, channelId: channel.id,
+        recording: { policy: definition.recordingPolicy, active: channel.recording_active,
+          mine: await myConsent(client, context, channel.id, "recording") },
+        transcription: { policy: definition.transcriptionPolicy, active: channel.transcription_active,
+          mine: await myConsent(client, context, channel.id, "transcription") } } });
   }
   return projection;
 }

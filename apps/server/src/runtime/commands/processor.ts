@@ -16,7 +16,8 @@ import { authorizationError } from "../../errors.js";
 import type { SessionAccessContextV1 } from "../../identity/context.js";
 
 export type CommandDecision =
-  | { status: "accepted"; aggregateVersion: number; eventType: string; eventPayload: JsonObject }
+  | { status: "accepted"; aggregateVersion: number; eventType: string; eventPayload: JsonObject;
+      followUpEvents?: Array<{ eventType: string; eventPayload: JsonObject; aggregateVersion?: number }> }
   | { status: "rejected" | "needs_reconciliation"; errorCode: CanonicalErrorCode; message: string };
 
 export interface CommandExecutionContext {
@@ -159,6 +160,27 @@ async function recordOutcome(
      VALUES ($1,$2,$3,$4)`,
     [randomUUID(), context.organizationId, context.sessionId, eventId]
   );
+  if (accepted) {
+    for (const followUp of decision.followUpEvents ?? []) {
+      if (!isPastTenseEventType(followUp.eventType)) throw new Error(`Event type is not past-tense dot-case: ${followUp.eventType}`);
+      const followUpSequence = await allocateEvidenceSequence(client, context.organizationId, context.sessionId);
+      const followUpId = randomUUID();
+      await client.query(
+        `INSERT INTO evidence.events
+           (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,
+            governing_release_id,authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
+         VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,transaction_timestamp())`,
+        [followUpId, context.organizationId, context.sessionId, followUpSequence, followUp.eventType,
+          context.principalId, context.participantId, command.governingReleaseId, context.authorityEpoch,
+          JSON.stringify(followUp.eventPayload), correlationId, command.commandId, command.aggregateId,
+          followUp.aggregateVersion ?? aggregateVersion]
+      );
+      await client.query(
+        `INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id) VALUES ($1,$2,$3,$4)`,
+        [randomUUID(), context.organizationId, context.sessionId, followUpId]
+      );
+    }
+  }
   return { commandId: command.commandId, status: decision.status, aggregateVersion,
     evidenceSequence: sequence, errorCode, message, replayed: false };
 }

@@ -21,6 +21,7 @@ import {
   VOICE_COMMAND_CONTRACT_ID,
   MEDIA_CREDENTIAL_CONTRACT_ID,
   FLOOR_LEASE_CONTRACT_ID,
+  VOICE_CONSENT_CONTRACT_ID,
   STUDIO_CRDT_CONTRACT_ID,
   STUDIO_PUBLISH_CONTRACT_ID,
   ROLE_PREVIEW_CONTRACT_ID,
@@ -43,6 +44,7 @@ import {
   voiceCommandV1Schema,
   mediaCredentialV1Schema,
   floorLeaseV1Schema,
+  voiceConsentV1Schema,
   studioCrdtV1Schema,
   studioPublishV1Schema,
   rolePreviewV1Schema,
@@ -119,6 +121,7 @@ assert.equal(approvalDecisionV1Schema.$id, APPROVAL_DECISION_CONTRACT_ID);
 assert.equal(voiceCommandV1Schema.$id, VOICE_COMMAND_CONTRACT_ID);
 assert.equal(mediaCredentialV1Schema.$id, MEDIA_CREDENTIAL_CONTRACT_ID);
 assert.equal(floorLeaseV1Schema.$id, FLOOR_LEASE_CONTRACT_ID);
+assert.equal(voiceConsentV1Schema.$id, VOICE_CONSENT_CONTRACT_ID);
 assert.equal(studioCrdtV1Schema.$id, STUDIO_CRDT_CONTRACT_ID);
 assert.equal(studioPublishV1Schema.$id, STUDIO_PUBLISH_CONTRACT_ID);
 assert.equal(rolePreviewV1Schema.$id, ROLE_PREVIEW_CONTRACT_ID);
@@ -131,6 +134,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
   syncDeltasV1Schema, syncSnapshotV1Schema, modelRunV1Schema, effectProposalV1Schema,
   approvalDecisionV1Schema, voiceCommandV1Schema, mediaCredentialV1Schema, floorLeaseV1Schema,
+  voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
   rolePreviewV1Schema,
   pluginManifestV1Schema];

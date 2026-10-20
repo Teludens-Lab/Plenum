@@ -914,7 +914,7 @@ components:
     RuntimeVoiceChannelV1:
       type: object
       additionalProperties: false
-      required: [id, definitionId, name, mode, status, joined, canListen, canTransmit, canModerate, microphoneState, floorHeldByMe, floorExpiresAt, version, governingReleaseId]
+      required: [id, definitionId, name, mode, status, joined, canListen, canTransmit, canModerate, microphoneState, floorHeldByMe, floorExpiresAt, version, governingReleaseId, consent]
       properties:
         id: { type: string, format: uuid }
         definitionId: { type: string, minLength: 1 }
@@ -930,6 +930,30 @@ components:
         floorExpiresAt: { type: [string, "null"], format: date-time }
         version: { type: integer, minimum: 1 }
         governingReleaseId: { type: string, format: uuid }
+        consent: { $ref: "#/components/schemas/VoiceConsentStateV1" }
+    VoiceConsentStateV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, channelId, recording, transcription]
+      properties:
+        contractId: { const: voice-consent-v1 }
+        channelId: { type: string, format: uuid }
+        recording:
+          type: object
+          additionalProperties: false
+          required: [policy, active, mine]
+          properties:
+            policy: { type: string, enum: [off, on, with_consent] }
+            active: { type: boolean }
+            mine: { type: string, enum: [given, withdrawn, not_given] }
+        transcription:
+          type: object
+          additionalProperties: false
+          required: [policy, active, mine]
+          properties:
+            policy: { type: string, enum: [off, with_consent] }
+            active: { type: boolean }
+            mine: { type: string, enum: [given, withdrawn, not_given] }
     RuntimeFormFieldV1:
       type: object
       additionalProperties: false

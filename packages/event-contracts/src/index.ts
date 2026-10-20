@@ -46,6 +46,9 @@ export const STUDIO_CRDT_CONTRACT_ID = "studio-crdt-v1";
 export const STUDIO_PUBLISH_CONTRACT_ID = "studio-publish-v1";
 export const CORE_DESIGN_EDITOR_CONTRACT_ID = "core-design-editor-v1";
 export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
+export const POLL_DEFINITION_CONTRACT_ID = "poll-definition-v1";
+export const VOICE_DEFINITION_CONTRACT_ID = "voice-definition-v1";
+export const VOICE_CONSENT_CONTRACT_ID = "voice-consent-v1";
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
 
@@ -395,6 +398,22 @@ export interface RuntimeVoiceChannelV1 {
   floorExpiresAt: string | null;
   version: number;
   governingReleaseId: string;
+  consent: VoiceConsentStateV1;
+}
+
+export interface VoiceConsentStateV1 {
+  contractId: typeof VOICE_CONSENT_CONTRACT_ID;
+  channelId: string;
+  recording: {
+    policy: "off" | "on" | "with_consent";
+    active: boolean;
+    mine: "given" | "withdrawn" | "not_given";
+  };
+  transcription: {
+    policy: "off" | "with_consent";
+    active: boolean;
+    mine: "given" | "withdrawn" | "not_given";
+  };
 }
 
 export interface VoiceCommandReceiptV1 extends CommandReceiptV1 {
@@ -716,6 +735,21 @@ export const floorLeaseV1Schema = {
   }
 } as const satisfies ContractSchema<FloorLeaseV1>;
 
+export const voiceConsentV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: VOICE_CONSENT_CONTRACT_ID, title: "Voice consent state v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "channelId", "recording", "transcription"],
+  properties: {
+    contractId: { const: VOICE_CONSENT_CONTRACT_ID }, channelId: uuidProperty,
+    recording: { type: "object", additionalProperties: false, required: ["policy", "active", "mine"], properties: {
+      policy: { enum: ["off", "on", "with_consent"] }, active: { type: "boolean" }, mine: { enum: ["given", "withdrawn", "not_given"] }
+    } },
+    transcription: { type: "object", additionalProperties: false, required: ["policy", "active", "mine"], properties: {
+      policy: { enum: ["off", "with_consent"] }, active: { type: "boolean" }, mine: { enum: ["given", "withdrawn", "not_given"] }
+    } }
+  }
+} as const satisfies ContractSchema<VoiceConsentStateV1>;
+
 export const studioCrdtV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema", $id: STUDIO_CRDT_CONTRACT_ID, title: "Studio CRDT envelope v1",
   type: "object", additionalProperties: false,
@@ -977,7 +1011,7 @@ export function canonicalizeJson(value: JsonValue): string {
 }
 
 const dotCaseName = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
-const irregularPastParticiples = new Set(["cast", "held", "left", "sent", "set"]);
+const irregularPastParticiples = new Set(["cast", "given", "held", "left", "sent", "set", "withdrawn"]);
 
 export function isCommandOperationType(value: string): boolean {
   if (!dotCaseName.test(value)) return false;

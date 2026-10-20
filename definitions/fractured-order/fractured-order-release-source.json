@@ -8094,7 +8094,16 @@
       "measurements": [],
       "pluginBindings": [],
       "platformAdapters": [
-        { "id": "local-media-v1", "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" }
+        {
+          "id": "local-media-v1",
+          "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "kind": "media_provider",
+          "voiceCapabilities": [
+            { "profile": "cloud", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false },
+            { "profile": "institutional", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false },
+            { "profile": "air_gapped", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false }
+          ]
+        }
       ],
       "compositions": [],
       "accessPolicy": {

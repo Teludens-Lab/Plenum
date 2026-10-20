@@ -22,7 +22,7 @@ import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, 
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
-import { getCollaborativeDraft, publishCollaborativeDraft, type CollaborativePublishInput } from "../studio/collaboration/service.js";
+import { getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -58,6 +58,16 @@ function collaborativePublishInput(body: JsonObject, correlationId: string): Col
     throw authorizationError("VALIDATION_FAILED", "The semantic version must use major.minor.patch.", correlationId);
   }
   return body as unknown as CollaborativePublishInput;
+}
+
+function rolePreviewInput(body: JsonObject, correlationId: string): RolePreviewInput {
+  if (Object.keys(body).some((field) => !["sessionRoleId", "stageId", "teamId"].includes(field)) ||
+      typeof body.sessionRoleId !== "string" || body.sessionRoleId.length === 0 || body.sessionRoleId.length > 200 ||
+      typeof body.stageId !== "string" || body.stageId.length === 0 || body.stageId.length > 200 ||
+      (body.teamId !== undefined && (typeof body.teamId !== "string" || body.teamId.length === 0 || body.teamId.length > 200))) {
+    throw authorizationError("VALIDATION_FAILED", "The role preview selection is invalid.", correlationId);
+  }
+  return body as unknown as RolePreviewInput;
 }
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
@@ -173,6 +183,12 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/validate$/u))) {
         const draft = await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId);
         send(response, draft.validation.valid ? 200 : 422, draft.validation);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/role-preview$/u))) {
+        const projectId = pathId(match[1], correlationId);
+        send(response, 200, await getRolePreview(options.pool, principal, projectId,
+          rolePreviewInput(await readBody(request, correlationId), correlationId), correlationId));
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publish$/u))) {

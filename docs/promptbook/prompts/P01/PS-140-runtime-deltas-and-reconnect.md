@@ -7,7 +7,7 @@
 - Goal: Add SSE projection deltas, cursor catch-up, polling fallback, and truthful reconnect states.
 - User outcome: Connected clients recover from dropped connections without duplicate effects or hidden-data leakage.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

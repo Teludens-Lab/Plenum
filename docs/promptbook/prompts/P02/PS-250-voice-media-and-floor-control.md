@@ -7,7 +7,7 @@
 - Goal: Run one local media provider behind the adapter with authoritative grants and non-replayable Floor leases.
 - User outcome: Authorized Participants can use configured voice modes while revoked or disconnected users fail closed.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

@@ -7,7 +7,7 @@
 - Goal: Implement the core voting lifecycle with explicit rules, idempotent Ballots, reproducible Tallies, and Certification.
 - User outcome: Eligible Participants can vote with clear receipts and operators can certify a reproducible result without exposing protected choices.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

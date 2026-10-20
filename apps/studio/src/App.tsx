@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { StudioPublishV1 } from "@plenum/event-contracts";
 
 import { StudioCollaborationClient, type StudioClientState } from "./collaboration/client.js";
+import { VisualCoreDesignEditor } from "./core-design/Editor.js";
 
 const initialState: StudioClientState = { connected: false, generation: 1, saveState: "saved_on_device",
   unsynchronizedChanges: 0, validation: null, message: "Connecting to the collaboration service." };
@@ -11,7 +12,25 @@ function projectIdFromPath(): string | null {
 }
 
 function sourceId(path: string): string {
-  return path.startsWith("scenario.name") ? "scenario-name" : path.startsWith("scenario.description") ? "scenario-description" : "draft-editor";
+  if (path.startsWith("scenario.name")) return "scenario-name";
+  if (path.startsWith("scenario.description")) return "scenario-description";
+  const [collection, elementId] = path.split(".");
+  const sections: Record<string, string> = {
+    teams: "teams", sessionRoles: "roles", seats: "seats", stages: "stages", stageGroups: "stages",
+    forms: "forms", artifactTypes: "forms", workflows: "workflows", informationPolicies: "policies",
+    interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
+    decisionTraceability: "research", communications: "policies", coreDesign: "overview", draft: "overview", scenario: "overview"
+  };
+  if (elementId !== undefined && ["teams", "sessionRoles", "seats", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces"].includes(collection ?? "")) {
+    return `${collection}-${elementId}`;
+  }
+  return sections[collection ?? ""] ?? "overview";
+}
+
+function revealIssue(source: string): void {
+  const target = document.getElementById(source);
+  if (target instanceof HTMLDetailsElement) target.open = true;
+  requestAnimationFrame(() => target?.querySelector<HTMLElement>("input, select, textarea, button")?.focus());
 }
 
 export function App() {
@@ -54,27 +73,22 @@ export function App() {
 
   if (projectId === null || client === null) return <main className="state-page"><section className="card"><h1>Project not found</h1><p>Open Studio with a valid project address.</p></section></main>;
   const valid = state.validation?.valid === true;
-  const scenarioName = client.scenarioField("name");
-  const scenarioDescription = client.scenarioField("description");
+  const materialization = client.materialization();
 
   return <>
     <a className="skip-link" href="#main-content">Skip to Draft editor</a>
     <header className="app-header"><a className="brand" href="/studio/">PLENUM STUDIO</a><span className={`badge ${state.connected ? "badge-online" : "badge-offline"}`}>{state.connected ? "Connected" : "Offline"}</span></header>
     <main id="main-content" className="studio-layout">
-      <section className="hero"><p className="eyebrow">Collaborative Draft</p><h1>Scenario editor</h1><p>Edits merge live. A merged Draft must still pass validation before it can be frozen and published.</p></section>
+      <section className="hero"><p className="eyebrow">Collaborative Draft</p><h1>Core Design editor</h1><p>Build the first-proof Core Design and Scenario with visual controls. Edits merge live and must pass validation before Publication.</p></section>
       <div className="status-panel status-warning" role="status"><div><strong>Save state: {state.saveState.replaceAll("_", " ")}</strong><p>{state.unsynchronizedChanges} unsynchronized change{state.unsynchronizedChanges === 1 ? "" : "s"}</p></div><span>Generation {state.generation}</span></div>
       <p className="live-region" aria-live="polite">{publishMessage ?? state.message}</p>
-      <div className="studio-grid">
-        <section id="draft-editor" className="card" aria-labelledby="editor-title">
-          <h2 id="editor-title">Draft source</h2>
-          <div className="field"><label htmlFor="scenario-name">Scenario name</label><input id="scenario-name" value={scenarioName} onChange={(event) => client.setScenarioField("name", event.target.value)} /></div>
-          <div className="field"><label htmlFor="scenario-description">Scenario description</label><textarea id="scenario-description" rows={8} value={scenarioDescription} onChange={(event) => client.setScenarioField("description", event.target.value)} /></div>
-          <p className="hint">This slice edits scenario identity fields. Other definition sections remain in the shared Draft and are validated continuously.</p>
-        </section>
+      {materialization.coreDesign === undefined || materialization.scenario === undefined ? <section className="card" aria-busy="true"><h2>Loading Draft</h2><p>Waiting for the synchronized Core Design.</p></section> :
+        <VisualCoreDesignEditor projectId={projectId} client={client} core={materialization.coreDesign} scenario={materialization.scenario} />}
+      <div className="review-grid">
         <section className="card" aria-labelledby="validation-title">
           <div className="card-heading"><h2 id="validation-title">Validation</h2><span className={`badge ${valid ? "badge-online" : "badge-error"}`}>{valid ? "Valid" : "Needs attention"}</span></div>
           {state.validation === null ? <p>Waiting for the authoritative validation report.</p> : state.validation.issues.length === 0 ? <p>No validation errors were found.</p> :
-            <ul className="issue-list">{state.validation.issues.map((issue) => <li key={`${issue.code}:${issue.path}`}><a href={`#${sourceId(issue.path)}`}>{issue.path}</a><span>{issue.message}</span></li>)}</ul>}
+            <ul className="issue-list">{state.validation.issues.map((issue) => { const source = sourceId(issue.path); return <li key={`${issue.code}:${issue.path}`}><a href={`#${source}`} onClick={() => revealIssue(source)}>{issue.path}</a><span>{issue.message}</span></li>; })}</ul>}
         </section>
         <form className="card publish-card" onSubmit={(event) => void publish(event)} aria-labelledby="publish-title">
           <h2 id="publish-title">Freeze and publish</h2>

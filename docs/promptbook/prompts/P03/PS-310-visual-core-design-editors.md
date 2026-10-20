@@ -7,7 +7,7 @@
 - Goal: Let a non-programming Designer create the first-proof Core Design and Scenario using visual controls only.
 - User outcome: A Designer configures Teams, roles, Seats, Stages, Forms, workflow, Information Policy, interfaces, and a Scenario without raw JSON.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

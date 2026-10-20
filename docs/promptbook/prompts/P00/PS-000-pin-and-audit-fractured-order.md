@@ -7,7 +7,7 @@
 - Goal: Create the evidence-backed parity inventory against an owner-approved Fractured Order commit.
 - User outcome: Every preserved reference behavior has a classification, source location, and parity-test target.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

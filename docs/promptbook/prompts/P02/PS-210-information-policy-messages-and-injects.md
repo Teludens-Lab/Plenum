@@ -7,7 +7,7 @@
 - Goal: Deliver a default-deny information flow slice spanning author configuration, Runtime enforcement, and evidence.
 - User outcome: Participants receive only permitted content and each designed Inject fires and tracks response exactly once.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

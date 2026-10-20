@@ -95,8 +95,8 @@ graph TD
 
 | Task | Phase | Programmatic prerequisites | Unratified / open dependencies | Ready now |
 |---|---|---|---|---|
-| PS-000 | P00 | - | OPEN-001, DEC-22 | Yes |
-| PS-001 | P00 | - | ADR-008, ADR-009, OPEN-001 | Yes |
+| PS-000 | P00 | - | OPEN-001, DEC-22 | No |
+| PS-001 | P00 | - | ADR-008, ADR-009, OPEN-001 | No |
 | PS-100 | P01 | PS-001 | ADR-008, OPEN-012, OPEN-022 | No |
 | PS-110 | P01 | PS-100 | ADR-012, OPEN-007, OPEN-025 | No |
 | PS-120 | P01 | PS-100, PS-110 | ADR-014, OPEN-016, OPEN-017 | No |
@@ -107,10 +107,10 @@ graph TD
 | PS-210 | P02 | PS-110, PS-120, PS-200 | DEC-34, DEC-40, OPEN-024 | No |
 | PS-220 | P02 | PS-100, PS-110, PS-130 | - | No |
 | PS-230 | P02 | PS-120, PS-210, PS-220 | - | No |
-| PS-240 | P02 | PS-120, PS-140, PS-210 | OPEN-028 | Yes |
+| PS-240 | P02 | PS-120, PS-140, PS-210 | OPEN-028 | No |
 | PS-250 | P02 | PS-110, PS-120, PS-140, PS-210 | ADR-013, ADR-017, OPEN-027 | No |
 | PS-300 | P03 | PS-100, PS-110, PS-130, PS-140 | ADR-002, ADR-010, OPEN-013, OPEN-014 | No |
-| PS-310 | P03 | PS-210, PS-300 | DEC-31, DEC-32, DEC-33, OPEN-004, OPEN-005, OPEN-006, OPEN-010, OPEN-018, OPEN-022 | No |
+| PS-310 | P03 | PS-210, PS-300 | DEC-31, DEC-32, DEC-33, OPEN-004, OPEN-005, OPEN-006, OPEN-010, OPEN-018, OPEN-022 | Yes |
 | PS-320 | P03 | PS-240, PS-250, PS-310 | ADR-017, OPEN-027, OPEN-028 | No |
 | PS-330 | P03 | PS-220, PS-230, PS-310 | ADR-018, OPEN-022, OPEN-029 | No |
 | PS-340 | P03 | PS-110, PS-150, PS-310 | ADR-012, OPEN-007, OPEN-025 | No |

@@ -2,7 +2,7 @@
 
 Plenum is being developed as a configuration-driven simulation platform. This repository contains the governing product corpus, generated development promptbook, immutable and executable reference material, shared TypeScript contracts, and the standards that apply to application code.
 
-The implemented platform kernel now includes shared contracts, OIDC and tenant isolation, transactional Commands and Evidence Events, immutable Release Packages, S3-compatible storage, authorized Runtime SSE/polling reconnect services, and a React Runtime shell proving the configured S1 artifact workflow through the HTTP boundary. Studio authoring remains future work.
+The implemented platform now includes shared contracts, OIDC and tenant isolation, transactional Commands and Evidence Events, immutable Release Packages, S3-compatible storage, authorized Runtime synchronization, the configured Fractured Order Runtime, isolated Plugin effects with human approval, authoritative voting, Voice/Floor control, and a collaborative Studio foundation that validates, freezes, and publishes Drafts. The full visual Studio authoring suite begins with PS-310 and remains future work.
 
 ## Repository authorities
 

@@ -7,7 +7,7 @@
 - Goal: Create the smallest buildable monorepo skeleton with shared canonical contracts beside the retained slice.
 - User outcome: Frontend and server code share one typed vocabulary and one verified build path.
 - Risk: **MEDIUM**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

@@ -7,7 +7,7 @@
 - Goal: Deliver two-Designer Draft convergence and publication from an exact validated materialization.
 - User outcome: Designers can reconnect after concurrent edits and publish one immutable Release without losing later work.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

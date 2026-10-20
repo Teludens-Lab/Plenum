@@ -103,7 +103,7 @@ interface WorkflowDefinition {
   transitions: WorkflowTransitionDefinition[];
 }
 
-interface InterfaceProfileDefinition {
+export interface RuntimeInterfaceProjectionProfile {
   id: string;
   sessionRoleIds: string[];
   stageIds?: string[];
@@ -125,7 +125,7 @@ interface RuntimeDefinition {
   forms: RuntimeFormDefinition[];
   artifactTypes: ArtifactTypeDefinition[];
   workflows: WorkflowDefinition[];
-  interfaceProfiles: InterfaceProfileDefinition[];
+  interfaceProfiles: RuntimeInterfaceProjectionProfile[];
 }
 
 interface ArtifactRow {
@@ -694,7 +694,13 @@ function actionsFor(
     .map(asAction);
 }
 
-function profileFor(definition: RuntimeDefinition, activeSessionRoleId: string, stageId: string | null): InterfaceProfileDefinition | undefined {
+export function resolveRuntimeInterfaceProfile(
+  value: unknown,
+  activeSessionRoleId: string,
+  stageId: string | null,
+  correlationId: string
+): RuntimeInterfaceProjectionProfile | undefined {
+  const definition = runtimeDefinition(value, correlationId);
   return definition.interfaceProfiles.find((profile) => profile.sessionRoleIds.includes(activeSessionRoleId) &&
     (profile.stageIds === undefined || (stageId !== null && profile.stageIds.includes(stageId))));
 }
@@ -728,7 +734,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     );
     const stageState = stageStateResult.rows[0];
     const stage = definition.stages.find((candidate) => candidate.id === stageState?.stage_id) ?? definition.stages[0] ?? null;
-    const profile = profileFor(definition, context.activeSessionRoleId, stage?.id ?? null);
+    const profile = resolveRuntimeInterfaceProfile(definition, context.activeSessionRoleId, stage?.id ?? null, input.correlationId);
     if (profile === undefined) {
       throw authorizationError("PERMISSION_DENIED", "No Interface Profile is available for the Active Role Context.", input.correlationId);
     }

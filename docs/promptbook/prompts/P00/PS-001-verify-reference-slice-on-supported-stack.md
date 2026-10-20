@@ -7,7 +7,7 @@
 - Goal: Reproduce the reference slice verification record on the supported floor and approved database major.
 - User outcome: Engineers have a trustworthy preserve/change/deprecate baseline before platform extraction begins.
 - Risk: **MEDIUM**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

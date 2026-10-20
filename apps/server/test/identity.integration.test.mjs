@@ -50,6 +50,7 @@ import {
   issueMediaCredential,
   applyStudioUpdate,
   getCollaborativeDraft,
+  getRolePreview,
   publishCollaborativeDraft,
   requestFloor,
   releaseFloor,
@@ -1343,12 +1344,23 @@ function captureUpdate(document, change) {
 }
 
 test("PS-300 SYNC-01 SYNC-02 AC-01 concurrent offline edits converge byte-for-byte and invalid merges cannot publish", async () => {
+  const preview = await getRolePreview(app, principalE, ids.projectA, {
+    sessionRoleId: "scribe", stageId: "orientation", teamId: "blue"
+  }, randomUUID());
+  assert.equal(preview.contractId, "role-preview-v1");
+  assert.equal(preview.interfaceProfileId, "participant-author");
+  assert.ok(preview.modules.some(({ type }) => type === "artifact_form"));
+  assert.deepEqual(preview.content.map(({ id }) => id), ["opening-brief"]);
   await owner.query(
     "DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='designer'",
     [ids.orgA, principalE.principalId]
   );
   await assert.rejects(
     getCollaborativeDraft(app, principalE, ids.projectA, randomUUID()),
+    (error) => error.envelope?.error?.code === "ACCESS_REVOKED"
+  );
+  await assert.rejects(
+    getRolePreview(app, principalE, ids.projectA, { sessionRoleId: "scribe", stageId: "orientation", teamId: "blue" }, randomUUID()),
     (error) => error.envelope?.error?.code === "ACCESS_REVOKED"
   );
   await owner.query(

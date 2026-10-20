@@ -720,12 +720,18 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
 test.describe.serial("PS-300 collaborative Studio", () => {
   test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
     await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(first.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+
+    const teams = first.page.getByRole("region", { name: "Teams" });
+    await teams.getByRole("button", { name: "Add Team" }).click();
+    await teams.getByText("New Team", { exact: true }).click();
+    await teams.getByLabel("Team name").last().fill("Browser-created Team");
 
     await first.page.getByLabel("Scenario name").fill("Browser convergence proof");
     await second.context.setOffline(true);
@@ -740,6 +746,15 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await expect(first.page.getByText("Valid", { exact: true })).toBeVisible();
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
+
+    const preview = first.page.getByRole("region", { name: "Role & Stage preview" });
+    await preview.getByLabel("Session Role").selectOption("scribe");
+    await preview.getByLabel("Stage").selectOption("orientation");
+    await preview.getByLabel("Team").selectOption("blue");
+    await preview.getByRole("button", { name: "Preview interface" }).click();
+    await expect(preview.getByText("Preview updated.")).toBeVisible();
+    await expect(preview.getByLabel("Scribe interface preview")).toBeVisible();
+    await expect(preview.getByRole("heading", { name: "Opening brief" })).toBeVisible();
 
     await first.page.getByLabel("Release label").fill("PS-300 browser proof");
     await first.page.getByLabel("Semantic version").fill("3.0.0");
@@ -757,7 +772,32 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
     await first.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    await expect.poll(() => first.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect.poll(() => first.page.evaluate(() => [...document.querySelectorAll("body *")].filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.right > document.documentElement.clientWidth + 1 || bounds.left < -1;
+    }).slice(0, 12).map((element) => ({ element: `${element.tagName.toLowerCase()}.${element.className}`, right: Math.round(element.getBoundingClientRect().right),
+      width: Math.round(element.getBoundingClientRect().width), text: element.textContent?.trim().slice(0, 80) })))).toEqual([]);
+    await Promise.all([first.context.close(), second.context.close()]);
+  });
+
+  test("PS-310 AC-01 keeps Stage IDs stable while a reorder converges", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const first = await actor(browser, fixture.tokens.publisher);
+    const second = await actor(browser, fixture.tokens.designerA);
+    await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
+    await Promise.all([
+      expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 }),
+      expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 })
+    ]);
+    const stages = first.page.getByRole("region", { name: "Stages" });
+    const stageCards = stages.locator("details[id^='stages-']");
+    const stageIdsBefore = await stageCards.evaluateAll((items) => items.map(({ id }) => id));
+    await stageCards.nth(1).locator("summary").click();
+    await stageCards.nth(1).getByRole("button", { name: "Earlier" }).click();
+    const expectedStageIds = [stageIdsBefore[1], stageIdsBefore[0], ...stageIdsBefore.slice(2)];
+    await expect.poll(() => stageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
+    const secondStageCards = second.page.getByRole("region", { name: "Stages" }).locator("details[id^='stages-']");
+    await expect.poll(() => secondStageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
     await Promise.all([first.context.close(), second.context.close()]);
   });
 });

@@ -7,7 +7,7 @@
 - Goal: Render the preserved artifact workflow through React and prove the Phase 1 authority slice end to end.
 - User outcome: Participants and operators can complete the configured handoff with clear loading, denial, reconnect, and error states.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

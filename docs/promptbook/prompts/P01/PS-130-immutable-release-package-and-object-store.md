@@ -7,7 +7,7 @@
 - Goal: Freeze validated Drafts into immutable Definition Revisions, Releases, and digest-verified Packages.
 - User outcome: A published simulation is stable, portable, and verifiable across Deployments.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

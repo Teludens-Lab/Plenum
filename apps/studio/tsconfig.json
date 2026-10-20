@@ -9,5 +9,5 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../../packages/event-contracts" }]
+  "references": [{ "path": "../../packages/event-contracts" }, { "path": "../../packages/simulation-schema" }]
 }

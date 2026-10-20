@@ -7,7 +7,7 @@
 - Goal: Replace demo identity with server-derived OIDC context and prove tenant and Session policy isolation.
 - User outcome: People authenticate once and receive only resources and fields authorized for their Organization and Session context.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

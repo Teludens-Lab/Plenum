@@ -382,7 +382,33 @@ export interface RuntimeAccessPolicyV1 {
   readiness: Array<{ key: string; label: string; sessionRoleIds?: string[]; blocking: boolean }>;
 }
 
+export interface MethodologyConceptV1 {
+  key: string;
+  label: string;
+  enabled: boolean;
+  dependsOn: string[];
+}
+
+export interface ResearchQuestionV1 {
+  id: string;
+  question: string;
+}
+
+export interface DecisionTraceV1 {
+  id: string;
+  artifactTypeId: string;
+  researchQuestionIds: string[];
+  ownerSessionRoleId: string;
+  trigger: string;
+  informationRequirements: string;
+  availableActions: string;
+  adjudicationMethod: string;
+  affectedStateVariableIds: string[];
+  measurementDefinitionIds: string[];
+}
+
 export interface RuntimeCoreDesignV1 {
+  methodologyConcepts?: MethodologyConceptV1[];
   teams: Array<{ id: string; name: string; objectiveIds: string[]; enabled: boolean }>;
   teamCells?: RuntimeTeamCellDefinitionV1[];
   sessionRoles: Array<{
@@ -411,6 +437,8 @@ export interface RuntimeCoreDesignV1 {
   identity?: { title: string; subtitle?: string; developer: string; developerLogoResourceId?: string };
   presentation?: Record<string, unknown>;
   resources?: Array<{ id: string; name: string; type: string; mediaType: string; usage: string[]; altText?: string; dataUri?: string; sourcePath?: string; contentDigest: string }>;
+  researchQuestions?: ResearchQuestionV1[];
+  decisionTraceability?: DecisionTraceV1[];
 }
 
 export interface CoreDesignV1 extends Partial<RuntimeCoreDesignV1> {
@@ -433,6 +461,22 @@ export interface SimulationReleaseV1 {
   manifest: ReleaseManifestV1;
   coreDesign: CoreDesignV1;
   scenario: ScenarioV1;
+}
+
+export function copySimulationTemplate(
+  coreDesign: CoreDesignV1,
+  scenario: ScenarioV1,
+  newProjectId: string,
+  newScenarioId: string,
+  includeScenario = false
+): { projectId: string; coreDesign: CoreDesignV1; scenario: ScenarioV1 } {
+  return {
+    projectId: newProjectId,
+    coreDesign: structuredClone(coreDesign),
+    scenario: includeScenario
+      ? { ...structuredClone(scenario), id: newScenarioId }
+      : { id: newScenarioId, name: "Untitled Scenario", description: "", deliveryModes: [], tags: [] }
+  };
 }
 
 type ManifestSchema = Readonly<{

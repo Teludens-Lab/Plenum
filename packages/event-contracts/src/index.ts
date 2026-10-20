@@ -44,6 +44,8 @@ export const MEDIA_CREDENTIAL_CONTRACT_ID = "media-credential-v1";
 export const FLOOR_LEASE_CONTRACT_ID = "floor-lease-v1";
 export const STUDIO_CRDT_CONTRACT_ID = "studio-crdt-v1";
 export const STUDIO_PUBLISH_CONTRACT_ID = "studio-publish-v1";
+export const CORE_DESIGN_EDITOR_CONTRACT_ID = "core-design-editor-v1";
+export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
 
@@ -85,6 +87,21 @@ export interface StudioPublishV1 {
   manifestDigest: string;
   packageDigest: string;
   saveState: "published";
+}
+
+export interface RolePreviewV1 {
+  contractId: typeof ROLE_PREVIEW_CONTRACT_ID;
+  projectId: string;
+  sessionRoleId: string;
+  sessionRoleLabel: string;
+  stageId: string;
+  stageLabel: string;
+  teamId: string | null;
+  teamLabel: string | null;
+  interfaceProfileId: string;
+  layout: "single_column" | "main_with_sidebar" | "dashboard_grid" | "workspace_tabs";
+  modules: RuntimeModuleV1[];
+  content: Array<{ id: string; title: string; type: string; body?: string }>;
 }
 
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
@@ -729,6 +746,22 @@ export const studioPublishV1Schema = {
     saveState: { const: "published" }
   }
 } as const satisfies ContractSchema<StudioPublishV1>;
+
+export const rolePreviewV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: ROLE_PREVIEW_CONTRACT_ID, title: "Studio role preview v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "projectId", "sessionRoleId", "sessionRoleLabel", "stageId", "stageLabel", "teamId", "teamLabel", "interfaceProfileId", "layout", "modules", "content"],
+  properties: {
+    contractId: { const: ROLE_PREVIEW_CONTRACT_ID }, projectId: uuidProperty,
+    sessionRoleId: { type: "string", minLength: 1 }, sessionRoleLabel: { type: "string", minLength: 1 },
+    stageId: { type: "string", minLength: 1 }, stageLabel: { type: "string", minLength: 1 },
+    teamId: { type: ["string", "null"] }, teamLabel: { type: ["string", "null"] },
+    interfaceProfileId: { type: "string", minLength: 1 },
+    layout: { type: "string", enum: ["single_column", "main_with_sidebar", "dashboard_grid", "workspace_tabs"] },
+    modules: { type: "array", items: { type: "object" } },
+    content: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<RolePreviewV1>;
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

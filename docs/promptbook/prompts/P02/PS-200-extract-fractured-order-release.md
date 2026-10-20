@@ -7,7 +7,7 @@
 - Goal: Move remaining first-proof behavior into a compiled Release consumed by generic Runtime engines.
 - User outcome: Teams, roles, Stages, Forms, workflows, messages, Injects, interfaces, and reports change without source edits.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

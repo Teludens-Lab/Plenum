@@ -51,6 +51,30 @@ paths:
       responses:
         "200": { description: Current merged Draft is valid. }
         "422": { description: Current merged Draft has actionable validation issues. }
+  /v1/projects/{projectId}/role-preview:
+    post:
+      operationId: previewDraftAsRole
+      x-contract-id: role-preview-v1
+      x-authorized-organization-roles: [designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolePreviewRequestV1" }
+      responses:
+        "200":
+          description: Server-filtered Runtime interface and Scenario content for the selected Draft role and Stage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RolePreviewV1" }
+        "403": { description: Studio authority is absent or was revoked. }
+        "422": { description: Role, Stage, Team, or Interface Profile selection is invalid. }
   /v1/projects/{projectId}/publish:
     post:
       operationId: freezeAndPublishCollaborativeDraft
@@ -709,6 +733,31 @@ components:
         manifestDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
         packageDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
         saveState: { const: published }
+    RolePreviewRequestV1:
+      type: object
+      additionalProperties: false
+      required: [sessionRoleId, stageId]
+      properties:
+        sessionRoleId: { type: string, minLength: 1, maxLength: 200 }
+        stageId: { type: string, minLength: 1, maxLength: 200 }
+        teamId: { type: string, minLength: 1, maxLength: 200 }
+    RolePreviewV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, projectId, sessionRoleId, sessionRoleLabel, stageId, stageLabel, teamId, teamLabel, interfaceProfileId, layout, modules, content]
+      properties:
+        contractId: { const: role-preview-v1 }
+        projectId: { type: string, format: uuid }
+        sessionRoleId: { type: string, minLength: 1 }
+        sessionRoleLabel: { type: string, minLength: 1 }
+        stageId: { type: string, minLength: 1 }
+        stageLabel: { type: string, minLength: 1 }
+        teamId: { type: [string, "null"] }
+        teamLabel: { type: [string, "null"] }
+        interfaceProfileId: { type: string, minLength: 1 }
+        layout: { type: string, enum: [single_column, main_with_sidebar, dashboard_grid, workspace_tabs] }
+        modules: { type: array, items: { type: object } }
+        content: { type: array, items: { type: object } }
     PluginArtifactV1:
       type: object
       additionalProperties: false

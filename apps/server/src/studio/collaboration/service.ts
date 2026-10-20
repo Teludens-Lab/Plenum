@@ -3,15 +3,18 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   STUDIO_CRDT_CONTRACT_ID,
   STUDIO_PUBLISH_CONTRACT_ID,
+  ROLE_PREVIEW_CONTRACT_ID,
   canonicalizeJson,
   type JsonObject,
   type JsonValue,
   type StudioCrdtV1,
   type StudioPublishV1,
+  type RolePreviewV1,
   type StudioValidationReportV1
 } from "@plenum/event-contracts";
-import { validateStudioDraft } from "@plenum/validation-engine";
+import { validateStudioDraft, type StudioMaterialization } from "@plenum/validation-engine";
 import type { Pool, PoolClient } from "pg";
+import { audienceAllows } from "@plenum/policy-engine";
 import * as Y from "yjs";
 
 import { withOrganizationTransaction } from "../../database.js";
@@ -19,6 +22,7 @@ import { authorizationError } from "../../errors.js";
 import type { AuthenticatedPrincipal } from "../../identity/login.js";
 import type { ObjectStore } from "../../registry/object-store.js";
 import { publishReleaseFromFreeze, type PublicationControls } from "../../registry/publication.js";
+import { resolveRuntimeInterfaceProfile } from "../../runtime/artifact-workflow.js";
 
 const MAX_UPDATE_BYTES = 256 * 1024;
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
@@ -64,6 +68,12 @@ export interface CollaborativePublishInput {
   accessibilityReviewStatus: string;
   retentionPolicyId: string;
   approvalNotes: string;
+}
+
+export interface RolePreviewInput {
+  sessionRoleId: string;
+  stageId: string;
+  teamId?: string;
 }
 
 function sha256(value: Uint8Array | string): string {
@@ -222,6 +232,58 @@ export async function getCollaborativeDraft(
     const { row, projectTitle } = await ensureDocument(client, principal, projectId, correlationId);
     return stateFrom(projectId, projectTitle, row);
   });
+}
+
+export async function getRolePreview(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  input: RolePreviewInput,
+  correlationId: string
+): Promise<RolePreviewV1> {
+  const draft = await getCollaborativeDraft(pool, principal, projectId, correlationId);
+  const materialization = draft.materialization as unknown as StudioMaterialization;
+  const core = materialization.coreDesign;
+  const role = core.sessionRoles?.find(({ id }) => id === input.sessionRoleId);
+  const stage = core.stages?.find(({ id }) => id === input.stageId);
+  const team = input.teamId === undefined ? undefined : core.teams?.find(({ id }) => id === input.teamId);
+  if (role === undefined || stage === undefined || (input.teamId !== undefined && team === undefined) ||
+      (team !== undefined && role.allowedTeamIds !== undefined && !role.allowedTeamIds.includes(team.id))) {
+    throw authorizationError("VALIDATION_FAILED", "Choose a valid Session Role, Stage and eligible Team for preview.", correlationId);
+  }
+  const profile = resolveRuntimeInterfaceProfile({ coreDesign: core }, role.id, stage.id, correlationId);
+  if (profile === undefined) {
+    throw authorizationError("REFERENCE_INVALID", "No Interface Profile is available for that Session Role and Stage.", correlationId);
+  }
+  const content = (materialization.scenario.content ?? []).filter((item) => {
+    const policy = core.informationPolicies?.find(({ id }) => id === item.informationPolicyId);
+    return policy?.grants.some((grant) => {
+      const release = grant.release;
+      const released = release === undefined || release.mode === "immediate" ||
+        (release.mode === "at_stage" && release.stageId === stage.id);
+      return released && audienceAllows({
+        organizationId: principal.organizationId,
+        activeSessionRoleId: role.id,
+        ...(team === undefined ? {} : { activeTeamId: team.id }),
+        isControlRole: role.isControlRole,
+        organizationRoles: []
+      }, grant.audience);
+    }) === true;
+  }).map(({ id, title, type, body }) => ({ id, title, type, ...(body === undefined ? {} : { body }) }));
+  return {
+    contractId: ROLE_PREVIEW_CONTRACT_ID,
+    projectId,
+    sessionRoleId: role.id,
+    sessionRoleLabel: role.name,
+    stageId: stage.id,
+    stageLabel: stage.name,
+    teamId: team?.id ?? null,
+    teamLabel: team?.name ?? null,
+    interfaceProfileId: profile.id,
+    layout: profile.layout,
+    modules: profile.modules,
+    content
+  };
 }
 
 export async function applyStudioUpdate(

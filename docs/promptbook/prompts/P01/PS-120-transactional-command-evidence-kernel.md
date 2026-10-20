@@ -7,7 +7,7 @@
 - Goal: Promote proven command, receipt, authority, evidence, and outbox behavior into reusable platform modules.
 - User outcome: Retries, rejections, stale writes, and authority loss are truthful and never double-commit.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

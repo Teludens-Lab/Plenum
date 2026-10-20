@@ -1,4 +1,5 @@
 import { STUDIO_CRDT_CONTRACT_ID, type StudioCrdtV1, type StudioSaveStateV1, type StudioValidationReportV1 } from "@plenum/event-contracts";
+import type { CoreDesignV1, ScenarioV1 } from "@plenum/simulation-schema";
 import * as Y from "yjs";
 
 export interface StudioClientState {
@@ -22,6 +23,20 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function base64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+function toYValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const result = new Y.Array<unknown>();
+    result.push(value.map(toYValue));
+    return result;
+  }
+  if (typeof value === "object" && value !== null) {
+    const result = new Y.Map<unknown>();
+    for (const [key, child] of Object.entries(value)) result.set(key, toYValue(child));
+    return result;
+  }
+  return value;
 }
 
 export class StudioCollaborationClient {
@@ -94,6 +109,57 @@ export class StudioCollaborationClient {
     return typeof value === "string" ? value : "";
   }
 
+  materialization(): { coreDesign: CoreDesignV1; scenario: ScenarioV1 } {
+    return this.document.getMap("draft").toJSON() as { coreDesign: CoreDesignV1; scenario: ScenarioV1 };
+  }
+
+  transact(change: () => void): void {
+    this.document.transact(change, "visual-editor");
+  }
+
+  setAtPath(path: readonly (string | number)[], value: unknown): void {
+    const parent = this.resolve(path.slice(0, -1), true);
+    const key = path.at(-1);
+    if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
+    parent.set(key, toYValue(value));
+  }
+
+  deleteAtPath(path: readonly (string | number)[]): void {
+    const parent = this.resolve(path.slice(0, -1));
+    const key = path.at(-1);
+    if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
+    parent.delete(key);
+  }
+
+  appendAtPath(path: readonly (string | number)[], value: unknown): void {
+    let target = this.resolve(path);
+    if (target === undefined) {
+      const parent = this.resolve(path.slice(0, -1), true);
+      const key = path.at(-1);
+      if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio collection path is invalid");
+      target = new Y.Array<unknown>();
+      parent.set(key, target);
+    }
+    if (!(target instanceof Y.Array)) throw new Error("Studio collection path is invalid");
+    target.push([toYValue(value)]);
+  }
+
+  removeAtPath(path: readonly (string | number)[], index: number): void {
+    const target = this.resolve(path);
+    if (!(target instanceof Y.Array) || index < 0 || index >= target.length) throw new Error("Studio collection item is invalid");
+    target.delete(index, 1);
+  }
+
+  moveAtPath(path: readonly (string | number)[], index: number, direction: -1 | 1): void {
+    const target = this.resolve(path);
+    const destination = index + direction;
+    if (!(target instanceof Y.Array) || destination < 0 || destination >= target.length) return;
+    const value = target.get(index);
+    const json = value instanceof Y.AbstractType ? value.toJSON() : value;
+    target.delete(index, 1);
+    target.insert(destination, [toYValue(json)]);
+  }
+
   setScenarioField(field: "name" | "description", value: string): void {
     const scenario = this.document.getMap("draft").get("scenario");
     if (scenario instanceof Y.Map) scenario.set(field, value);
@@ -101,6 +167,20 @@ export class StudioCollaborationClient {
 
   markPublished(): void {
     this.setState({ saveState: "published", message: "The frozen Draft was published." });
+  }
+
+  private resolve(path: readonly (string | number)[], create = false): unknown {
+    let value: unknown = this.document.getMap("draft");
+    for (const [index, segment] of path.entries()) {
+      let next = typeof segment === "number" && value instanceof Y.Array ? value.get(segment) :
+        typeof segment === "string" && value instanceof Y.Map ? value.get(segment) : undefined;
+      if (next === undefined && create && typeof segment === "string" && value instanceof Y.Map) {
+        next = typeof path[index + 1] === "number" ? new Y.Array<unknown>() : new Y.Map<unknown>();
+        value.set(segment, next);
+      }
+      value = next;
+    }
+    return value;
   }
 
   private receive(message: StudioCrdtV1): void {

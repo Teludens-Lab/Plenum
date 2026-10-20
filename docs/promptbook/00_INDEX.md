@@ -18,6 +18,7 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 - `DEPENDENCY_GRAPH.md`: acyclic task graph and unratified labels.
 - `COMMAND_REGISTRY.md`: verified versus proposed commands.
 - `PROJECT_STATE.md`: current observed maturity and next task.
+- `RELEASE_GAP_PROMPTBOOK.md`: ready-to-use work packages for closing the remaining production approval gaps without replacing the PS task graph.
 - `PROMPTBOOK_VALIDATION_REPORT.md`: structural, coverage, cycle, and sample-task QA.
 - Other matrices and gates provide architecture, deployment, compatibility, security, recovery, migration, change-control, and release context without replacing their authoritative corpus documents.
 

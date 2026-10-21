@@ -22,7 +22,6 @@ Date: 2026-10-18. Mode: production-oriented contract slice, not production appro
 
 ## Gates and limits
 
-- Security Owner approval: PENDING; required before production identity use.
-- ADR-012 is Approved as of 2026-10-20 and ADR-015 is Confirmed; named Security Owner sign-off for ADR-012 remains.
-- OPEN-007 (federation variants/MFA/passwordless) and OPEN-025 (additional Organization Roles): unresolved and not invented here.
+- ADR-012 Security Owner sign-off: confirmed complete on 2026-10-21.
+- OPEN-007 and OPEN-025: resolved on 2026-10-21. Subsequent migration `018_identity_roles_and_governance.sql` and the identity/governance runtime implement the Keycloak profile contract and DEC-61 roles; this PS-110 evidence predates that follow-up.
 - Node 26, a real Keycloak/remote issuer, browser cookie/CSRF behavior, performance, deployment and recovery: NOT RUN.

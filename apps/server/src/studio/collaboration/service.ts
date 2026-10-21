@@ -131,7 +131,7 @@ function decodeUpdate(value: string, correlationId: string): Uint8Array {
 async function requireStudioAccess(
   client: PoolClient,
   principal: AuthenticatedPrincipal,
-  roles: readonly ("designer" | "publisher")[],
+  roles: readonly ("designer" | "publisher" | "reviewer")[],
   correlationId: string
 ): Promise<void> {
   if (principal.expiresAt <= new Date()) throw authorizationError("AUTH_EXPIRED", "The Authentication Session has expired.", correlationId);
@@ -228,7 +228,7 @@ export async function getCollaborativeDraft(
   correlationId: string
 ): Promise<CollaborativeDraftState> {
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireStudioAccess(client, principal, ["designer", "publisher"], correlationId);
+    await requireStudioAccess(client, principal, ["designer", "publisher", "reviewer"], correlationId);
     const { row, projectTitle } = await ensureDocument(client, principal, projectId, correlationId);
     return stateFrom(projectId, projectTitle, row);
   });
@@ -357,7 +357,7 @@ interface FreezeResult {
   validation: StudioValidationReportV1;
 }
 
-async function freezeCollaborativeDraft(
+export async function freezeCollaborativeDraft(
   pool: Pool,
   principal: AuthenticatedPrincipal,
   projectId: string,
@@ -406,6 +406,58 @@ async function freezeCollaborativeDraft(
   });
 }
 
+export interface PublicationReview {
+  freezeId: string;
+  reviewerPersonId: string;
+  decidedAt: string;
+}
+
+export async function approvePublicationFreeze(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  freezeId: string,
+  notes: string,
+  correlationId: string
+): Promise<PublicationReview> {
+  if (!uuid.test(projectId) || !uuid.test(freezeId) || notes.trim().length === 0 || notes.length > 4_000) {
+    throw authorizationError("VALIDATION_FAILED", "A valid Publication Freeze and review notes are required.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireStudioAccess(client, principal, ["reviewer"], correlationId);
+    const freeze = await client.query(
+      "SELECT 1 FROM studio.publication_freezes WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+      [principal.organizationId, projectId, freezeId]
+    );
+    if (freeze.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", correlationId);
+    const existing = await client.query<{ notes: string; decided_at: Date }>(
+      `SELECT notes,decided_at FROM studio.publication_reviews
+        WHERE organization_id=$1 AND freeze_id=$2 AND reviewer_person_id=$3`,
+      [principal.organizationId, freezeId, principal.principalId]
+    );
+    if (existing.rows[0] !== undefined) {
+      if (existing.rows[0].notes !== notes.trim()) {
+        throw authorizationError("IDEMPOTENCY_COLLISION", "This Reviewer already approved the freeze with different notes.", correlationId);
+      }
+      return { freezeId, reviewerPersonId: principal.principalId, decidedAt: existing.rows[0].decided_at.toISOString() };
+    }
+    const decidedAt = new Date();
+    await client.query(
+      `INSERT INTO studio.publication_reviews
+         (id,organization_id,project_id,freeze_id,reviewer_person_id,decision,notes,decided_at)
+       VALUES ($1,$2,$3,$4,$5,'approved',$6,$7)`,
+      [randomUUID(), principal.organizationId, projectId, freezeId, principal.principalId, notes.trim(), decidedAt]
+    );
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'studio.publication_approved',$4,$5::jsonb)`,
+      [randomUUID(), principal.organizationId, principal.principalId, `publication_freeze:${freezeId}`,
+        JSON.stringify({ correlationId, projectId })]
+    );
+    return { freezeId, reviewerPersonId: principal.principalId, decidedAt: decidedAt.toISOString() };
+  });
+}
+
 export async function publishCollaborativeDraft(
   pool: Pool,
   store: ObjectStore,
@@ -423,6 +475,24 @@ export async function publishCollaborativeDraft(
   const frozen = input.freezeId === undefined
     ? await freezeCollaborativeDraft(pool, principal, projectId, correlationId)
     : { freezeId: input.freezeId, validation: null };
+  const approvals = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ reviewer_person_id: string }>(
+      `SELECT review.reviewer_person_id
+         FROM studio.publication_reviews review
+         JOIN identity.memberships membership
+           ON membership.organization_id=review.organization_id
+          AND membership.person_id=review.reviewer_person_id
+          AND membership.organization_role='reviewer'
+        WHERE review.organization_id=$1 AND review.project_id=$2 AND review.freeze_id=$3
+        ORDER BY review.decided_at,review.id`,
+      [principal.organizationId, projectId, frozen.freezeId]
+    );
+    return result.rows.map(({ reviewer_person_id }) => reviewer_person_id);
+  });
+  if (approvals.length === 0) {
+    throw authorizationError("PERMISSION_DENIED", "A current Reviewer approval is required before Publication.", correlationId,
+      { freezeId: frozen.freezeId });
+  }
   const controls: PublicationControls = {
     validationReportId: frozen.freezeId,
     validationPassed: true,
@@ -430,13 +500,13 @@ export async function publishCollaborativeDraft(
     classificationReviewId: input.classificationReviewId,
     accessibilityReviewStatus: input.accessibilityReviewStatus,
     retentionPolicyId: input.retentionPolicyId,
-    approvedBy: [principal.principalId],
+    approvedBy: approvals,
     approvalNotes: input.approvalNotes
   };
   const published = await publishReleaseFromFreeze(pool, store, principal, frozen.freezeId, {
     projectId, releaseLabel: input.releaseLabel, semanticVersion: input.semanticVersion,
     methodologyVersion: input.methodologyVersion, releaseNotes: input.releaseNotes, controls,
-    policy: { requireDistinctApprover: false, requireTestSession: false }, correlationId
+    policy: { requireDistinctApprover: false, requireTestSession: false, approverOrganizationRole: "reviewer" }, correlationId
   }, now);
   return { contractId: STUDIO_PUBLISH_CONTRACT_ID, freezeId: frozen.freezeId, ...published, saveState: "published" };
 }

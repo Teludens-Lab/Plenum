@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | PRD |
 | Number | 01 |
-| Version | 0.7.3 |
-| Date | 2026-10-17 |
+| Version | 0.7.4 |
+| Date | 2026-10-21 |
 | Status | Draft — reconstructed (DEC-21, Assumed). Not ratified. |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -66,16 +66,16 @@ The product has five parts:
 
 ## 3. Users
 
-| Persona | Primary jobs | Organization Role (DEC-44) |
+| Persona | Primary jobs | Organization Role (DEC-61) |
 |---|---|---|
 | Simulation Designer | Define Core Design and Scenario: Teams, Session Roles, Seats, Stages, Artifact Types, workflows, Information Policies, interfaces. | Designer |
 | Studio Administrator | Manage members, permissions, approved templates, plugins and deployment settings. | Admin |
-| Reviewer / Methodology Owner | Check methodological conformance; approve publication and risky live changes. | Publisher today; dedicated role is OPEN-025 |
+| Reviewer / Methodology Owner | Check methodological conformance; approve publication and risky live changes. | Reviewer |
 | Session Operator ("Game Master") | Create, staff, monitor, pause, complete, archive and export Sessions. | Operator |
 | Control staff (e.g. White Cell in Fractured Order) | Run the timeline and injects, review and return artifacts, adjudicate or route to plugins. | Session Role defined by the Release |
 | Participant | Use a role-specific interface; create and submit Artifacts; receive information under Information Policy. | Session Role defined by the Release |
 | Subject-matter adjudicator | Review assigned matters, record outcomes with rationale and provenance. | Session Role defined by the Release |
-| Research / evaluation analyst | Export permitted evidence, reconstruct sequence and provenance, separate observed from derived data. | OPEN-025 |
+| Research / evaluation analyst | Export permitted evidence, reconstruct sequence and provenance, separate observed from derived data. | Research Analyst |
 
 Personas are not all mandatory seats in every simulation.
 
@@ -199,9 +199,9 @@ REQ-001 to REQ-008 replace PLENUM-NEW-01 to PLENUM-NEW-08 in order.
 | ID | Requirement | Acceptance | Basis | Owner doc |
 |---|---|---|---|---|
 | REQ-045 | Tenant identity MUST come only from authenticated server context; every tenant-owned record MUST be attributable to one Organization; cross-organization reads and writes MUST fail. | Hostile organization IDs in requests are ignored or refused under the real application database role. | ADR-015; INV-001 | 06 |
-| REQ-046 | Authentication MUST support email and passwordless sign-in, institutional single sign-on (OIDC and SAML), multi-factor status and expiring Guest Identities; join codes MUST NOT grant access by themselves. | A code-only join is refused without identity verification and Seat eligibility. | ADR-006, ADR-012; OPEN-007 | 02, 06 |
+| REQ-046 | Authentication MUST support email and passwordless sign-in, institutional single sign-on (OIDC and SAML), multi-factor status and expiring Guest Identities; join codes MUST NOT grant access by themselves. | A code-only join is refused without identity verification and Seat eligibility. | ADR-006, ADR-012; OPEN-007 resolution | 02, 06 |
 | REQ-047 | Authorization MUST combine role-based and attribute-based policy server-side; unauthorized information MUST NOT be sent to the client. | Hidden fields are absent from responses, not merely hidden in the UI. | INV-002 | 06, 09 |
-| REQ-048 | Organization Roles and Session Roles MUST be separate; Session Roles are assigned only through Seats. | No Session Role exists as an Organization Membership. | DEC-44 | 03, 06 |
+| REQ-048 | Organization Roles and Session Roles MUST be separate; Session Roles are assigned only through Seats. | No Session Role exists as an Organization Membership. | DEC-61 | 03, 06 |
 | REQ-049 | Participant reassignment MUST be transactional, preserve historical attribution, refresh access and warn operators about possible information exposure. | Reassignment closes the prior Seat Assignment and opens a new one atomically. | Platform §23.8 | 02, 05 |
 | REQ-050 | Designers MUST be able to classify fields, forms, content, communications and exports; organization policy MAY forbid exporting or sending certain classifications to plugins. | A restricted field is excluded from a forbidden export and from plugin inputs. | OPEN-024 | 06 |
 | REQ-051 | The platform MUST implement baseline security controls: input validation, output encoding, CSRF protection, secure token handling, rate limiting, upload type validation and malware scanning, encryption in transit and at rest, key lifecycle management, least-privilege service roles, secret rotation, dependency scanning and security event monitoring. | Each control has a test or operational check recorded before production. | Data §16 | 06 |
@@ -364,7 +364,7 @@ Delivery sequence, gates and evidence are owned by 07 Implementation Roadmap. De
 
 ## 10. Open items affecting this PRD
 
-Unresolved items are those not marked resolved in Decision Register §7; OPEN-003 and OPEN-021 are resolved. The items that block PRD ratification are OPEN-001 (approvers) and confirmation of the Assumed decisions listed in Decision Register §3.
+Unresolved items are those not marked resolved in Decision Register §7; OPEN-003, OPEN-007, OPEN-021 and OPEN-025 are resolved. The items that block PRD ratification are OPEN-001 (approvers) and confirmation of the Assumed decisions listed in Decision Register §3.
 
 ---
 
@@ -410,3 +410,4 @@ Section numbers cited here refer to the superseded source documents (Foundation 
 | 0.7.1 | 2026-10-17 | Appendix B: stated that cited section numbers refer to archived sources. |
 | 0.7.2 | 2026-10-17 | Added §6.12 to §6.14 (REQ-072 to REQ-094) and INV-023 to INV-028 for polling and voting, voice and the Extension Framework; strengthened REQ-038 and INV-020 (DEC-54); stated first-release scope in §9; updated non-goals, governing decisions, domain summary and Appendix A note (DEC-57). |
 | 0.7.3 | 2026-10-17 | Updated the open-item status note after the Product Owner resolved OPEN-003 by confirming the official Fractured Order golden reference. No requirement or acceptance criterion changed. |
+| 0.7.4 | 2026-10-21 | Applied the OPEN-007 identity-profile resolution and DEC-61 Reviewer and Research Analyst Organization Roles; no requirement IDs changed. |

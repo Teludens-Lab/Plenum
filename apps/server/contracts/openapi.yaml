@@ -23,7 +23,7 @@ paths:
     get:
       operationId: getCollaborativeDraft
       x-contract-id: studio-crdt-v1
-      x-authorized-organization-roles: [designer, publisher]
+      x-authorized-organization-roles: [designer, publisher, reviewer]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -41,7 +41,7 @@ paths:
     post:
       operationId: validateCollaborativeDraft
       x-contract-id: studio-validation-v1
-      x-authorized-organization-roles: [designer, publisher]
+      x-authorized-organization-roles: [designer, publisher, reviewer]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -55,7 +55,7 @@ paths:
     post:
       operationId: previewDraftAsRole
       x-contract-id: role-preview-v1
-      x-authorized-organization-roles: [designer, publisher]
+      x-authorized-organization-roles: [designer, publisher, reviewer]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -93,12 +93,120 @@ paths:
             schema: { $ref: "#/components/schemas/StudioPublishRequestV1" }
       responses:
         "201":
-          description: Exact validated state vector frozen and published as an immutable Definition Revision and Release.
+          description: Reviewer-approved frozen state published as an immutable Definition Revision and Release.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StudioPublishV1" }
-        "403": { description: Publisher authority is absent or was revoked. }
+        "403": { description: Publisher authority or a current Reviewer approval is absent or was revoked. }
         "422": { description: Validation or publication controls failed. }
+  /v1/projects/{projectId}/publication-freezes:
+    post:
+      operationId: freezeCollaborativeDraftForReview
+      x-contract-id: studio-validation-v1
+      x-authorized-organization-role: publisher
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Exact validated state vector frozen for methodology review.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicationFreezeV1" }
+        "403": { description: Publisher authority is absent or revoked. }
+        "422": { description: The Draft has validation errors. }
+  /v1/projects/{projectId}/publication-freezes/{freezeId}/approve:
+    post:
+      operationId: approvePublicationFreeze
+      x-authorized-organization-role: reviewer
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: freezeId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [notes]
+              properties:
+                notes: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        "201":
+          description: Immutable Reviewer approval recorded for the exact freeze.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicationReviewV1" }
+        "403": { description: Reviewer authority is absent or revoked. }
+        "404": { description: Freeze is outside the authenticated Organization or project. }
+  /v1/projects/{projectId}/research-access-grants:
+    post:
+      operationId: grantResearchEvidenceAccess
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResearchAccessGrantRequestV1" }
+      responses:
+        "201": { description: Time-bounded project and protocol Research Access Grant created. }
+        "403": { description: Admin authority is absent or revoked. }
+        "422": { description: Analyst membership, protocol, or expiry is invalid. }
+  /v1/research-access-grants/{grantId}:
+    delete:
+      operationId: revokeResearchEvidenceAccess
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: grantId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Research Access Grant revoked and audited. }
+        "403": { description: Admin authority is absent or revoked. }
+        "404": { description: Active grant is outside the authenticated Organization or absent. }
+  /v1/sessions/{sessionId}/research-evidence-index:
+    get:
+      operationId: exportResearchEvidenceIndex
+      x-contract-id: research-evidence-index-v1
+      x-authorized-organization-role: research_analyst
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: afterSequence
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 }
+      responses:
+        "200":
+          description: Protocol-scoped, PII-free Evidence Event index; event bodies and actor identifiers are excluded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResearchEvidenceIndexV1" }
+        "403": { description: Research Analyst authority or an active project grant is absent. }
   /v1/plugins/submissions:
     post:
       operationId: submitPluginArtifact
@@ -971,6 +1079,51 @@ components:
         accessibilityReviewStatus: { type: string, minLength: 1, maxLength: 4000 }
         retentionPolicyId: { type: string, minLength: 1, maxLength: 4000 }
         approvalNotes: { type: string, minLength: 1, maxLength: 4000 }
+    PublicationFreezeV1:
+      type: object
+      additionalProperties: false
+      required: [freezeId, validation]
+      properties:
+        freezeId: { type: string, format: uuid }
+        validation: { $ref: "#/components/schemas/StudioValidationReportV1" }
+    PublicationReviewV1:
+      type: object
+      additionalProperties: false
+      required: [freezeId, reviewerPersonId, decidedAt]
+      properties:
+        freezeId: { type: string, format: uuid }
+        reviewerPersonId: { type: string, format: uuid }
+        decidedAt: { type: string, format: date-time }
+    ResearchAccessGrantRequestV1:
+      type: object
+      additionalProperties: false
+      required: [analystPersonId, protocolReference, expiresAt]
+      properties:
+        analystPersonId: { type: string, format: uuid }
+        protocolReference: { type: string, minLength: 1, maxLength: 400 }
+        expiresAt: { type: string, format: date-time }
+    ResearchEvidenceIndexV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, protocolReference, generatedAt, events, nextSequence]
+      properties:
+        contractId: { const: research-evidence-index-v1 }
+        sessionId: { type: string, format: uuid }
+        protocolReference: { type: string, minLength: 1 }
+        generatedAt: { type: string, format: date-time }
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [sequence, eventType, eventVersion, governingReleaseId, recordedAt]
+            properties:
+              sequence: { type: integer, minimum: 1 }
+              eventType: { type: string, minLength: 1 }
+              eventVersion: { type: integer, minimum: 1 }
+              governingReleaseId: { type: string, format: uuid }
+              recordedAt: { type: string, format: date-time }
+        nextSequence: { type: [integer, "null"], minimum: 1 }
     StudioPublishV1:
       type: object
       additionalProperties: false

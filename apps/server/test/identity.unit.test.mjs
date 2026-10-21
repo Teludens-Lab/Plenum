@@ -6,6 +6,7 @@ import {
   AuthorizationError,
   createOidcAuthorizationRequest,
   exchangeOidcAuthorizationCode,
+  loadIdentityDeploymentConfiguration,
   verifyOidcIdToken
 } from "../dist/index.js";
 
@@ -110,4 +111,32 @@ test("PS-110-T01 rejects invalid issuer, audience, nonce and expiry", async () =
     verifyOidcIdToken(configuration, expired, "expected-nonce", correlationId),
     (error) => error instanceof AuthorizationError && error.envelope.error.code === "AUTH_EXPIRED"
   );
+});
+
+test("ADR-012 loads cloud, self-hosted and air-gapped identity profiles with exact endpoint allowlists", () => {
+  const base = {
+    PLENUM_IDENTITY_PROVIDER_KEY: "primary",
+    PLENUM_ORGANIZATION_ID: organizationId,
+    PLENUM_OIDC_ISSUER: "https://identity.plenum.test/realms/plenum",
+    PLENUM_OIDC_AUDIENCE: "plenum",
+    PLENUM_OIDC_CLIENT_ID: "plenum",
+    PLENUM_OIDC_REDIRECT_URI: "https://app.plenum.test/v1/auth/oidc/callback",
+    PLENUM_OIDC_AUTHORIZATION_ENDPOINT: "https://identity.plenum.test/realms/plenum/protocol/openid-connect/auth",
+    PLENUM_OIDC_TOKEN_ENDPOINT: "https://identity.plenum.test/realms/plenum/protocol/openid-connect/token",
+    PLENUM_OIDC_JWKS_URI: "https://identity.plenum.test/realms/plenum/protocol/openid-connect/certs",
+    PLENUM_IDENTITY_ALLOWED_ORIGINS: "https://identity.plenum.test"
+  };
+  for (const profile of ["self_hosted", "air_gapped"]) {
+    const configuration = loadIdentityDeploymentConfiguration({ ...base,
+      PLENUM_DEPLOYMENT_PROFILE: profile, PLENUM_IDENTITY_PROVIDER: "keycloak" });
+    assert.equal(configuration.profile, profile);
+    assert.equal(configuration.oidc.jwksUri, base.PLENUM_OIDC_JWKS_URI);
+  }
+  assert.equal(loadIdentityDeploymentConfiguration({ ...base,
+    PLENUM_DEPLOYMENT_PROFILE: "cloud", PLENUM_IDENTITY_PROVIDER: "customer_oidc" }).providerKind, "customer_oidc");
+  assert.throws(() => loadIdentityDeploymentConfiguration({ ...base,
+    PLENUM_DEPLOYMENT_PROFILE: "air_gapped", PLENUM_IDENTITY_PROVIDER: "customer_oidc" }), /bundled Keycloak/u);
+  assert.throws(() => loadIdentityDeploymentConfiguration({ ...base,
+    PLENUM_DEPLOYMENT_PROFILE: "cloud", PLENUM_IDENTITY_PROVIDER: "customer_oidc",
+    PLENUM_OIDC_TOKEN_ENDPOINT: "https://token.attacker.test/token" }), /not allowlisted/u);
 });

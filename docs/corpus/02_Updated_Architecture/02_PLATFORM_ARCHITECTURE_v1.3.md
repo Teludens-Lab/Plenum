@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | TSD |
 | Number | 02 |
-| Version | 1.3.1 |
-| Date | 2026-10-17 |
+| Version | 1.3.2 |
+| Date | 2026-10-21 |
 | Status | Draft for review. v1.2 amendments merged into the body (DEC-26). |
 | Owner | Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -243,7 +243,7 @@ interface SessionAccessContext {
   activeSessionRoleId?: string;
   activeSessionTeamId?: string;
   seatId?: string;
-  organizationRoles: string[];      // Admin, Designer, Publisher, Operator (DEC-44)
+  organizationRoles: string[];      // Admin, Designer, Publisher, Operator, Reviewer, Research Analyst (DEC-61)
   stageId?: string;
   activeReleaseId: string;
   authenticationStrength: string;
@@ -500,6 +500,7 @@ OPEN-012 (compatibility and compiler determinism), OPEN-016 (authority transfer)
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.2 | 2026-10-21 | Applied the resolved OPEN-007 deployment-profile identity rules and DEC-61 Organization Roles. Runtime support for Reviewer and Research Analyst remains a separately tested implementation change. |
 | 1.3.1 | 2026-10-17 | Added polling, voice and extension services, schemas, deployment components, transports and failure modes; replaced the §18 plugin interface with a summary of 10 Extension Framework; recorded the media-stack exception (DEC-49). |
 | 1.3.0 | 2026-10-17 | Merged v1.2 amendment into body; adopted Glossary terms (Session, Simulation Release, Stage, Session Access Context); removed "workspace"; replaced Supabase stack with ADR-006 to ADR-013; removed AI-assisted design services (DEC-41); added deployment profile table, authoritative source table, command pipeline and realtime transport; renumbered sections. |
 | 1.2.0 | 2026-10-17 | Controlled alignment amendment (archived). |

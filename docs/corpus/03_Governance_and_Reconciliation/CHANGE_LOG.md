@@ -2,6 +2,10 @@
 
 This log replaces the four separate change logs and reconciliation records that the corpus previously carried (Foundation, Upstream, Alignment and per-document addenda). Those records are kept unchanged under `archive/03_Governance_and_Reconciliation/`. Each document still keeps its own change log table at the end.
 
+## 2026-10-21 — Identity profiles and Organization Roles resolved
+
+The Product Owner confirmed completion of the Security Owner sign-off for ADR-012 and accepted the OPEN-007 deployment-profile identity proposal. Plenum remains an OIDC relying party in every profile; Keycloak owns local accounts and any SAML/LDAP federation in self-hosted and air-gapped profiles. DEC-61 supersedes DEC-44 by adding the least-privilege Reviewer and Research Analyst Organization Roles and resolves OPEN-025. Migration `018_identity_roles_and_governance.sql`, the OIDC deployment-profile loader, bundled Keycloak configuration, Reviewer publication gate, and governed Research Analyst evidence index implement the accepted decisions; production deployment and recovery evidence remain separate release gates.
+
 ## 2026-10-20 — Proposed documents approved
 
 The Product Owner directed that every current Proposed governing document be accepted as Approved. Decision Register v1.0.9 records ADR-002, ADR-004, ADR-005, ADR-008 to ADR-014 and ADR-017 as Approved and resolves OPEN-002. The Data Model, Synchronization Protocol, feature-specification document controls and OPEN-019 acceptance recommendation now reflect that approval. Named specialist sign-offs, Assumed decisions and unrelated OPEN items remain unchanged; OPEN-019 remains open until its Technical Lead and Operations Owner sign-offs are complete.

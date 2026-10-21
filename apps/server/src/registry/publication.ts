@@ -32,6 +32,7 @@ export interface PublicationControls extends JsonObject {
 export interface PublicationPolicy {
   requireDistinctApprover: boolean;
   requireTestSession: boolean;
+  approverOrganizationRole?: "reviewer";
 }
 
 export interface PublishReleaseInput {
@@ -215,11 +216,14 @@ async function publishMaterialization(
       }
       const approvers = await client.query<{ count: string }>(
         `SELECT count(DISTINCT person_id) AS count FROM identity.memberships
-          WHERE organization_id=$1 AND person_id=ANY($2::uuid[])`,
-        [principal.organizationId, input.controls.approvedBy]
+          WHERE organization_id=$1 AND person_id=ANY($2::uuid[])
+            AND ($3::text IS NULL OR organization_role=$3)`,
+        [principal.organizationId, input.controls.approvedBy, input.policy.approverOrganizationRole ?? null]
       );
       if (Number(approvers.rows[0]?.count) !== new Set(input.controls.approvedBy).size) {
-        throw authorizationError("REFERENCE_INVALID", "A publication approver is not an active Organization member.", input.correlationId);
+        throw authorizationError("REFERENCE_INVALID", input.policy.approverOrganizationRole === undefined
+          ? "A publication approver is not an active Organization member."
+          : "A publication approver no longer holds the required Reviewer Organization Role.", input.correlationId);
       }
       const number = await client.query<{ release_number: number }>(
         "SELECT COALESCE(MAX(release_number),0)::int+1 AS release_number FROM registry.releases WHERE organization_id=$1 AND project_id=$2",

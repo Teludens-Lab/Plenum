@@ -1,0 +1,36 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start", "--optimized", "--import-realm"]
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?set KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: ${KEYCLOAK_DATABASE_URL:?set KEYCLOAK_DATABASE_URL}
+      KC_DB_USERNAME: ${KEYCLOAK_DATABASE_USERNAME:?set KEYCLOAK_DATABASE_USERNAME}
+      KC_DB_PASSWORD: ${KEYCLOAK_DATABASE_PASSWORD:?set KEYCLOAK_DATABASE_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?set KEYCLOAK_HOSTNAME}
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /run/secrets/tls.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /run/secrets/tls.key
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./realm-plenum.json:/opt/keycloak/data/import/realm-plenum.json:ro
+      - ${KEYCLOAK_TLS_CERTIFICATE:?set KEYCLOAK_TLS_CERTIFICATE}:/run/secrets/tls.crt:ro
+      - ${KEYCLOAK_TLS_PRIVATE_KEY:?set KEYCLOAK_TLS_PRIVATE_KEY}:/run/secrets/tls.key:ro
+    networks: [identity]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /opt/keycloak/data/tmp
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  identity:
+    name: plenum-identity

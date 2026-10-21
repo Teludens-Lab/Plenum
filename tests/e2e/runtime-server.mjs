@@ -38,7 +38,7 @@ const mediaAdapter = process.env.MEDIA_TEST_URL === undefined ? fakeMediaAdapter
   allowedHosts: ["127.0.0.1"],
   allowInsecureLoopback: true
 });
-const roles = { operator: ["operator"], designerA: ["designer"], designerB: ["designer"], publisher: ["designer", "publisher"] };
+const roles = { operator: ["operator"], designerA: ["designer"], designerB: ["designer"], publisher: ["designer", "publisher", "reviewer"] };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
   principalId: fixture.people[key],

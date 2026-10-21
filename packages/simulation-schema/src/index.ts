@@ -446,7 +446,7 @@ export interface RuntimeReportDefinitionV1 {
   formats: string[];
   sections: unknown[];
   availableToSessionRoleIds?: string[];
-  availableToOrganizationRoles?: Array<"Admin" | "Designer" | "Publisher" | "Operator">;
+  availableToOrganizationRoles?: Array<"Admin" | "Designer" | "Publisher" | "Operator" | "Reviewer" | "Research Analyst">;
 }
 
 export interface RuntimeAccessPolicyV1 {
@@ -922,7 +922,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
 
   for (const report of runtime.reports) {
     report.availableToSessionRoleIds?.forEach((id) => reference(roles, id, `Report ${report.id}`));
-    const organizationRoles = new Set(["Admin", "Designer", "Publisher", "Operator"]);
+    const organizationRoles = new Set(["Admin", "Designer", "Publisher", "Operator", "Reviewer", "Research Analyst"]);
     if (report.availableToOrganizationRoles?.some((role) => !organizationRoles.has(role))) {
       throw new Error(`Report ${report.id} references an invalid Organization Role`);
     }

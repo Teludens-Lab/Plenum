@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | DREG |
-| Version | 1.0.9 |
-| Date | 2026-10-20 |
+| Version | 1.0.10 |
+| Date | 2026-10-21 |
 | Status | Controlled. Single source of decisions for the Plenum corpus. |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner; Operations Owner (role placeholders — see OPEN-001) |
@@ -49,6 +49,7 @@ The Product Owner directed on 2026-10-20 that every current Proposed governing d
 
 - **Assumed decisions:** DEC-21 to DEC-27 and DEC-30 to DEC-40. Questions 1–22 of the 2026-10-17 questionnaire came back without visible selections, so the recommended options were applied as stated in that questionnaire.
 - **Approved ADRs:** ADR-002, ADR-004, ADR-005, ADR-008 to ADR-014 and ADR-017 were accepted by Product Owner direction on 2026-10-20. ADR-006 and ADR-007 were already Approved. ADR-001, ADR-003, ADR-015, ADR-016 and ADR-018 remain Confirmed by Product Owner direction on 2026-10-19.
+- **Completed specialist sign-off:** the Product Owner confirmed on 2026-10-21 that the Security Owner sign-off required by ADR-012 is complete.
 - **Replacement term:** the name **Message Channel** in DEC-51 was chosen by the editor; the Product Owner confirmed only that "Voice Channel" keeps its name.
 - **Approver identities:** OPEN-001.
 
@@ -124,7 +125,7 @@ Full definitions live in `GLOSSARY_AND_CROSSWALK_v1.0.md`.
 | DEC-41 | AI-assisted authoring content is moved to a "Deferred — requires a new product decision" appendix. Model-based adjudication (for example PLI) remains allowed as a plugin. | Confirmed | Q23; clarified by DEC-57 |
 | DEC-42 | Reference artifact workflow return paths for the Fractured Order package: see §5.4. | Confirmed | Q28 |
 | DEC-43 | A rejected command records a rejected receipt and an Evidence Event. | Confirmed | Q29 |
-| DEC-44 | Organization Roles (Admin, Designer, Publisher, Operator) are separate from Session Roles. Session Roles are defined by the Simulation Release and assigned to Participants through Seats. | Confirmed | Q30 |
+| DEC-44 | Organization Roles (Admin, Designer, Publisher, Operator) are separate from Session Roles. Session Roles are defined by the Simulation Release and assigned to Participants through Seats. | Superseded by DEC-61 | Q30 |
 | DEC-45 | The reference code slice reads roles and workflow transitions from the published Simulation Release; no simulation-specific role names or transitions in code. | Confirmed | Q27 |
 
 ### 5.4 DEC-42 detail — reference workflow
@@ -167,6 +168,12 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 | DEC-59 | Voting-method adapters and media-provider adapters form a separate **Platform Adapter** class outside the plugin categories. They extend a core capability, are pinned and verified like plugins, and never hold authority. | Confirmed | 10, 11, 12 |
 | DEC-60 | Plugin categories: four families (model, evidence, analysis, communication) with nine detailed categories (adjudication; world and simulation; agents and actor behavior; information and communication; evidence and observation; research and analysis; experimentation and evaluation; visualization and spatial; integration and data). A category is discovery metadata, never a permission. Resolves OPEN-021. | Confirmed | 10 §3 |
 
+### 5.6 Decision recorded 2026-10-21 (DEC-61)
+
+| ID | Decision | Status | Source |
+|---|---|---|---|
+| DEC-61 | Organization Roles are **Admin**, **Designer**, **Publisher**, **Operator**, **Reviewer** and **Research Analyst**. They remain separate from Release-defined Session Roles and may be combined on one Organization Membership. Reviewer authority is limited to project-scoped methodology review, publication approval and approval of governed live changes; it does not grant design editing, Organization administration or Session operation. Research Analyst authority is limited to project- or protocol-scoped, policy-approved research evidence and exports subject to classification, consent, retention and data-access approval; it does not grant identity mapping, unrestricted raw or restricted data, Organization administration, publication or Session operation. Additional authority requires a separately assigned role or explicit data-access approval. | Confirmed | Product Owner direction; resolves OPEN-025 and supersedes DEC-44 |
+
 ## 6. Architecture decisions
 
 | ID | Decision | Status | Approvers still required | Maps from |
@@ -182,7 +189,7 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 | ADR-009 | **Approved 2026-10-20 by Product Owner direction. Database version.** PostgreSQL 18 is the minimum supported major version in every profile (supported until November 2030). Managed PostgreSQL in the cloud profile; packaged PostgreSQL in self-hosted and air-gapped profiles. Pin the latest minor release at build time; evaluate a newer major only after its first minor releases. The reference slice moves from PostgreSQL 16 to 18. | Approved | Technical Lead, Operations Owner | Recommendation requested in Q24 |
 | ADR-010 | **Approved 2026-10-20 by Product Owner direction. Realtime transport.** Runtime: commands over HTTPS POST with idempotent receipts; server-to-client deltas over Server-Sent Events, using the SSE resume ID as the projection cursor, served over HTTP/2. Studio collaboration: authenticated WebSocket for CRDT update exchange. Fallback for restrictive networks: the polling delta endpoint already defined in the Synchronization Protocol. Voice media is a separate path (ADR-017). | Approved | Technical Lead, Security Owner | Recommendation requested in Q26 |
 | ADR-011 | **Approved 2026-10-20 by Product Owner direction. Object storage.** The application talks only to an S3-compatible API. Cloud profile: the provider's object store. Self-hosted and air-gapped: Garage or SeaweedFS for small and medium installations, Ceph RGW for large institutions; final choice after evaluation. MinIO Community Edition is excluded because the project was archived in April 2026. | Approved | Technical Lead, Operations Owner | New |
-| ADR-012 | **Approved 2026-10-20 by Product Owner direction. Identity provider.** The application is an OIDC relying party. Self-hosted and air-gapped profiles bundle Keycloak for local accounts, MFA and SAML/OIDC/LDAP federation; the cloud profile accepts Keycloak or a customer identity provider over OIDC. | Approved | Security Owner | Implements ADR-006 |
+| ADR-012 | **Approved 2026-10-20 by Product Owner direction; Security Owner sign-off confirmed complete 2026-10-21. Identity provider.** The application is an OIDC relying party. Self-hosted and air-gapped profiles bundle Keycloak for local accounts, MFA and SAML/OIDC/LDAP federation; the cloud profile accepts Keycloak or a customer identity provider over OIDC. | Approved | — | Implements ADR-006; OPEN-007 resolved 2026-10-21 |
 | ADR-013 | **Approved 2026-10-20 by Product Owner direction. Deployment packaging.** One set of OCI container images for every profile. Reference single-node deployment with Docker Compose or Podman for LAN and air-gapped installations, shipped as an offline bundle with signed checksums. Cloud profile on a managed container service with managed PostgreSQL. Kubernetes is optional for institutions that already run it, not required. A reverse proxy terminates TLS and serves HTTP/2. The image set also carries the Extension Host, the media server and TURN relays (DEC-49). | Approved | Operations Owner, Security Owner | Implements DEC-19 |
 | ADR-014 | **Approved 2026-10-20 by Product Owner direction. Persistence depth.** Current state lives in relational tables; history lives in the append-only Evidence Event journal. Full event sourcing is not required. | Approved | Technical Lead | Foundation §8; Platform §18 "event sourcing depth" |
 | ADR-015 | **Confirmed 2026-10-19 by Product Owner direction. Tenant isolation layering.** Tenant identity comes only from authenticated server context. PostgreSQL row-level security is defense in depth under a non-owner application role without BYPASSRLS. Information asymmetry inside a Session is enforced by the application policy engine and server-side projections. | Confirmed | Product Owner | Platform §18 "multitenancy and row-level security" |
@@ -216,7 +223,7 @@ In the Origin column, section numbers refer to the superseded source documents k
 | OPEN-004 | Which methodology concepts are always enabled versus optional, and their dependency matrix. | Publication dependency validation (DEC-01) | Methodology Lead | Foundation §13.1 |
 | OPEN-005 | Permitted Stage structures: sequential, parallel, nested, conditional, continuously timed. | Stage engine contract | Methodology Lead | Foundation §13.2 |
 | OPEN-006 | Workflow language expressiveness: conditions, parallel branches, loops, timers, assignment, approvals, termination guarantees. | Workflow engine contract | Methodology Lead, Technical Lead | Foundation §13.3 |
-| OPEN-007 | Identity federation variations per deployment profile. | Final identity design (ADR-012) | Security Owner | Foundation §13.4 |
+| OPEN-007 | **Resolved 2026-10-21 by Product Owner direction.** Plenum is always an OIDC relying party. Cloud deployments use a customer identity provider or Keycloak over OIDC. Self-hosted deployments bundle Keycloak for local accounts, passwordless sign-in and MFA under Organization policy, with optional upstream OIDC, SAML or LDAP federation. Air-gapped deployments bundle local Keycloak/accounts and MFA; federation is limited to locally reachable institutional systems with zero public egress. Keycloak terminates SAML and LDAP. Each Deployment allowlists issuer and audience, explicitly maps claims to Persons and Organization Memberships, and defines local signing-key rollover. | — | Security Owner | Foundation §13.4; ADR-012 |
 | OPEN-008 | Migration policy for pending artifacts, in-progress stages and participant permissions during live activation; who may authorize disruptive changes. | ADR-004 approval | Methodology Lead | Foundation §13.5 |
 | OPEN-009 | Data residency, sensitivity, retention, performance budgets and operational owner. | Production readiness | Operations Owner | Foundation §13.6 |
 | OPEN-010 | Artifact schema and form constraints (field types, nesting, calculated fields, attachments) and import/export formats. | Form renderer contract | Methodology Lead | Foundation §13.7 |
@@ -234,7 +241,7 @@ In the Origin column, section numbers refer to the superseded source documents k
 | OPEN-022 | **Resolved for the current implementation baseline 2026-10-19 by Product Owner direction.** Use JSON Schema 2020-12 and the existing workflow and policy engines; report generation remains in PS-520; Python and native scientific-model sandboxes are deferred and are not enabled by PS-220. | — | Product Owner | Platform §18; ADR-018 |
 | OPEN-023 | If the original PRD v0.6 is recovered, reconcile it with PRD v0.7. | Nothing until recovered | Product Owner | DEC-21 |
 | OPEN-024 | Information classification scheme for classified deployments beyond public, internal, confidential and restricted. | Air-gapped accreditation | Security Owner | Data §8 |
-| OPEN-025 | Organization roles for reviewers or methodology owners and for research analysts, beyond Admin, Designer, Publisher and Operator. | Publication approval and research export permissions | Product Owner | DEC-44; Foundation §4 |
+| OPEN-025 | **Resolved 2026-10-21 by Product Owner direction.** Add the Reviewer and Research Analyst Organization Roles with the least-privilege boundaries in DEC-61. | — | Product Owner | DEC-61; Foundation §4 |
 | OPEN-026 | **Resolved 2026-10-19.** Plenum must make generic Orientation/coverage gates, bounded Control operations and decision-trace capabilities available as configurable options to every simulation. Each Release selects the capabilities and supplies its roles, forms, labels, timing, ordering, required combinations and gate rules. Fractured Order's observed Orientation content and exact Control semantics remain Release configuration, not platform hard-coding. | — | Methodology Lead | DEC-22; owner direction |
 | OPEN-027 | How consent to recording and transcription is captured and withdrawn; legal basis; retention, access and export of recordings and transcripts; which transcription engines may run locally in air-gapped profiles. | Enabling recording or transcription in a production Session | Security Owner, Product Owner | DEC-50; document 12 |
 | OPEN-028 | Secret-ballot protection: ballot encryption, eligibility tokens, key custody, whether any administrator can recover choices, and small-group suppression thresholds for results. | Secret-ballot polls in a production Session | Security Owner, research governance | Document 11 |
@@ -312,3 +319,4 @@ These collided with the Foundation's DEC-01 to DEC-20 and are retired.
 | 1.0.7 | 2026-10-19 | Product Owner direction confirmed ADR-001 and ADR-003 for the PS-230 authority and evidence baseline. |
 | 1.0.8 | 2026-10-19 | Product Owner confirmed ADR-015 tenant isolation layering and ADR-016 capability schemas. |
 | 1.0.9 | 2026-10-20 | Product Owner accepted every current Proposed governing document and ADR as Approved; resolved OPEN-002. Named specialist sign-offs and all unrelated OPEN items remain. |
+| 1.0.10 | 2026-10-21 | Recorded completed Security Owner sign-off for ADR-012; resolved OPEN-007 with deployment-profile federation rules; added DEC-61 and resolved OPEN-025 with Reviewer and Research Analyst Organization Roles. |

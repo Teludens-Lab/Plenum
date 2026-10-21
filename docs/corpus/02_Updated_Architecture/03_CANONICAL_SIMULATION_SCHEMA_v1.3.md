@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | CDM |
 | Number | 03 |
-| Version | 1.3.1 |
-| Date | 2026-10-17 |
+| Version | 1.3.2 |
+| Date | 2026-10-21 |
 | Status | Draft for review. v1.2 addendum merged (DEC-26). Header previously read 1.1.0 in a file named v1.2; corrected. |
 | Owner | Technical Lead, with Methodology Lead for meaning |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -204,7 +204,7 @@ interface SeatDefinition {
 }
 ```
 
-Organization Roles (Admin, Designer, Publisher, Operator) are platform-defined and never appear in a Release (DEC-44).
+Organization Roles (Admin, Designer, Publisher, Operator, Reviewer, Research Analyst) are platform-defined and never appear in a Release (DEC-61).
 
 ## 7. Capability catalog
 
@@ -803,7 +803,7 @@ interface ReportDefinition {
   filters?: ReportFilter[];
   anonymizationProfileId?: string;
   availableToSessionRoleIds?: string[];
-  availableToOrganizationRoles?: Array<"Admin" | "Designer" | "Publisher" | "Operator">;
+  availableToOrganizationRoles?: Array<"Admin" | "Designer" | "Publisher" | "Operator" | "Reviewer" | "Research Analyst">;
 }
 
 interface ReportSection {
@@ -1087,6 +1087,7 @@ OPEN-004 (concept activation), OPEN-005 (Stage structures), OPEN-006 (workflow e
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.2 | 2026-10-21 | Added Reviewer and Research Analyst to the Organization Role vocabulary under DEC-61. Runtime validation support remains a separate implementation change. |
 | 1.3.1 | 2026-10-17 | Added `PollDefinition` (§13.2), `VoiceChannelDefinition` (§13.3), `ModelCompositionDefinition` and a digest-pinned `PluginBinding` (§14.2); renamed `CommunicationChannel` to `MessageChannel` and `channels` to `messageChannels` (DEC-51); removed `requireHumanApproval` (DEC-54); added validator rules and runtime mappings. |
 | 1.3.0 | 2026-10-17 | Split Core Design, Scenario and manifest (DEC-31); replaced phases with Stages and Stage Groups (DEC-33); replaced `RoleDefinition` with `SessionRoleDefinition` and removed platform scope (DEC-44); added capability catalog; defined previously undefined types (ActorSelector, AssignmentRule, QuorumDefinition, FactReference, ExpressionDefinition, FieldValidation, ValidationRule, EditabilityRule, FormUiOptions, NavigationDefinition, ReportSection, ReportFilter, InputMapping, RubricDefinition, DecisionRule, EffectMapping, OperatorControlDefinition, ResourceAllocation, PluginBinding, ValidationProfile, AccessPolicyDefinition and others); replaced VisibilityRule with default-deny Information Policy; added decision-bearing artifacts, capabilities, resources, research and measurement types; added DEC-42 reference workflow; merged v1.2 addendum. |
 | 1.2.0 | 2026-10-17 | Reconciliation addendum (archived). Header incorrectly read 1.1.0. |

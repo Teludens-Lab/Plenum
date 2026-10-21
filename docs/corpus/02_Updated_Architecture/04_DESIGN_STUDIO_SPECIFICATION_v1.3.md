@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | SAS |
 | Number | 04 |
-| Version | 1.3.2 |
-| Date | 2026-10-17 |
+| Version | 1.3.3 |
+| Date | 2026-10-21 |
 | Status | Draft for review. v1.2 amendment merged (DEC-26). |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -129,7 +129,7 @@ Capabilities are shown in plain-language groups:
 | Review and adjudication | Review, forward, return and accept artifacts; score criteria; apply effects; approve outcomes; publish outcomes |
 | Control | Control timer; advance Stage; release Injects; reassign Participants; override workflows; record interventions; export data |
 
-Organization Roles are not configured here; they are managed in organization administration (DEC-44).
+Organization Roles are not configured here; they are managed in organization administration (DEC-61).
 
 ### 8.3 Preview as role
 
@@ -359,4 +359,5 @@ Owned by 10 Extension Framework (DEC-52 to DEC-60). Designers never write plugin
 | 1.3.0 | 2026-10-17 | Merged v1.2 amendment; made real-time collaboration first-release scope (DEC-15); added Methodology, Research and Decisions and Live Changes navigation areas; replaced phases with Stages (DEC-33); separated Session Roles from Organization Roles (DEC-44); adopted the Publication lifecycle (DEC-39); removed AI assistance (DEC-41, PRD Appendix A); renumbered sections. |
 | 1.3.1 | 2026-10-17 | Replaced "Workspaces" with "Navigation areas" in §3 to avoid confusion with the removed Workspace level (DEC-36). |
 | 1.3.2 | 2026-10-17 | Added §25 Polls, §26 Voice Channels and §27 Plugins and Model Compositions; renamed Channel editor to Message Channel editor (DEC-51); plugin approval always on (DEC-54); new validation checks, test runs and live-change notes. |
+| 1.3.3 | 2026-10-21 | Repointed Organization Role governance from superseded DEC-44 to DEC-61. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |

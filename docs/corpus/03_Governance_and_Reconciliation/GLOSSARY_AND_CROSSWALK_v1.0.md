@@ -5,12 +5,12 @@
 | Field | Value |
 |---|---|
 | Document ID | GLOSS |
-| Version | 1.0.1 |
-| Date | 2026-10-17 |
+| Version | 1.0.2 |
+| Date | 2026-10-21 |
 | Status | Controlled draft. Terms marked **(A)** rest on Assumed decisions and change if those decisions change. |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
-| Governed by | `DECISION_REGISTER_v1.0.md`, chiefly DEC-30 to DEC-40, DEC-44 and DEC-46 to DEC-60 |
+| Governed by | `DECISION_REGISTER_v1.0.md`, chiefly DEC-30 to DEC-40 and DEC-46 to DEC-61 |
 | Read by | Every Plenum document, API, event contract, database object and interface label |
 
 ## 1. Rules
@@ -29,7 +29,9 @@
 | Organization | The tenant and top-level security boundary. Owns memberships, Simulation Projects, Simulation Releases, Sessions, plugins and exports. | There is no level between Organization and Simulation Project (DEC-36). |
 | Person | A persistent human identity known to the platform. | Legacy: user, user account |
 | Organization Membership | A Person's membership in an Organization, carrying one or more Organization Roles. | |
-| Organization Role | Platform-defined authority inside an Organization: **Admin**, **Designer**, **Publisher**, **Operator**. Fixed by the platform, never by a Simulation Release. | DEC-44. Further roles: OPEN-025 |
+| Organization Role | Platform-defined authority inside an Organization: **Admin**, **Designer**, **Publisher**, **Operator**, **Reviewer**, **Research Analyst**. Fixed by the platform, never by a Simulation Release. | DEC-61 |
+| Reviewer | An Organization Role limited to project-scoped methodology review, publication approval and approval of governed live changes. | DEC-61; legacy persona: Methodology Owner |
+| Research Analyst | An Organization Role limited to policy-approved research evidence and exports within an assigned project or protocol scope. | DEC-61; legacy persona: research/evaluation analyst |
 | Session Operator | A Person holding the Operator Organization Role who is assigned to operate a specific Session. | Persona label "Game Master" maps here |
 | Guest Identity | A Session-limited principal with a display name, explicit Session and Seat scope, expiry and revocation state. Never becomes an Organization Membership. | |
 | Display Principal | A non-human principal for shared read-only displays, limited to approved Interface Profiles and an information classification ceiling. | Legacy: device identity (Platform §23.6) |
@@ -59,7 +61,7 @@
 | Term | Definition | Notes |
 |---|---|---|
 | Team Definition | A designer-defined group of Participants with identity, objectives and resources. Not a fixed set of sides. | |
-| Session Role | A Release-defined functional responsibility in a Session, with explicit capabilities and scope (for example Scribe, Facilitator, White Cell in Fractured Order). | DEC-44. Legacy: role definition, RoleInstance |
+| Session Role | A Release-defined functional responsibility in a Session, with explicit capabilities and scope (for example Scribe, Facilitator, White Cell in Fractured Order). | DEC-61. Legacy: role definition, RoleInstance |
 | Seat | A Release-defined position a Participant occupies, binding a Session Role and optionally a Team. Has minimum and maximum occupancy and a join mode. | |
 | Stage | A unit of simulation structure and time. Has a designer-chosen **Stage Type** label (for example phase, move, round, turn, orientation, custom) and may belong to a parent **Stage Group**, allowing nesting such as a move containing phases. | DEC-33 (A); OPEN-005. Legacy: phase, round, turn, move, orientation, temporal node |
 | Stage Transition | A guarded move from one Stage to another: automatic, manual, or either. | Legacy: phase transition |
@@ -344,3 +346,4 @@ A replayed Command returns its original receipt with `replayed: true`.
 |---|---|---|
 | 1.0.0 | 2026-10-17 | Created from the 2026-10-17 review and questionnaire. |
 | 1.0.1 | 2026-10-17 | Added voting, voice and extension terms (DEC-46 to DEC-60) and lifecycles §7.9 to §7.12; renamed Communication Channel to Message Channel (DEC-51); replaced Adapter with Plugin Installation; mapped specification event names. |
+| 1.0.2 | 2026-10-21 | Added Reviewer and Research Analyst Organization Roles from DEC-61. |

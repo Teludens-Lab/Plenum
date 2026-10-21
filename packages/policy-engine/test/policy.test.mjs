@@ -82,3 +82,9 @@ test("PS-210-T01: export and Plugin projections enforce their classification cei
     internalDetail: "organization only"
   });
 });
+
+test("DEC-61: Reviewer and Research Analyst are distinct Organization Role audiences", () => {
+  assert.equal(audienceAllows({ ...context, organizationRoles: ["reviewer"] }, { organizationRoles: ["reviewer"] }), true);
+  assert.equal(audienceAllows({ ...context, organizationRoles: ["research_analyst"] }, { organizationRoles: ["reviewer"] }), false);
+  assert.equal(audienceAllows({ ...context, organizationRoles: ["research_analyst"] }, { organizationRoles: ["research_analyst"] }), true);
+});

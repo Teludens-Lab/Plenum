@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   createLocalJWKSet,
+  createRemoteJWKSet,
   jwtVerify,
   type JSONWebKeySet
 } from "jose";
@@ -16,7 +17,8 @@ export interface OidcProviderConfiguration {
   redirectUri: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
-  jwks: JSONWebKeySet;
+  jwks?: JSONWebKeySet;
+  jwksUri?: string;
 }
 
 export interface PendingOidcLogin {
@@ -47,6 +49,24 @@ function base64Url(bytes: Uint8Array): string {
 
 function requireHttps(url: string, field: string): void {
   if (new URL(url).protocol !== "https:") throw new Error(`${field} must use HTTPS`);
+}
+
+const remoteKeySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function verificationKeySet(configuration: OidcProviderConfiguration) {
+  if (configuration.jwks !== undefined) return createLocalJWKSet(configuration.jwks);
+  if (configuration.jwksUri === undefined) throw new Error("jwks or jwksUri is required");
+  requireHttps(configuration.jwksUri, "jwksUri");
+  let keySet = remoteKeySets.get(configuration.jwksUri);
+  if (keySet === undefined) {
+    keySet = createRemoteJWKSet(new URL(configuration.jwksUri), {
+      timeoutDuration: 5_000,
+      cooldownDuration: 30_000,
+      cacheMaxAge: 10 * 60 * 1000
+    });
+    remoteKeySets.set(configuration.jwksUri, keySet);
+  }
+  return keySet;
 }
 
 export function createOidcAuthorizationRequest(
@@ -118,7 +138,7 @@ export async function verifyOidcIdToken(
   now = new Date()
 ): Promise<VerifiedOidcIdentity> {
   try {
-    const result = await jwtVerify(idToken, createLocalJWKSet(configuration.jwks), {
+    const result = await jwtVerify(idToken, verificationKeySet(configuration), {
       issuer: configuration.issuer,
       audience: configuration.audience,
       algorithms: ["RS256"],

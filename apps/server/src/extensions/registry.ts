@@ -61,7 +61,7 @@ export interface PluginCatalogEntryV1 extends RegisteredPluginArtifact {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function requireRole(principal: AuthenticatedPrincipal, roles: readonly RegistryRole[], correlationId: string): void {
-  if (!principal.organizationRoles.some((role) => roles.includes(role))) {
+  if (!roles.some((role) => principal.organizationRoles.includes(role))) {
     throw authorizationError("PERMISSION_DENIED", `One of these Organization Roles is required: ${roles.join(", ")}.`, correlationId);
   }
 }

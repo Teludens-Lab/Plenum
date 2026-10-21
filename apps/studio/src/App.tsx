@@ -39,6 +39,8 @@ export function App() {
   const client = useMemo(() => projectId === null ? null : new StudioCollaborationClient(projectId), [projectId]);
   const [state, setState] = useState(initialState);
   const [publishing, setPublishing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [freezeId, setFreezeId] = useState("");
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export function App() {
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch(`/v1/projects/${projectId}/publish`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        freezeId,
         releaseLabel: form.get("releaseLabel"), semanticVersion: form.get("semanticVersion"), methodologyVersion: "1.3.1",
         releaseNotes: form.get("releaseNotes"), warningsAcknowledged: form.get("warningsAcknowledged") === "on",
         classificationReviewId: form.get("classificationReviewId"), accessibilityReviewStatus: "reviewed",
@@ -69,6 +72,43 @@ export function App() {
       setPublishMessage(error instanceof Error ? error.message : "Publication failed.");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function freezeForReview(): Promise<void> {
+    if (projectId === null) return;
+    setReviewing(true);
+    setPublishMessage(null);
+    try {
+      const response = await fetch(`/v1/projects/${projectId}/publication-freezes`, { method: "POST" });
+      const body = await response.json() as { freezeId?: string; error?: { message?: string } };
+      if (!response.ok || body.freezeId === undefined) throw new Error(body.error?.message ?? "The Draft could not be frozen.");
+      setFreezeId(body.freezeId);
+      setPublishMessage(`Freeze ${body.freezeId} is ready for Reviewer approval.`);
+    } catch (error) {
+      setPublishMessage(error instanceof Error ? error.message : "The Draft could not be frozen.");
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  async function approveFreeze(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (projectId === null || freezeId === "") return;
+    setReviewing(true);
+    setPublishMessage(null);
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(`/v1/projects/${projectId}/publication-freezes/${freezeId}/approve`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notes: form.get("reviewNotes") })
+      });
+      const body = await response.json() as { reviewerPersonId?: string; error?: { message?: string } };
+      if (!response.ok || body.reviewerPersonId === undefined) throw new Error(body.error?.message ?? "The review could not be recorded.");
+      setPublishMessage(`Reviewer approval recorded for freeze ${freezeId}.`);
+    } catch (error) {
+      setPublishMessage(error instanceof Error ? error.message : "The review could not be recorded.");
+    } finally {
+      setReviewing(false);
     }
   }
 
@@ -91,9 +131,18 @@ export function App() {
           {state.validation === null ? <p>Waiting for the authoritative validation report.</p> : state.validation.issues.length === 0 ? <p>No validation errors were found.</p> :
             <ul className="issue-list">{state.validation.issues.map((issue) => { const source = sourceId(issue.path); return <li key={`${issue.code}:${issue.path}`}><a href={`#${source}`} onClick={() => revealIssue(source)}>{issue.path}</a><span>{issue.message}</span></li>; })}</ul>}
         </section>
-        <form className="card publish-card" onSubmit={(event) => void publish(event)} aria-labelledby="publish-title">
-          <h2 id="publish-title">Freeze and publish</h2>
-          <p className="hint">Publication freezes the exact synchronized state vector. Edits arriving afterward remain in the next Draft.</p>
+        <section className="card publish-card" aria-labelledby="publish-title">
+          <h2 id="publish-title">Review and publish</h2>
+          <p className="hint">A Publisher freezes the exact synchronized state, a Reviewer approves that freeze, and a Publisher publishes it. Later edits remain in the next Draft.</p>
+          <button className="btn-secondary" type="button" disabled={!state.connected || !valid || state.unsynchronizedChanges > 0 || reviewing} onClick={() => void freezeForReview()}>{reviewing ? "Working…" : "Freeze for review"}</button>
+          <div className="field"><label htmlFor="freeze-id">Publication Freeze ID</label><input id="freeze-id" value={freezeId} onChange={(event) => setFreezeId(event.target.value)} required pattern="[0-9a-fA-F-]{36}" aria-describedby="freeze-help" /><p className="hint" id="freeze-help">Reviewers may paste a Freeze ID supplied by the Publisher.</p></div>
+          <form onSubmit={(event) => void approveFreeze(event)} aria-labelledby="review-title">
+            <h3 id="review-title">Reviewer approval</h3>
+            <div className="field"><label htmlFor="review-notes">Methodology review notes</label><textarea id="review-notes" name="reviewNotes" required rows={3} /></div>
+            <button className="btn-secondary" type="submit" disabled={freezeId === "" || reviewing}>{reviewing ? "Working…" : "Approve freeze"}</button>
+          </form>
+          <form onSubmit={(event) => void publish(event)} aria-labelledby="release-title">
+          <h3 id="release-title">Release details</h3>
           <div className="field"><label htmlFor="release-label">Release label</label><input id="release-label" name="releaseLabel" required maxLength={200} defaultValue="Collaborative Draft" /></div>
           <div className="field"><label htmlFor="semantic-version">Semantic version</label><input id="semantic-version" name="semanticVersion" required pattern="\d+\.\d+\.\d+" defaultValue="1.0.0" /></div>
           <div className="field"><label htmlFor="release-notes">Release notes</label><textarea id="release-notes" name="releaseNotes" required rows={4} /></div>
@@ -101,8 +150,9 @@ export function App() {
           <div className="field"><label htmlFor="retention-policy">Retention policy ID</label><input id="retention-policy" name="retentionPolicyId" required /></div>
           <div className="field"><label htmlFor="approval-notes">Approval notes</label><textarea id="approval-notes" name="approvalNotes" required rows={3} /></div>
           <label className="choice"><input type="checkbox" name="warningsAcknowledged" />I acknowledge the validation warnings.</label>
-          <button className="btn-primary" type="submit" disabled={!state.connected || !valid || state.unsynchronizedChanges > 0 || publishing}>{publishing ? "Publishing…" : "Freeze and publish"}</button>
-        </form>
+          <button className="btn-primary" type="submit" disabled={!state.connected || !valid || state.unsynchronizedChanges > 0 || freezeId === "" || publishing}>{publishing ? "Publishing…" : "Publish approved freeze"}</button>
+          </form>
+        </section>
       </div>
     </main>
   </>;

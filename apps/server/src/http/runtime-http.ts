@@ -44,7 +44,8 @@ import { getPluginCatalog } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
-import { getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
+import { exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
+import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -259,6 +260,43 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         const projectId = pathId(match[1], correlationId);
         send(response, 201, await publishCollaborativeDraft(options.pool, options.objectStore, principal, projectId,
           collaborativePublishInput(await readBody(request, correlationId), correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publication-freezes$/u))) {
+        send(response, 201, await freezeCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publication-freezes\/([^/]+)\/approve$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "notes") || typeof body.notes !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "Publication review notes are required.", correlationId);
+        }
+        send(response, 201, await approvePublicationFreeze(options.pool, principal,
+          pathId(match[1], correlationId), pathId(match[2], correlationId), body.notes, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/research-access-grants$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["analystPersonId", "protocolReference", "expiresAt"].includes(field)) ||
+            typeof body.analystPersonId !== "string" || typeof body.protocolReference !== "string" || typeof body.expiresAt !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "Research access grant fields are invalid.", correlationId);
+        }
+        send(response, 201, await grantResearchAccess(options.pool, principal, {
+          projectId: pathId(match[1], correlationId), analystPersonId: body.analystPersonId,
+          protocolReference: body.protocolReference, expiresAt: new Date(body.expiresAt)
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "DELETE" && (match = url.pathname.match(/^\/v1\/research-access-grants\/([^/]+)$/u))) {
+        await revokeResearchAccess(options.pool, principal, pathId(match[1], correlationId), correlationId);
+        send(response, 200, { revoked: true });
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/research-evidence-index$/u))) {
+        const afterSequence = url.searchParams.get("afterSequence");
+        const limit = url.searchParams.get("limit");
+        send(response, 200, await exportResearchEvidenceIndex(options.pool, principal, pathId(match[1], correlationId), correlationId,
+          afterSequence === null ? 0 : Number(afterSequence), limit === null ? 1_000 : Number(limit)));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-projection$/u))) {

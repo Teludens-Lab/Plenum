@@ -44,4 +44,4 @@ After live use, stop new joining/open transitions and forward-fix; do not drop a
 
 Studio save-state semantics and Participant Runtime `local_pending` behavior are unchanged. Operator staffing/open mutations require the live Session Authority and are not queued offline.
 
-`ADR-012`, `OPEN-007`, and `OPEN-025` remain explicitly unratified or unresolved. Identity federation variations under `OPEN-007` still block release approval. Formal security review, supported Node 24 browser repetition, load/capacity, production deployment, backup/restore, and manual assistive-technology review were not performed by PS-340.
+ADR-012 Security Owner sign-off and the OPEN-007 and OPEN-025 resolutions were confirmed on 2026-10-21 after this implementation evidence was produced. A subsequent follow-up implements the Keycloak profile contract and DEC-61 Reviewer and Research Analyst workflows through migration `018_identity_roles_and_governance.sql`. Formal implementation security review, supported Node 24 browser repetition, load/capacity, production deployment, backup/restore, and manual assistive-technology review were not performed by PS-340.

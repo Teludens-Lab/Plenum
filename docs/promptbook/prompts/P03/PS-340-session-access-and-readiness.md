@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/src/server.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-012`, `OPEN-007`, `OPEN-025`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -125,7 +125,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Attribution survives reassignment
 - Guest expiry and revocation are tested
 
-The approval gate is: Identity federation variations remain OPEN-007. A task may be implementation-complete without being release-approved.
+The approval gate is: OPEN-007 resolved 2026-10-21; production identity-profile and DEC-61 role implementation evidence remain separate gates. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -154,8 +154,8 @@ Verification:
 Compatibility / migrations:
 - Adds 017 session access.
 Risks / follow-up:
-- Federation variants remain OPEN-007.
-Refs: PS-340, REQ-069, DEC-44
+- Production identity profiles and DEC-61 roles remain separate implementation work.
+Refs: PS-340, REQ-069, DEC-61
 ```
 
 Proposed PR description:
@@ -166,4 +166,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-007 or OPEN-025 resolves; Guest policy changes; Seat topology contract changes.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: DEC-61 role implementation begins; Guest policy changes; Seat topology contract changes.

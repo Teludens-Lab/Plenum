@@ -24,7 +24,8 @@ const migrations = [
   "apps/server/migrations/014_comms_voice_core.sql",
   "apps/server/migrations/015_collaboration_runtime.sql",
   "apps/server/migrations/016_voice_consent_assets.sql",
-  "apps/server/migrations/017_session_access.sql"
+  "apps/server/migrations/017_session_access.sql",
+  "apps/server/migrations/018_identity_roles_and_governance.sql"
 ];
 
 export default async function globalSetup() {
@@ -67,7 +68,7 @@ export default async function globalSetup() {
     );
     await owner.query(
       `INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES
-       ($1,$2,'designer'),($1,$3,'designer'),($1,$4,'designer'),($1,$4,'publisher')`,
+       ($1,$2,'designer'),($1,$3,'designer'),($1,$4,'designer'),($1,$4,'publisher'),($1,$4,'reviewer')`,
       [fixture.organizationId, fixture.people.designerA, fixture.people.designerB, fixture.people.publisher]
     );
     await owner.query(

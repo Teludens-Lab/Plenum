@@ -67,9 +67,15 @@ import {
   getPollResult,
   issueMediaCredential,
   applyStudioUpdate,
+  assertStudioSyncAccess,
   getCollaborativeDraft,
   getRolePreview,
+  approvePublicationFreeze,
+  exportResearchEvidenceIndex,
+  freezeCollaborativeDraft,
+  grantResearchAccess,
   publishCollaborativeDraft,
+  revokeResearchAccess,
   requestFloor,
   releaseFloor,
   submitPluginArtifact,
@@ -88,6 +94,7 @@ const ids = {
   personC: "20000000-0000-4000-8000-000000000003",
   personD: "20000000-0000-4000-8000-000000000004",
   personE: "20000000-0000-4000-8000-000000000005",
+  personF: "20000000-0000-4000-8000-000000000006",
   projectA: "30000000-0000-4000-8000-000000000001",
   projectB: "30000000-0000-4000-8000-000000000002",
   revisionA: "40000000-0000-4000-8000-000000000001",
@@ -151,6 +158,15 @@ const principalE = {
   expiresAt: new Date("2099-01-01T00:00:00.000Z")
 };
 
+const principalF = {
+  authenticationSessionId: "e1000000-0000-4000-8000-000000000006",
+  principalId: ids.personF,
+  organizationId: ids.orgA,
+  organizationRoles: ["reviewer"],
+  authenticationStrength: "mfa",
+  expiresAt: new Date("2099-01-01T00:00:00.000Z")
+};
+
 const releaseMaterialization = {
   coreDesign: {
     pluginBindings: [{
@@ -196,7 +212,8 @@ async function applyMigrations() {
     "apps/server/migrations/014_comms_voice_core.sql",
     "apps/server/migrations/015_collaboration_runtime.sql",
     "apps/server/migrations/016_voice_consent_assets.sql",
-    "apps/server/migrations/017_session_access.sql"
+    "apps/server/migrations/017_session_access.sql",
+    "apps/server/migrations/018_identity_roles_and_governance.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -210,8 +227,8 @@ async function seed() {
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
-    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D'),($5,'Designer E')", [ids.personA, ids.personB, ids.personC, ids.personD, ids.personE]);
-    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin'),($3,$6,'designer'),($3,$6,'publisher'),($1,$5,'designer'),($1,$6,'designer'),($1,$6,'publisher'),($1,$7,'designer')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD, ids.personE]);
+    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D'),($5,'Designer E'),($6,'Reviewer F')", [ids.personA, ids.personB, ids.personC, ids.personD, ids.personE, ids.personF]);
+    await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin'),($3,$6,'designer'),($3,$6,'publisher'),($1,$5,'designer'),($1,$5,'research_analyst'),($1,$6,'admin'),($1,$6,'designer'),($1,$6,'publisher'),($1,$7,'designer'),($1,$8,'reviewer')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD, ids.personE, ids.personF]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
     await client.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
@@ -244,6 +261,7 @@ async function seed() {
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2099-01-01T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','publisher-d','mfa','2099-01-01T00:00:00.000Z')", [principalD.authenticationSessionId, ids.orgA, ids.personD]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','designer-e','mfa','2099-01-01T00:00:00.000Z')", [principalE.authenticationSessionId, ids.orgA, ids.personE]);
+    await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','reviewer-f','mfa','2099-01-01T00:00:00.000Z')", [principalF.authenticationSessionId, ids.orgA, ids.personF]);
     await client.query("INSERT INTO sync.projection_grants(id,organization_id,session_id,participant_id,policy_revision,access_revision,expires_at) VALUES ('d0000000-0000-4000-8000-000000000001',$1,$2,$3,'policy-decision-v1',1,now()+interval '1 hour')", [ids.orgA, ids.sessionA, ids.participantA]);
     await client.query("COMMIT");
   } catch (error) {
@@ -1612,6 +1630,11 @@ test("PS-300 SYNC-01 SYNC-02 AC-01 concurrent offline edits converge byte-for-by
 });
 
 test("PS-300 AC-02 publication freezes one valid state vector and later edits remain in the next Draft", async () => {
+  await getCollaborativeDraft(app, principalF, ids.projectA, randomUUID());
+  await assert.rejects(
+    assertStudioSyncAccess(app, principalF, ids.projectA, randomUUID()),
+    (error) => error.envelope?.error?.code === "ACCESS_REVOKED"
+  );
   const invalid = await getCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
   const repairedDocument = collaborativeDocument(invalid.update);
   const workflows = repairedDocument.getMap("draft").get("coreDesign").get("workflows");
@@ -1632,7 +1655,18 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
     get: objectStore.get.bind(objectStore),
     deleteIfDigest: objectStore.deleteIfDigest.bind(objectStore)
   };
+  const frozen = await freezeCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
+  await assert.rejects(
+    publishCollaborativeDraft(app, delayedStore, principalD, ids.projectA, {
+      freezeId: frozen.freezeId, releaseLabel: "Unreviewed", semanticVersion: "2.0.0", methodologyVersion: "1.3.1",
+      releaseNotes: "must fail", warningsAcknowledged: true, classificationReviewId: "class-review",
+      accessibilityReviewStatus: "reviewed", retentionPolicyId: "standard", approvalNotes: "synthetic test"
+    }, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED" && error.envelope.error.details?.freezeId === frozen.freezeId
+  );
+  await approvePublicationFreeze(app, principalF, ids.projectA, frozen.freezeId, "Methodology reviewed.", randomUUID());
   const publishing = publishCollaborativeDraft(app, delayedStore, principalD, ids.projectA, {
+    freezeId: frozen.freezeId,
     releaseLabel: "Frozen collaboration proof", semanticVersion: "2.0.0", methodologyVersion: "1.3.1",
     releaseNotes: "PS-300 publication fence proof", warningsAcknowledged: true, classificationReviewId: "class-review",
     accessibilityReviewStatus: "reviewed", retentionPolicyId: "standard", approvalNotes: "synthetic test"
@@ -1677,5 +1711,41 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
     applyStudioUpdate(app, principalE, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
       expectedGeneration: nextDraft.generation, update: rateLimitedUpdate }, randomUUID()),
     (error) => error.envelope?.error?.code === "CAPABILITY_UNAVAILABLE"
+  );
+});
+
+test("DEC-61 Research Analyst exports only a granted, PII-free Evidence index", async () => {
+  const analyst = { ...principalC, organizationRoles: ["research_analyst"] };
+  await assert.rejects(
+    owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'invented_role')", [ids.orgA, ids.personC]),
+    /memberships_organization_role_check/iu
+  );
+  await assert.rejects(
+    exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await assert.rejects(
+    grantResearchAccess(app, analyst, {
+      projectId: ids.projectA, analystPersonId: ids.personC, protocolReference: "PROTO-DENIED",
+      expiresAt: new Date("2098-01-01T00:00:00.000Z")
+    }, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  const grant = await grantResearchAccess(app, principalD, {
+    projectId: ids.projectA,
+    analystPersonId: ids.personC,
+    protocolReference: "PROTO-SYNTHETIC-001",
+    expiresAt: new Date("2098-01-01T00:00:00.000Z")
+  }, randomUUID());
+  const exported = await exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID(), 0, 10,
+    new Date("2026-10-21T12:00:00.000Z"));
+  assert.equal(exported.protocolReference, "PROTO-SYNTHETIC-001");
+  assert.ok(exported.events.length > 0);
+  assert.equal("body" in exported.events[0], false);
+  assert.equal("actorPersonId" in exported.events[0], false);
+  await revokeResearchAccess(app, principalD, grant.grantId, randomUUID());
+  await assert.rejects(
+    exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
   );
 });

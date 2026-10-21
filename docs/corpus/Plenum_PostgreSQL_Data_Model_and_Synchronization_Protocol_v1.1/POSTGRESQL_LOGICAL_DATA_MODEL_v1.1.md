@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | PGLDM |
-| Version | 1.1.1 |
-| Date | 2026-10-17 |
+| Version | 1.1.2 |
+| Date | 2026-10-21 |
 | Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001 to ADR-005 and ADR-014 to ADR-016; named specialist sign-offs remain required. OPEN-002 is resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -61,7 +61,7 @@ Status: **Implemented** (in migrations 001–004 and exercised by tests), **Sche
 |---|---|---|
 | organizations | id, name | Implemented |
 | persons | id, display_name | Implemented |
-| memberships | (organization_id, person_id, organization_role ∈ admin, designer, publisher, operator) | Implemented (DEC-44) |
+| memberships | (organization_id, person_id, organization_role ∈ admin, designer, publisher, operator; reviewer and research_analyst approved by DEC-61) | Implemented four-role baseline; DEC-61 migration pending |
 | federated_identities | person_id, issuer, subject, provider_type, last_authenticated_at | Specified (ADR-012) |
 | guest_identities | id, organization_id, session_id, display_name, expires_at, revoked_at | Specified |
 | display_principals | id, organization_id, session_id, interface_profile_id, classification_ceiling, credential_rotated_at, revoked_at | Specified |
@@ -278,6 +278,7 @@ PostgreSQL minor version pinning and hosting (ADR-009); RPO and RTO (OPEN-017); 
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.2 | 2026-10-21 | Recorded DEC-61 Reviewer and Research Analyst roles and the explicit migration gap from the implemented four-role constraint. |
 | 1.1.1 | 2026-10-17 | Added `voting`, `comms` and `extension` schemas (ADR-016) with entity catalogs §4.7 to §4.9 and DB-11 to DB-13. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms; added persons, Organization Role memberships and seat assignments (DEC-44); moved Release-defined identifiers out of `CHECK` constraints (DEC-45); added project-consistency foreign keys, application role, append-only triggers and corrected row-level security; recorded rejected and reconciliation receipts with evidence (DEC-43); split checkpoint storage into batches, signatures and anchors; replaced inline SQL with the tested migrations 001–004; added entity catalog with implementation status and acceptance test status. |
 | 1.0.0 | 2026-10-17 | Initial proposal (archived). |

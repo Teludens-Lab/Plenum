@@ -1,6 +1,6 @@
 export const POLICY_DECISION_VERSION = "policy-decision-v1";
 
-export type OrganizationRole = "admin" | "designer" | "publisher" | "operator";
+export type OrganizationRole = "admin" | "designer" | "publisher" | "operator" | "reviewer" | "research_analyst";
 export type DataClassification = "public" | "internal" | "confidential" | "restricted";
 
 export interface PolicyContext {

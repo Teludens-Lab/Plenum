@@ -28,7 +28,7 @@ Observed source evidence:
 - references/plenum-runtime-slice/src/db.mjs
 - references/plenum-runtime-slice/migrations/004_security.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-012`, `OPEN-007`, `OPEN-025`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -129,7 +129,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Demo identity remains confined to the retained reference slice
 - No raw claims reach domain authorization
 
-The approval gate is: Security Owner approval before production identity use. A task may be implementation-complete without being release-approved.
+The approval gate is: ADR-012 Security Owner sign-off completed 2026-10-21; production profile evidence remains required. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -158,7 +158,7 @@ Verification:
 Compatibility / migrations:
 - Adds 005 identity context tables.
 Risks / follow-up:
-- Federation variants remain OPEN-007.
+- Production deployment profiles remain PS-530 work.
 Refs: PS-110, REQ-045, ADR-015
 ```
 
@@ -170,4 +170,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-012 or ADR-015 changes; OPEN-007 resolves; New principal type is approved.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-012 or ADR-015 changes; DEC-61 role implementation begins; Production identity profile work begins.

@@ -823,7 +823,12 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await first.page.getByLabel("Retention policy ID", { exact: true }).fill("standard-retention");
     await first.page.getByLabel("Approval notes").fill("Synthetic browser approval.");
     await first.page.getByLabel("I acknowledge the validation warnings.").check();
-    await first.page.getByRole("button", { name: "Freeze and publish" }).click();
+    await first.page.getByRole("button", { name: "Freeze for review" }).click();
+    await expect(first.page.getByText(/is ready for Reviewer approval/u)).toBeVisible();
+    await first.page.getByLabel("Methodology review notes").fill("Synthetic methodology review.");
+    await first.page.getByRole("button", { name: "Approve freeze" }).click();
+    await expect(first.page.getByText(/Reviewer approval recorded/u)).toBeVisible();
+    await first.page.getByRole("button", { name: "Publish approved freeze" }).click();
     await expect(first.page.getByText(/Published release/u)).toBeVisible({ timeout: 20_000 });
     await expect(first.page.getByText("Save state: published")).toBeVisible({ timeout: 20_000 });
 

@@ -9,6 +9,7 @@ export * from "./identity/oidc.js";
 export * from "./identity/login.js";
 export * from "./identity/context.js";
 export * from "./access/reassignment.js";
+export * from "./runtime/access/onboarding.js";
 export * from "./runtime/commands/processor.js";
 export * from "./runtime/artifact-workflow.js";
 export * from "./runtime/information-flow.js";

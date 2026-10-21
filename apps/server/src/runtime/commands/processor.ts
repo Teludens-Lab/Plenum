@@ -36,6 +36,40 @@ export interface ProcessCommandInput {
   lockAggregateAndExecute: (input: CommandExecutionContext) => Promise<CommandDecision>;
 }
 
+export interface PrincipalSessionCommandContext {
+  principalId: string;
+  organizationId: string;
+  organizationRoles: string[];
+  sessionId: string;
+  deviceId: string;
+  authorityEpoch: number;
+}
+
+export interface ProcessPrincipalCommandInput {
+  pool: Pool;
+  context: PrincipalSessionCommandContext;
+  command: CommandEnvelopeV1;
+  correlationId: string;
+  deploymentId: string;
+  lockSessionAndExecute: (input: {
+    client: PoolClient;
+    context: PrincipalSessionCommandContext;
+    command: CommandEnvelopeV1;
+    activeReleaseId: string;
+    sessionStatus: string;
+  }) => Promise<CommandDecision>;
+}
+
+type RecordedCommandContext = {
+  principalId: string;
+  organizationId: string;
+  sessionId: string;
+  deviceId?: string;
+  participantId?: string;
+  activeSessionRoleId?: string;
+  authorityEpoch: number;
+};
+
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export function validateCommandEnvelope(command: CommandEnvelopeV1, correlationId: string): void {
@@ -111,7 +145,7 @@ async function allocateEvidenceSequence(client: PoolClient, organizationId: stri
 
 async function recordOutcome(
   client: PoolClient,
-  input: Omit<ProcessCommandInput, "pool" | "lockAggregateAndExecute">,
+  input: { context: RecordedCommandContext; command: CommandEnvelopeV1; correlationId: string; deploymentId: string },
   digest: string,
   decision: CommandDecision,
   activeReleaseId: string
@@ -129,7 +163,7 @@ async function recordOutcome(
     operationType: command.operationType,
     aggregateId: command.aggregateId,
     errorCode,
-    activeSessionRoleId: context.activeSessionRoleId
+    activeSessionRoleId: context.activeSessionRoleId ?? null
   };
   const sequence = await allocateEvidenceSequence(client, context.organizationId, context.sessionId);
   const eventId = randomUUID();
@@ -140,7 +174,7 @@ async function recordOutcome(
         correlation_id, causation_id, aggregate_id, aggregate_version, occurred_at)
      VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11::jsonb,$12,$6,$13,$14,transaction_timestamp())`,
     [eventId, context.organizationId, context.sessionId, sequence, eventType, command.commandId,
-      context.principalId, context.participantId, accepted ? command.governingReleaseId : activeReleaseId, context.authorityEpoch,
+      context.principalId, context.participantId ?? null, accepted ? command.governingReleaseId : activeReleaseId, context.authorityEpoch,
       JSON.stringify(eventPayload), correlationId, command.aggregateId, aggregateVersion]
   );
   await client.query(
@@ -151,7 +185,7 @@ async function recordOutcome(
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
              transaction_timestamp(),$17,$18)`,
     [randomUUID(), context.organizationId, context.sessionId, command.commandId, digest,
-      command.deviceId, context.principalId, context.participantId, context.activeSessionRoleId,
+      command.deviceId, context.principalId, context.participantId ?? null, context.activeSessionRoleId ?? null,
       context.authorityEpoch, command.operationType, command.aggregateId, decision.status,
       aggregateVersion, sequence, errorCode, correlationId, message]
   );
@@ -183,6 +217,56 @@ async function recordOutcome(
   }
   return { commandId: command.commandId, status: decision.status, aggregateVersion,
     evidenceSequence: sequence, errorCode, message, replayed: false };
+}
+
+/** Records pre-admission and Session Operator Commands without inventing a Participant Seat. */
+export async function processPrincipalSessionCommand(input: ProcessPrincipalCommandInput): Promise<CommandReceiptV1> {
+  const { pool, context, command, correlationId, deploymentId } = input;
+  validateCommandEnvelope(command, correlationId);
+  if (command.deviceId !== context.deviceId) {
+    throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
+  }
+  const digest = commandDigest(command);
+  return withOrganizationTransaction(pool, context.organizationId, async (client) => {
+    const authority = await client.query<{ deployment_id: string; authority_epoch: string; status: string }>(
+      `SELECT deployment_id,authority_epoch,status FROM runtime.session_authorities
+        WHERE organization_id=$1 AND session_id=$2 FOR UPDATE`,
+      [context.organizationId, context.sessionId]
+    );
+    const authorityRow = authority.rows[0];
+    if (authorityRow === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Session was not found.", correlationId);
+    const prior = await previousReceipt(client, context.sessionId, command.commandId);
+    if (prior !== undefined) {
+      if (prior.payloadSha256 !== digest || prior.actorPersonId !== context.principalId) {
+        throw authorizationError("IDEMPOTENCY_COLLISION", "The Command ID was already used.", correlationId);
+      }
+      const { payloadSha256: _digest, actorPersonId: _actor, ...receipt } = prior;
+      return receipt;
+    }
+    if (authorityRow.deployment_id !== deploymentId || Number(authorityRow.authority_epoch) !== context.authorityEpoch || authorityRow.status !== "active") {
+      throw authorizationError("AUTHORITY_UNAVAILABLE", "This Deployment is not the Session Authority.", correlationId);
+    }
+    const device = await client.query(
+      "SELECT 1 FROM sync.devices WHERE organization_id=$1 AND id=$2 AND person_id=$3 AND revoked_at IS NULL",
+      [context.organizationId, command.deviceId, context.principalId]
+    );
+    if (device.rowCount !== 1) throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
+    const session = await client.query<{ status: string; active_release_id: string }>(
+      `SELECT session.status,activation.release_id AS active_release_id
+         FROM runtime.sessions session
+         JOIN LATERAL (SELECT release_id FROM runtime.release_activations
+           WHERE organization_id=session.organization_id AND session_id=session.id
+           ORDER BY activation_sequence DESC LIMIT 1) activation ON true
+        WHERE session.organization_id=$1 AND session.id=$2 FOR UPDATE OF session`,
+      [context.organizationId, context.sessionId]
+    );
+    const row = session.rows[0];
+    if (row === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Session was not found.", correlationId);
+    const decision = command.governingReleaseId !== row.active_release_id
+      ? { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "The governing Release changed." } as const
+      : await input.lockSessionAndExecute({ client, context, command, activeReleaseId: row.active_release_id, sessionStatus: row.status });
+    return recordOutcome(client, input, digest, decision, row.active_release_id);
+  });
 }
 
 export async function processSessionCommand(input: ProcessCommandInput): Promise<CommandReceiptV1> {

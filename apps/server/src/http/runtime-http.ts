@@ -20,6 +20,25 @@ import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
+import {
+  assignParticipant,
+  activateDisplayPrincipal,
+  claimSeat,
+  configureSessionAccess,
+  confirmReadiness,
+  createGuestIdentity,
+  decideJoinRequest,
+  getReadiness,
+  importRoster,
+  issueInvitation,
+  markSessionReady,
+  openSession,
+  reassignSeat,
+  revokeSessionPrincipal,
+  resolveInvitationSession,
+  resolvePrincipalCommandContext,
+  submitJoinRequest
+} from "../runtime/access/onboarding.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 import { getPluginCatalog } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
@@ -83,6 +102,10 @@ function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
   if (["INVALID_ID", "INVALID_JSON"].includes(code)) return 400;
   if (["INVALID_COMMAND", "VALIDATION_FAILED", "REFERENCE_INVALID"].includes(code)) return 422;
   return 500;
+}
+
+function statusForReceipt(receipt: CommandReceiptV1): number {
+  return receipt.status === "accepted" ? 200 : statusFor(receipt.errorCode ?? "INTERNAL");
 }
 
 function send(response: ServerResponse, status: number, body: unknown): void {
@@ -246,6 +269,101 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           deviceId: deviceHeader(request, correlationId),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/readiness$/u))) {
+        send(response, 200, await getReadiness(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/invitations\/([^/]+)\/accept$/u))) {
+        const invitationToken = decodeURIComponent(match[1] ?? "");
+        const sessionId = await resolveInvitationSession(options.pool, principal, invitationToken, correlationId);
+        const submitted = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        const command = { ...submitted, payload: { ...submitted.payload, invitationToken } };
+        validateCommandEnvelope(command, correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await submitJoinRequest(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/(access\/configure|invitations|join-requests|roster-imports|participants|ready|open)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const operation = match[2];
+        const result = operation === "access/configure" ? await configureSessionAccess(options.pool, context, command, correlationId, options.deploymentId) :
+          operation === "invitations" ? await issueInvitation(options.pool, context, command, correlationId, options.deploymentId) :
+          operation === "join-requests" ? await submitJoinRequest(options.pool, context, command, correlationId, options.deploymentId) :
+          operation === "roster-imports" ? await importRoster(options.pool, context, command, correlationId, options.deploymentId) :
+          operation === "participants" ? await assignParticipant(options.pool, context, command, correlationId, options.deploymentId) :
+          operation === "ready" ? await markSessionReady(options.pool, context, command, correlationId, options.deploymentId) :
+          await openSession(options.pool, context, command, correlationId, options.deploymentId);
+        const receipt = "receipt" in result ? result.receipt : result;
+        send(response, statusForReceipt(receipt), result);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/join-requests\/([^/]+)\/(admit|reject)$/u))) {
+        const sessionId = pathId(match[1], correlationId), participantId = pathId(match[2], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.aggregateId !== participantId) throw authorizationError("VALIDATION_FAILED", "The Participant path and Command target differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await decideJoinRequest(options.pool, context, command, correlationId, options.deploymentId,
+          match[3] === "admit" ? "admit" : "reject");
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/seats\/([^/]+)\/claim$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.payload.seatId !== decodeURIComponent(match[2] ?? "")) throw authorizationError("VALIDATION_FAILED", "The Seat path and payload differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await claimSeat(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/seat-assignments\/([^/]+)\/reassign$/u))) {
+        const sessionId = pathId(match[1], correlationId), assignmentId = pathId(match[2], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.payload.previousSeatAssignmentId !== assignmentId) throw authorizationError("VALIDATION_FAILED", "The Seat Assignment path and payload differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await reassignSeat(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/readiness\/([^/]+)\/confirm$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.payload.checkKey !== decodeURIComponent(match[2] ?? "")) throw authorizationError("VALIDATION_FAILED", "The readiness path and payload differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await confirmReadiness(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/(guests|display-principals\/activate)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const result = match[2] === "guests"
+          ? await createGuestIdentity(options.pool, context, command, correlationId, options.deploymentId)
+          : await activateDisplayPrincipal(options.pool, context, command, correlationId, options.deploymentId);
+        const receipt = "receipt" in result ? result.receipt : result;
+        send(response, statusForReceipt(receipt), result);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/principals\/([^/]+)\/revoke$/u))) {
+        const sessionId = pathId(match[1], correlationId), principalId = pathId(match[2], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.aggregateId !== principalId) throw authorizationError("VALIDATION_FAILED", "The Principal path and Command target differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await revokeSessionPrincipal(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/polls$/u))) {

@@ -260,6 +260,16 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect((await forbidden.json()).errorCode).toBe("INVALID_TRANSITION");
     const unauthorizedOperator = await authorApi.get(`/v1/operator/sessions/${fixture.sessionId}`);
     expect(unauthorizedOperator.status()).toBe(403);
+    const unauthorizedReadiness = await authorApi.get(`/v1/sessions/${fixture.sessionId}/readiness`);
+    expect(unauthorizedReadiness.status()).toBe(403);
+    const anonymous = await browser.newContext();
+    const codeOnlyJoin = await anonymous.request.post(`/v1/sessions/${fixture.sessionId}/join-requests`, { data: {
+      commandId: crypto.randomUUID(), deviceId: crypto.randomUUID(), operationType: "join_request.submit",
+      aggregateId: crypto.randomUUID(), expectedAggregateVersion: 0, governingReleaseId: fixture.releaseId,
+      payload: { sessionCode: "code-alone-is-not-authority" }
+    } });
+    expect(codeOnlyJoin.status()).toBe(401);
+    await anonymous.close();
     const forbiddenStage = await authorApi.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
       commandId: crypto.randomUUID(), deviceId, operationType: "stage.start", aggregateId: fixture.sessionId,
       expectedAggregateVersion: 0, governingReleaseId: authorProjection.releaseId,
@@ -368,6 +378,11 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect((await participantProjection.json()).error.code).toBe("NOT_A_PARTICIPANT");
     await operator.page.goto(operatorUrl());
     await expect(operator.page.getByRole("heading", { level: 1, name: "Session control view" })).toBeVisible();
+    await expect(operator.page.getByRole("heading", { level: 2, name: "Session staffing" })).toBeVisible();
+    await expect(operator.page.getByText("No ambiguous roster rows.")).toBeVisible();
+    await expect(operator.page.getByRole("heading", { level: 2, name: "Operator readiness" })).toBeVisible();
+    await expect(operator.page.getByText("Current governing Release is pinned")).toBeVisible();
+    expect((await new AxeBuilder({ page: operator.page }).analyze()).violations).toEqual([]);
     await expect(operator.page.locator(".status-list li").filter({ hasText: "completed" })).toContainText("1");
     await expect(operator.page.getByText("artifact.accepted", { exact: true })).toBeVisible();
     await operator.page.screenshot({ path: `${evidenceRoot}/operator-accepted.png`, fullPage: true });
@@ -842,8 +857,10 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await stageCards.nth(1).getByRole("button", { name: "Earlier" }).click();
     const expectedStageIds = [stageIdsBefore[1], stageIdsBefore[0], ...stageIdsBefore.slice(2)];
     await expect.poll(() => stageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
+    await expect(first.page.getByText("Save state: saved on device")).toBeVisible();
+    await expect(first.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 20_000 });
     const secondStageCards = second.page.getByRole("region", { name: "Stages" }).locator("details[id^='stages-']");
-    await expect.poll(() => secondStageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
+    await expect.poll(() => secondStageCards.evaluateAll((items) => items.map(({ id }) => id)), { timeout: 20_000 }).toEqual(expectedStageIds);
     await Promise.all([first.context.close(), second.context.close()]);
   });
 

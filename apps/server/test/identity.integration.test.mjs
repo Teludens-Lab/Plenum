@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +16,12 @@ import {
 
 import {
   beginOidcLogin,
+  activateDisplayPrincipal,
+  claimSeat,
+  configureSessionAccess,
+  confirmReadiness,
+  createGuestIdentity,
+  decideJoinRequest,
   acceptPluginLicense,
   approvePluginArtifact,
   authorizePluginRun,
@@ -24,6 +30,7 @@ import {
   createDatabasePool,
   exportReleasePackage,
   getOperatorProjection,
+  getReadiness,
   getPluginCatalog,
   getRuntimeDeltas,
   getRuntimeSnapshot,
@@ -38,8 +45,18 @@ import {
   provisionPluginTrustRoot,
   registerPluginPublisher,
   reassignParticipant,
+  reassignSeat,
+  requireActiveGuest,
+  resolveInvitationSession,
+  resolvePrincipalCommandContext,
   resolveSessionAccessContext,
   revokeAuthenticationSession,
+  revokeSessionPrincipal,
+  importRoster,
+  issueInvitation,
+  markSessionReady,
+  openSession,
+  submitJoinRequest,
   revokePluginArtifact,
   submitRuntimeCommand,
   getEffectProposals,
@@ -89,6 +106,15 @@ const ids = {
   deviceC: "90000000-0000-4000-8000-000000000003",
   deploymentA: "a0000000-0000-4000-8000-000000000001",
   deploymentB: "a0000000-0000-4000-8000-000000000002"
+};
+
+const accessIds = {
+  project: "30000000-0000-4000-8000-000000000003",
+  revision: "40000000-0000-4000-8000-000000000003",
+  release: "50000000-0000-4000-8000-000000000003",
+  session: "60000000-0000-4000-8000-000000000003",
+  deviceD: "90000000-0000-4000-8000-000000000004",
+  deviceE: "90000000-0000-4000-8000-000000000005"
 };
 
 const owner = new Pool({ connectionString: databaseUrl, max: 1 });
@@ -169,7 +195,8 @@ async function applyMigrations() {
     "apps/server/migrations/013_voting_core.sql",
     "apps/server/migrations/014_comms_voice_core.sql",
     "apps/server/migrations/015_collaboration_runtime.sql",
-    "apps/server/migrations/016_voice_consent_assets.sql"
+    "apps/server/migrations/016_voice_consent_assets.sql",
+    "apps/server/migrations/017_session_access.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -296,6 +323,153 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
   );
 });
 
+test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignment and readiness", async () => {
+  const accessPolicy = {
+    joinMethods: ["invitation", "code_and_verified_email", "waiting_room", "open_seat_selection", "operator_assignment"],
+    guests: { allowed: true, requiredFields: ["displayName"], expiryHours: 2, includeInResearchExports: false, operatorApproval: true },
+    displays: [{ interfaceProfileId: "observer", classificationCeiling: "internal" }],
+    reassignment: { allowedBy: "operator", crossTeamAllowed: true, exposureAcknowledgementRequired: true },
+    readiness: [
+      { key: "permissions", label: "Permissions verified", blocking: true },
+      { key: "recovery", label: "Recovery rehearsed", blocking: true }
+    ]
+  };
+  const snapshot = { coreDesign: { accessPolicy, seats: [
+    { id: "blue-lead", name: "Blue lead", sessionRoleIds: ["lead"], teamId: "blue", minOccupancy: 1, maxOccupancy: 1, required: true, joinMode: "open_seat_selection" },
+    { id: "red-lead", name: "Red lead", sessionRoleIds: ["lead"], teamId: "red", minOccupancy: 0, maxOccupancy: 1, required: false, joinMode: "operator_assignment" }
+  ] } };
+  await owner.query("BEGIN");
+  try {
+    await owner.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'PS-340 access',$3)", [accessIds.project, ids.orgA, ids.personA]);
+    await owner.query(`INSERT INTO studio.definition_revisions
+      (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+      VALUES ($1,$2,$3,$4::jsonb,repeat('c',64),'1.3.1',$5)`, [accessIds.revision, ids.orgA, accessIds.project, JSON.stringify(snapshot), ids.personA]);
+    await owner.query(`INSERT INTO registry.releases
+      (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
+      VALUES ($1,$2,$3,$4,1,'PS-340 release','1.0.0','0.1.0',repeat('d',64),'fixture://ps-340',$5)`,
+      [accessIds.release, ids.orgA, accessIds.project, accessIds.revision, ids.personA]);
+    await owner.query("INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by) VALUES ($1,$2,$3,$4,'created',$5)",
+      [accessIds.session, ids.orgA, accessIds.project, accessIds.release, ids.personA]);
+    await owner.query("INSERT INTO runtime.session_authorities(session_id,organization_id,deployment_id,authority_epoch,status) VALUES ($1,$2,$3,1,'active')",
+      [accessIds.session, ids.orgA, ids.deploymentA]);
+    await owner.query(`INSERT INTO runtime.release_activations
+      (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+      VALUES (gen_random_uuid(),$1,$2,$3,$4,1,'{}',$5)`, [ids.orgA, accessIds.project, accessIds.session, accessIds.release, ids.personA]);
+    await owner.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)", [accessIds.session, ids.orgA]);
+    await owner.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3),($4,$2,$5)",
+      [accessIds.deviceD, ids.orgA, ids.personD, accessIds.deviceE, ids.personE]);
+    await owner.query("COMMIT");
+  } catch (error) { await owner.query("ROLLBACK"); throw error; }
+
+  const operator = await resolvePrincipalCommandContext(app, principal, accessIds.session, ids.deviceA, randomUUID());
+  const claimantD = await resolvePrincipalCommandContext(app, principalD, accessIds.session, accessIds.deviceD, randomUUID());
+  const claimantE = await resolvePrincipalCommandContext(app, principalE, accessIds.session, accessIds.deviceE, randomUUID());
+  const command = (context, operationType, aggregateId, payload = {}, expectedAggregateVersion = 0) => ({
+    commandId: randomUUID(), deviceId: context.deviceId, operationType, aggregateId, expectedAggregateVersion,
+    governingReleaseId: accessIds.release, payload
+  });
+
+  const configured = await configureSessionAccess(app, operator,
+    command(operator, "session.configure", accessIds.session, { sessionCode: "verified-code" }), randomUUID(), ids.deploymentA);
+  assert.equal(configured.status, "accepted");
+
+  const invitationId = randomUUID();
+  const issued = await issueInvitation(app, operator,
+    command(operator, "invitation.issue", invitationId, { recipientPersonId: ids.personD, seatId: "blue-lead", expiresInHours: 1 }), randomUUID(), ids.deploymentA);
+  assert.equal(issued.receipt.status, "accepted");
+  assert.ok(issued.invitationToken);
+  assert.equal(await resolveInvitationSession(app, principalD, issued.invitationToken, randomUUID()), accessIds.session);
+  const storedInvitation = await owner.query("SELECT token_sha256 FROM identity.session_invitations WHERE id=$1", [invitationId]);
+  assert.equal(storedInvitation.rows[0].token_sha256, createHash("sha256").update(issued.invitationToken).digest("hex"));
+  assert.notEqual(storedInvitation.rows[0].token_sha256, issued.invitationToken);
+  const joinCommand = command(claimantD, "join_request.submit", randomUUID(), { invitationToken: issued.invitationToken });
+  const joined = await submitJoinRequest(app, claimantD, joinCommand, randomUUID(), ids.deploymentA);
+  assert.equal(joined.status, "accepted");
+  assert.equal((await submitJoinRequest(app, claimantD, joinCommand, randomUUID(), ids.deploymentA)).replayed, true);
+  assert.equal((await claimSeat(app, claimantD,
+    command(claimantD, "seat.claim", randomUUID(), { seatId: "blue-lead", sessionRoleId: "lead" }), randomUUID(), ids.deploymentA)).errorCode, "PERMISSION_DENIED");
+  assert.equal((await decideJoinRequest(app, operator,
+    command(operator, "participant.admit", ids.personD), randomUUID(), ids.deploymentA, "admit")).status, "accepted");
+  const codeOnly = await submitJoinRequest(app, claimantE,
+    command(claimantE, "join_request.submit", randomUUID(), {}), randomUUID(), ids.deploymentA);
+  assert.deepEqual([codeOnly.status, codeOnly.errorCode], ["rejected", "PERMISSION_DENIED"]);
+  const issuedE = await issueInvitation(app, operator,
+    command(operator, "invitation.issue", randomUUID(), { recipientPersonId: ids.personE, expiresInHours: 1 }), randomUUID(), ids.deploymentA);
+  assert.ok(issuedE.invitationToken);
+  assert.equal((await submitJoinRequest(app, claimantE,
+    command(claimantE, "join_request.submit", randomUUID(), { invitationToken: issuedE.invitationToken }), randomUUID(), ids.deploymentA)).status, "accepted");
+  assert.equal((await decideJoinRequest(app, operator,
+    command(operator, "participant.admit", ids.personE), randomUUID(), ids.deploymentA, "admit")).status, "accepted");
+  assert.equal((await issueInvitation(app, claimantD,
+    command(claimantD, "invitation.issue", randomUUID(), { expiresInHours: 1 }), randomUUID(), ids.deploymentA)).receipt.errorCode, "PERMISSION_DENIED");
+  const expiredInvitationId = randomUUID();
+  const expiredInvitation = await issueInvitation(app, operator,
+    command(operator, "invitation.issue", expiredInvitationId, { recipientPersonId: ids.personD, expiresInHours: 1 }), randomUUID(), ids.deploymentA);
+  await owner.query("UPDATE identity.session_invitations SET expires_at=transaction_timestamp()-interval '1 second' WHERE id=$1", [expiredInvitationId]);
+  assert.equal((await submitJoinRequest(app, claimantD,
+    command(claimantD, "join_request.submit", randomUUID(), { invitationToken: expiredInvitation.invitationToken }), randomUUID(), ids.deploymentA)).errorCode,
+  "PERMISSION_DENIED");
+
+  const importId = randomUUID();
+  const roster = await importRoster(app, operator, command(operator, "roster.import", importId, { rows: [
+    { personId: ids.personD, teamId: "blue", sessionRoleId: "lead", seatId: "blue-lead" },
+    { teamId: "blue", sessionRoleId: "lead", seatId: "blue-lead" }
+  ] }), randomUUID(), ids.deploymentA);
+  assert.equal(roster.reviewCount, 1);
+  const reviewQueue = await owner.query("SELECT status,review_reasons FROM runtime.roster_import_rows WHERE import_id=$1 ORDER BY row_number", [importId]);
+  assert.deepEqual(reviewQueue.rows.map(({ status }) => status), ["ready", "review"]);
+  assert.ok(reviewQueue.rows[1].review_reasons.includes("person_unresolved"));
+
+  const claims = await Promise.all([
+    claimSeat(app, claimantD, command(claimantD, "seat.claim", randomUUID(), { seatId: "blue-lead", sessionRoleId: "lead" }), randomUUID(), ids.deploymentA),
+    claimSeat(app, claimantE, command(claimantE, "seat.claim", randomUUID(), { seatId: "blue-lead", sessionRoleId: "lead" }), randomUUID(), ids.deploymentA)
+  ]);
+  assert.equal(claims.filter(({ status }) => status === "accepted").length, 1);
+  assert.equal(claims.filter(({ status }) => status === "rejected").length, 1);
+  const losingClaimant = claims[0].status === "accepted" ? claimantE : claimantD;
+
+  const active = await owner.query("SELECT id,participant_id FROM runtime.seat_assignments WHERE session_id=$1 AND seat_id='blue-lead' AND valid_to IS NULL", [accessIds.session]);
+  const revision = await owner.query("SELECT access_revision FROM runtime.participant_access_revisions WHERE participant_id=$1", [active.rows[0].participant_id]);
+  const needsWarning = await reassignSeat(app, operator, command(operator, "participant.reassign", active.rows[0].participant_id, {
+    previousSeatAssignmentId: active.rows[0].id, newSeatId: "red-lead", newSessionRoleId: "lead", reason: "Cross-Team staffing"
+  }, Number(revision.rows[0].access_revision)), randomUUID(), ids.deploymentA);
+  assert.deepEqual([needsWarning.status, needsWarning.errorCode], ["rejected", "VALIDATION_FAILED"]);
+  const reassigned = await reassignSeat(app, operator, command(operator, "participant.reassign", active.rows[0].participant_id, {
+    previousSeatAssignmentId: active.rows[0].id, newSeatId: "red-lead", newSessionRoleId: "lead", reason: "Cross-Team staffing", exposureAcknowledged: true
+  }, Number(revision.rows[0].access_revision)), randomUUID(), ids.deploymentA);
+  assert.equal(reassigned.status, "accepted");
+  assert.equal((await claimSeat(app, losingClaimant, command(losingClaimant, "seat.claim", randomUUID(), { seatId: "blue-lead", sessionRoleId: "lead" }), randomUUID(), ids.deploymentA)).status, "accepted");
+
+  const premature = await markSessionReady(app, operator, command(operator, "session.ready", accessIds.session), randomUUID(), ids.deploymentA);
+  assert.deepEqual([premature.status, premature.errorCode], ["rejected", "VALIDATION_FAILED"]);
+  for (const checkKey of ["permissions", "recovery"]) {
+    assert.equal((await confirmReadiness(app, operator,
+      command(operator, "readiness.confirm", accessIds.session, { checkKey }), randomUUID(), ids.deploymentA)).status, "accepted");
+  }
+  assert.equal((await getReadiness(app, principal, accessIds.session, randomUUID())).ready, true);
+  assert.equal((await markSessionReady(app, operator, command(operator, "session.ready", accessIds.session), randomUUID(), ids.deploymentA)).status, "accepted");
+  assert.equal((await openSession(app, operator, command(operator, "session.open", accessIds.session), randomUUID(), ids.deploymentA)).status, "accepted");
+
+  const guestId = randomUUID();
+  assert.equal((await createGuestIdentity(app, operator, command(operator, "guest_identity.create", guestId,
+    { displayName: "Synthetic guest", seatId: "blue-lead", expiresInHours: 1 }), randomUUID(), ids.deploymentA)).status, "accepted");
+  assert.equal((await requireActiveGuest(app, ids.orgA, guestId, randomUUID())).seatId, "blue-lead");
+  assert.equal((await revokeSessionPrincipal(app, operator, command(operator, "principal.revoke", guestId,
+    { principalType: "guest" }), randomUUID(), ids.deploymentA)).status, "accepted");
+  await assert.rejects(requireActiveGuest(app, ids.orgA, guestId, randomUUID()), (error) => error?.envelope?.error?.code === "ACCESS_REVOKED");
+  const expiredGuestId = randomUUID();
+  assert.equal((await createGuestIdentity(app, operator, command(operator, "guest_identity.create", expiredGuestId,
+    { displayName: "Expiring synthetic guest", seatId: "blue-lead", expiresInHours: 1 }), randomUUID(), ids.deploymentA)).status, "accepted");
+  await owner.query("UPDATE identity.guest_identities SET expires_at=transaction_timestamp()-interval '1 second' WHERE id=$1", [expiredGuestId]);
+  await assert.rejects(requireActiveGuest(app, ids.orgA, expiredGuestId, randomUUID()), (error) => error?.envelope?.error?.code === "ACCESS_REVOKED");
+
+  const display = await activateDisplayPrincipal(app, operator, command(operator, "display_principal.activate", randomUUID(),
+    { interfaceProfileId: "observer", classificationCeiling: "internal" }), randomUUID(), ids.deploymentA);
+  assert.equal(display.receipt.status, "accepted");
+  assert.ok(display.credential);
+  assert.ok(await publishPendingRuntimeDeltas(app, ids.orgA) > 0);
+});
+
 test("Game Master projection requires Operator authorization and remains tenant/Session scoped", async () => {
   const projection = await getOperatorProjection(
     app, principal, ids.sessionA, "e0000000-0000-4000-8000-000000000010"
@@ -366,7 +540,7 @@ test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async
        (SELECT access_revision FROM runtime.participant_access_revisions WHERE participant_id=$1) revision,
        (SELECT count(*) FROM sync.projection_grants WHERE participant_id=$1 AND revoked_at IS NOT NULL) revoked,
        (SELECT count(*) FROM evidence.events WHERE session_id=$3 AND event_type='seat_assignment.changed') events,
-       (SELECT count(*) FROM evidence.audit_records WHERE action='participant.reassigned') audits,
+       (SELECT count(*) FROM evidence.audit_records WHERE action='participant.reassigned' AND target_ref='participant:' || $1::text) audits,
        (SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$3) outbox`,
     [ids.participantA, ids.assignmentA, ids.sessionA]
   );

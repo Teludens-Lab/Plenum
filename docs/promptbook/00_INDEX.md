@@ -19,6 +19,7 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 - `COMMAND_REGISTRY.md`: verified versus proposed commands.
 - `PROJECT_STATE.md`: current observed maturity and next task.
 - `RELEASE_GAP_PROMPTBOOK.md`: ready-to-use work packages for closing the remaining production approval gaps without replacing the PS task graph.
+- `TELUDENS_RUNTIME_MIGRATION_PROMPTBOOK.md`: supplemental, dependency-ordered prompts for preserving Fractured Order's operational identity while migrating Runtime and Studio preview presentation to Teludens.
 - `PROMPTBOOK_VALIDATION_REPORT.md`: structural, coverage, cycle, and sample-task QA.
 - Other matrices and gates provide architecture, deployment, compatibility, security, recovery, migration, change-control, and release context without replacing their authoritative corpus documents.
 

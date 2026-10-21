@@ -49,6 +49,8 @@ export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
 export const POLL_DEFINITION_CONTRACT_ID = "poll-definition-v1";
 export const VOICE_DEFINITION_CONTRACT_ID = "voice-definition-v1";
 export const VOICE_CONSENT_CONTRACT_ID = "voice-consent-v1";
+export const SESSION_ONBOARDING_CONTRACT_ID = "session-onboarding-v1";
+export const READINESS_CONTRACT_ID = "readiness-v1";
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
 
@@ -461,6 +463,21 @@ export interface OperatorProjectionV1 {
   artifactsByState: Record<string, number>;
   activeTasks: Array<{ artifactId: string; artifactTypeKey: string; state: string; version: number }>;
   recentEvents: Array<{ type: string; recordedAt: string; aggregateId: string | null }>;
+}
+
+export interface ReadinessProjectionV1 {
+  contractId: typeof READINESS_CONTRACT_ID;
+  sessionId: string;
+  governingReleaseId: string;
+  assignmentVersion: number;
+  ready: boolean;
+  checks: Array<{ key: string; label: string; blocking: boolean; complete: boolean }>;
+  staffing: {
+    seats: Array<{ seatId: string; sessionRoleIds: string[]; teamId: string | null; minimum: number; maximum: number | null; occupied: number }>;
+    joinRequests: Array<{ personId: string; requestedSeatId: string | null; status: string; submittedAt: string }>;
+    rosterReview: Array<{ rowId: string; rowNumber: number; personId: string | null; seatId: string | null; reasons: string[] }>;
+    assignments: Array<{ seatAssignmentId: string; participantId: string; personId: string; seatId: string; sessionRoleId: string; teamId: string | null; accessRevision: number }>;
+  };
 }
 
 export type EffectProposalStatus = "staged" | "in_review" | "applied" | "rejected" | "returned" | "stale" | "failed";

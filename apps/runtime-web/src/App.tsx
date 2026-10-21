@@ -6,6 +6,7 @@ import {
   type EffectProposalV1,
   type JsonObject,
   type OperatorProjectionV1,
+  type ReadinessProjectionV1,
   type RuntimeActionV1,
   type RuntimeArtifactV1,
   type RuntimeCreateTaskV1,
@@ -805,20 +806,51 @@ function OperatorView() {
   const id = sessionId();
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [projection, setProjection] = useState<OperatorProjectionV1 | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessProjectionV1 | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
     setConnection("loading");
     try {
-      setProjection(await api<OperatorProjectionV1>(`/v1/operator/sessions/${id}`));
+      const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };
+      setDeviceId(registered.deviceId);
+      const [nextProjection, nextReadiness] = await Promise.all([
+        api<OperatorProjectionV1>(`/v1/operator/sessions/${id}`),
+        api<ReadinessProjectionV1>(`/v1/sessions/${id}/readiness`).catch((cause: unknown) => {
+          if (cause instanceof ApiError && cause.envelope.error.code === "INVALID_TRANSITION") return null;
+          throw cause;
+        })
+      ]);
+      setProjection(nextProjection); setReadiness(nextReadiness);
       setConnection("online"); setError(null);
     } catch (cause) { setConnection(navigator.onLine ? "error" : "offline"); setError(cause instanceof Error ? cause.message : "Operator view unavailable."); }
-  }, [id]);
+  }, [deviceId, id]);
   useEffect(() => { void load(); }, [load]);
   if (projection === null) return <StatePage connection={connection} title={connection === "loading" ? "Loading operator view" : "Access denied"}
     message={connection === "loading" ? "Reading authoritative Session state." : error ?? "This view is unavailable."}
     {...(connection === "loading" ? {} : { retry: () => void load() })} />;
   const states = Object.entries(projection.artifactsByState);
+  const send = async (path: string, operationType: string, payload: JsonObject = {}, aggregateId = id,
+    expectedAggregateVersion = readiness?.assignmentVersion ?? 0) => {
+    if (id === null || deviceId === null || readiness === null || pending || aggregateId === null) return null;
+    setPending(true); setNotice("Submitting authoritative Session change.");
+    try {
+      const result = await api<CommandReceiptV1 | { receipt: CommandReceiptV1; invitationToken: string | null }>(path, { method: "POST", body: JSON.stringify({
+        commandId: crypto.randomUUID(), deviceId, operationType, aggregateId,
+        expectedAggregateVersion, governingReleaseId: readiness.governingReleaseId, payload
+      }) });
+      const receipt = "receipt" in result ? result.receipt : result;
+      setNotice(receipt.status === "accepted" ? "Authoritative Session state updated." : receipt.message ?? "The change was not accepted.");
+      await load();
+      return result;
+    } catch (cause) { setNotice(cause instanceof Error ? cause.message : "The Session change failed."); }
+    finally { setPending(false); }
+    return null;
+  };
   return <Shell connection={connection}>
     <main id="main-content" className="runtime-layout" tabIndex={-1}>
       <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p>{projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
@@ -827,6 +859,88 @@ function OperatorView() {
         <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount}</strong></div>
         <div className="card metric"><span>Active tasks</span><strong>{projection.activeTasks.length}</strong></div>
       </section>
+      {readiness === null ? null : <section aria-labelledby="staffing-title">
+        <div className="section-heading"><p className="eyebrow">Verified onboarding</p><h2 id="staffing-title">Session staffing</h2></div>
+        <div className="card-grid">
+          <article className="card"><h3>Issue invitation</h3>
+            <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              const personId = String(data.get("personId") ?? "").trim(), seatId = String(data.get("seatId") ?? "");
+              const payload: JsonObject = { expiresInHours: 24 };
+              if (personId !== "") payload.recipientPersonId = personId;
+              if (seatId !== "") payload.seatId = seatId;
+              void send(`/v1/sessions/${id}/invitations`, "invitation.issue", payload, crypto.randomUUID(), 0)
+                .then((result) => setInvitationToken(result !== null && "invitationToken" in result ? result.invitationToken : null)); }}>
+              <div className="field"><label htmlFor="invite-person">Recipient Person ID <span className="hint">(optional)</span></label>
+                <input id="invite-person" name="personId" type="text" autoComplete="off" /></div>
+              <div className="field"><label htmlFor="invite-seat">Reserved Seat <span className="hint">(optional)</span></label>
+                <select id="invite-seat" name="seatId"><option value="">Any eligible Seat</option>
+                  {readiness.staffing.seats.map((item) => <option key={item.seatId} value={item.seatId}>{item.seatId}</option>)}</select></div>
+              <button className="btn-primary" type="submit" disabled={pending}>Issue invitation</button>
+            </form>
+            {invitationToken === null ? null : <p className="credential" role="status">Copy this one-time token now: <code>{invitationToken}</code></p>}
+          </article>
+          <article className="card"><h3>Assign Participant</h3>
+            <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              void send(`/v1/sessions/${id}/participants`, "participant.assign", {
+                personId: String(data.get("personId")), seatId: String(data.get("seatId")), sessionRoleId: String(data.get("sessionRoleId"))
+              }, crypto.randomUUID()); }}>
+              <div className="field"><label htmlFor="assign-person">Person ID</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
+              <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
+                {readiness.staffing.seats.map((item) => <option key={item.seatId} value={item.seatId}>{item.seatId}</option>)}</select></div>
+              <div className="field"><label htmlFor="assign-role">Session Role ID</label><input id="assign-role" name="sessionRoleId" type="text" required autoComplete="off" /></div>
+              <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
+            </form>
+          </article>
+        </div>
+        <h3>Seat occupancy</h3>
+        <ul className="readiness-list">{readiness.staffing.seats.map((item) => <li key={item.seatId}><span><strong>{item.seatId}</strong>{item.teamId === null ? "" : ` · Team ${item.teamId}`}</span>
+          <span>{item.occupied} / {item.maximum ?? "unlimited"} occupied · minimum {item.minimum}</span></li>)}</ul>
+        <h3>Waiting room</h3>
+        {readiness.staffing.joinRequests.length === 0 ? <p className="empty-state">No pending join requests.</p> : <ul className="readiness-list">
+          {readiness.staffing.joinRequests.map((item) => <li key={`${item.personId}-${item.submittedAt}`}><span><strong>{item.personId}</strong> · {item.status}{item.requestedSeatId === null ? "" : ` · ${item.requestedSeatId}`}</span>
+            <span className="actions"><button className="btn-primary" type="button" disabled={pending}
+              onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/admit`, "participant.admit", {}, item.personId, 0)}>Admit</button>
+              <button className="btn-secondary" type="button" disabled={pending}
+                onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/reject`, "participant.reject", {}, item.personId, 0)}>Reject</button></span></li>)}</ul>}
+        <h3>Roster review</h3>
+        {readiness.staffing.rosterReview.length === 0 ? <p className="empty-state">No ambiguous roster rows.</p> : <ul className="readiness-list">
+          {readiness.staffing.rosterReview.map((item) => <li key={item.rowId}><span><strong>Row {item.rowNumber}</strong> · {item.personId ?? "Unresolved person"} · {item.seatId ?? "No Seat"}</span>
+            <span>{item.reasons.join(", ")}</span></li>)}</ul>}
+        <h3>Active assignments</h3>
+        {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
+          {readiness.staffing.assignments.map((item) => <li key={item.seatAssignmentId}><span><strong>{item.seatId}</strong> · {item.personId} · {item.sessionRoleId}</span>
+            <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
+                previousSeatAssignmentId: item.seatAssignmentId, newSeatId: String(data.get("seatId")),
+                newSessionRoleId: String(data.get("sessionRoleId")), reason: String(data.get("reason")),
+                exposureAcknowledged: data.get("exposureAcknowledged") === "on"
+              }, item.participantId, item.accessRevision); }}>
+              <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
+                {readiness.staffing.seats.map((seat) => <option key={seat.seatId} value={seat.seatId}>{seat.seatId}</option>)}</select></div>
+              <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role ID</label><input id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required /></div>
+              <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
+              <label className="choice"><input name="exposureAcknowledged" type="checkbox" /> I acknowledge that previously viewed information cannot be withdrawn.</label>
+              <button className="btn-primary" type="submit" disabled={pending}>Reassign</button>
+            </form></details></li>)}</ul>}
+      </section>}
+      {readiness === null ? null : <section aria-labelledby="readiness-title">
+        <div className="section-heading"><p className="eyebrow">Release and assignment version {readiness.assignmentVersion}</p><h2 id="readiness-title">Operator readiness</h2></div>
+        <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
+        <ul className="readiness-list">
+          {readiness.checks.map((check) => <li key={check.key}>
+            <span><strong>{check.complete ? "Complete" : "Incomplete"}</strong> — {check.label}</span>
+            {check.key === "release_current" || check.key === "required_seats" || check.key === "operator_assignment" || check.complete
+              ? null : <button className="btn-secondary" type="button" disabled={pending}
+                onClick={() => void send(`/v1/sessions/${id}/readiness/${encodeURIComponent(check.key)}/confirm`, "readiness.confirm", { checkKey: check.key })}>Confirm</button>}
+          </li>)}
+        </ul>
+        <div className="actions">
+          {projection.sessionStatus === "configured" ? <button className="btn-primary" type="button" disabled={pending || !readiness.ready}
+            onClick={() => void send(`/v1/sessions/${id}/ready`, "session.ready")}>Mark Session ready</button> : null}
+          {projection.sessionStatus === "ready" ? <button className="btn-primary" type="button" disabled={pending || !readiness.ready}
+            onClick={() => void send(`/v1/sessions/${id}/open`, "session.open")}>Open Session</button> : null}
+        </div>
+      </section>}
       <section aria-labelledby="artifact-status-title"><h2 id="artifact-status-title">Artifact status</h2>
         {states.length === 0 ? <p className="empty-state">No Artifacts have been created.</p> : <ul className="status-list">
           {states.map(([state, count]) => <li key={state}><span>{state.replaceAll("_", " ")}</span><strong>{count}</strong></li>)}</ul>}

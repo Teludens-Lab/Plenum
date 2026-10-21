@@ -607,6 +607,208 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OperatorProjectionV1" }
         "403": { description: The authenticated Principal is not an Operator. }
+  /v1/sessions/{sessionId}/access/configure:
+    post:
+      operationId: configureSessionAccess
+      x-contract-id: session-onboarding-v1
+      x-command-operation: session.configure
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Release access policy, Seats, Session Operator and readiness checks configured atomically. }
+        "409": { description: Session state or governing Release is stale. }
+  /v1/sessions/{sessionId}/invitations:
+    post:
+      operationId: issueSessionInvitation
+      x-contract-id: session-onboarding-v1
+      x-command-operation: invitation.issue
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Opaque invitation returned once; only its SHA-256 digest is stored. }
+  /v1/invitations/{token}/accept:
+    post:
+      operationId: acceptSessionInvitation
+      x-contract-id: session-onboarding-v1
+      x-command-operation: join_request.submit
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: token, required: true, schema: { type: string, minLength: 20, maxLength: 200 } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Verified Principal enters assignment review or the waiting room. }
+        "403": { description: Invitation is expired, revoked, consumed, or bound to another Principal. }
+  /v1/sessions/{sessionId}/join-requests:
+    post:
+      operationId: submitSessionJoinRequest
+      x-contract-id: session-onboarding-v1
+      x-command-operation: join_request.submit
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Verified Principal enters assignment review or the waiting room; no code grants access. }
+        "401": { description: Identity verification is required before a join request. }
+  /v1/sessions/{sessionId}/join-requests/{participantId}/admit:
+    post:
+      operationId: admitSessionParticipant
+      x-contract-id: session-onboarding-v1
+      x-command-operation: participant.admit
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: participantId, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Pending verified Principal admitted without granting a Seat. }
+  /v1/sessions/{sessionId}/join-requests/{participantId}/reject:
+    post:
+      operationId: rejectSessionParticipant
+      x-contract-id: session-onboarding-v1
+      x-command-operation: participant.reject
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: participantId, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Pending join request rejected atomically. }
+  /v1/sessions/{sessionId}/roster-imports:
+    post:
+      operationId: importSessionRoster
+      x-contract-id: session-onboarding-v1
+      x-command-operation: roster.import
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Valid rows are staged and ambiguous rows enter review; neither is silently assigned. }
+  /v1/sessions/{sessionId}/seats/{seatId}/claim:
+    post:
+      operationId: claimSessionSeat
+      x-contract-id: session-onboarding-v1
+      x-command-operation: seat.claim
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: seatId, required: true, schema: { type: string, minLength: 1 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Server-authorized Seat Assignment and access revision. }
+        "409": { description: Seat capacity was consumed or Session state changed. }
+  /v1/sessions/{sessionId}/participants:
+    post:
+      operationId: assignSessionParticipant
+      x-contract-id: session-onboarding-v1
+      x-command-operation: participant.assign
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Participant and Seat Assignment created atomically. }
+  /v1/sessions/{sessionId}/seat-assignments/{seatAssignmentId}/reassign:
+    post:
+      operationId: reassignSessionSeat
+      x-contract-id: session-onboarding-v1
+      x-command-operation: participant.reassign
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: seatAssignmentId, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Old assignment closed and replacement opened in one transaction. }
+        "409": { description: Assignment version is stale or destination Seat is occupied. }
+  /v1/sessions/{sessionId}/guests:
+    post:
+      operationId: createSessionGuest
+      x-contract-id: session-onboarding-v1
+      x-command-operation: guest_identity.create
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Expiring Session-scoped Guest Identity created. }
+  /v1/sessions/{sessionId}/display-principals/activate:
+    post:
+      operationId: activateSessionDisplayPrincipal
+      x-contract-id: session-onboarding-v1
+      x-command-operation: display_principal.activate
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Short-lived read-only Display Principal credential returned once. }
+  /v1/sessions/{sessionId}/principals/{principalId}/revoke:
+    post:
+      operationId: revokeSessionPrincipal
+      x-contract-id: session-onboarding-v1
+      x-command-operation: principal.revoke
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: principalId, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Guest or Display Principal access revoked. }
+  /v1/sessions/{sessionId}/readiness:
+    get:
+      operationId: getSessionReadiness
+      x-contract-id: readiness-v1
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Current Release- and assignment-version-bound readiness., content: { application/json: { schema: { $ref: "#/components/schemas/ReadinessProjectionV1" } } } }
+        "403": { description: Administrative readiness is never returned to a Participant. }
+  /v1/sessions/{sessionId}/readiness/{checkKey}/confirm:
+    post:
+      operationId: confirmSessionReadinessCheck
+      x-contract-id: readiness-v1
+      x-command-operation: readiness.confirm
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: checkKey, required: true, schema: { type: string, minLength: 1 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Check confirmation pinned to current Release and assignment versions. }
+  /v1/sessions/{sessionId}/ready:
+    post:
+      operationId: markSessionReady
+      x-contract-id: readiness-v1
+      x-command-operation: session.ready
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Session is ready only after every blocking current-version check passes. }
+        "409": { description: Required readiness is incomplete or stale. }
+  /v1/sessions/{sessionId}/open:
+    post:
+      operationId: openSession
+      x-contract-id: readiness-v1
+      x-command-operation: session.open
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Ready Session opened; Participants may join. }
+        "409": { description: Session is not ready or current checks failed. }
   /v1/sessions/{sessionId}/sync/stream:
     get:
       operationId: streamRuntimeDeltas
@@ -1163,6 +1365,78 @@ components:
         artifactsByState: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         activeTasks: { type: array, items: { type: object } }
         recentEvents: { type: array, items: { type: object } }
+    ReadinessProjectionV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, governingReleaseId, assignmentVersion, ready, checks, staffing]
+      properties:
+        contractId: { const: readiness-v1 }
+        sessionId: { type: string, format: uuid }
+        governingReleaseId: { type: string, format: uuid }
+        assignmentVersion: { type: integer, minimum: 1 }
+        ready: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, label, blocking, complete]
+            properties:
+              key: { type: string, minLength: 1 }
+              label: { type: string, minLength: 1 }
+              blocking: { type: boolean }
+              complete: { type: boolean }
+        staffing:
+          type: object
+          additionalProperties: false
+          required: [seats, joinRequests, rosterReview, assignments]
+          properties:
+            seats:
+              type: array
+              items:
+                type: object
+                required: [seatId, sessionRoleIds, teamId, minimum, maximum, occupied]
+                properties:
+                  seatId: { type: string }
+                  sessionRoleIds: { type: array, items: { type: string } }
+                  teamId: { type: [string, "null"] }
+                  minimum: { type: integer, minimum: 0 }
+                  maximum: { type: [integer, "null"], minimum: 0 }
+                  occupied: { type: integer, minimum: 0 }
+            joinRequests:
+              type: array
+              items:
+                type: object
+                required: [personId, requestedSeatId, status, submittedAt]
+                properties:
+                  personId: { type: string, format: uuid }
+                  requestedSeatId: { type: [string, "null"] }
+                  status: { type: string }
+                  submittedAt: { type: string, format: date-time }
+            rosterReview:
+              type: array
+              items:
+                type: object
+                required: [rowId, rowNumber, personId, seatId, reasons]
+                properties:
+                  rowId: { type: string, format: uuid }
+                  rowNumber: { type: integer, minimum: 1 }
+                  personId: { type: [string, "null"], format: uuid }
+                  seatId: { type: [string, "null"] }
+                  reasons: { type: array, items: { type: string } }
+            assignments:
+              type: array
+              items:
+                type: object
+                required: [seatAssignmentId, participantId, personId, seatId, sessionRoleId, teamId, accessRevision]
+                properties:
+                  seatAssignmentId: { type: string, format: uuid }
+                  participantId: { type: string, format: uuid }
+                  personId: { type: string, format: uuid }
+                  seatId: { type: string }
+                  sessionRoleId: { type: string }
+                  teamId: { type: [string, "null"] }
+                  accessRevision: { type: integer, minimum: 1 }
     EffectProposalV1:
       type: object
       additionalProperties: false

@@ -23,7 +23,8 @@ const migrations = [
   "apps/server/migrations/013_voting_core.sql",
   "apps/server/migrations/014_comms_voice_core.sql",
   "apps/server/migrations/015_collaboration_runtime.sql",
-  "apps/server/migrations/016_voice_consent_assets.sql"
+  "apps/server/migrations/016_voice_consent_assets.sql",
+  "apps/server/migrations/017_session_access.sql"
 ];
 
 export default async function globalSetup() {
@@ -106,6 +107,33 @@ export default async function globalSetup() {
        VALUES ('17000000-0000-4000-8000-000000000001',$1,$2,$3,$4,1,'{}',$5)`,
       [fixture.organizationId, fixture.projectId, fixture.sessionId, fixture.releaseId, fixture.people.operator]
     );
+    await owner.query(
+      `INSERT INTO runtime.session_access_configs
+       (organization_id,session_id,governing_release_id,access_policy,assignment_version,configured_by)
+       VALUES ($1,$2,$3,$4::jsonb,1,$5)`,
+      [fixture.organizationId, fixture.sessionId, fixture.releaseId, JSON.stringify(releaseDefinition.coreDesign.accessPolicy), fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)
+       VALUES ($1,$2,$3,$3)`, [fixture.organizationId, fixture.sessionId, fixture.people.operator]
+    );
+    for (const seat of releaseDefinition.coreDesign.seats) {
+      await owner.query(
+        `INSERT INTO runtime.session_seats
+         (organization_id,session_id,seat_id,session_role_ids,team_id,min_occupancy,max_occupancy,required,join_mode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [fixture.organizationId, fixture.sessionId, seat.id, seat.sessionRoleIds, seat.teamId ?? null,
+          seat.minOccupancy, seat.maxOccupancy, seat.required, seat.joinMode]
+      );
+    }
+    for (const check of releaseDefinition.coreDesign.accessPolicy.readiness) {
+      await owner.query(
+        `INSERT INTO runtime.session_readiness_checks
+         (organization_id,session_id,check_key,label,blocking,governing_release_id,assignment_version,completed_by,completed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,1,$7,now())`,
+        [fixture.organizationId, fixture.sessionId, check.key, check.label, check.blocking, fixture.releaseId, fixture.people.operator]
+      );
+    }
     await owner.query(
       `INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES
        ($1,$2,$3,$4),($5,$2,$3,$6),($7,$2,$3,$8),($9,$2,$3,$10),($11,$2,$3,$12),($13,$2,$3,$14)`,

@@ -50,6 +50,14 @@ export interface AuthorizedPluginBinding {
   configurationDigest: string;
 }
 
+export interface PluginCatalogEntryV1 extends RegisteredPluginArtifact {
+  installationId: string;
+  deploymentId: string;
+  publisher: { id: string; name: string };
+  manifest: PluginManifestV1;
+  permittedPermissions: string[];
+}
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function requireRole(principal: AuthenticatedPrincipal, roles: readonly RegistryRole[], correlationId: string): void {
@@ -723,24 +731,40 @@ export async function revokePluginArtifact(
 export async function getPluginCatalog(
   pool: Pool,
   principal: AuthenticatedPrincipal,
-  correlationId: string
-): Promise<Array<RegisteredPluginArtifact & { installed: boolean }>> {
+  correlationId: string,
+  projectId?: string
+): Promise<PluginCatalogEntryV1[]> {
   requireRole(principal, ["admin", "designer", "publisher"], correlationId);
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentRole(client, principal, ["admin", "designer", "publisher"], correlationId);
+    if (projectId !== undefined) {
+      const project = await client.query(
+        "SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2",
+        [principal.organizationId, projectId]
+      );
+      if (project.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Simulation Project was not found.", correlationId);
+    }
     const result = await client.query<{
-      id: string; plugin_id: string; version: string; digest: string; lifecycle_status: string; installed: boolean;
+      id: string; plugin_id: string; version: string; digest: string; lifecycle_status: string;
+      installation_id: string; deployment_id: string; publisher_id: string; publisher_name: string;
+      manifest: PluginManifestV1; permitted_permissions: string[];
     }>(
       `SELECT artifact.id,artifact.plugin_id,artifact.version,artifact.digest,artifact.lifecycle_status,
-              EXISTS (SELECT 1 FROM extension.plugin_installations installation
-                WHERE installation.organization_id=artifact.organization_id AND installation.artifact_id=artifact.id
-                  AND installation.status='enabled') AS installed
+              installation.id AS installation_id,installation.deployment_id,
+              publisher.id AS publisher_id,publisher.display_name AS publisher_name,
+              artifact.manifest,installation.permitted_permissions
          FROM extension.plugin_artifacts artifact
-        WHERE artifact.organization_id=$1 AND artifact.lifecycle_status IN ('approved','revoked','suspended')
-        ORDER BY artifact.plugin_id,artifact.version`,
+         JOIN extension.publishers publisher
+           ON publisher.organization_id=artifact.organization_id AND publisher.id=artifact.publisher_id AND publisher.status='approved'
+         JOIN extension.plugin_installations installation
+           ON installation.organization_id=artifact.organization_id AND installation.artifact_id=artifact.id AND installation.status='enabled'
+        WHERE artifact.organization_id=$1 AND artifact.lifecycle_status='approved'
+        ORDER BY artifact.plugin_id,artifact.version,installation.id`,
       [principal.organizationId]
     );
     return result.rows.map((row) => ({ artifactId: row.id, pluginId: row.plugin_id, version: row.version,
-      digest: row.digest, lifecycleStatus: row.lifecycle_status, installed: row.installed }));
+      digest: row.digest, lifecycleStatus: row.lifecycle_status, installationId: row.installation_id,
+      deploymentId: row.deployment_id, publisher: { id: row.publisher_id, name: row.publisher_name },
+      manifest: row.manifest, permittedPermissions: row.permitted_permissions }));
   });
 }

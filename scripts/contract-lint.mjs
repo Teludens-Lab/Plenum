@@ -57,6 +57,12 @@ import {
   PLUGIN_MANIFEST_CONTRACT_ID,
   pluginManifestV1Schema
 } from "../packages/plugin-sdk/dist/index.js";
+import {
+  COMPOSITION_DEFINITION_CONTRACT_ID,
+  PLUGIN_BINDING_CONTRACT_ID,
+  compositionDefinitionV1Schema,
+  pluginBindingV1Schema
+} from "../packages/simulation-schema/dist/index.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -128,6 +134,8 @@ assert.equal(rolePreviewV1Schema.$id, ROLE_PREVIEW_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
+assert.equal(pluginBindingV1Schema.$id, PLUGIN_BINDING_CONTRACT_ID);
+assert.equal(compositionDefinitionV1Schema.$id, COMPOSITION_DEFINITION_CONTRACT_ID);
 
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
@@ -137,7 +145,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
   rolePreviewV1Schema,
-  pluginManifestV1Schema];
+  pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }

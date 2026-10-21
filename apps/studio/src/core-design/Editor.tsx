@@ -9,6 +9,8 @@ import type {
 import { StudioCollaborationClient } from "../collaboration/client.js";
 import { PollEditor } from "../polls/PollEditor.js";
 import { VoiceEditor } from "../voice/VoiceEditor.js";
+import { PluginCatalogEditor } from "../plugins/PluginCatalogEditor.js";
+import { CompositionEditor } from "../compositions/CompositionEditor.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, defaultGrant, identifier
@@ -21,7 +23,8 @@ const SECTIONS = [
   ["overview", "Overview & Scenario"], ["methodology", "Methodology"], ["teams", "Teams"],
   ["roles", "Session Roles"], ["seats", "Seats"], ["stages", "Stages"],
   ["forms", "Forms & Artifacts"], ["workflows", "Workflows"], ["policies", "Information Policy"],
-  ["polls", "Polls"], ["voice", "Voice Channels"], ["interfaces", "Interfaces"], ["research", "Research"],
+  ["polls", "Polls"], ["voice", "Voice Channels"], ["plugins", "Plugin catalog & bindings"],
+  ["compositions", "Model Compositions"], ["interfaces", "Interfaces"], ["research", "Research"],
   ["access", "Access"], ["preview", "Role preview"]
 ] as const;
 
@@ -422,6 +425,8 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
       <PolicyEditor core={core} client={client} />
       <PollEditor core={core} client={client} />
       <VoiceEditor core={core} client={client} />
+      <PluginCatalogEditor projectId={projectId} core={core} client={client} />
+      <CompositionEditor projectId={projectId} core={core} client={client} />
       <InterfaceEditor core={core} client={client} />
       <ResearchEditor core={core} client={client} />
       <AccessEditor core={core} client={client} />

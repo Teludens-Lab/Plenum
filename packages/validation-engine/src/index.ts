@@ -8,6 +8,7 @@ import {
   type StudioValidationReportV1
 } from "@plenum/event-contracts";
 import {
+  assertModelComposition,
   assertRuntimeCoreDesign,
   assertRuntimeScenario,
   type CoreDesignV1,
@@ -30,7 +31,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function sourceFor(message: string): { path: string; elementId: string | null } {
-  const match = message.match(/^(Workflow|Stage|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Team Cell|Scenario content|Readiness check) ([^ ]+)/u);
+  const match = message.match(/^(Workflow|Stage|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Team Cell|Scenario content|Readiness check|Model Composition) ([^ ]+)/u);
   if (match === null) return { path: "coreDesign", elementId: null };
   const collections: Record<string, string> = {
     "Workflow": "workflows", "Stage": "stages", "Form": "forms", "Artifact Type": "artifactTypes",
@@ -38,7 +39,7 @@ function sourceFor(message: string): { path: string; elementId: string | null } 
     "Communication Route": "communications.routes", "Message Channel": "communications.messageChannels",
     "Voice Channel": "communications.voiceChannels", "Poll": "polls", "Inject": "scenario.injects",
     "Report": "reports", "Seat": "seats", "Team Cell": "teams", "Scenario content": "scenario.content",
-    "Readiness check": "readinessChecks"
+    "Readiness check": "readinessChecks", "Model Composition": "compositions"
   };
   const label = match[1] ?? "";
   const elementId = match[2] ?? null;
@@ -193,6 +194,19 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
       issues.push(issue("voice.adapter_capability_missing",
         `Voice Channel ${id} is unsupported by its Media Provider Adapter in the ${String(unsupported.profile)} target profile.`,
         `communications.voiceChannels.${id}`, id));
+    }
+  }
+  const pluginBindings = (Array.isArray(materialization.coreDesign.pluginBindings) ? materialization.coreDesign.pluginBindings : []);
+  const sessionRoleIds = new Set((materialization.coreDesign.sessionRoles ?? []).map(({ id }) => id));
+  for (const composition of materialization.coreDesign.compositions ?? []) {
+    try {
+      assertModelComposition(composition, pluginBindings, sessionRoleIds);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Model Composition ${composition.id} is invalid`;
+      const code = /cycle/iu.test(message) ? "composition.cycle" : /incompatible types/iu.test(message) ? "composition.type_mismatch" :
+        /incompatible units/iu.test(message) ? "composition.unit_mismatch" : /classification ceiling/iu.test(message) ? "composition.classification_leak" :
+          /approval gate/iu.test(message) ? "composition.approval_required" : "composition.invalid";
+      issues.push(issue(code, message, `compositions.${composition.id}`, composition.id));
     }
   }
   const disabledRoles = new Set(records(core.sessionRoles).filter((role) => role.enabled === false).map((role) => String(role.id)));

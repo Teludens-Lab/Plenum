@@ -10,6 +10,8 @@ import {
 } from "@plenum/event-contracts";
 import type { Pool } from "pg";
 import type { MediaProviderAdapter } from "@plenum/media-adapter";
+import { compileModelComposition, previewCompositionFixture } from "@plenum/release-compiler";
+import { COMPOSITION_DEFINITION_CONTRACT_ID } from "@plenum/simulation-schema";
 
 import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
@@ -19,6 +21,7 @@ import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
+import { getPluginCatalog } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
@@ -178,6 +181,43 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/draft$/u))) {
         send(response, 200, await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/plugin-catalog$/u))) {
+        const projectId = pathId(match[1], correlationId);
+        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId, projectId) });
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/compositions\/validate$/u))) {
+        const projectId = pathId(match[1], correlationId);
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["compositionId", "fixtureId"].includes(field)) ||
+            typeof body.compositionId !== "string" || typeof body.fixtureId !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The Model Composition fixture request is invalid.", correlationId);
+        }
+        const draft = await getCollaborativeDraft(options.pool, principal, projectId, correlationId);
+        const materialization = draft.materialization as { coreDesign?: { pluginBindings?: unknown[]; compositions?: unknown[]; sessionRoles?: Array<{ id: string }> } };
+        const core = materialization.coreDesign;
+        const composition = core?.compositions?.find((item) => typeof item === "object" && item !== null && "id" in item && item.id === body.compositionId);
+        if (composition === undefined || core === undefined || !Array.isArray(core.pluginBindings)) {
+          throw authorizationError("REFERENCE_INVALID", "The Model Composition is unavailable in this Draft.", correlationId);
+        }
+        const typedComposition = composition as Parameters<typeof compileModelComposition>[0];
+        const bindings = core.pluginBindings as Parameters<typeof compileModelComposition>[1];
+        const fixture = typedComposition.fixtures.find(({ id }) => id === body.fixtureId);
+        if (fixture === undefined) throw authorizationError("REFERENCE_INVALID", "The composition fixture is unavailable.", correlationId);
+        const compiled = compileModelComposition(typedComposition, bindings, new Set(core.sessionRoles?.map(({ id }) => id) ?? []));
+        send(response, 200, { contractId: COMPOSITION_DEFINITION_CONTRACT_ID, compositionId: compiled.id,
+          graphDigest: compiled.graphDigest, dependencyClosure: compiled.dependencyClosure,
+          preview: previewCompositionFixture(compiled, bindings, fixture) });
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/organizations\/([^/]+)\/plugin-catalog$/u))) {
+        const organizationId = pathId(match[1], correlationId);
+        if (organizationId !== principal.organizationId) {
+          throw authorizationError("PERMISSION_DENIED", "The Plugin catalog belongs to another Organization.", correlationId);
+        }
+        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId) });
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/validate$/u))) {

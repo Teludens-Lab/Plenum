@@ -191,8 +191,31 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        "200": { description: Organization-scoped curated Plugin catalog; Participant access is denied server-side. }
+        "200":
+          description: Organization-scoped curated Plugin catalog; Participant access is denied server-side.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginCatalogV1" }
         "403": { description: Required Organization Role is absent. }
+  /v1/projects/{projectId}/plugin-catalog:
+    get:
+      operationId: getProjectPluginCatalog
+      x-contract-id: plugin-registry-v1
+      x-authorized-organization-roles: [admin, designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Approved installed Plugins available to this Organization-owned Simulation Project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginCatalogV1" }
+        "403": { description: Required Organization Role is absent. }
+        "404": { description: Project is outside the authenticated Organization or does not exist. }
   /v1/projects/{projectId}/plugin-bindings:
     post:
       operationId: bindPluginInstallation
@@ -213,6 +236,32 @@ paths:
         "201": { description: Enabled installation bound by immutable Artifact and configuration digests. }
         "403": { description: Binding authority or Plugin approval is absent. }
         "409": { description: Deployment profile or Release schema is incompatible. }
+  /v1/projects/{projectId}/compositions/validate:
+    post:
+      operationId: previewModelCompositionFixture
+      x-contract-ids: [composition-definition-v1, plugin-binding-v1]
+      x-authorized-organization-roles: [admin, designer, publisher]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [compositionId, fixtureId]
+              properties:
+                compositionId: { type: string, format: uuid }
+                fixtureId: { type: string, format: uuid }
+      responses:
+        "200": { description: Typed graph compiled and fixture routing previewed without Session state change. }
+        "403": { description: Studio authority is absent or revoked. }
+        "422": { description: Graph, fixture, type, unit, classification, cycle, or approval validation failed. }
   /v1/projects/{projectId}/releases:
     post:
       operationId: publishRelease
@@ -780,6 +829,28 @@ components:
         hostApiVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
         releaseSchemaVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
         deploymentProfile: { type: string, enum: [connected, self_hosted, air_gapped] }
+    PluginCatalogV1:
+      type: object
+      additionalProperties: false
+      required: [plugins]
+      properties:
+        plugins:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [artifactId, pluginId, version, digest, lifecycleStatus, installationId, deploymentId, publisher, manifest, permittedPermissions]
+            properties:
+              artifactId: { type: string, format: uuid }
+              pluginId: { type: string }
+              version: { type: string }
+              digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+              lifecycleStatus: { const: approved }
+              installationId: { type: string, format: uuid }
+              deploymentId: { type: string, format: uuid }
+              publisher: { type: object }
+              manifest: { type: object }
+              permittedPermissions: { type: array, items: { type: string } }
     PluginBindingRequestV1:
       type: object
       additionalProperties: false

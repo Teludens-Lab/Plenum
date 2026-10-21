@@ -9,8 +9,8 @@ import {
   type CompileReleaseInput,
   type CompiledRelease
 } from "@plenum/release-compiler";
-import type { CoreDesignV1, ScenarioV1 } from "@plenum/simulation-schema";
-import type { Pool } from "pg";
+import { PLUGIN_BINDING_CONTRACT_ID, type CoreDesignV1, type ScenarioV1 } from "@plenum/simulation-schema";
+import type { Pool, PoolClient } from "pg";
 
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
@@ -109,6 +109,37 @@ interface FrozenMaterialization {
   sourceFreezeId?: string;
 }
 
+async function assertApprovedPluginBindings(
+  client: PoolClient,
+  organizationId: string,
+  coreDesign: CoreDesignV1,
+  correlationId: string
+): Promise<void> {
+  for (const binding of coreDesign.pluginBindings) {
+    const catalogBacked = binding.contractId === PLUGIN_BINDING_CONTRACT_ID ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(binding.installationId);
+    if (!catalogBacked) continue;
+    const result = await client.query<{
+      artifact_digest: string; installation_status: string; lifecycle_status: string; publisher_status: string;
+    }>(
+      `SELECT installation.artifact_digest,installation.status AS installation_status,
+              artifact.lifecycle_status,publisher.status AS publisher_status
+         FROM extension.plugin_installations installation
+         JOIN extension.plugin_artifacts artifact
+           ON artifact.organization_id=installation.organization_id AND artifact.id=installation.artifact_id
+         JOIN extension.publishers publisher
+           ON publisher.organization_id=artifact.organization_id AND publisher.id=artifact.publisher_id
+        WHERE installation.organization_id=$1 AND installation.id=$2`,
+      [organizationId, binding.installationId]
+    );
+    const row = result.rows[0];
+    if (row === undefined || row.installation_status !== "enabled" || row.lifecycle_status !== "approved" ||
+        row.publisher_status !== "approved" || row.artifact_digest !== binding.pluginDigest) {
+      throw authorizationError("PLUGIN_NOT_APPROVED", `Plugin Binding ${binding.id} is not backed by an approved Organization installation.`, correlationId);
+    }
+  }
+}
+
 async function publishMaterialization(
   pool: Pool,
   store: ObjectStore,
@@ -170,6 +201,7 @@ async function publishMaterialization(
         );
         if (freeze.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", input.correlationId);
       }
+      await assertApprovedPluginBindings(client, principal.organizationId, frozen.materialization.coreDesign, input.correlationId);
       const duplicate = await client.query<{ release_id: string }>(
         `SELECT release.id AS release_id
            FROM studio.definition_revisions revision

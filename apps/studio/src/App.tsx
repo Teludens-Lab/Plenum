@@ -19,9 +19,10 @@ function sourceId(path: string): string {
     teams: "teams", sessionRoles: "roles", seats: "seats", stages: "stages", stageGroups: "stages",
     forms: "forms", artifactTypes: "forms", workflows: "workflows", informationPolicies: "policies",
     interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
-    decisionTraceability: "research", communications: "policies", coreDesign: "overview", draft: "overview", scenario: "overview"
+    decisionTraceability: "research", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
+    coreDesign: "overview", draft: "overview", scenario: "overview"
   };
-  if (elementId !== undefined && ["teams", "sessionRoles", "seats", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces"].includes(collection ?? "")) {
+  if (elementId !== undefined && ["teams", "sessionRoles", "seats", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces", "pluginBindings", "compositions"].includes(collection ?? "")) {
     return `${collection}-${elementId}`;
   }
   return sections[collection ?? ""] ?? "overview";

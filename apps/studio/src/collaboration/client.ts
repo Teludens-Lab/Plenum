@@ -44,6 +44,7 @@ export class StudioCollaborationClient {
   private readonly pending = new Map<string, string>();
   private readonly listeners = new Set<(state: StudioClientState) => void>();
   private socket: WebSocket | null = null;
+  private inFlightUpdateId: string | null = null;
   private reconnectTimer: number | null = null;
   private stopped = false;
   private readonly offline = () => {
@@ -83,6 +84,7 @@ export class StudioCollaborationClient {
     socket.addEventListener("close", () => {
       if (this.socket !== null && this.socket !== socket) return;
       if (this.socket === socket) this.socket = null;
+      this.inFlightUpdateId = null;
       this.setState({ connected: false, saveState: this.pending.size > 0 ? "saved_on_device" : this.state.saveState,
         message: "Connection lost. Changes remain in this tab and will retry automatically." });
       if (!this.stopped) this.reconnectTimer = window.setTimeout(() => this.connect(), 1000);
@@ -188,7 +190,10 @@ export class StudioCollaborationClient {
     if ((message.type === "sync" || message.type === "remote_update") && message.update !== null) {
       Y.applyUpdate(this.document, base64ToBytes(message.update), REMOTE);
     }
-    if (message.type === "ack" && message.updateId !== null) this.pending.delete(message.updateId);
+    if (message.type === "ack" && message.updateId !== null) {
+      this.pending.delete(message.updateId);
+      if (this.inFlightUpdateId === message.updateId) this.inFlightUpdateId = null;
+    }
     this.setState({
       generation: message.generation,
       validation: message.validation ?? this.state.validation,
@@ -200,11 +205,13 @@ export class StudioCollaborationClient {
   }
 
   private flush(): void {
-    if (this.socket?.readyState !== WebSocket.OPEN) return;
-    for (const [updateId, update] of this.pending) {
-      this.socket.send(JSON.stringify({ contractId: STUDIO_CRDT_CONTRACT_ID, type: "update", updateId,
-        generation: this.state.generation, update }));
-    }
+    if (this.socket?.readyState !== WebSocket.OPEN || this.inFlightUpdateId !== null) return;
+    const pending = this.pending.entries().next().value as [string, string] | undefined;
+    if (pending === undefined) return;
+    const [updateId, update] = pending;
+    this.inFlightUpdateId = updateId;
+    this.socket.send(JSON.stringify({ contractId: STUDIO_CRDT_CONTRACT_ID, type: "update", updateId,
+      generation: this.state.generation, update }));
   }
 
   private setState(patch: Partial<StudioClientState>): void {

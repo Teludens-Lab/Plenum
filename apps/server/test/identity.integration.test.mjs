@@ -24,6 +24,7 @@ import {
   createDatabasePool,
   exportReleasePackage,
   getOperatorProjection,
+  getPluginCatalog,
   getRuntimeDeltas,
   getRuntimeSnapshot,
   getRuntimeSse,
@@ -879,6 +880,13 @@ test("EXT-01/02/16 separates Plugin submit, approval, install, bind, run authori
     correlationId
   }, now);
   assert.equal(installed.digest, manifest.digest);
+  const catalog = await getPluginCatalog(app, admin, correlationId, ids.projectB);
+  assert.ok(catalog.some((entry) => entry.installationId === installationId && entry.digest === manifest.digest));
+  assert.equal(catalog.every((entry) => entry.lifecycleStatus === "approved"), true);
+  await assert.rejects(getPluginCatalog(app, operator, correlationId, ids.projectB),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(getPluginCatalog(app, admin, correlationId, ids.projectA),
+    (error) => error?.envelope?.error?.code === "NOT_FOUND");
   await assert.rejects(
     withOrganizationTransaction(app, ids.orgB, (client) => client.query(
       "UPDATE extension.plugin_artifacts SET digest=$1 WHERE id=$2",

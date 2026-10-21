@@ -846,4 +846,48 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect.poll(() => secondStageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
     await Promise.all([first.context.close(), second.context.close()]);
   });
+
+  test("@a11y EXT-12 EXT-13 EXT-14 builds and previews a two-model composition without code", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const designer = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    await designer.page.goto(studioUrl());
+    await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    const plugins = designer.page.getByRole("region", { name: "Plugin catalog & bindings" });
+    await expect(plugins.getByText("2 approved installed Plugins available.")).toBeVisible({ timeout: 20_000 });
+    const catalogCards = plugins.locator(".catalog-card");
+    await expect(catalogCards).toHaveCount(2);
+    await catalogCards.nth(0).getByRole("button", { name: "Bind installed Plugin" }).click();
+    await catalogCards.nth(1).getByRole("button", { name: "Bind installed Plugin" }).click();
+    const effectBinding = plugins.locator("details").filter({ hasText: "org.ssg.fixtures.effect 1.0.0" });
+    await effectBinding.locator("summary").click();
+    await effectBinding.getByRole("button", { name: "Add input port" }).click();
+    await expect(effectBinding.getByRole("group", { name: "Input ports" }).getByLabel("Port label")).toHaveValue("Input 1");
+    await expect(designer.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 20_000 });
+
+    const compositions = designer.page.getByRole("region", { name: "Model Compositions" });
+    await compositions.getByRole("button", { name: "Add Model Composition" }).click();
+    const composition = compositions.locator("details").last();
+    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "org.ssg.fixtures.analysis 1.0.0" });
+    await composition.getByRole("button", { name: "Add model node" }).click();
+    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "org.ssg.fixtures.effect 1.0.0" });
+    await composition.getByRole("button", { name: "Add model node" }).click();
+    await composition.getByRole("button", { name: "Add approval gate" }).click();
+    await composition.getByRole("button", { name: "Add output" }).click();
+
+    const edgeBuilder = composition.getByRole("group", { name: "Connect typed ports" });
+    await edgeBuilder.getByLabel("Output port").selectOption({ label: "org.ssg.fixtures.analysis 1.0.0: Result · number · unitless · internal" });
+    await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "org.ssg.fixtures.effect 1.0.0: Input 1 · ceiling internal" });
+    await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
+    await edgeBuilder.getByLabel("Output port").selectOption({ label: "org.ssg.fixtures.effect 1.0.0: Effect Proposals · effect proposal · unitless · internal" });
+    await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "Mandatory approval: Effect Proposals · ceiling internal" });
+    await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
+    await edgeBuilder.getByLabel("Output port").selectOption({ label: "Mandatory approval: Effect Proposals · effect proposal · unitless · internal" });
+    await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "Composition output: Approved Effect Proposals · ceiling internal" });
+    await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
+    await composition.getByRole("button", { name: "Run fixture without state change" }).click();
+    await expect(composition.getByText("Status: completed")).toBeVisible({ timeout: 20_000 });
+    await expect(composition.getByText("State changes: 0")).toBeVisible();
+    expect((await new AxeBuilder({ page: designer.page }).include("#plugins").include("#compositions").analyze()).violations).toEqual([]);
+    await designer.context.close();
+  });
 });

@@ -11,11 +11,13 @@ import {
   type ScenarioV1,
   type SimulationReleaseV1
 } from "@plenum/simulation-schema";
+import { compileModelComposition, previewCompositionFixture, type CompositionPreviewV1 } from "./compositions/index.js";
 
 export const RELEASE_COMPILER_VERSION = "0.1.0";
 export { RELEASE_MANIFEST_CONTRACT_ID };
 export const PACKAGE_IMPORT_CONTRACT_ID = "package-import-v1";
 export const PACKAGE_SCHEMA_VERSION = "1.0.0";
+export { compileModelComposition, previewCompositionFixture, type CompositionPreviewV1 };
 
 export interface ReleasePackageV1 extends JsonObject {
   contractId: typeof PACKAGE_IMPORT_CONTRACT_ID;
@@ -70,7 +72,7 @@ const digestPattern = /^[0-9a-f]{64}$/u;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const prohibitedKeys = new Set([
   "apikey", "authorization", "clientsecret", "credential", "credentials", "participant", "participantdata",
-  "participantid", "participants", "password", "privatekey", "secretkey", "secrets", "sessiondata", "token"
+  "participantid", "participants", "password", "privatekey", "secretkey", "secretref", "secretreference", "secrets", "sessiondata", "token"
 ]);
 const packageKeys = new Set(["contractId", "packageSchemaVersion", "manifest", "manifestDigest", "coreDesign", "scenario"]);
 const manifestKeys = new Set([
@@ -132,7 +134,7 @@ function assertPortable(value: JsonValue, path = "release"): void {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (prohibitedKeys.has(key.toLowerCase())) throw new Error(`Package contains prohibited data at ${path}.${key}`);
+    if (prohibitedKeys.has(key.replaceAll("_", "").replaceAll("-", "").toLowerCase())) throw new Error(`Package contains prohibited data at ${path}.${key}`);
     assertPortable(child, `${path}.${key}`);
   }
 }
@@ -154,6 +156,27 @@ function assertExecutableRuntimeDesign(coreDesign: CoreDesignV1, scenario: Scena
   if (coreDesign.teams !== undefined) {
     assertRuntimeCoreDesign(coreDesign);
     assertRuntimeScenario(coreDesign, scenario);
+  }
+}
+
+function compiledCoreDesign(coreDesign: CoreDesignV1): CoreDesignV1 {
+  const compiled = structuredClone(coreDesign);
+  if (compiled.compositions !== undefined) {
+    const roles = new Set(compiled.sessionRoles?.map(({ id }) => id) ?? []);
+    compiled.compositions = compiled.compositions.map((composition) =>
+      compileModelComposition(composition, compiled.pluginBindings, roles));
+  }
+  return compiled;
+}
+
+function assertCompiledCompositions(coreDesign: CoreDesignV1): void {
+  const roles = new Set(coreDesign.sessionRoles?.map(({ id }) => id) ?? []);
+  for (const composition of coreDesign.compositions ?? []) {
+    const compiled = compileModelComposition(composition, coreDesign.pluginBindings, roles);
+    if (composition.graphDigest !== compiled.graphDigest ||
+        canonicalizeJson(asJson(composition.dependencyClosure ?? [])) !== canonicalizeJson(asJson(compiled.dependencyClosure ?? []))) {
+      throw new Error(`Model Composition ${composition.id} digest or dependency closure is invalid`);
+    }
   }
 }
 
@@ -183,7 +206,8 @@ function validateInput(input: CompileReleaseInput): void {
 
 export function compileRelease(input: CompileReleaseInput): CompiledRelease {
   validateInput(input);
-  const frozen = JSON.parse(canonicalizeJson(asJson(input.materialization))) as {
+  const materialization = { coreDesign: compiledCoreDesign(input.materialization.coreDesign), scenario: input.materialization.scenario };
+  const frozen = JSON.parse(canonicalizeJson(asJson(materialization))) as {
     coreDesign: CoreDesignV1 & JsonObject;
     scenario: ScenarioV1 & JsonObject;
   };
@@ -246,6 +270,7 @@ export function verifyReleasePackage(bytes: Uint8Array, expectedPackageDigest: s
   assertPortable(asJson({ coreDesign: pkg.coreDesign, scenario: pkg.scenario }));
   assertPinnedDependencies(pkg.coreDesign);
   assertExecutableRuntimeDesign(pkg.coreDesign, pkg.scenario);
+  assertCompiledCompositions(pkg.coreDesign);
   return {
     release: { manifest: pkg.manifest, coreDesign: pkg.coreDesign, scenario: pkg.scenario },
     bytes,

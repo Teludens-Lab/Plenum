@@ -144,6 +144,7 @@ export default async function globalSetup() {
     const extensionIds = {
       publisher: "24000000-0000-4000-8000-000000000001", artifact: "24000000-0000-4000-8000-000000000002",
       installation: "24000000-0000-4000-8000-000000000003", binding: "24000000-0000-4000-8000-000000000004",
+      artifactB: "24000000-0000-4000-8000-000000000012", installationB: "24000000-0000-4000-8000-000000000013",
       compositionRun: "24000000-0000-4000-8000-000000000005", modelRun: "24000000-0000-4000-8000-000000000006",
       stateValue: "24000000-0000-4000-8000-000000000007", proposal: "24000000-0000-4000-8000-000000000008"
     };
@@ -151,16 +152,29 @@ export default async function globalSetup() {
     const configurationDigest = `sha256:${"4".repeat(64)}`;
     const inputDigest = `sha256:${"5".repeat(64)}`;
     const outputDigest = `sha256:${"6".repeat(64)}`;
+    const catalogManifest = (pluginId, digest, capability) => ({
+      pluginId, version: "1.0.0", digest, categories: ["world_and_simulation"], capabilities: [capability],
+      connectivity: "offline_capable", contracts: { inputSchema: `${pluginId}.input.schema.json`, outputSchema: `${pluginId}.output.schema.json` },
+      limits: { timeoutSeconds: 30, memoryMiB: 128, cpuMillis: 1000, outputBytes: 65536 },
+      requestedPermissions: capability === "propose_effect" ? ["effects.propose"] : [], dataClassificationMaximum: "confidential",
+      dependencies: []
+    });
     await owner.query(`INSERT INTO extension.publishers(id,organization_id,principal_id,display_name,signature_key_id,public_key_pem,status,approved_by)
       VALUES ($1,$2,$3,'PS-230 fixture','fixture','fixture','approved',$3)`, [extensionIds.publisher, fixture.organizationId, fixture.people.operator]);
     await owner.query(`INSERT INTO extension.plugin_artifacts
       (id,organization_id,publisher_id,plugin_id,version,digest,manifest_digest,bundle_digest,object_key,manifest,supply_chain,lifecycle_status,submitted_by,approved_by,approved_at)
-      VALUES ($1,$2,$3,'org.ssg.fixtures.effect','1.0.0',$4,$5,$6,'fixture','{}','{}','approved',$7,$7,now())`,
-      [extensionIds.artifact, fixture.organizationId, extensionIds.publisher, artifactDigest, `sha256:${"8".repeat(64)}`, `sha256:${"9".repeat(64)}`, fixture.people.operator]);
+      VALUES ($1,$2,$3,'org.ssg.fixtures.effect','1.0.0',$4,$5,$6,'fixture',$7::jsonb,'{}','approved',$8,$8,now()),
+             ($9,$2,$3,'org.ssg.fixtures.analysis','1.0.0',$10,$11,$12,'fixture-b',$13::jsonb,'{}','approved',$8,$8,now())`,
+      [extensionIds.artifact, fixture.organizationId, extensionIds.publisher, artifactDigest, `sha256:${"8".repeat(64)}`, `sha256:${"9".repeat(64)}`,
+        JSON.stringify(catalogManifest("org.ssg.fixtures.effect", artifactDigest, "propose_effect")), fixture.people.operator,
+        extensionIds.artifactB, `sha256:${"c".repeat(64)}`, `sha256:${"d".repeat(64)}`, `sha256:${"f".repeat(64)}`,
+        JSON.stringify(catalogManifest("org.ssg.fixtures.analysis", `sha256:${"c".repeat(64)}`, "compute"))]);
     await owner.query(`INSERT INTO extension.plugin_installations
       (id,organization_id,deployment_id,artifact_id,artifact_digest,status,permitted_permissions,installed_by)
-      VALUES ($1,$2,$3,$4,$5,'enabled',ARRAY['effects.propose'],$6)`,
-      [extensionIds.installation, fixture.organizationId, fixture.deploymentId, extensionIds.artifact, artifactDigest, fixture.people.operator]);
+      VALUES ($1,$2,$3,$4,$5,'enabled',ARRAY['effects.propose'],$6),
+             ($7,$2,$3,$8,$9,'enabled',ARRAY[]::text[],$6)`,
+      [extensionIds.installation, fixture.organizationId, fixture.deploymentId, extensionIds.artifact, artifactDigest, fixture.people.operator,
+        extensionIds.installationB, extensionIds.artifactB, `sha256:${"c".repeat(64)}`]);
     await owner.query(`INSERT INTO extension.plugin_bindings
       (id,organization_id,project_id,definition_revision_id,installation_id,artifact_digest,configuration_digest,deployment_profile,status,bound_by)
       VALUES ($1,$2,$3,$4,$5,$6,$7,'air_gapped','enabled',$8)`,

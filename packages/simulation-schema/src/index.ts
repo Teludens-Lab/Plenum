@@ -3,6 +3,8 @@
 export const SIMULATION_SCHEMA_VERSION = "1.3.1";
 export const RELEASE_MANIFEST_CONTRACT_ID = "release-manifest-v1";
 export const RELEASE_MANIFEST_SCHEMA_ID = RELEASE_MANIFEST_CONTRACT_ID;
+export const PLUGIN_BINDING_CONTRACT_ID = "plugin-binding-v1";
+export const COMPOSITION_DEFINITION_CONTRACT_ID = "composition-definition-v1";
 
 export interface ReleaseManifestV1 {
   schemaVersion: string;
@@ -22,6 +24,7 @@ export interface ReleaseManifestV1 {
 }
 
 export interface PluginBindingV1 {
+  contractId?: typeof PLUGIN_BINDING_CONTRACT_ID;
   id: string;
   pluginId: string;
   pluginVersion: string;
@@ -39,6 +42,63 @@ export interface PluginBindingV1 {
   timeoutSeconds: number;
   enabledInProfiles: Array<"cloud" | "institutional" | "air_gapped">;
   localReplacementBindingId?: string;
+  requestedPermissions?: string[];
+  inputSchema?: string;
+  outputSchema?: string;
+  inputPorts?: CompositionPortV1[];
+  outputPorts?: CompositionPortV1[];
+  dependencies?: Array<{ pluginId: string; version: string; digest: string }>;
+}
+
+export type CompositionDataTypeV1 = "boolean" | "integer" | "number" | "string" | "object" | "array" | "effect_proposal";
+
+export interface CompositionPortV1 {
+  id: string;
+  label: string;
+  dataType: CompositionDataTypeV1;
+  unit: string;
+  classification: "public" | "internal" | "confidential" | "restricted";
+  required: boolean;
+  carriesEffectProposals?: boolean;
+}
+
+export interface CompositionNodeV1 {
+  id: string;
+  name: string;
+  kind: "model" | "transform" | "fan_out" | "join" | "approval_gate" | "output";
+  bindingId?: string;
+  transform?: "identity" | "sum" | "average";
+  joinPolicy?: "all_required" | "allow_partial";
+  approverSessionRoleIds?: string[];
+  inputPorts: CompositionPortV1[];
+  outputPorts: CompositionPortV1[];
+}
+
+export interface CompositionEdgeV1 {
+  id: string;
+  fromNodeId: string;
+  fromPortId: string;
+  toNodeId: string;
+  toPortId: string;
+}
+
+export interface CompositionFixtureV1 {
+  id: string;
+  name: string;
+  modelOutputs: Record<string, Record<string, unknown>>;
+  failingNodeIds?: string[];
+}
+
+export interface ModelCompositionV1 {
+  contractId: typeof COMPOSITION_DEFINITION_CONTRACT_ID;
+  id: string;
+  name: string;
+  version: string;
+  nodes: CompositionNodeV1[];
+  edges: CompositionEdgeV1[];
+  fixtures: CompositionFixtureV1[];
+  graphDigest?: string;
+  dependencyClosure?: Array<{ pluginId: string; version: string; digest: string }>;
 }
 
 export type RuntimeFieldTypeV1 = "short_text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
@@ -446,6 +506,7 @@ export interface RuntimeCoreDesignV1 {
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
   pluginBindings: PluginBindingV1[];
+  compositions?: ModelCompositionV1[];
   platformAdapters?: PlatformAdapterV1[];
   terminology?: { labels: Record<string, { singular: string; plural: string }>; customLabels: Record<string, string> };
   accessPolicy?: RuntimeAccessPolicyV1;
@@ -546,6 +607,37 @@ export const releaseManifestV1Schema = {
     validationReportId: uuidProperty
   }
 } as const satisfies ManifestSchema;
+
+export const pluginBindingV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: PLUGIN_BINDING_CONTRACT_ID, title: "Plugin Binding v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "pluginId", "pluginVersion", "pluginDigest", "installationId", "categories", "connectivity",
+    "configuration", "configurationDigest", "inputMappings", "timeoutSeconds", "enabledInProfiles"],
+  properties: {
+    contractId: { const: PLUGIN_BINDING_CONTRACT_ID }, id: { type: "string", format: "uuid" }, pluginId: nonEmptyStringProperty,
+    pluginVersion: nonEmptyStringProperty, pluginDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    installationId: { type: "string", format: "uuid" }, categories: { type: "array", items: nonEmptyStringProperty },
+    connectivity: { enum: ["offline_capable", "lan_required", "external_required"] }, configuration: { type: "object" },
+    configurationDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, inputMappings: { type: "array", items: { type: "object" } },
+    timeoutSeconds: { type: "integer", minimum: 1, maximum: 300 }, enabledInProfiles: { type: "array", uniqueItems: true,
+      items: { enum: ["cloud", "institutional", "air_gapped"] } }, localReplacementBindingId: { type: "string", format: "uuid" },
+    requestedPermissions: { type: "array", uniqueItems: true, items: nonEmptyStringProperty }, inputSchema: nonEmptyStringProperty,
+    outputSchema: nonEmptyStringProperty, inputPorts: { type: "array", items: { type: "object" } },
+    outputPorts: { type: "array", items: { type: "object" } }, dependencies: { type: "array", items: { type: "object" } }
+  }
+} as const;
+
+export const compositionDefinitionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: COMPOSITION_DEFINITION_CONTRACT_ID, title: "Model Composition Definition v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "name", "version", "nodes", "edges", "fixtures"],
+  properties: {
+    contractId: { const: COMPOSITION_DEFINITION_CONTRACT_ID }, id: { type: "string", format: "uuid" }, name: nonEmptyStringProperty,
+    version: nonEmptyStringProperty, nodes: { type: "array", items: { type: "object" } },
+    edges: { type: "array", items: { type: "object" } }, fixtures: { type: "array", items: { type: "object" } },
+    graphDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, dependencyClosure: { type: "array", items: { type: "object" } }
+  }
+} as const;
 
 export function hasPinnedPluginDigest(binding: PluginBindingV1): boolean {
   return binding.pluginVersion.length > 0 && /^sha256:[0-9a-f]{64}$/u.test(binding.pluginDigest);
@@ -694,6 +786,99 @@ function uniqueIds(items: readonly { id: string }[], label: string): Set<string>
   return ids;
 }
 
+const classificationRank = { public: 0, internal: 1, confidential: 2, restricted: 3 } as const;
+
+export function assertModelComposition(
+  composition: ModelCompositionV1,
+  bindings: readonly PluginBindingV1[],
+  sessionRoleIds: ReadonlySet<string> = new Set()
+): void {
+  if (composition.contractId !== COMPOSITION_DEFINITION_CONTRACT_ID || composition.name.trim().length === 0 ||
+      composition.version.trim().length === 0) throw new Error(`Model Composition ${composition.id} is incomplete`);
+  const nodes = new Map(composition.nodes.map((node) => [node.id, node]));
+  if (nodes.size !== composition.nodes.length) throw new Error(`Model Composition ${composition.id} has duplicate node IDs`);
+  const edges = new Map(composition.edges.map((edge) => [edge.id, edge]));
+  if (edges.size !== composition.edges.length) throw new Error(`Model Composition ${composition.id} has duplicate edge IDs`);
+  const bindingById = new Map(bindings.map((binding) => [binding.id, binding]));
+  const incoming = new Map<string, CompositionEdgeV1[]>();
+  const outgoing = new Map<string, CompositionEdgeV1[]>();
+  for (const node of composition.nodes) {
+    uniqueIds(node.inputPorts, `Model Composition ${composition.id} node ${node.id} input port`);
+    uniqueIds(node.outputPorts, `Model Composition ${composition.id} node ${node.id} output port`);
+    if (node.kind === "model" && (node.bindingId === undefined || !bindingById.has(node.bindingId))) {
+      throw new Error(`Model Composition ${composition.id} node ${node.id} references a missing Plugin Binding`);
+    }
+    if (node.kind !== "model" && node.bindingId !== undefined) {
+      throw new Error(`Model Composition ${composition.id} node ${node.id} can bind a Plugin only when its kind is model`);
+    }
+    if (node.kind === "approval_gate" && (node.approverSessionRoleIds?.length ?? 0) === 0) {
+      throw new Error(`Model Composition ${composition.id} approval gate ${node.id} needs an approver Session Role`);
+    }
+    node.approverSessionRoleIds?.forEach((id) => {
+      if (sessionRoleIds.size > 0 && !sessionRoleIds.has(id)) {
+        throw new Error(`Model Composition ${composition.id} approval gate ${node.id} references missing Session Role ${id}`);
+      }
+    });
+  }
+  for (const edge of composition.edges) {
+    const source = nodes.get(edge.fromNodeId);
+    const target = nodes.get(edge.toNodeId);
+    const sourcePort = source?.outputPorts.find(({ id }) => id === edge.fromPortId);
+    const targetPort = target?.inputPorts.find(({ id }) => id === edge.toPortId);
+    if (source === undefined || target === undefined || sourcePort === undefined || targetPort === undefined) {
+      throw new Error(`Model Composition ${composition.id} edge ${edge.id} references a missing node or port`);
+    }
+    if (sourcePort.dataType !== targetPort.dataType) {
+      throw new Error(`Model Composition ${composition.id} edge ${edge.id} has incompatible types ${sourcePort.dataType} and ${targetPort.dataType}`);
+    }
+    if (sourcePort.unit !== targetPort.unit) {
+      throw new Error(`Model Composition ${composition.id} edge ${edge.id} has incompatible units ${sourcePort.unit || "unitless"} and ${targetPort.unit || "unitless"}`);
+    }
+    if (classificationRank[sourcePort.classification] > classificationRank[targetPort.classification]) {
+      throw new Error(`Model Composition ${composition.id} edge ${edge.id} exceeds the ${targetPort.classification} classification ceiling`);
+    }
+    incoming.set(target.id, [...(incoming.get(target.id) ?? []), edge]);
+    outgoing.set(source.id, [...(outgoing.get(source.id) ?? []), edge]);
+  }
+  for (const node of composition.nodes) {
+    for (const port of node.inputPorts) {
+      const count = (incoming.get(node.id) ?? []).filter(({ toPortId }) => toPortId === port.id).length;
+      if (port.required && count === 0) throw new Error(`Model Composition ${composition.id} node ${node.id} is missing required input ${port.id}`);
+      if (count > 1 && node.kind !== "join") throw new Error(`Model Composition ${composition.id} node ${node.id} has illegal fan-in at ${port.id}`);
+    }
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (nodeId: string, path: string[]): void => {
+    if (visiting.has(nodeId)) throw new Error(`Model Composition ${composition.id} has a cycle: ${[...path, nodeId].join(" -> ")}`);
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const edge of outgoing.get(nodeId) ?? []) visit(edge.toNodeId, [...path, nodeId]);
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  };
+  composition.nodes.forEach(({ id }) => visit(id, []));
+  const effectSources = composition.nodes.filter((node) => node.outputPorts.some((port) =>
+    port.dataType === "effect_proposal" || port.carriesEffectProposals === true));
+  const checkApprovalPath = (nodeId: string, approved: boolean, path: string[]): void => {
+    const node = nodes.get(nodeId)!;
+    const nextApproved = approved || node.kind === "approval_gate";
+    const next = outgoing.get(nodeId) ?? [];
+    if ((node.kind === "output" || next.length === 0) && !nextApproved) {
+      throw new Error(`Model Composition ${composition.id} Effect Proposal path ${[...path, nodeId].join(" -> ")} has no approval gate`);
+    }
+    next.forEach((edge) => checkApprovalPath(edge.toNodeId, nextApproved, [...path, nodeId]));
+  };
+  effectSources.forEach(({ id }) => {
+    const next = outgoing.get(id) ?? [];
+    if (next.length === 0) throw new Error(`Model Composition ${composition.id} Effect Proposal path ${id} has no approval gate`);
+    next.forEach((edge) => checkApprovalPath(edge.toNodeId, nodes.get(id)?.kind === "approval_gate", [id]));
+  });
+  if (composition.graphDigest !== undefined && !/^sha256:[0-9a-f]{64}$/u.test(composition.graphDigest)) {
+    throw new Error(`Model Composition ${composition.id} graph digest is invalid`);
+  }
+}
+
 /** Validates the executable Runtime subset of the canonical Core Design. */
 export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is CoreDesignV1 & RuntimeCoreDesignV1 {
   const required = ["teams", "sessionRoles", "seats", "stageGroups", "stages", "artifactTypes", "forms",
@@ -719,6 +904,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   const stageGroups = uniqueIds(runtime.stageGroups, "Stage Group");
   uniqueIds(runtime.polls ?? [], "Poll Definition");
   uniqueIds(runtime.communications.voiceChannels ?? [], "Voice Channel Definition");
+  uniqueIds(runtime.compositions ?? [], "Model Composition");
   uniqueIds(runtime.reports, "Report");
 
   const reference = (ids: Set<string>, id: string, label: string): void => {
@@ -751,6 +937,22 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   if (runtime.terminology !== undefined && Object.values(runtime.terminology.customLabels).some((label) => label.trim().length === 0)) {
     throw new Error("Terminology custom labels must be non-empty");
   }
+
+  const bindingIds = uniqueIds(runtime.pluginBindings, "Plugin Binding");
+  for (const binding of runtime.pluginBindings) {
+    if (binding.contractId !== undefined && binding.contractId !== PLUGIN_BINDING_CONTRACT_ID) {
+      throw new Error(`Plugin Binding ${binding.id} has an unsupported contract identifier`);
+    }
+    if (!hasPinnedPluginDigest(binding)) throw new Error(`Plugin Binding ${binding.id} is not pinned by digest`);
+    if (binding.localReplacementBindingId !== undefined) reference(bindingIds, binding.localReplacementBindingId, `Plugin Binding ${binding.id}`);
+    if (binding.connectivity === "external_required" && binding.enabledInProfiles.includes("air_gapped")) {
+      const replacement = runtime.pluginBindings.find(({ id }) => id === binding.localReplacementBindingId);
+      if (replacement === undefined || replacement.connectivity !== "offline_capable" || !replacement.enabledInProfiles.includes("air_gapped")) {
+        throw new Error(`Plugin Binding ${binding.id} needs a verified local replacement for the air_gapped profile`);
+      }
+    }
+  }
+  for (const composition of runtime.compositions ?? []) assertModelComposition(composition, runtime.pluginBindings, roles);
 
   for (const role of runtime.sessionRoles) {
     role.interfaceProfileIds.forEach((id) => reference(interfaces, id, `Session Role ${role.id}`));

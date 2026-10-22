@@ -4,16 +4,16 @@
 
 - ID: `PS-350`
 - Title: Prove Designer to evidence first release journey
-- Goal: Pass AC-01 through AC-13 across Studio, Release, Runtime, evidence, and export.
+- Goal: Prove the implemented Phase 3 journey across Studio, Release, Runtime, evidence, and export; defer AC-07 and AC-11 to their later owning tasks and release gate.
 - User outcome: A non-programming Designer and Session team complete the entire first product proof on one build.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
-Product IDs: `REQ-001`, `REQ-009`, `REQ-021`, `REQ-024`, `REQ-027`, `REQ-035`, `REQ-041`, `REQ-043`, `REQ-053`, `REQ-064`, `INV-002`, `INV-003`, `INV-004`, `INV-005`, `INV-017`, `INV-021`, `INV-022`.
+Product IDs: `REQ-001`, `REQ-009`, `REQ-021`, `REQ-024`, `REQ-027`, `REQ-035`, `REQ-053`, `REQ-064`, `INV-002`, `INV-003`, `INV-004`, `INV-005`, `INV-017`, `INV-021`, `INV-022`.
 
-Requirement-row authority: `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` — rows `REQ-001`, `REQ-009`, `REQ-021`, `REQ-024`, `REQ-027`, `REQ-035`, `REQ-041`, `REQ-043`, `REQ-053`, `REQ-064`, `INV-002`, `INV-003`, `INV-004`, `INV-005`, `INV-017`, `INV-021`, `INV-022`. Canonical terminology authority: `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` — entries for every domain term used by this task.
+Requirement-row authority: `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` — rows `REQ-001`, `REQ-009`, `REQ-021`, `REQ-024`, `REQ-027`, `REQ-035`, `REQ-053`, `REQ-064`, `INV-002`, `INV-003`, `INV-004`, `INV-005`, `INV-017`, `INV-021`, `INV-022`. Canonical terminology authority: `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` — entries for every domain term used by this task.
 
 Authoritative sources and sections:
 
@@ -35,10 +35,12 @@ Task prerequisites: `PS-200`, `PS-210`, `PS-230`, `PS-240`, `PS-250`, `PS-300`, 
 
 Before editing, read Roadmap section 16, `PROJECT_STATE.md`, this prompt, the requirement rows, the smallest governing sections, Glossary terms, contracts, and tests. Check `git status --short`, current versions, and prerequisite evidence. Stop on a dirty overlap or failed prerequisite; preserve unrelated work. Required git state: no unreviewed overlapping changes and no unresolved failed gate. Do not create a commit unless the repository workflow or user explicitly authorizes it.
 
+Run every Node/npm command with Node 24 or newer. Record `node --version` at preflight. If the system default is older, select a verified Node 24+ runtime before validation; older-runtime results are diagnostic only and cannot satisfy a task gate. If Node 24+ is unavailable, mark affected commands BLOCKED and do not claim completion.
+
 ## Inspect before editing
 
 - Every prerequisite evidence record
-- AC-01 to AC-13 fixture definitions
+- Active PS-350 fixture definitions and deferred AC-07/AC-11 ownership
 - Known unresolved approval gates
 
 Read callers, tests, fixtures, configuration, exports, migrations, and public contracts that touch the change. Verify real paths before creating any unobserved path.
@@ -65,6 +67,7 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 - Use real browser actors and PostgreSQL
 - Exercise network loss and duplicate retry
 - Compare export to canonical records
+- Exercise the real local-SFU media path with two browser Participants
 - Record blocked AC-09 separately if needed
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
@@ -81,7 +84,8 @@ Derive the Principal, Organization, Session, Seat Assignments, Active Role Conte
 
 ## Concurrency/idempotency/versions
 
-- Exercise duplicate retry, queued reconnect, and conflicting adjudication
+- Exercise duplicate retry and conflicting adjudication
+- Record queued reconnect as deferred to AC-11 owners
 - Pin Release and adapter digests
 - Use deterministic clocks and seeds
 
@@ -90,6 +94,8 @@ Pin Governing Release, schema, contract, Plugin, and Platform Adapter versions w
 ## Non-goals and explicitly prohibited side effects
 
 - Do not claim full production readiness
+- Do not implement or pass AC-07/AC-11 in PS-350; retain them as mandatory PS-420/PS-500 release gates
+- Defer accessibility acceptance to the final PS-550 accessibility and release gate
 - Do not waive failed gates
 - Do not claim AC-09 without verified parity evidence
 
@@ -97,26 +103,28 @@ Also prohibited: destructive production operations, production secret changes, p
 
 ## Acceptance
 
-- Given the documented preconditions, when the task behavior is exercised, then aC-01 through AC-13 each has actual behavior and evidence
+- Given the documented preconditions, when the task behavior is exercised, then each active PS-350 acceptance ID has actual behavior and evidence
+- Given the documented preconditions, when the task behavior is exercised, then deferred AC-07 and AC-11 remain assigned to PS-420/PS-500 and block release approval until passed
 - Given the documented preconditions, when the task behavior is exercised, then failures block completion and name the owning task
 - Given the documented preconditions, when the task behavior is exercised, then export reconciles to canonical records
 - Given the documented preconditions, when the task behavior is exercised, then no application-built claim exceeds evidence
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
-- AC-01 to AC-13 evidence bundle
+- Evidence bundle for AC-01 through AC-06, AC-08 through AC-10, and AC-12 through AC-13
+- Explicit AC-07/AC-11 deferred release-gate record
 - Defect ledger
 - Phase 3 readiness decision
 
 ## Tests
 
-Required test/evidence IDs: `AC-01`, `AC-02`, `AC-03`, `AC-04`, `AC-05`, `AC-06`, `AC-07`, `AC-08`, `AC-09`, `AC-10`, `AC-11`, `AC-12`, `AC-13`.
+Required test/evidence IDs: `AC-01`, `AC-02`, `AC-03`, `AC-04`, `AC-05`, `AC-06`, `AC-08`, `AC-09`, `AC-10`, `AC-12`, `AC-13`.
 
 Use the smallest effective levels from Roadmap section 8: domain tests for invariants, database/integration tests for real boundaries, and a few browser flows for critical journeys. Use synthetic representative fixtures, deterministic clocks/seeds, isolated tenants, and no arbitrary sleeps. Do not mock the boundary the test claims to prove.
 
 ## Validation commands
 
-Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-E2E`, `CMD-PLATFORM-A11Y`, `CMD-PARITY`, `CMD-PROMPTBOOK-VALIDATE`.
+Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-E2E`, `CMD-PLATFORM-MEDIA`, `CMD-PARITY`, `CMD-PROMPTBOOK-VALIDATE`.
 
 Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
@@ -141,21 +149,21 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 - Proposed branch: `feat/ps-350-first-product-proof`
 - Proposed subject: `test(e2e): prove first product journey`
 - Expected migrations: none
-- Expected API/contract IDs: `first-proof-e2e-v1`
+- Expected API/contract IDs: `first-proof-e2e-v1`, `session-onboarding-v1`
 
 Proposed body:
 
 ```text
 Why:
-- Demonstrate the first release journey across real boundaries.
+- Demonstrate the implemented first release journey across real boundaries.
 What:
-- Add AC-01 to AC-13 E2E evidence.
+- Add active PS-350 E2E evidence and retain AC-07/AC-11 as explicit later release gates.
 Verification:
-- Full first-proof and accessibility lanes.
+- Full first-proof and real-media lanes; accessibility acceptance is deferred to PS-550.
 Compatibility / migrations:
 - None.
 Risks / follow-up:
-- This is not production approval.
+- This is not production approval; AC-07 and AC-11 remain mandatory before release.
 Refs: PS-350, AC-01, AC-13
 ```
 

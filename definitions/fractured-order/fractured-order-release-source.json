@@ -6945,6 +6945,18 @@
                 "scribe",
                 "notetaker"
               ]
+            },
+            {
+              "id": "note-autosave",
+              "from": "saved",
+              "command": "artifact.edit",
+              "label": "Save changes",
+              "to": "saved",
+              "allowedSessionRoleIds": [
+                "scribe",
+                "notetaker"
+              ],
+              "contentOnly": true
             }
           ]
         },

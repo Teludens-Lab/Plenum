@@ -21,12 +21,15 @@ import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import {
+  archiveSession,
   assignParticipant,
   activateDisplayPrincipal,
   claimSeat,
   configureSessionAccess,
   confirmReadiness,
   createGuestIdentity,
+  createSession,
+  deleteSession,
   decideJoinRequest,
   getReadiness,
   importRoster,
@@ -34,6 +37,7 @@ import {
   markSessionReady,
   openSession,
   reassignSeat,
+  removeParticipants,
   revokeSessionPrincipal,
   resolveInvitationSession,
   resolvePrincipalCommandContext,
@@ -44,7 +48,7 @@ import { getPluginCatalog } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
-import { exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
+import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -112,6 +116,13 @@ function statusForReceipt(receipt: CommandReceiptV1): number {
 function send(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(body));
+}
+
+function sendArtifact(response: ServerResponse, artifact: { contentType: string; filename: string; bytes: Uint8Array }): void {
+  response.writeHead(200, { "content-type": artifact.contentType, "content-length": artifact.bytes.byteLength,
+    "content-disposition": `attachment; filename="${artifact.filename}"`, "cache-control": "no-store",
+    "x-content-type-options": "nosniff" });
+  response.end(Buffer.from(artifact.bytes));
 }
 
 async function readBody(request: IncomingMessage, correlationId: string): Promise<JsonObject> {
@@ -287,6 +298,24 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         }, correlationId));
         return true;
       }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/sessions$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "releaseId") || typeof body.releaseId !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "A published Release identifier is required.", correlationId);
+        }
+        send(response, 201, await createSession(options.pool, principal, pathId(match[1], correlationId),
+          body.releaseId, correlationId, options.deploymentId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/research-export$/u))) {
+        const format = url.searchParams.get("format") ?? "zip";
+        if (!new Set(["json", "csv", "html", "zip"]).has(format)) {
+          throw authorizationError("VALIDATION_FAILED", "The research export format is invalid.", correlationId);
+        }
+        sendArtifact(response, await exportResearchEvidenceBundle(options.pool, principal,
+          pathId(match[1], correlationId), format as "json" | "csv" | "html" | "zip", correlationId));
+        return true;
+      }
       if (request.method === "DELETE" && (match = url.pathname.match(/^\/v1\/research-access-grants\/([^/]+)$/u))) {
         await revokeResearchAccess(options.pool, principal, pathId(match[1], correlationId), correlationId);
         send(response, 200, { revoked: true });
@@ -310,7 +339,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/readiness$/u))) {
-        send(response, 200, await getReadiness(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        send(response, 200, await getReadiness(options.pool, principal, pathId(match[1], correlationId), correlationId,
+          url.searchParams.get("query") ?? undefined));
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/invitations\/([^/]+)\/accept$/u))) {
@@ -339,6 +369,20 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           await openSession(options.pool, context, command, correlationId, options.deploymentId);
         const receipt = "receipt" in result ? result.receipt : result;
         send(response, statusForReceipt(receipt), result);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/(participants\/remove|archive|delete)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.aggregateId !== sessionId) throw authorizationError("VALIDATION_FAILED", "The Session path and Command target differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = match[2] === "participants/remove"
+          ? await removeParticipants(options.pool, context, command, correlationId, options.deploymentId)
+          : match[2] === "archive"
+            ? await archiveSession(options.pool, context, command, correlationId, options.deploymentId)
+            : await deleteSession(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/join-requests\/([^/]+)\/(admit|reject)$/u))) {

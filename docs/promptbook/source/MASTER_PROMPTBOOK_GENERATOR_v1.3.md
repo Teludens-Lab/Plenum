@@ -172,6 +172,7 @@ Stage A: source inventory and conflict report (no code changes). Stage B: archit
 
 ### B. Contract-first cross-cutting conventions
 The generated promptbook MUST explicitly govern:
+- execution of every Node/npm validation command with Node 24 or newer, including a preflight `node --version` check and a prohibition on using older-runtime results as completion evidence;
 - canonical clock and timestamp conventions (server-authoritative time, INV-011; device clocks observational only);
 - UUID/key policy, DEC-38 naming for commands and events, canonical enum vocabulary, SQL naming, JSON naming and the 09 error envelope with its documented error codes;
 - transaction + Evidence Event + command receipt + transactional outbox atomicity (REQ-053, DEC-43);

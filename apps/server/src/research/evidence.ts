@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { canonicalizeJson, type JsonObject } from "@plenum/event-contracts";
 import type { Pool, PoolClient } from "pg";
 
 import { withOrganizationTransaction } from "../database.js";
@@ -181,5 +182,155 @@ export async function exportResearchEvidenceIndex(
         eventVersion: row.event_version, governingReleaseId: row.governing_release_id, recordedAt: row.recorded_at.toISOString() })),
       nextSequence: hasMore ? Number(rows.at(-1)?.sequence ?? afterSequence) : null
     };
+  });
+}
+
+interface ResearchExportEvent extends JsonObject {
+  sessionId: string;
+  sequence: number;
+  eventType: string;
+  eventVersion: number;
+  governingReleaseId: string;
+  aggregateId: string;
+  aggregateVersion: number | null;
+  recordedAt: string;
+  captureMode: "captured";
+}
+
+export interface ResearchExportArtifact {
+  contentType: string;
+  filename: string;
+  bytes: Uint8Array;
+  manifest: JsonObject;
+}
+
+const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
+const text = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : canonicalizeJson(value as JsonObject));
+const csv = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+const html = (value: unknown) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zip(files: Array<{ path: string; bytes: Uint8Array }>): Uint8Array {
+  const local: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = Buffer.from(file.path, "utf8");
+    const body = Buffer.from(file.bytes);
+    const checksum = crc32(body);
+    const header = Buffer.alloc(30 + name.length);
+    header.writeUInt32LE(0x04034b50, 0); header.writeUInt16LE(20, 4); header.writeUInt16LE(0, 6);
+    header.writeUInt16LE(0, 8); header.writeUInt16LE(0, 10); header.writeUInt16LE(33, 12);
+    header.writeUInt32LE(checksum, 14); header.writeUInt32LE(body.length, 18); header.writeUInt32LE(body.length, 22);
+    header.writeUInt16LE(name.length, 26); header.writeUInt16LE(0, 28); name.copy(header, 30);
+    local.push(header, body);
+    const directory = Buffer.alloc(46 + name.length);
+    directory.writeUInt32LE(0x02014b50, 0); directory.writeUInt16LE(20, 4); directory.writeUInt16LE(20, 6);
+    directory.writeUInt16LE(0, 8); directory.writeUInt16LE(0, 10); directory.writeUInt16LE(0, 12);
+    directory.writeUInt16LE(33, 14); directory.writeUInt32LE(checksum, 16); directory.writeUInt32LE(body.length, 20);
+    directory.writeUInt32LE(body.length, 24); directory.writeUInt16LE(name.length, 28); directory.writeUInt32LE(offset, 42);
+    name.copy(directory, 46); central.push(directory); offset += header.length + body.length;
+  }
+  const centralBytes = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(centralBytes.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...local, centralBytes, end]);
+}
+
+export async function exportResearchEvidenceBundle(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  format: "json" | "csv" | "html" | "zip",
+  correlationId: string,
+  now = new Date()
+): Promise<ResearchExportArtifact> {
+  if (!uuid.test(projectId)) throw authorizationError("VALIDATION_FAILED", "A valid Project is required.", correlationId);
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireCurrentRole(client, principal, "research_analyst", correlationId);
+    const access = await client.query<{ protocol_reference: string }>(
+      `SELECT protocol_reference FROM evidence.research_access_grants
+        WHERE organization_id=$1 AND project_id=$2 AND analyst_person_id=$3
+          AND classification_ceiling='internal' AND revoked_at IS NULL AND expires_at>$4
+        ORDER BY created_at DESC LIMIT 1`,
+      [principal.organizationId, projectId, principal.principalId, now]
+    );
+    if (access.rows[0] === undefined) {
+      throw authorizationError("PERMISSION_DENIED", "An active project-scoped Research Access Grant is required.", correlationId);
+    }
+    const sessions = await client.query<{ id: string; status: string; created_at: Date }>(
+      `SELECT id,status,created_at FROM runtime.sessions
+        WHERE organization_id=$1 AND project_id=$2 ORDER BY created_at,id`,
+      [principal.organizationId, projectId]
+    );
+    if (sessions.rowCount === 0) throw authorizationError("NOT_FOUND", "No Sessions were found for the Project.", correlationId);
+    const sessionIds = sessions.rows.map(({ id }) => id);
+    const source = await client.query<{
+      session_id: string; sequence: string; event_type: string; event_version: number; governing_release_id: string;
+      aggregate_id: string; aggregate_version: string | null; recorded_at: Date;
+    }>(
+      `SELECT session_id,sequence,event_type,event_version,governing_release_id,aggregate_id,aggregate_version,recorded_at
+         FROM evidence.events
+        WHERE organization_id=$1 AND session_id=ANY($2::uuid[]) ORDER BY session_id,sequence`,
+      [principal.organizationId, sessionIds]
+    );
+    const events: ResearchExportEvent[] = source.rows.map((row) => ({
+      sessionId: row.session_id, sequence: Number(row.sequence), eventType: row.event_type,
+      eventVersion: row.event_version, governingReleaseId: row.governing_release_id,
+      aggregateId: row.aggregate_id, aggregateVersion: row.aggregate_version === null ? null : Number(row.aggregate_version),
+      recordedAt: row.recorded_at.toISOString(), captureMode: "captured"
+    }));
+    const jsonBytes = text({ contractId: "research-evidence-export-v1", projectId, sessions: sessions.rows.map((session) => ({
+      sessionId: session.id, status: session.status, createdAt: session.created_at.toISOString()
+    })), events });
+    const csvBytes = text([
+      ["sessionId", "sequence", "eventType", "eventVersion", "governingReleaseId", "aggregateId", "aggregateVersion", "recordedAt", "captureMode"].map(csv).join(","),
+      ...events.map((event) => [event.sessionId, event.sequence, event.eventType, event.eventVersion,
+        event.governingReleaseId, event.aggregateId, event.aggregateVersion, event.recordedAt, event.captureMode].map(csv).join(","))
+    ].join("\n") + "\n");
+    const htmlBytes = text(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Research evidence report</title><body>` +
+      `<h1>Research evidence report</h1><p>Project ${html(projectId)}</p><p>${events.length} canonical captured event rows.</p>` +
+      `<table><thead><tr><th>Session</th><th>Sequence</th><th>Event</th><th>Capture</th></tr></thead><tbody>` +
+      events.map((event) => `<tr><td>${html(event.sessionId)}</td><td>${event.sequence}</td><td>${html(event.eventType)}</td><td>captured</td></tr>`).join("") +
+      `</tbody></table></body></html>`);
+    const files = [
+      { path: "events.json", mediaType: "application/json", bytes: jsonBytes, records: events.length },
+      { path: "events.csv", mediaType: "text/csv", bytes: csvBytes, records: events.length },
+      { path: "report.html", mediaType: "text/html", bytes: htmlBytes, records: events.length }
+    ];
+    const manifest: JsonObject = {
+      contractId: "research-evidence-manifest-v1", exportId: randomUUID(), projectId,
+      sessionIds, protocolReference: access.rows[0].protocol_reference, generatedAt: now.toISOString(),
+      captureModes: ["captured"],
+      files: files.map((file) => ({ path: file.path, mediaType: file.mediaType, bytes: file.bytes.byteLength,
+        records: file.records, sha256: hash(file.bytes) })),
+      formalReportSource: { path: "report.html", sourcePath: "events.json", sourceSha256: hash(jsonBytes) },
+      sourceReconciliation: { sourceRows: source.rowCount, exportedRows: events.length,
+        matched: source.rowCount === events.length, sourceSha256: hash(text(events)) }
+    };
+    const manifestBytes = text(manifest);
+    const selection = format === "json" ? { contentType: "application/json", filename: "research-evidence.json", bytes: jsonBytes } :
+      format === "csv" ? { contentType: "text/csv; charset=utf-8", filename: "research-evidence.csv", bytes: csvBytes } :
+      format === "html" ? { contentType: "text/html; charset=utf-8", filename: "research-evidence.html", bytes: htmlBytes } :
+      { contentType: "application/zip", filename: "research-evidence.zip",
+        bytes: zip([{ path: "manifest.json", bytes: manifestBytes }, ...files.map(({ path, bytes }) => ({ path, bytes }))]) };
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'research.export_completed',$4,$5::jsonb)`,
+      [randomUUID(), principal.organizationId, principal.principalId, `project:${projectId}`,
+        JSON.stringify({ correlationId, exportId: manifest.exportId, format, sessionCount: sessionIds.length,
+          eventCount: events.length, exportSha256: hash(selection.bytes), classificationCeiling: "internal" })]
+    );
+    return { ...selection, manifest };
   });
 }

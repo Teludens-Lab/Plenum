@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   type CommandEnvelopeV1,
   type CommandReceiptV1,
@@ -112,6 +112,7 @@ function FieldEditor(props: FieldEditorProps) {
 }
 
 function FlatFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
+  const idPrefix = useId().replaceAll(":", "");
   const [values, setValues] = useState<Record<string, string | string[] | number>>(() => Object.fromEntries(
     form.fields.map((field) => {
       const value = runtimeFormValue(initial ?? {}, field.key);
@@ -146,7 +147,7 @@ function FlatFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: Fie
     {form.sections.map((section) => <fieldset key={section.id}>
       {section.title === undefined ? null : <legend>{section.title}</legend>}
       {section.fields.filter((field) => runtimeFieldConditionMatches(field.visibleWhen, payload())).map((field) => {
-      const id = `${form.id}-${field.key}`;
+      const id = `${idPrefix}-${form.id}-${field.key}`;
       const error = errors[field.key];
       const required = field.required || (field.requiredWhen !== undefined && runtimeFieldConditionMatches(field.requiredWhen, payload()));
       const describedBy = [field.helpText === undefined ? null : `${id}-help`, error === undefined ? null : `${id}-error`]
@@ -184,6 +185,7 @@ function FlatFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: Fie
 }
 
 function RepeatableFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
+  const idPrefix = useId().replaceAll(":", "");
   const blankItem = (section: RuntimeFormV1["sections"][number]): JsonObject => Object.fromEntries(
     section.fields.map((field) => [field.key, field.type === "multi_select" || field.type === "artifact_reference" ? [] : ""])
   ) as JsonObject;
@@ -261,7 +263,7 @@ function RepeatableFieldEditor({ form, initial, disabled, onSubmit, submitLabel 
       {section.description === undefined ? null : <p className="hint">{section.description}</p>}
       {(Array.isArray(values[section.id]) ? values[section.id] as JsonObject[] : []).map((entry, index) => <fieldset className="repeatable-item" key={index}>
         <legend>{section.itemLabel ?? "Item"} {index + 1}</legend>
-        {section.fields.map((field) => renderField(field, entry, `${section.id}.${index}.${field.key}`, `${form.id}-${section.id}-${index}-${field.key.replaceAll(".", "-")}`))}
+        {section.fields.map((field) => renderField(field, entry, `${section.id}.${index}.${field.key}`, `${idPrefix}-${form.id}-${section.id}-${index}-${field.key.replaceAll(".", "-")}`))}
         <button className="btn-secondary" type="button" disabled={disabled || (values[section.id] as JsonObject[]).length <= (section.minItems ?? 0)} onClick={() => {
           const entries = [...(values[section.id] as JsonObject[])]; entries.splice(index, 1); setValues({ ...values, [section.id]: entries });
         }}>Remove {section.itemLabel ?? "item"}</button>
@@ -273,7 +275,7 @@ function RepeatableFieldEditor({ form, initial, disabled, onSubmit, submitLabel 
     </fieldset> : <fieldset key={section.id}>
       {section.title === undefined ? null : <legend>{section.title}</legend>}
       {section.description === undefined ? null : <p className="hint">{section.description}</p>}
-      {section.fields.map((field) => renderField(field, values, field.key, `${form.id}-${field.key.replaceAll(".", "-")}`))}
+      {section.fields.map((field) => renderField(field, values, field.key, `${idPrefix}-${form.id}-${field.key.replaceAll(".", "-")}`))}
     </fieldset>)}
     <button className="btn-primary" type="submit" disabled={disabled}>{submitLabel}</button>
   </form>;

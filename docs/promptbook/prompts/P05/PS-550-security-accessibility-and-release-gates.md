@@ -33,9 +33,11 @@ Task prerequisites: `PS-510`, `PS-520`, `PS-530`, `PS-540`.
 
 Before editing, read Roadmap section 16, `PROJECT_STATE.md`, this prompt, the requirement rows, the smallest governing sections, Glossary terms, contracts, and tests. Check `git status --short`, current versions, and prerequisite evidence. Stop on a dirty overlap or failed prerequisite; preserve unrelated work. Required git state: no unreviewed overlapping changes and no unresolved failed gate. Do not create a commit unless the repository workflow or user explicitly authorizes it.
 
+Run every Node/npm command with Node 24 or newer. Record `node --version` at preflight. If the system default is older, select a verified Node 24+ runtime before validation; older-runtime results are diagnostic only and cannot satisfy a task gate. If Node 24+ is unavailable, mark affected commands BLOCKED and do not claim completion.
+
 ## Inspect before editing
 
-- All phase evidence
+- All phase evidence, including deferred AC-07/AC-11 results from PS-420/PS-500
 - Security control ownership
 - Accessibility reference screens
 - Migration and recovery rehearsals
@@ -100,6 +102,7 @@ Also prohibited: destructive production operations, production secret changes, p
 ## Acceptance
 
 - Given the documented preconditions, when the task behavior is exercised, then every mandatory control has PASS/FAIL/NOT RUN evidence
+- Given the documented preconditions, when the task behavior is exercised, then deferred AC-07 and AC-11 have passing PS-420/PS-500 evidence before release approval
 - Given the documented preconditions, when the task behavior is exercised, then no critical defect is silently accepted
 - Given the documented preconditions, when the task behavior is exercised, then maturity states are separated
 - Given the documented preconditions, when the task behavior is exercised, then owner approval remains distinct from engineering completion

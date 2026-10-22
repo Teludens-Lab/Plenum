@@ -34,6 +34,14 @@ type Seat = {
   state: string;
 };
 
+export interface CreatedSessionV1 {
+  contractId: "session-onboarding-v1";
+  sessionId: string;
+  projectId: string;
+  governingReleaseId: string;
+  status: "created";
+}
+
 function requireOperation(command: CommandEnvelopeV1, operation: string, correlationId: string): JsonObject {
   if (command.operationType !== operation) throw authorizationError("INVALID_COMMAND", `Expected ${operation}.`, correlationId);
   return command.payload;
@@ -137,6 +145,69 @@ async function assignSeat(
     [context.organizationId, context.sessionId, seatId]
   );
   return { assignmentId, participantId, assignmentVersion: Number(version.rows[0]!.assignment_version), definition };
+}
+
+export async function createSession(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  releaseId: string,
+  correlationId: string,
+  deploymentId: string
+): Promise<CreatedSessionV1> {
+  if (!uuid.test(projectId) || !uuid.test(releaseId)) {
+    throw authorizationError("VALIDATION_FAILED", "A valid Project and published Release are required.", correlationId);
+  }
+  if (!principal.organizationRoles.includes("operator")) {
+    throw authorizationError("PERMISSION_DENIED", "An Operator Organization Role is required.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const authorizedRelease = await client.query(
+      `SELECT 1
+         FROM registry.releases release
+         JOIN identity.memberships membership
+           ON membership.organization_id=release.organization_id AND membership.person_id=$4
+          AND membership.organization_role='operator'
+        WHERE release.organization_id=$1 AND release.project_id=$2 AND release.id=$3`,
+      [principal.organizationId, projectId, releaseId, principal.principalId]
+    );
+    if (authorizedRelease.rowCount !== 1) {
+      throw authorizationError("REFERENCE_INVALID", "The published Release is unavailable for this Project.", correlationId);
+    }
+    const sessionId = randomUUID();
+    await client.query(
+      `INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by)
+       VALUES ($1,$2,$3,$4,'created',$5)`,
+      [sessionId, principal.organizationId, projectId, releaseId, principal.principalId]
+    );
+    await client.query(
+      `INSERT INTO runtime.session_authorities(session_id,organization_id,deployment_id,authority_epoch,status)
+       VALUES ($1,$2,$3,1,'active')`,
+      [sessionId, principal.organizationId, deploymentId]
+    );
+    await client.query(
+      `INSERT INTO runtime.release_activations
+       (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+       VALUES ($1,$2,$3,$4,$5,1,'{}',$6)`,
+      [randomUUID(), principal.organizationId, projectId, sessionId, releaseId, principal.principalId]
+    );
+    await client.query(
+      `INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)
+       VALUES ($1,$2,$3,$3)`,
+      [principal.organizationId, sessionId, principal.principalId]
+    );
+    await client.query(
+      "INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)",
+      [sessionId, principal.organizationId]
+    );
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'session.created',$4,$5::jsonb)`,
+      [randomUUID(), principal.organizationId, principal.principalId, `session:${sessionId}`,
+        JSON.stringify({ correlationId, projectId, governingReleaseId: releaseId })]
+    );
+    return { contractId: "session-onboarding-v1", sessionId, projectId, governingReleaseId: releaseId, status: "created" };
+  });
 }
 
 export async function resolvePrincipalCommandContext(
@@ -442,6 +513,148 @@ export async function assignParticipant(
   }});
 }
 
+export async function removeParticipants(
+  pool: Pool, context: PrincipalSessionCommandContext, command: CommandEnvelopeV1, correlationId: string, deploymentId: string
+): Promise<CommandReceiptV1> {
+  return processPrincipalSessionCommand({ pool, context, command, correlationId, deploymentId, lockSessionAndExecute: async ({ client }) => {
+    const payload = requireOperation(command, "participant.remove_bulk", correlationId);
+    const denied = await requireSessionOperator(client, context); if (denied !== null) return denied;
+    if (!Array.isArray(payload.participantIds) || payload.participantIds.length < 1 || payload.participantIds.length > 100 ||
+        !payload.participantIds.every((id) => typeof id === "string" && uuid.test(id)) ||
+        new Set(payload.participantIds).size !== payload.participantIds.length ||
+        typeof payload.reason !== "string" || payload.reason.trim().length < 3 || payload.reason.length > 500) {
+      throw authorizationError("VALIDATION_FAILED", "Bulk removal requires 1 to 100 unique Participants and a reason.", correlationId);
+    }
+    const participantIds = payload.participantIds as string[];
+    const participants = await client.query<{ id: string }>(
+      `SELECT id FROM runtime.participants
+        WHERE organization_id=$1 AND session_id=$2 AND id=ANY($3::uuid[]) FOR UPDATE`,
+      [context.organizationId, context.sessionId, participantIds]
+    );
+    if (participants.rowCount !== participantIds.length) {
+      return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "One or more Participants were not found." };
+    }
+    await client.query(
+      `UPDATE runtime.seat_assignments SET valid_to=transaction_timestamp(),ended_by=$1,end_reason=$2
+        WHERE organization_id=$3 AND session_id=$4 AND participant_id=ANY($5::uuid[]) AND valid_to IS NULL`,
+      [context.principalId, payload.reason.trim(), context.organizationId, context.sessionId, participantIds]
+    );
+    await client.query(
+      `UPDATE runtime.participant_access_revisions
+          SET access_revision=access_revision+1,refreshed_at=transaction_timestamp()
+        WHERE organization_id=$1 AND session_id=$2 AND participant_id=ANY($3::uuid[])`,
+      [context.organizationId, context.sessionId, participantIds]
+    );
+    await client.query(
+      `UPDATE runtime.join_requests SET status='revoked',decided_by=$1,decided_at=transaction_timestamp()
+        WHERE organization_id=$2 AND session_id=$3
+          AND person_id IN (SELECT person_id FROM runtime.participants
+            WHERE organization_id=$2 AND session_id=$3 AND id=ANY($4::uuid[]))
+          AND status IN ('assignment_pending','waiting_room','admitted')`,
+      [context.principalId, context.organizationId, context.sessionId, participantIds]
+    );
+    await client.query(
+      `UPDATE sync.projection_grants SET revoked_at=transaction_timestamp()
+        WHERE organization_id=$1 AND session_id=$2 AND participant_id=ANY($3::uuid[]) AND revoked_at IS NULL`,
+      [context.organizationId, context.sessionId, participantIds]
+    );
+    await client.query(
+      `UPDATE runtime.session_seats seat SET state=CASE WHEN EXISTS(
+         SELECT 1 FROM runtime.seat_assignments assignment
+          WHERE assignment.organization_id=seat.organization_id AND assignment.session_id=seat.session_id
+            AND assignment.seat_id=seat.seat_id AND assignment.valid_to IS NULL
+       ) THEN 'occupied' ELSE 'vacated' END
+       WHERE seat.organization_id=$1 AND seat.session_id=$2`,
+      [context.organizationId, context.sessionId]
+    );
+    const version = await client.query<{ assignment_version: string }>(
+      `UPDATE runtime.session_access_configs SET assignment_version=assignment_version+1
+        WHERE organization_id=$1 AND session_id=$2 RETURNING assignment_version`,
+      [context.organizationId, context.sessionId]
+    );
+    await audit(client, context, "participant.bulk_removed", `session:${context.sessionId}`,
+      { participantIds, reason: payload.reason.trim() });
+    return { status: "accepted", aggregateVersion: Number(version.rows[0]!.assignment_version),
+      eventType: "participant.bulk_removed", eventPayload: { participantIds, reason: payload.reason.trim() } };
+  }});
+}
+
+async function setSessionRetentionState(
+  pool: Pool, context: PrincipalSessionCommandContext, command: CommandEnvelopeV1, correlationId: string,
+  deploymentId: string, operation: "session.archive" | "session.delete"
+): Promise<CommandReceiptV1> {
+  return processPrincipalSessionCommand({ pool, context, command, correlationId, deploymentId,
+    lockSessionAndExecute: async ({ client, sessionStatus }) => {
+      const payload = requireOperation(command, operation, correlationId);
+      const denied = await requireSessionOperator(client, context); if (denied !== null) return denied;
+      if (Object.keys(payload).some((key) => key !== "reason") || typeof payload.reason !== "string" ||
+          payload.reason.trim().length < 3 || payload.reason.length > 500) {
+        throw authorizationError("VALIDATION_FAILED", "A bounded retention reason is required.", correlationId);
+      }
+      if ((operation === "session.archive" && sessionStatus === "archived") ||
+          (operation === "session.delete" && sessionStatus !== "archived")) {
+        return { status: "rejected", errorCode: "INVALID_TRANSITION",
+          message: operation === "session.delete" ? "The Session must be archived before logical deletion." : "The Session is already archived." };
+      }
+      const updated = await client.query<{ version: string }>(
+        `UPDATE runtime.sessions SET status='archived',version=version+1
+          WHERE organization_id=$1 AND id=$2 RETURNING version`,
+        [context.organizationId, context.sessionId]
+      );
+      if (operation === "session.delete") {
+        await client.query(
+          `UPDATE runtime.seat_assignments SET valid_to=transaction_timestamp(),ended_by=$1,end_reason=$2
+            WHERE organization_id=$3 AND session_id=$4 AND valid_to IS NULL`,
+          [context.principalId, payload.reason.trim(), context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE runtime.join_requests SET status='revoked',decided_by=$1,decided_at=transaction_timestamp()
+            WHERE organization_id=$2 AND session_id=$3 AND status IN ('assignment_pending','waiting_room','admitted')`,
+          [context.principalId, context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE sync.projection_grants SET revoked_at=transaction_timestamp()
+            WHERE organization_id=$1 AND session_id=$2 AND revoked_at IS NULL`,
+          [context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE identity.session_invitations SET revoked_at=transaction_timestamp()
+            WHERE organization_id=$1 AND session_id=$2 AND revoked_at IS NULL`,
+          [context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE identity.guest_identities SET revoked_at=transaction_timestamp()
+            WHERE organization_id=$1 AND session_id=$2 AND revoked_at IS NULL`,
+          [context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE identity.display_principals SET revoked_at=transaction_timestamp()
+            WHERE organization_id=$1 AND session_id=$2 AND revoked_at IS NULL`,
+          [context.organizationId, context.sessionId]
+        );
+        await client.query(
+          `UPDATE runtime.session_authorities SET status='fenced',modified_at=transaction_timestamp()
+            WHERE organization_id=$1 AND session_id=$2`,
+          [context.organizationId, context.sessionId]
+        );
+      }
+      await audit(client, context, operation === "session.delete" ? "session.deleted" : "session.archived",
+        `session:${context.sessionId}`, { reason: payload.reason.trim(), logicalDeletion: operation === "session.delete" });
+      return { status: "accepted", aggregateVersion: Number(updated.rows[0]!.version),
+        eventType: operation === "session.delete" ? "session.deleted" : "session.archived",
+        eventPayload: { sessionId: context.sessionId, logicalDeletion: operation === "session.delete" } };
+    }
+  });
+}
+
+export const archiveSession = (pool: Pool, context: PrincipalSessionCommandContext, command: CommandEnvelopeV1,
+  correlationId: string, deploymentId: string) =>
+  setSessionRetentionState(pool, context, command, correlationId, deploymentId, "session.archive");
+
+export const deleteSession = (pool: Pool, context: PrincipalSessionCommandContext, command: CommandEnvelopeV1,
+  correlationId: string, deploymentId: string) =>
+  setSessionRetentionState(pool, context, command, correlationId, deploymentId, "session.delete");
+
 export async function reassignSeat(
   pool: Pool, context: PrincipalSessionCommandContext, command: CommandEnvelopeV1, correlationId: string, deploymentId: string
 ): Promise<CommandReceiptV1> {
@@ -703,8 +916,11 @@ async function readiness(client: PoolClient, context: PrincipalSessionCommandCon
 }
 
 export async function getReadiness(
-  pool: Pool, principal: AuthenticatedPrincipal, sessionId: string, correlationId: string
+  pool: Pool, principal: AuthenticatedPrincipal, sessionId: string, correlationId: string, rosterQuery?: string
 ): Promise<ReadinessProjectionV1> {
+  if (rosterQuery !== undefined && (rosterQuery.length > 200 || rosterQuery.trim().length === 0)) {
+    throw authorizationError("VALIDATION_FAILED", "The roster filter is invalid.", correlationId);
+  }
   if (!principal.organizationRoles.includes("operator")) throw authorizationError("PERMISSION_DENIED", "Operator access is required.", correlationId);
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     const session = await client.query<{ release_id: string }>(
@@ -720,7 +936,17 @@ export async function getReadiness(
     if (await requireSessionOperator(client, context) !== null) {
       throw authorizationError("PERMISSION_DENIED", "An active Session Operator assignment is required.", correlationId);
     }
-    return readiness(client, context, session.rows[0].release_id);
+    const projection = await readiness(client, context, session.rows[0].release_id);
+    if (rosterQuery === undefined) return projection;
+    const query = rosterQuery.trim().toLocaleLowerCase("en-US");
+    return { ...projection, staffing: { ...projection.staffing,
+      assignments: projection.staffing.assignments.filter((item) =>
+        [item.participantId, item.personId, item.seatId, item.sessionRoleId, item.teamId]
+          .some((value) => value?.toLocaleLowerCase("en-US").includes(query))),
+      rosterReview: projection.staffing.rosterReview.filter((item) =>
+        [item.personId, item.seatId, ...item.reasons]
+          .some((value) => value?.toLocaleLowerCase("en-US").includes(query)))
+    } };
   });
 }
 

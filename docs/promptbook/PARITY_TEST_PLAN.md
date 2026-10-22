@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. PS-200 compiled the configuration Release and executed the available generic Runtime evidence. After PS-210 RFI and communications closure, the machine-readable matrix records 9 `PASS`, 0 `BLOCKED`, and 8 `OUT_OF_SCOPE` targets. `AC-09` remains **BLOCKED** because the eight later-phase parity targets have not been executed; none was waived. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
+Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official Fractured Order golden reference, and `references/fractured-order.snapshot.json` records the verified tree and archive digest. PS-200 compiled the configuration Release and executed the available generic Runtime evidence. The PS-350 AC-09 implementation pass added executable Orientation, operational-notes, Control, Scenario, admin lifecycle, complete export/archive, PLI, and intercom/recorder evidence. The machine-readable matrix records 17 `PASS`, 0 `BLOCKED`, and 0 `OUT_OF_SCOPE` targets, so `AC-09` is **PASS** with no waiver. The v0.2.0 slice remains separate executable evidence, not the golden product reference.
 
 ## Pinning protocol
 
@@ -30,7 +30,7 @@ Source identity is **PINNED**. The Product Owner confirmed commit `ae5d5065bc04a
 - `docs/reference-audit/PS-000_REFERENCE_AUDIT.md` is the readable route, service, data, realtime, hard-coding and coverage audit.
 - `definitions/fractured-order/reference-inventory.json` is the machine-readable classification inventory keyed by commit, tree and archive digest.
 - `tests/parity/fractured-order-fixture-plan.json` defines 17 deterministic parity targets, including unauthorized, disconnected, stale and partial-failure cases.
-- `node tests/parity/validate-reference-inventory.mjs` validates the pin, exact capability-manifest coverage, source evidence anchors, Canon categories, the resolved `OPEN-026` boundary, fixture targets, explicit execution status and evidence/future ownership. It reports but does not override the blocked `AC-09` approval gate.
+- `node tests/parity/validate-reference-inventory.mjs` validates the pin, exact capability-manifest coverage, source evidence anchors, Canon categories, the resolved `OPEN-026` boundary, fixture targets, explicit execution status and evidence/future ownership. It reports 17/17 passing targets and an `AC-09` PASS result.
 
 ## Required scenarios
 

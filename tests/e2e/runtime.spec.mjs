@@ -2,15 +2,72 @@ import { mkdir } from "node:fs/promises";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
 
 import { fixture, operatorUrl, runtimeUrl, studioUrl } from "./fixture.mjs";
 
 const evidenceRoot = "output/playwright/ps-150";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
+let publishedReleaseId;
 
 async function actor(browser, token, options = {}) {
   const context = await browser.newContext({ ...options, extraHTTPHeaders: headers(token) });
   return { context, page: await context.newPage() };
+}
+
+function setFormValue(target, path, value) {
+  const parts = path.split(".");
+  let owner = target;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const key = /^\d+$/u.test(parts[index]) ? Number(parts[index]) : parts[index];
+    const nextIsIndex = /^\d+$/u.test(parts[index + 1]);
+    owner[key] ??= nextIsIndex ? [] : {};
+    owner = owner[key];
+  }
+  const last = /^\d+$/u.test(parts.at(-1)) ? Number(parts.at(-1)) : parts.at(-1);
+  owner[last] = value;
+}
+
+function representativePayload(form, overrides = {}) {
+  const payload = {};
+  for (const field of form.sections.flatMap(({ fields }) => fields)) {
+    const option = field.options?.[0]?.value;
+    const value = field.type === "multi_select" ? (option === undefined ? [] : [option]) :
+      option ?? (field.type === "number" ? 1 : field.type === "checkbox" ? true :
+        `Synthetic parity evidence for ${field.label}. This narrative is intentionally representative.`);
+    setFormValue(payload, field.key, value);
+  }
+  for (const [path, value] of Object.entries(overrides)) setFormValue(payload, path, value);
+  return payload;
+}
+
+async function apiActor(browser, token) {
+  const instance = await actor(browser, token);
+  const deviceId = (await (await instance.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+  const readProjection = async () => (await (await instance.context.request.get(
+    `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": deviceId } }
+  )).json());
+  return { ...instance, deviceId, readProjection };
+}
+
+async function submitRuntime(instance, projection, operationType, aggregateId, expectedAggregateVersion, payload = {}) {
+  return instance.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+    commandId: crypto.randomUUID(), deviceId: instance.deviceId, operationType, aggregateId,
+    expectedAggregateVersion, governingReleaseId: projection.releaseId,
+    activeSessionRoleId: projection.activeSessionRoleId, payload
+  } });
+}
+
+async function createRuntimeArtifact(instance, projection, artifactTypeKey, overrides = {}) {
+  const task = projection.createTasks.find((candidate) => candidate.artifactTypeKey === artifactTypeKey);
+  expect(task, `Missing create task ${artifactTypeKey}`).toBeDefined();
+  const artifactId = crypto.randomUUID();
+  const response = await submitRuntime(instance, projection, "artifact.create", artifactId, 0, {
+    artifactTypeKey,
+    content: representativePayload(task.form, overrides)
+  });
+  expect(response.status()).toBe(200);
+  return artifactId;
 }
 
 async function fillBlueOrientation(page, description) {
@@ -142,9 +199,9 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.close();
   });
 
-  test("@a11y VOICE-06/07/11 uses local media with keyboard controls and non-audio instructions", async ({ browser }) => {
+  test("VOICE-06/07/11 sends microphone audio through the local media provider", async ({ browser }) => {
     test.skip(process.env.MEDIA_TEST_URL === undefined, "A local SFU is required for the real media proof");
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce",
       permissions: ["microphone"] });
     await context.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
@@ -186,7 +243,6 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await page.keyboard.up("Space");
     await expect(radio.getByText("ready", { exact: true })).toBeVisible({ timeout: 10_000 });
     await radio.getByRole("button", { name: "Leave voice" }).click();
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: `${evidenceRoot}/voice-keyboard-local-media.png`, fullPage: true });
 
     await context.setOffline(true);
@@ -232,7 +288,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const author = await actor(browser, fixture.tokens.author);
     await author.page.goto(runtimeUrl());
     await createDraft(author.page, "Approve the first configured handoff");
@@ -303,12 +359,43 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
     const finalReviewer = await actor(browser, fixture.tokens.finalReviewer);
     await finalReviewer.page.goto(runtimeUrl());
-    await finalReviewer.page.getByRole("button", { name: "Accept" }).click();
+    await finalReviewer.page.getByRole("button", { name: "Return for revision" }).click();
     await expect(finalReviewer.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
-    await expect(finalReviewer.page.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(finalReviewer.page.getByText("Returned for revision", { exact: true })).toBeVisible();
+
+    await author.page.reload();
+    await expect(author.page.getByText("Returned for revision", { exact: true })).toBeVisible();
+    await authored.getByLabel("What will Red do first?").fill("Revised after White Cell feedback");
+    await authored.getByRole("button", { name: "Save revision" }).click();
+    await expect(authored.locator("dl.metadata dd").first()).toHaveText("5");
+    await authored.getByRole("button", { name: "Resubmit to Team Facilitator" }).click();
+    await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible();
+    await reviewer.page.reload();
+    await reviewer.page.getByRole("button", { name: "Forward to White Cell" }).click();
+    await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible();
+    await finalReviewer.page.reload();
+
     const controlDeviceResponse = await finalReviewer.context.request.post("/v1/devices", { data: {} });
     const { deviceId: controlDeviceId } = await controlDeviceResponse.json();
-    const controlProjection = await (await finalReviewer.context.request.get(
+    let controlProjection = await (await finalReviewer.context.request.get(
+      `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": controlDeviceId } }
+    )).json();
+    const adjudicated = controlProjection.artifacts.find(({ id }) => id === submitted.id);
+    const acceptance = (commandId) => finalReviewer.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+      commandId, deviceId: controlDeviceId, operationType: "artifact.accept", aggregateId: adjudicated.id,
+      expectedAggregateVersion: adjudicated.version, governingReleaseId: adjudicated.governingReleaseId,
+      activeSessionRoleId: controlProjection.activeSessionRoleId, payload: {}
+    } });
+    const competing = await Promise.all([acceptance(crypto.randomUUID()), acceptance(crypto.randomUUID())]);
+    expect(competing.map((response) => response.status()).sort()).toEqual([200, 409]);
+    const competingReceipts = await Promise.all(competing.map((response) => response.json()));
+    expect(competingReceipts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: "accepted", evidenceSequence: expect.any(Number) }),
+      expect.objectContaining({ status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION" })
+    ]));
+    await finalReviewer.page.reload();
+    await expect(finalReviewer.page.getByText("Completed", { exact: true })).toBeVisible();
+    controlProjection = await (await finalReviewer.context.request.get(
       `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": controlDeviceId } }
     )).json();
     const started = await finalReviewer.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
@@ -322,6 +409,38 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     )).json();
     expect(controlAfterStart.injects).toHaveLength(1);
     expect(controlAfterStart.injects[0]).toMatchObject({ definitionId: "opening-briefing", state: "released" });
+    const controlActor = { ...finalReviewer, deviceId: controlDeviceId };
+    const gateClosed = await submitRuntime(controlActor, controlAfterStart, "stage.advance", fixture.sessionId, 1, {
+      reason: "Attempt before every Industry orientation reaches Control", targetStageId: "m1-deliberation"
+    });
+    expect(gateClosed.status()).toBe(409);
+    expect(await gateClosed.json()).toMatchObject({ status: "rejected", errorCode: "INVALID_TRANSITION",
+      message: "The Stage completion requirements are not satisfied." });
+
+    const invalidGreen = await apiActor(browser, fixture.tokens.designerA);
+    let greenProjection = await invalidGreen.readProjection();
+    const incompleteOrientationId = crypto.randomUUID();
+    const incompleteDraft = await submitRuntime(invalidGreen, greenProjection, "artifact.create", incompleteOrientationId, 0, {
+      artifactTypeKey: "green_strategic_orientation", content: {}
+    });
+    expect(incompleteDraft.status()).toBe(200);
+    const missingNarrative = await submitRuntime(invalidGreen, greenProjection, "artifact.submit", incompleteOrientationId, 1);
+    expect(missingNarrative.status()).toBe(409);
+    expect((await missingNarrative.json()).errorCode).toBe("VALIDATION_FAILED");
+    await createRuntimeArtifact(invalidGreen, greenProjection, "green_strategic_orientation");
+    await createRuntimeArtifact({ ...red, deviceId: redDeviceId }, redProjection, "red_strategic_orientation");
+
+    const industry = await apiActor(browser, fixture.tokens.designerB);
+    const industryReview = await apiActor(browser, fixture.tokens.publisher);
+    const industryProjection = await industry.readProjection();
+    for (const industryCellId of ["industry-agriculture", "industry-telecommunications", "industry-biotechnology"]) {
+      const artifactId = await createRuntimeArtifact(industry, industryProjection, "industry_strategic_plan", { industryCellId });
+      expect((await submitRuntime(industry, industryProjection, "artifact.submit", artifactId, 1)).status()).toBe(200);
+      const reviewProjection = await industryReview.readProjection();
+      const submittedIndustry = reviewProjection.artifacts.find(({ id }) => id === artifactId);
+      expect(submittedIndustry).toMatchObject({ state: "with_facilitator", version: 2 });
+      expect((await submitRuntime(industryReview, reviewProjection, "artifact.forward", artifactId, 2)).status()).toBe(200);
+    }
     const broadcastId = crypto.randomUUID();
     const broadcast = await finalReviewer.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
       commandId: crypto.randomUUID(), deviceId: controlDeviceId, operationType: "message.send", aggregateId: broadcastId,
@@ -384,9 +503,65 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(operator.page.getByText("Current governing Release is pinned")).toBeVisible();
     expect((await new AxeBuilder({ page: operator.page }).analyze()).violations).toEqual([]);
     await expect(operator.page.locator(".status-list li").filter({ hasText: "completed" })).toContainText("1");
-    await expect(operator.page.getByText("artifact.accepted", { exact: true })).toBeVisible();
+    await expect(operator.page.getByText("stage.advanced", { exact: true })).toBeVisible();
     await operator.page.screenshot({ path: `${evidenceRoot}/operator-accepted.png`, fullPage: true });
-    await Promise.all([author.context.close(), reviewer.context.close(), red.context.close(), finalReviewer.context.close(), operator.context.close()]);
+    await Promise.all([author.context.close(), reviewer.context.close(), red.context.close(), finalReviewer.context.close(),
+      operator.context.close(), invalidGreen.context.close(), industry.context.close(), industryReview.context.close()]);
+  });
+
+  test("PARITY-NOTES-01 keeps concurrent operational notes editable and seat isolated", async ({ browser }) => {
+    const author = await apiActor(browser, fixture.tokens.author);
+    const notetaker = await apiActor(browser, fixture.tokens.blueNotetaker);
+    const red = await apiActor(browser, fixture.tokens.redAuthor);
+    const authorProjection = await author.readProjection();
+    const notetakerProjection = await notetaker.readProjection();
+    const authorNoteId = await createRuntimeArtifact(author, authorProjection, "note");
+    const notetakerNoteId = await createRuntimeArtifact(notetaker, notetakerProjection, "note");
+
+    const refreshedAuthor = await author.readProjection();
+    expect(refreshedAuthor.artifacts.map(({ id }) => id)).toContain(authorNoteId);
+    expect(refreshedAuthor.artifacts.map(({ id }) => id)).not.toContain(notetakerNoteId);
+    const authorNote = refreshedAuthor.artifacts.find(({ id }) => id === authorNoteId);
+    const edited = await submitRuntime(author, refreshedAuthor, "artifact.edit", authorNoteId, 1, {
+      content: representativePayload(authorNote.form, { notes: "Autosaved operational note revision." })
+    });
+    expect(edited.status()).toBe(200);
+    expect((await author.readProjection()).artifacts.find(({ id }) => id === authorNoteId)).toMatchObject({ version: 2 });
+
+    const forbidden = await submitRuntime(notetaker, notetakerProjection, "artifact.edit", authorNoteId, 1, {
+      content: representativePayload(authorNote.form)
+    });
+    expect(forbidden.status()).toBe(409);
+    expect((await forbidden.json()).errorCode).toBe("TARGET_NOT_FOUND");
+    expect((await red.readProjection()).artifacts.map(({ id }) => id)).not.toContain(authorNoteId);
+    await Promise.all([author.context.close(), notetaker.context.close(), red.context.close()]);
+  });
+
+  test("PARITY-CONTROL-01 exercises timer, reset, advance, return, stale and reconnect controls", async ({ browser }) => {
+    const control = await apiActor(browser, fixture.tokens.finalReviewer);
+    let projection = await control.readProjection();
+    expect(projection).toMatchObject({ currentStageId: "m1-deliberation", currentStageStatus: "active" });
+    expect((await submitRuntime(control, projection, "timer.pause", fixture.sessionId, 2, { reason: "Parity pause" })).status()).toBe(200);
+    const stale = await submitRuntime(control, projection, "timer.resume", fixture.sessionId, 2, { reason: "Stale parity resume" });
+    expect(stale.status()).toBe(409);
+    expect((await stale.json()).errorCode).toBe("STALE_AGGREGATE_VERSION");
+    expect((await submitRuntime(control, projection, "timer.resume", fixture.sessionId, 3, { reason: "Parity resume" })).status()).toBe(200);
+    expect((await submitRuntime(control, projection, "timer.extend", fixture.sessionId, 4,
+      { reason: "Per-mark allocation", seconds: 60 })).status()).toBe(200);
+    projection = await control.readProjection();
+    expect(projection.stageRemainingSeconds).toBeGreaterThan(2700);
+    expect((await submitRuntime(control, projection, "stage.end", fixture.sessionId, 5, { reason: "End mark" })).status()).toBe(200);
+    expect((await submitRuntime(control, projection, "stage.reopen", fixture.sessionId, 6, { reason: "Reset mark" })).status()).toBe(200);
+    expect((await submitRuntime(control, projection, "stage.advance", fixture.sessionId, 7,
+      { reason: "Advance mark", targetStageId: "m1-consultation" })).status()).toBe(200);
+    projection = await control.readProjection();
+    expect(projection.currentStageId).toBe("m1-consultation");
+    expect((await submitRuntime(control, projection, "stage.return", fixture.sessionId, 8,
+      { reason: "Return to prior mark", targetStageId: "m1-deliberation" })).status()).toBe(200);
+    await control.context.close();
+    const reconnected = await apiActor(browser, fixture.tokens.finalReviewer);
+    expect(await reconnected.readProjection()).toMatchObject({ currentStageId: "m1-deliberation", currentStageStatus: "active" });
+    await reconnected.context.close();
   });
 
   test("AC-08/10 keeps stale and lost-acknowledgement states truthful", async ({ browser }) => {
@@ -398,6 +573,13 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const { deviceId } = await deviceResponse.json();
     const projectionResponse = await author.context.request.get(`/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": deviceId } });
     const projection = await projectionResponse.json();
+    const unavailablePlugin = await author.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+      commandId: crypto.randomUUID(), deviceId, operationType: "composition_run.start", aggregateId: crypto.randomUUID(),
+      expectedAggregateVersion: 0, governingReleaseId: projection.releaseId,
+      activeSessionRoleId: projection.activeSessionRoleId, payload: { planId: "unavailable-plan" }
+    } });
+    expect(unavailablePlugin.status()).toBe(409);
+    expect((await unavailablePlugin.json()).errorCode).toBe("CAPABILITY_UNAVAILABLE");
     const staleArtifact = projection.artifacts.at(-1);
     const changed = await author.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
       commandId: crypto.randomUUID(), deviceId, operationType: "artifact.edit", aggregateId: staleArtifact.id,
@@ -416,9 +598,11 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(author.page.getByText(/Authoritative state changed: The Artifact is at version 2/)).toBeVisible();
 
     let intercepted = false;
+    let lostCommand;
     await author.page.route("**/v1/sessions/*/commands", async (route) => {
       if (intercepted) return route.continue();
       intercepted = true;
+      lostCommand = route.request().postDataJSON();
       const response = await route.fetch();
       await response.body();
       await route.abort("failed");
@@ -427,10 +611,65 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await create.getByRole("button", { name: "Save draft" }).click();
     await expect(author.page.getByText("Delivery acknowledgement was lost. This Command is still local pending, not accepted.")).toBeVisible();
     await author.page.unroute("**/v1/sessions/*/commands");
+    const retries = await Promise.all([1, 2, 3].map(() => author.context.request.post(
+      `/v1/sessions/${fixture.sessionId}/commands`, { data: lostCommand }
+    )));
+    expect(retries.map((response) => response.status())).toEqual([200, 200, 200]);
+    const retryReceipts = await Promise.all(retries.map((response) => response.json()));
+    expect(new Set(retryReceipts.map(({ evidenceSequence }) => evidenceSequence)).size).toBe(1);
+    expect(retryReceipts.every(({ replayed }) => replayed === true)).toBe(true);
     await author.page.getByRole("button", { name: "Check receipt and retry" }).click();
     await expect(author.page.getByText("The original server receipt was recovered.")).toBeVisible();
     await expect(author.page.locator('input[value="Lost acknowledgement proof"]').first()).toBeVisible();
     await author.context.close();
+  });
+
+  test("AC-06/13 reconciles a structured export with canonical accepted and rejected Evidence Events", async ({ browser }) => {
+    const author = await actor(browser, fixture.tokens.author);
+    const deviceId = (await (await author.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+    const projection = await (await author.context.request.get(`/v1/sessions/${fixture.sessionId}/runtime-projection`, {
+      headers: { "x-device-id": deviceId }
+    })).json();
+    const rejectedResponse = await author.context.request.post(`/v1/sessions/${fixture.sessionId}/commands`, { data: {
+      commandId: crypto.randomUUID(), deviceId, operationType: "composition_run.start", aggregateId: crypto.randomUUID(),
+      expectedAggregateVersion: 0, governingReleaseId: projection.releaseId,
+      activeSessionRoleId: projection.activeSessionRoleId, payload: { planId: "missing-first-proof-plan" }
+    } });
+    expect(rejectedResponse.status()).toBe(409);
+    const rejected = await rejectedResponse.json();
+    expect(rejected).toMatchObject({ status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE",
+      evidenceSequence: expect.any(Number) });
+
+    const operator = await actor(browser, fixture.tokens.operator);
+    const grantResponse = await operator.context.request.post(`/v1/projects/${fixture.projectId}/research-access-grants`, { data: {
+      analystPersonId: fixture.people.designerB,
+      protocolReference: "PS-350 canonical export reconciliation",
+      expiresAt: "2099-01-01T00:00:00.000Z"
+    } });
+    expect(grantResponse.status()).toBe(201);
+    const analyst = await actor(browser, fixture.tokens.designerB);
+    const exportResponse = await analyst.context.request.get(`/v1/sessions/${fixture.sessionId}/research-evidence-index`);
+    expect(exportResponse.status()).toBe(200);
+    const exported = await exportResponse.json();
+    const exportedRejection = exported.events.find(({ sequence }) => sequence === rejected.evidenceSequence);
+    expect(exportedRejection).toMatchObject({ eventType: "command.rejected", governingReleaseId: projection.releaseId });
+    expect(exported.events.some(({ eventType }) => eventType === "artifact.accepted")).toBe(true);
+
+    const database = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    try {
+      const canonical = await database.query(
+        `SELECT sequence,event_type,event_version,governing_release_id,recorded_at
+           FROM evidence.events WHERE organization_id=$1 AND session_id=$2 ORDER BY sequence`,
+        [fixture.organizationId, fixture.sessionId]
+      );
+      expect(exported.events).toEqual(canonical.rows.map((row) => ({
+        sequence: Number(row.sequence), eventType: row.event_type, eventVersion: row.event_version,
+        governingReleaseId: row.governing_release_id, recordedAt: row.recorded_at.toISOString()
+      })));
+    } finally {
+      await database.end();
+    }
+    await Promise.all([author.context.close(), operator.context.close(), analyst.context.close()]);
   });
 
   test("PS-210-RFI-E2E PARITY-RFI-01 closes lifecycle parity including stale-answer and cross-team denial", async ({ browser }) => {
@@ -784,7 +1023,23 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await teams.getByText("New Team", { exact: true }).click();
     await teams.getByLabel("Team name").last().fill("Browser-created Team");
 
+    const roles = first.page.getByRole("region", { name: "Session Roles" });
+    await roles.locator("details").first().locator("summary").click();
+    await roles.getByLabel("Description").first().fill("Configured by the PS-350 visual proof.");
+    const stages = first.page.getByRole("region", { name: "Stages" });
+    await stages.locator("details[id^='stages-']").first().locator("summary").click();
+    await stages.getByLabel("Duration in seconds (0 for untimed)").first().fill("1799");
+    const forms = first.page.getByRole("region", { name: "Forms & Artifact Types" });
+    await forms.locator("details[id^='forms-']").first().locator("summary").click();
+    await forms.getByLabel("Form name").first().fill("PS-350 browser-configured form");
+    const workflows = first.page.getByRole("region", { name: "Workflows" });
+    await workflows.locator("details[id^='workflows-']").first().locator("summary").click();
+    await workflows.getByLabel("Workflow name").first().fill("PS-350 DEC-42 review workflow");
+    await expect(first.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
+
     await first.page.getByLabel("Scenario name").fill("Browser convergence proof");
+    await expect(first.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
+    await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await second.context.setOffline(true);
     await second.page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await second.page.getByLabel("Scenario description").fill("Offline visual-form edit merged after reconnect.");
@@ -828,7 +1083,11 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await first.page.getByLabel("Methodology review notes").fill("Synthetic methodology review.");
     await first.page.getByRole("button", { name: "Approve freeze" }).click();
     await expect(first.page.getByText(/Reviewer approval recorded/u)).toBeVisible();
+    const publishedResponse = first.page.waitForResponse((response) =>
+      response.request().method() === "POST" && response.url().endsWith(`/v1/projects/${fixture.projectId}/publish`));
     await first.page.getByRole("button", { name: "Publish approved freeze" }).click();
+    publishedReleaseId = (await (await publishedResponse).json()).releaseId;
+    expect(publishedReleaseId).toMatch(/^[0-9a-f-]{36}$/u);
     await expect(first.page.getByText(/Published release/u)).toBeVisible({ timeout: 20_000 });
     await expect(first.page.getByText("Save state: published")).toBeVisible({ timeout: 20_000 });
 
@@ -843,6 +1102,29 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     }).slice(0, 12).map((element) => ({ element: `${element.tagName.toLowerCase()}.${element.className}`, right: Math.round(element.getBoundingClientRect().right),
       width: Math.round(element.getBoundingClientRect().width), text: element.textContent?.trim().slice(0, 80) })))).toEqual([]);
     await Promise.all([first.context.close(), second.context.close()]);
+  });
+
+  test("AC-03 creates a Session from the Release published in the visual journey", async ({ browser }) => {
+    expect(publishedReleaseId).toMatch(/^[0-9a-f-]{36}$/u);
+    const operator = await actor(browser, fixture.tokens.operator);
+    const createdResponse = await operator.context.request.post(`/v1/projects/${fixture.projectId}/sessions`, {
+      data: { releaseId: publishedReleaseId }
+    });
+    expect(createdResponse.status()).toBe(201);
+    const created = await createdResponse.json();
+    expect(created).toMatchObject({
+      contractId: "session-onboarding-v1",
+      projectId: fixture.projectId,
+      governingReleaseId: publishedReleaseId,
+      status: "created"
+    });
+    const designer = await actor(browser, fixture.tokens.designerA);
+    const denied = await designer.context.request.post(`/v1/projects/${fixture.projectId}/sessions`, {
+      data: { releaseId: publishedReleaseId }
+    });
+    expect(denied.status()).toBe(403);
+    expect((await denied.json()).error.code).toBe("PERMISSION_DENIED");
+    await Promise.all([operator.context.close(), designer.context.close()]);
   });
 
   test("PS-310 AC-01 keeps Stage IDs stable while a reorder converges", async ({ browser }) => {

@@ -207,6 +207,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResearchEvidenceIndexV1" }
         "403": { description: Research Analyst authority or an active project grant is absent. }
+  /v1/projects/{projectId}/research-export:
+    get:
+      operationId: exportProjectResearchEvidence
+      x-contract-id: research-evidence-manifest-v1
+      x-authorized-organization-role: research_analyst
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: format, schema: { type: string, enum: [json, csv, html, zip], default: zip } }
+      responses:
+        "200":
+          description: Project-scoped PII-free canonical Evidence export with captured-row labels, hashes and source reconciliation.
+          content:
+            application/json: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+            text/html: { schema: { type: string, format: binary } }
+            application/zip: { schema: { type: string, format: binary } }
+        "403": { description: Research Analyst authority or an active project grant is absent. }
   /v1/plugins/submissions:
     post:
       operationId: submitPluginArtifact
@@ -715,6 +733,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OperatorProjectionV1" }
         "403": { description: The authenticated Principal is not an Operator. }
+  /v1/projects/{projectId}/sessions:
+    post:
+      operationId: createSession
+      x-contract-id: session-onboarding-v1
+      summary: Create a Session governed by a published Release
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [releaseId]
+              properties:
+                releaseId: { type: string, format: uuid }
+      responses:
+        "201": { description: Session created with its initial governing Release Activation. }
+        "403": { description: The authenticated Principal is not a current Operator. }
+        "422": { description: The published Release is unavailable for this Project. }
   /v1/sessions/{sessionId}/access/configure:
     post:
       operationId: configureSessionAccess
@@ -821,6 +860,41 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
       responses:
         "200": { description: Participant and Seat Assignment created atomically. }
+  /v1/sessions/{sessionId}/participants/remove:
+    post:
+      operationId: removeSessionParticipants
+      x-contract-id: session-onboarding-v1
+      x-command-operation: participant.remove_bulk
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Active Seat Assignments and projection grants revoked atomically; Participant and evidence records retained. }
+        "404": { description: One or more Participant identifiers are outside the Session or Organization. }
+  /v1/sessions/{sessionId}/archive:
+    post:
+      operationId: archiveSession
+      x-contract-id: session-onboarding-v1
+      x-command-operation: session.archive
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Session archived while retained records remain immutable and auditable. }
+  /v1/sessions/{sessionId}/delete:
+    post:
+      operationId: logicallyDeleteSession
+      x-contract-id: session-onboarding-v1
+      x-command-operation: session.delete
+      x-authorized-session-operator: true
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Archived Session authority fenced and access revoked; evidence and audit records retained. }
+        "409": { description: Session must be archived before logical deletion. }
   /v1/sessions/{sessionId}/seat-assignments/{seatAssignmentId}/reassign:
     post:
       operationId: reassignSessionSeat
@@ -876,7 +950,9 @@ paths:
       x-contract-id: readiness-v1
       x-authorized-session-operator: true
       security: [{ SessionCookie: [] }]
-      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: query, schema: { type: string, minLength: 1, maxLength: 200 } }
       responses:
         "200": { description: Current Release- and assignment-version-bound readiness., content: { application/json: { schema: { $ref: "#/components/schemas/ReadinessProjectionV1" } } } }
         "403": { description: Administrative readiness is never returned to a Participant. }

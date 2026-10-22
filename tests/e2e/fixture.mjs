@@ -15,7 +15,8 @@ export const fixture = {
     redReviewer: "21000000-0000-4000-8000-000000000007",
     designerA: "21000000-0000-4000-8000-000000000008",
     designerB: "21000000-0000-4000-8000-000000000009",
-    publisher: "21000000-0000-4000-8000-00000000000a"
+    publisher: "21000000-0000-4000-8000-00000000000a",
+    blueNotetaker: "21000000-0000-4000-8000-00000000000b"
   },
   participants: {
     author: "31000000-0000-4000-8000-000000000001",
@@ -23,7 +24,11 @@ export const fixture = {
     finalReviewer: "31000000-0000-4000-8000-000000000003",
     redAuthor: "31000000-0000-4000-8000-000000000005",
     greenReviewer: "31000000-0000-4000-8000-000000000006",
-    redReviewer: "31000000-0000-4000-8000-000000000007"
+    redReviewer: "31000000-0000-4000-8000-000000000007",
+    greenAuthor: "31000000-0000-4000-8000-000000000008",
+    industryAuthor: "31000000-0000-4000-8000-000000000009",
+    industryReviewer: "31000000-0000-4000-8000-00000000000a",
+    blueNotetaker: "31000000-0000-4000-8000-00000000000b"
   },
   assignments: {
     author: "41000000-0000-4000-8000-000000000001",
@@ -31,7 +36,11 @@ export const fixture = {
     finalReviewer: "41000000-0000-4000-8000-000000000003",
     redAuthor: "41000000-0000-4000-8000-000000000005",
     greenReviewer: "41000000-0000-4000-8000-000000000006",
-    redReviewer: "41000000-0000-4000-8000-000000000007"
+    redReviewer: "41000000-0000-4000-8000-000000000007",
+    greenAuthor: "41000000-0000-4000-8000-000000000008",
+    industryAuthor: "41000000-0000-4000-8000-000000000009",
+    industryReviewer: "41000000-0000-4000-8000-00000000000a",
+    blueNotetaker: "41000000-0000-4000-8000-00000000000b"
   },
   authenticationSessions: {
     author: "51000000-0000-4000-8000-000000000001",
@@ -43,7 +52,8 @@ export const fixture = {
     redReviewer: "51000000-0000-4000-8000-000000000007",
     designerA: "51000000-0000-4000-8000-000000000008",
     designerB: "51000000-0000-4000-8000-000000000009",
-    publisher: "51000000-0000-4000-8000-00000000000a"
+    publisher: "51000000-0000-4000-8000-00000000000a",
+    blueNotetaker: "51000000-0000-4000-8000-00000000000b"
   },
   tokens: {
     author: "ps150-author",
@@ -55,7 +65,8 @@ export const fixture = {
     redReviewer: "ps210-red-reviewer",
     designerA: "ps300-designer-a",
     designerB: "ps300-designer-b",
-    publisher: "ps300-publisher"
+    publisher: "ps300-publisher",
+    blueNotetaker: "ps350-blue-notetaker"
   },
   proposalArtifactId: "61000000-0000-4000-8000-000000000001",
   pollId: "62000000-0000-4000-8000-000000000001",

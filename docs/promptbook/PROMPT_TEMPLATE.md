@@ -36,6 +36,7 @@ Populate every field required by `task.schema.json`. In particular:
 
 Each generated prompt must preserve these rules:
 
+- Run every Node/npm command with Node 24 or newer. Record `node --version` at preflight; select a verified Node 24+ runtime when the system default is older, and treat older-runtime results as diagnostic only.
 - Start from Roadmap section 16: read requirement rows, the smallest governing sections, Glossary terms, relevant contracts, and tests.
 - Inspect the working tree before edits and preserve unrelated user changes.
 - Use trusted server context for Principal, Organization, Session, Seat Assignment, Active Role Context, and Authority Epoch.

@@ -113,6 +113,7 @@ export interface RuntimeInterfaceProjectionProfile {
 
 interface RuntimeDefinition {
   teams: Array<{ id: string; name: string }>;
+  teamCells?: Array<{ id: string; teamId: string; kind: string; enabled: boolean }>;
   sessionRoles: Array<{ id: string; name: string; capabilities?: Array<{ capability: string }>; isControlRole?: boolean }>;
   seats: Array<{ id: string; sessionRoleIds: string[]; teamId?: string }>;
   informationPolicies: Array<{ id: string; grants: Array<{ audience: FieldAudience }> }>;
@@ -121,6 +122,15 @@ interface RuntimeDefinition {
     transitions?: Array<{ id: string; targetStageId: string; mode: "automatic" | "manual" | "automatic_or_manual" }>;
     allowedActivityIds?: string[];
     operatorControls?: { allowStart: boolean; allowEnd: boolean; allowReopen: boolean; allowExtend: boolean; allowSkip: boolean; allowReturnToPrevious: boolean; requireReason: boolean };
+    completionRequirements?: Array<{
+      id: string;
+      kind: "artifact_coverage";
+      artifactTypeId: string;
+      scope: { kind: "team_cell"; teamId: string; cellKind: string; field: string };
+      minimumPerScope: number;
+      qualifyingMilestone: "submitted_to_control";
+      stageGroupId?: string;
+    }>;
   }>;
   forms: RuntimeFormDefinition[];
   artifactTypes: ArtifactTypeDefinition[];
@@ -493,9 +503,6 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "The Artifact is governed by another Release." };
   }
   const currentVersion = Number(artifact.version);
-  if (command.expectedAggregateVersion !== currentVersion) {
-    return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: `The Artifact is at version ${currentVersion}.` };
-  }
   const { definition } = await readRelease(client, context.organizationId, artifact.governing_release_id, command.commandId);
   const artifactType = typeFor(definition, artifact.artifact_type_key);
   if (artifactType === undefined) throw new Error(`Release lacks Artifact Type ${artifact.artifact_type_key}`);
@@ -503,6 +510,9 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
   if (actor === undefined || !artifactAllowed(definition, artifactType, context, artifact.owner_team_id, artifact.payload, actor) ||
       (artifact.creator_participant_id !== context.participantId && !artifact.visible_role_ids.includes(context.activeSessionRoleId))) {
     return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Artifact was not found." };
+  }
+  if (command.expectedAggregateVersion !== currentVersion) {
+    return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: `The Artifact is at version ${currentVersion}.` };
   }
   const workflow = workflowFor(definition, artifactType);
   if (!actor.isControlRole && actor.teamId !== artifact.owner_team_id) {
@@ -563,6 +573,34 @@ function textPayload(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+async function completionRequirementsSatisfied(
+  client: PoolClient,
+  context: SessionAccessContextV1,
+  definition: RuntimeDefinition,
+  stage: RuntimeDefinition["stages"][number]
+): Promise<boolean> {
+  for (const requirement of stage.completionRequirements ?? []) {
+    const artifactType = definition.artifactTypes.find(({ id }) => id === requirement.artifactTypeId);
+    if (artifactType === undefined) return false;
+    const workflow = workflowFor(definition, artifactType);
+    const controlRoleIds = new Set(definition.sessionRoles.filter(({ isControlRole }) => isControlRole).map(({ id }) => id));
+    const qualifyingStates = workflow.states.filter((state) => state.kind === "terminal" ||
+      state.holderSessionRoleIds?.some((sessionRoleId) => controlRoleIds.has(sessionRoleId))).map(({ key }) => key);
+    const cells = (definition.teamCells ?? []).filter((cell) => cell.enabled &&
+      cell.teamId === requirement.scope.teamId && cell.kind === requirement.scope.cellKind);
+    for (const cell of cells) {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*) AS count FROM runtime.artifact_instances
+          WHERE organization_id=$1 AND session_id=$2 AND artifact_type_key=$3
+            AND state=ANY($4::text[]) AND payload #>> string_to_array($5,'.')=$6`,
+        [context.organizationId, context.sessionId, artifactType.key, qualifyingStates, requirement.scope.field, cell.id]
+      );
+      if (Number(result.rows[0]?.count ?? 0) < requirement.minimumPerScope) return false;
+    }
+  }
+  return true;
+}
+
 export async function executeStageCommand(input: CommandExecutionContext): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
   if (command.governingReleaseId !== activeReleaseId) {
@@ -573,7 +611,8 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
   }
   const { definition } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
   const role = definition.sessionRoles.find((candidate) => candidate.id === context.activeSessionRoleId);
-  const capability = command.operationType === "stage.advance" ? "stage.advance" : "timer.control";
+  const capability = command.operationType === "stage.advance" || command.operationType === "stage.return"
+    ? "stage.advance" : "timer.control";
   if (!role?.capabilities?.some((grant) => grant.capability === capability)) {
     return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The Active Role Context cannot control this Stage." };
   }
@@ -619,19 +658,37 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
 
   if (command.operationType === "stage.start" && current.status === "not_started" && stage.operatorControls?.allowStart) {
     status = "active"; startedAt = now;
-  } else if (command.operationType === "stage.pause" && current.status === "active") {
+  } else if ((command.operationType === "stage.pause" || command.operationType === "timer.pause") && current.status === "active") {
     status = "paused"; pausedAt = now;
-  } else if (command.operationType === "stage.resume" && current.status === "paused" && pausedAt !== null) {
+  } else if ((command.operationType === "stage.resume" || command.operationType === "timer.resume") && current.status === "paused" && pausedAt !== null) {
     status = "active"; pauseSeconds += Math.max(0, Math.floor((now.getTime() - pausedAt.getTime()) / 1000)); pausedAt = null;
-  } else if (command.operationType === "stage.extend" && stage.operatorControls?.allowExtend &&
+  } else if ((command.operationType === "stage.extend" || command.operationType === "timer.extend") && stage.operatorControls?.allowExtend &&
       (current.status === "active" || current.status === "paused")) {
     const seconds = command.payload.seconds;
     if (!Number.isSafeInteger(seconds) || Number(seconds) <= 0) {
       return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Extension seconds must be a positive integer." };
     }
     extensionSeconds += Number(seconds);
+  } else if (command.operationType === "stage.end" && current.status !== "not_started" && stage.operatorControls?.allowEnd) {
+    if (!await completionRequirementsSatisfied(client, context, definition, stage)) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion requirements are not satisfied." };
+    }
+    status = "completed"; pausedAt = null;
+  } else if (command.operationType === "stage.reopen" && current.status === "completed" && stage.operatorControls?.allowReopen) {
+    status = "active"; startedAt = now; pausedAt = null; pauseSeconds = 0; extensionSeconds = 0;
+  } else if (command.operationType === "stage.return" && stage.operatorControls?.allowReturnToPrevious) {
+    const target = textPayload(command.payload.targetStageId);
+    const previous = target === undefined ? undefined : definition.stages.find((candidate) => candidate.id === target &&
+      candidate.transitions?.some((transition) => transition.targetStageId === current.stage_id));
+    if (previous === undefined) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Release does not allow return to that Stage." };
+    }
+    targetStageId = previous.id; status = "active"; startedAt = now; pausedAt = null; pauseSeconds = 0; extensionSeconds = 0;
   } else if (command.operationType === "stage.advance" &&
       (current.status !== "not_started" || stage.operatorControls?.allowSkip === true)) {
+    if (!stage.operatorControls?.allowSkip && !await completionRequirementsSatisfied(client, context, definition, stage)) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion requirements are not satisfied." };
+    }
     const target = textPayload(command.payload.targetStageId);
     const next = target === undefined ? undefined : nextStage(definition.stages.map((item) => ({
       ...item, name: item.name ?? item.label, stageType: "stage", allowedActivityIds: item.allowedActivityIds ?? [],
@@ -652,7 +709,7 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
      WHERE organization_id=$8 AND session_id=$9`,
     [targetStageId, status, startedAt, pausedAt, pauseSeconds, extensionSeconds, version, context.organizationId, context.sessionId]
   );
-  const releasedInjectIds = command.operationType === "stage.advance"
+  const releasedInjectIds = command.operationType === "stage.advance" || command.operationType === "stage.return"
     ? [
         ...await releaseStageInjects(input, "stage_exit", current.stage_id),
         ...await releaseStageInjects(input, "stage_entry", targetStageId)
@@ -675,8 +732,11 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
     [randomUUID(), context.organizationId, context.sessionId, activeReleaseId, current.stage_id, targetStageId,
       command.operationType, reason, context.principalId, version]
   );
-  const eventAction = command.operationType.slice("stage.".length);
-  return { status: "accepted", aggregateVersion: version, eventType: `stage.${eventAction === "pause" ? "paused" : eventAction === "resume" ? "resumed" : eventAction === "advance" ? "advanced" : eventAction === "extend" ? "extended" : "started"}`,
+  const action = command.operationType.slice(command.operationType.indexOf(".") + 1);
+  const eventAction = action === "pause" ? "paused" : action === "resume" ? "resumed" : action === "advance" ? "advanced" :
+    action === "extend" ? "extended" : action === "return" ? "returned" : action === "end" ? "ended" :
+      action === "reopen" ? "reopened" : "started";
+  return { status: "accepted", aggregateVersion: version, eventType: `stage.${eventAction}`,
     eventPayload: { fromStageId: current.stage_id, toStageId: targetStageId, status,
       activeSessionRoleId: context.activeSessionRoleId, version, releasedInjectIds } };
 }
@@ -854,7 +914,7 @@ export async function submitRuntimeCommand(
   extensionRunPlans: ReadonlyMap<string, ExtensionRunPlan> = new Map(),
   mediaAdapter?: MediaProviderAdapter
 ) {
-  const execute = command.operationType.startsWith("stage.") ? executeStageCommand :
+  const execute = command.operationType.startsWith("stage.") || command.operationType.startsWith("timer.") ? executeStageCommand :
     command.operationType.startsWith("artifact.") ? executeArtifactCommand :
       command.operationType.startsWith("message.") || command.operationType.startsWith("inject.") ? executeInformationCommand :
       command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :

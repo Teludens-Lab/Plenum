@@ -59,16 +59,16 @@ export default async function globalSetup() {
       `INSERT INTO identity.persons(id,display_name) VALUES
        ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
        ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer'),
-       ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher')`,
+       ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher'),($11,'Synthetic Blue notetaker')`,
       people
     );
     await owner.query(
-      "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator')",
+      "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($1,$2,'admin')",
       [fixture.organizationId, fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES
-       ($1,$2,'designer'),($1,$3,'designer'),($1,$4,'designer'),($1,$4,'publisher'),($1,$4,'reviewer')`,
+       ($1,$2,'designer'),($1,$3,'designer'),($1,$3,'research_analyst'),($1,$4,'designer'),($1,$4,'publisher'),($1,$4,'reviewer')`,
       [fixture.organizationId, fixture.people.designerA, fixture.people.designerB, fixture.people.publisher]
     );
     await owner.query(
@@ -137,13 +137,18 @@ export default async function globalSetup() {
     }
     await owner.query(
       `INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES
-       ($1,$2,$3,$4),($5,$2,$3,$6),($7,$2,$3,$8),($9,$2,$3,$10),($11,$2,$3,$12),($13,$2,$3,$14)`,
+       ($1,$2,$3,$4),($5,$2,$3,$6),($7,$2,$3,$8),($9,$2,$3,$10),($11,$2,$3,$12),($13,$2,$3,$14),
+       ($15,$2,$3,$16),($17,$2,$3,$18),($19,$2,$3,$20),($21,$2,$3,$22)`,
       [fixture.participants.author, fixture.organizationId, fixture.sessionId, fixture.people.author,
         fixture.participants.reviewer, fixture.people.reviewer,
         fixture.participants.finalReviewer, fixture.people.finalReviewer,
         fixture.participants.redAuthor, fixture.people.redAuthor,
         fixture.participants.greenReviewer, fixture.people.greenReviewer,
-        fixture.participants.redReviewer, fixture.people.redReviewer]
+        fixture.participants.redReviewer, fixture.people.redReviewer,
+        fixture.participants.greenAuthor, fixture.people.designerA,
+        fixture.participants.industryAuthor, fixture.people.designerB,
+        fixture.participants.industryReviewer, fixture.people.publisher,
+        fixture.participants.blueNotetaker, fixture.people.blueNotetaker]
     );
     await owner.query(
       `INSERT INTO runtime.seat_assignments
@@ -153,13 +158,21 @@ export default async function globalSetup() {
        ($8,$2,$3,$9,'white_cell','control',$5),
        ($10,$2,$3,$11,'scribe','red-scribe',$5),
        ($12,$2,$3,$13,'facilitator','green-facilitator',$5),
-       ($14,$2,$3,$15,'facilitator','red-facilitator',$5)`,
+       ($14,$2,$3,$15,'facilitator','red-facilitator',$5),
+       ($16,$2,$3,$17,'scribe','green-scribe',$5),
+       ($18,$2,$3,$19,'scribe','industry-scribe',$5),
+       ($20,$2,$3,$21,'facilitator','industry-facilitator',$5),
+       ($22,$2,$3,$23,'notetaker','blue-notetaker',$5)`,
       [fixture.assignments.author, fixture.organizationId, fixture.sessionId, fixture.participants.author,
         fixture.people.operator, fixture.assignments.reviewer, fixture.participants.reviewer,
         fixture.assignments.finalReviewer, fixture.participants.finalReviewer,
         fixture.assignments.redAuthor, fixture.participants.redAuthor,
         fixture.assignments.greenReviewer, fixture.participants.greenReviewer,
-        fixture.assignments.redReviewer, fixture.participants.redReviewer]
+        fixture.assignments.redReviewer, fixture.participants.redReviewer,
+        fixture.assignments.greenAuthor, fixture.participants.greenAuthor,
+        fixture.assignments.industryAuthor, fixture.participants.industryAuthor,
+        fixture.assignments.industryReviewer, fixture.participants.industryReviewer,
+        fixture.assignments.blueNotetaker, fixture.participants.blueNotetaker]
     );
     await owner.query(
       `INSERT INTO runtime.artifact_instances

@@ -13,6 +13,8 @@ Roadmap section 16 applies first: anyone changing code reads the requirement row
 
 The first eligible prompts are PS-000 and PS-001. Prefer PS-000 next because it produces the parity inventory required by PS-200. PS-001 may run independently, but its preflight must stop before edits when Node 24+ or PostgreSQL 18 is unavailable.
 
+Every prompt must run all Node/npm commands with Node 24 or newer. At preflight, record `node --version`; if the default runtime is older, select a verified Node 24+ runtime before validation. Results produced on an older Node version are diagnostic only and cannot satisfy a task gate. If Node 24+ is unavailable, mark the affected commands BLOCKED and do not claim completion.
+
 ## Context bootstrap
 
 Before editing:

@@ -207,6 +207,22 @@ test("PS-200-T01 defines an accessible Facilitator present mode for artifacts an
   assert.deepEqual(core.presentation.branding.placements, ["login", "session_header", "facilitator_present_mode"]);
 });
 
+test("PARITY-SCENARIO-01 packages hashed scenario media for only its configured surface", () => {
+  const core = source.materialization.coreDesign;
+  const deck = core.resources.find(({ id }) => id === "fractured-order-session-deck");
+  assert.match(deck.contentDigest, /^[0-9a-f]{64}$/u);
+  assert.match(deck.dataUri, /^data:text\/html;base64,/u);
+  const modules = (profile) => profile.layout.regions.flatMap(({ modules: items }) => items);
+  assert.equal(modules(core.interfaces.find(({ id }) => id === "participant-review"))
+    .some(({ configuration }) => configuration.releaseResourceId === deck.id), true);
+  assert.equal(modules(core.interfaces.find(({ id }) => id === "participant-author"))
+    .some(({ configuration }) => configuration.releaseResourceId === deck.id), false);
+  const missing = structuredClone(source);
+  missing.materialization.coreDesign.resources = missing.materialization.coreDesign.resources.filter(({ id }) => id !== deck.id);
+  assert.throws(() => compileRelease(missing), /missing identifier|missing Resource/u);
+  assert.equal(JSON.stringify(compileRelease(source).release).includes("https://"), false);
+});
+
 test("PS-200-T01 preserves the reference RFI category contract", () => {
   const form = authoringSource.materialization.coreDesign.forms.find(({ id }) => id === "form-rfi");
   const categories = form.sections.flatMap(({ fields }) => fields).find(({ key }) => key === "categories");

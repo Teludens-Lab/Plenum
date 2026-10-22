@@ -41,7 +41,7 @@ In simple terms: much of the product works locally, but production approval need
 | 7 | GAP-07 institutional media validation | PS-530, PS-540 | Deployable media profile and approved test network exist | LAN/TLS/TURN/firewall/restart evidence passes |
 | 8 | GAP-08 load and capacity evidence | PS-540 | PS-350, PS-500 and PS-530 complete | All approved workloads have named-environment results |
 | 9 | GAP-09 manual assistive-technology review | PS-550 | Stable release candidate exists | Required journeys pass human AT review or defects are resolved |
-| 10 | GAP-10 Fractured Order parity and AC-01–AC-13 | PS-350, PS-430, PS-550 | P03 complete; P04 evidence available where required | Every acceptance row has objective evidence |
+| 10 | GAP-10 Fractured Order parity and AC-01–AC-13 | PS-350, PS-420, PS-430, PS-500, PS-550 | P03 complete; P04/P05 evidence available where required | Every acceptance row has objective evidence, including deferred AC-07 from PS-420 and AC-11 from PS-420/PS-500 |
 | 11 | GAP-11 final go/no-go package | PS-550 | GAP-01–10 complete | Owners sign or release remains blocked |
 
 The order is deliberately conservative. Policy decisions may be prepared early, but final operational evidence must use the exact release candidate intended for approval.

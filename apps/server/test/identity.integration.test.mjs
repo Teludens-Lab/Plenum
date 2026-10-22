@@ -15,12 +15,15 @@ import {
 } from "@plenum/plugin-sdk";
 
 import {
+  archiveSession,
   beginOidcLogin,
   activateDisplayPrincipal,
   claimSeat,
   configureSessionAccess,
   confirmReadiness,
   createGuestIdentity,
+  createSession,
+  deleteSession,
   decideJoinRequest,
   acceptPluginLicense,
   approvePluginArtifact,
@@ -46,6 +49,7 @@ import {
   registerPluginPublisher,
   reassignParticipant,
   reassignSeat,
+  removeParticipants,
   requireActiveGuest,
   resolveInvitationSession,
   resolvePrincipalCommandContext,
@@ -66,6 +70,7 @@ import {
   getPollProjection,
   getPollResult,
   issueMediaCredential,
+  exportResearchEvidenceBundle,
   applyStudioUpdate,
   assertStudioSyncAccess,
   getCollaborativeDraft,
@@ -341,6 +346,46 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
   );
 });
 
+test("AC-03 creates a tenant-scoped Session from a published Release atomically", async () => {
+  const correlationId = randomUUID();
+  const created = await createSession(app, principal, ids.projectA, ids.releaseA, correlationId, ids.deploymentA);
+  assert.deepEqual(created, {
+    contractId: "session-onboarding-v1",
+    sessionId: created.sessionId,
+    projectId: ids.projectA,
+    governingReleaseId: ids.releaseA,
+    status: "created"
+  });
+  const persisted = await owner.query(
+    `SELECT session.status,activation.release_id,authority.deployment_id,operator.person_id,
+            sequence.next_sequence,audit.details->>'correlationId' AS correlation_id
+       FROM runtime.sessions session
+       JOIN runtime.release_activations activation ON activation.organization_id=session.organization_id AND activation.session_id=session.id
+       JOIN runtime.session_authorities authority ON authority.organization_id=session.organization_id AND authority.session_id=session.id
+       JOIN runtime.session_operators operator ON operator.organization_id=session.organization_id AND operator.session_id=session.id
+       JOIN evidence.session_sequences sequence ON sequence.organization_id=session.organization_id AND sequence.session_id=session.id
+       JOIN evidence.audit_records audit ON audit.organization_id=session.organization_id AND audit.target_ref='session:'||session.id::text
+      WHERE session.organization_id=$1 AND session.id=$2`,
+    [ids.orgA, created.sessionId]
+  );
+  assert.deepEqual(persisted.rows[0], {
+    status: "created",
+    release_id: ids.releaseA,
+    deployment_id: ids.deploymentA,
+    person_id: ids.personA,
+    next_sequence: "1",
+    correlation_id: correlationId
+  });
+  await assert.rejects(
+    createSession(app, principalC, ids.projectA, ids.releaseA, randomUUID(), ids.deploymentA),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await assert.rejects(
+    createSession(app, principal, ids.projectA, ids.releaseB, randomUUID(), ids.deploymentA),
+    (error) => error?.envelope?.error?.code === "REFERENCE_INVALID"
+  );
+});
+
 test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignment and readiness", async () => {
   const accessPolicy = {
     joinMethods: ["invitation", "code_and_verified_email", "waiting_room", "open_seat_selection", "operator_assignment"],
@@ -486,6 +531,47 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
   assert.equal(display.receipt.status, "accepted");
   assert.ok(display.credential);
   assert.ok(await publishPendingRuntimeDeltas(app, ids.orgA) > 0);
+
+  const staffed = await getReadiness(app, principal, accessIds.session, randomUUID());
+  const filtered = await getReadiness(app, principal, accessIds.session, randomUUID(), "red-lead");
+  assert.equal(filtered.staffing.assignments.length, 1);
+  assert.equal(filtered.staffing.assignments[0].seatId, "red-lead");
+  const participantIds = staffed.staffing.assignments.map(({ participantId }) => participantId);
+  assert.equal(participantIds.length, 2);
+  const removed = await removeParticipants(app, operator,
+    command(operator, "participant.remove_bulk", accessIds.session,
+      { participantIds, reason: "Parity bulk removal" }), randomUUID(), ids.deploymentA);
+  assert.equal(removed.status, "accepted");
+  assert.equal((await claimSeat(app, claimantD,
+    command(claimantD, "seat.claim", randomUUID(), { seatId: "blue-lead", sessionRoleId: "lead" }),
+    randomUUID(), ids.deploymentA)).errorCode, "PERMISSION_DENIED");
+
+  assert.equal((await archiveSession(app, operator,
+    command(operator, "session.archive", accessIds.session, { reason: "Parity archive" }),
+    randomUUID(), ids.deploymentA)).status, "accepted");
+  assert.equal((await deleteSession(app, operator,
+    command(operator, "session.delete", accessIds.session, { reason: "Parity logical deletion" }),
+    randomUUID(), ids.deploymentA)).status, "accepted");
+  await assert.rejects(
+    issueInvitation(app, operator,
+      command(operator, "invitation.issue", randomUUID(), { expiresInHours: 1 }), randomUUID(), ids.deploymentA),
+    (error) => error?.envelope?.error?.code === "AUTHORITY_UNAVAILABLE"
+  );
+  const retained = await owner.query(
+    `SELECT session.status,authority.status AS authority_status,
+            (SELECT count(*) FROM runtime.participants WHERE organization_id=$1 AND session_id=$2) participants,
+            (SELECT count(*) FROM runtime.seat_assignments WHERE organization_id=$1 AND session_id=$2) assignments,
+            (SELECT count(*) FROM evidence.audit_records WHERE organization_id=$1 AND target_ref='session:'||$2::text
+              AND action IN ('participant.bulk_removed','session.archived','session.deleted')) audits
+       FROM runtime.sessions session
+       JOIN runtime.session_authorities authority ON authority.organization_id=session.organization_id AND authority.session_id=session.id
+      WHERE session.organization_id=$1 AND session.id=$2`,
+    [ids.orgA, accessIds.session]
+  );
+  assert.deepEqual(retained.rows[0], {
+    status: "archived", authority_status: "fenced", participants: "2", assignments: "3", audits: "3"
+  });
+  assert.ok(await publishPendingRuntimeDeltas(app, ids.orgA) >= 4);
 });
 
 test("Game Master projection requires Operator authorization and remains tenant/Session scoped", async () => {
@@ -1743,6 +1829,24 @@ test("DEC-61 Research Analyst exports only a granted, PII-free Evidence index", 
   assert.ok(exported.events.length > 0);
   assert.equal("body" in exported.events[0], false);
   assert.equal("actorPersonId" in exported.events[0], false);
+  const generatedAt = new Date("2026-10-21T12:00:00.000Z");
+  const formats = await Promise.all(["json", "csv", "html", "zip"].map((format) =>
+    exportResearchEvidenceBundle(app, analyst, ids.projectA, format, randomUUID(), generatedAt)));
+  assert.deepEqual(formats.map(({ contentType }) => contentType), [
+    "application/json", "text/csv; charset=utf-8", "text/html; charset=utf-8", "application/zip"
+  ]);
+  const [json, csvExport, htmlExport, archive] = formats;
+  const jsonBody = JSON.parse(Buffer.from(json.bytes).toString("utf8"));
+  assert.ok(jsonBody.sessions.length >= 2);
+  assert.equal(jsonBody.events.every(({ captureMode }) => captureMode === "captured"), true);
+  assert.match(Buffer.from(csvExport.bytes).toString("utf8"), /^"sessionId","sequence","eventType"/u);
+  assert.match(Buffer.from(htmlExport.bytes).toString("utf8"), /Research evidence report/u);
+  assert.deepEqual(Buffer.from(archive.bytes.subarray(0, 4)), Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  assert.equal(Buffer.from(archive.bytes).includes(Buffer.from("manifest.json")), true);
+  assert.equal(archive.manifest.sourceReconciliation.matched, true);
+  assert.equal(archive.manifest.sourceReconciliation.sourceRows, archive.manifest.sourceReconciliation.exportedRows);
+  assert.deepEqual(archive.manifest.captureModes, ["captured"]);
+  assert.equal(archive.manifest.formalReportSource.path, "report.html");
   await revokeResearchAccess(app, principalD, grant.grantId, randomUUID());
   await assert.rejects(
     exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID()),

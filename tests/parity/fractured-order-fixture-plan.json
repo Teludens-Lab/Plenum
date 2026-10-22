@@ -22,8 +22,8 @@
     },
     {
       "id": "PARITY-ORIENTATION-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-350/PS-430",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-E2E", "tests/e2e/runtime.spec.mjs"],
       "title": "Team-specific Strategic Orientation and pre-Move 1 gate",
       "scenarios": ["four team forms", "missing required narrative", "handoff", "return/edit/resubmit", "gate closed", "gate opens after all required artifacts"],
       "evidence": ["artifact history", "ordered event transcript", "control-state capture"]
@@ -70,32 +70,32 @@
     },
     {
       "id": "PARITY-NOTES-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-340",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-E2E", "tests/e2e/runtime.spec.mjs"],
       "title": "Notetaker operational record",
       "scenarios": ["two-seat concurrent notes", "autosave", "quick capture", "reload", "cross-seat and cross-team isolation"],
       "evidence": ["seat-scoped records", "timeline projection", "authorization denial"]
     },
     {
       "id": "PARITY-CONTROL-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-400/PS-430",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-E2E", "tests/e2e/runtime.spec.mjs"],
       "title": "Stage, move and timer controls",
       "scenarios": ["start/pause/reset", "per-mark allocation", "advance and return", "unauthorized control", "stale control", "reconnect"],
       "evidence": ["authoritative state", "controlled-clock transcript", "denial receipt"]
     },
     {
       "id": "PARITY-ADMIN-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-340",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-DB", "apps/server/test/identity.integration.test.mjs"],
       "title": "Session and participant administration",
       "scenarios": ["create", "filter roster", "bulk removal", "archive", "delete", "rejoin denial", "retained audit evidence"],
       "evidence": ["operator state", "join denial", "audit record"]
     },
     {
       "id": "PARITY-EXPORT-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-520",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-DB", "apps/server/test/identity.integration.test.mjs"],
       "title": "Evidence and research exports",
       "scenarios": ["JSON and CSV", "research ZIP", "HTML report", "formal-report source", "cross-session archive", "captured/reconstructed labeling", "source reconciliation"],
       "evidence": ["manifest", "file hashes", "source-row reconciliation"]
@@ -110,16 +110,16 @@
     },
     {
       "id": "PARITY-PLI-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-220/PS-230",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-TEST", "tests/parity/ac09-plugin-capabilities.test.mjs"],
       "title": "PLI and SME procedures",
       "scenarios": ["matching-seat review", "wrong-seat denial", "override rationale", "Macro unlock", "finalized copy packet", "White Cell read-only"],
       "evidence": ["plugin input/output hashes", "review record", "authorization denial"]
     },
     {
       "id": "PARITY-PLUGIN-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-220/PS-250",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-TEST", "tests/parity/ac09-plugin-capabilities.test.mjs"],
       "title": "Intercom and session recorder plugin behavior",
       "scenarios": ["enable/disable", "small and large audio", "start/pause/resume/stop", "participant notice", "storage failure", "unavailable plugin"],
       "evidence": ["plugin lifecycle record", "artifact metadata", "failure state"]
@@ -134,8 +134,8 @@
     },
     {
       "id": "PARITY-SCENARIO-01",
-      "executionStatus": "OUT_OF_SCOPE",
-      "scopeOwner": "PS-220",
+      "executionStatus": "PASS",
+      "evidenceRefs": ["CMD-PLATFORM-TEST", "CMD-AIRGAP", "tests/platform/fractured-order-release.test.mjs"],
       "title": "Scenario briefs, decks and media",
       "scenarios": ["asset identity", "authorized availability", "missing asset", "offline package"],
       "evidence": ["content hashes", "access result", "offline manifest"]

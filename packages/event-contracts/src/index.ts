@@ -118,8 +118,8 @@ export const SESSION_OPERATOR_POLICY_V1 = {
   readOperations: ["session.monitor", "report.view"],
   consequentialOperations: [
     "session.create", "session.configure", "session.ready", "session.open", "session.start",
-    "session.pause", "session.resume", "session.complete", "session.lock", "session.archive",
-    "participant.assign", "participant.reassign", "participant.readiness_override", "principal.revoke",
+    "session.pause", "session.resume", "session.complete", "session.lock", "session.archive", "session.delete",
+    "participant.assign", "participant.reassign", "participant.remove_bulk", "participant.readiness_override", "principal.revoke",
     "stage.start", "stage.end", "stage.reopen", "stage.extend", "stage.skip", "stage.return",
     "timer.pause", "timer.resume", "timer.extend", "inject.release", "inject.cancel",
     "adjudication.route", "plugin_binding.enable", "plugin_binding.disable", "export.request",

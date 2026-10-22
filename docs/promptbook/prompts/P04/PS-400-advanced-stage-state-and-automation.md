@@ -7,7 +7,7 @@
 - Goal: Run approved nested or branching Stages, typed Gates, State Values, Capabilities, Resources, and automation without code.
 - User outcome: Designers model a crisis-response simulation with conditional behavior and traceable state effects.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
 
 ## Requirements and invariants
 
@@ -25,7 +25,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-005`, `OPEN-006`, `OPEN-018`, `OPEN-022`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -129,7 +129,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No code injection path
 - No new simulation-specific branches
 
-The approval gate is: Only behavior explicitly approved under OPEN-005/006 may ship. A task may be implementation-complete without being release-approved.
+The approval gate is: Approved 2026-10-22 by the user acting as Methodology Lead and Technical Lead for the bounded PS-400 baseline recorded in OPEN-005/006 and the PS-400 portion of OPEN-018. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -143,7 +143,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-400-advanced-stage-state-and-automation`
 - Proposed subject: `feat(runtime): add bounded world-state automation`
-- Expected migrations: `018_world_state_automation`
+- Expected migrations: `019_world_state_automation`
 - Expected API/contract IDs: `gate-expression-v1`, `state-transaction-v1`
 
 Proposed body:
@@ -156,7 +156,7 @@ What:
 Verification:
 - Deterministic engine and rehearsal tests.
 Compatibility / migrations:
-- Adds 018 world state.
+- Adds 019 world state.
 Risks / follow-up:
 - Unresolved constructs stay unavailable.
 Refs: PS-400, REQ-031, OPEN-005
@@ -170,4 +170,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-005/006/018 resolve; Expression evaluator changes; Measured performance becomes insufficient.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The bounded Stage/workflow semantics change; Expression evaluator changes; Measured performance becomes insufficient.

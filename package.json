@@ -19,10 +19,12 @@
     "test:airgap": "npm run build --silent && node scripts/test-airgap.mjs",
     "test:db": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs",
     "test:s3": "npm run build --silent && node --test apps/server/test/object-store.integration.test.mjs",
+    "setup:e2e": "playwright install --with-deps chromium",
     "test:e2e": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs",
     "test:e2e:media": "npm run build --silent && playwright test --config tests/e2e/playwright.media.config.mjs",
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
     "test:load:information": "npm run build --silent && node tests/load/information-flow-load.mjs",
+    "validate:promptbook": "node docs/promptbook/scripts/validate-promptbook.mjs",
     "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web && npm run build:web --workspace @plenum/studio",
     "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs"
   },

@@ -15,6 +15,7 @@ import { authorizationError } from "../errors.js";
 import type { SessionAccessContextV1 } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import type { CommandDecision, CommandExecutionContext } from "../runtime/commands/processor.js";
+import { applyStateValueChange } from "../runtime/state/world-state.js";
 
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -265,11 +266,12 @@ export async function executeEffectProposalCommand({ client, context, command, a
   }
   const result = await client.query<{
     proposal_hash: string; lifecycle_status: string; reviewer_role_ids: string[]; expected_state_version: string;
-    governing_release_id: string; authority_epoch: string; target_aggregate_id: string; operation: "set" | "adjust";
+    governing_release_id: string; authority_epoch: string; target_aggregate_id: string; target_state_variable_id: string;
+    scope_reference: string; operation: "set" | "adjust";
     value: JsonValue; version: string;
   }>(
     `SELECT proposal_hash,lifecycle_status,reviewer_role_ids,expected_state_version,governing_release_id,authority_epoch,
-            target_aggregate_id,operation,value,version
+            target_aggregate_id,target_state_variable_id,scope_reference,operation,value,version
        FROM extension.effect_proposals WHERE organization_id=$1 AND session_id=$2 AND id=$3 FOR UPDATE`,
     [context.organizationId, context.sessionId, command.aggregateId]
   );
@@ -304,15 +306,19 @@ export async function executeEffectProposalCommand({ client, context, command, a
       proposalId: command.aggregateId, proposalHash, approvalDecisionId: decisionId, decision: action
     } };
   }
-  let nextValue: JsonValue = proposal.value;
-  if (proposal.operation === "adjust") {
-    if (typeof state.rows[0].value !== "number" || typeof proposal.value !== "number") {
-      throw new Error("Numeric state is required for an adjust Effect Proposal");
-    }
-    nextValue = state.rows[0].value + proposal.value;
-  }
-  const appliedVersion = Number(state.rows[0].version) + 1;
-  await client.query("UPDATE runtime.state_values SET value=$1::jsonb,version=$2,updated_at=transaction_timestamp() WHERE organization_id=$3 AND id=$4", [JSON.stringify(nextValue), appliedVersion, context.organizationId, proposal.target_aggregate_id]);
+  const transaction = await applyStateValueChange(client, {
+    organizationId: context.organizationId, sessionId: context.sessionId, governingReleaseId: activeReleaseId
+  }, {
+    stateVariableId: proposal.target_state_variable_id,
+    scopeReference: proposal.scope_reference,
+    operation: proposal.operation === "adjust" ? "increment" : "set",
+    value: proposal.value as boolean | number | string,
+    rationale: reason
+  }, {
+    type: "plugin", reference: command.aggregateId, commandId: command.commandId,
+    actorPersonId: context.principalId, rationale: reason
+  }, { targetId: proposal.target_aggregate_id, expectedVersion: Number(proposal.expected_state_version) });
+  const appliedVersion = transaction.version;
   await client.query("UPDATE extension.effect_proposals SET lifecycle_status='applied',version=version+1,decided_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2", [context.organizationId, command.aggregateId]);
   await client.query(
     `INSERT INTO extension.effect_receipts(id,organization_id,session_id,proposal_id,approval_decision_id,command_id,applied_state_version)

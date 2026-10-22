@@ -30,6 +30,8 @@ node scripts/render-promptbook.mjs
 node scripts/validate-promptbook.mjs
 ```
 
+The validator is also available from the repository root as `npm run validate:promptbook`.
+
 These commands validate the planning artifact only. The application commands established by PS-100 are listed below.
 
 ## Platform checks
@@ -42,11 +44,12 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run setup:e2e
 npm run test:e2e
 npm run test:a11y
 ```
 
-The browser commands also require an empty disposable PostgreSQL 18 database through `DATABASE_URL` and a locally installed Playwright Chromium browser.
+The browser commands also require an empty disposable PostgreSQL 18 database through `DATABASE_URL`. `npm run setup:e2e` installs the pinned Playwright Chromium executable and its Linux system libraries on a fresh runner.
 
 All production workspaces install from the root `package-lock.json`. The retained reference slice is intentionally outside the workspace and keeps its historical lockfile.
 

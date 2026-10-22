@@ -11,6 +11,7 @@ import { PollEditor } from "../polls/PollEditor.js";
 import { VoiceEditor } from "../voice/VoiceEditor.js";
 import { PluginCatalogEditor } from "../plugins/PluginCatalogEditor.js";
 import { CompositionEditor } from "../compositions/CompositionEditor.js";
+import { AdvancedLogicEditor } from "../advanced-logic/AdvancedLogicEditor.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, defaultGrant, identifier
@@ -23,6 +24,7 @@ const SECTIONS = [
   ["overview", "Overview & Scenario"], ["methodology", "Methodology"], ["teams", "Teams"],
   ["roles", "Session Roles"], ["seats", "Seats"], ["stages", "Stages"],
   ["forms", "Forms & Artifacts"], ["workflows", "Workflows"], ["policies", "Information Policy"],
+  ["advanced-logic", "Advanced logic & world state"],
   ["polls", "Polls"], ["voice", "Voice Channels"], ["plugins", "Plugin catalog & bindings"],
   ["compositions", "Model Compositions"], ["interfaces", "Interfaces"], ["research", "Research"],
   ["access", "Access"], ["preview", "Role preview"]
@@ -135,7 +137,7 @@ function SeatEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
 function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const groups = coreArray(core, "stageGroups");
   const stages = coreArray(core, "stages");
-  const canReorder = stages.every((stage) => stage.transitions.length <= 1);
+  const canReorder = stages.every((stage) => stage.transitions.length <= 1 && stage.transitionMode !== "parallel" && stage.joinMode === undefined);
   const addStage = () => {
     const stage = basicStage(`Stage ${stages.length + 1}`, stages.length);
     client.transact(() => {
@@ -160,7 +162,7 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
     if (stage !== undefined) next.splice(destination, 0, stage);
     replaceSequentialStages(next);
   };
-  return <Workspace id="stages" title="Stages" intro="Build sequential or nested sequential structures. Parallel and conditional graphs remain unavailable pending OPEN-005.">
+  return <Workspace id="stages" title="Stages" intro="Build bounded acyclic Stage graphs with sequential, conditional, or parallel fork/join behavior.">
     <h3>Stage Groups</h3><div className="editor-list compact-list">{groups.map((group, index) => <details className="editor-item" id={`stageGroups-${group.id}`} key={group.id}><summary>{group.name}</summary><div className="item-body grid-fields">
       <TextField id={`group-name-${group.id}`} label="Group name" value={group.name} path={["coreDesign", "stageGroups", index, "name"]} client={client} />
       <TextField id={`group-type-${group.id}`} label="Stage Type label" value={group.stageType} path={["coreDesign", "stageGroups", index, "stageType"]} client={client} />
@@ -173,14 +175,37 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
         <TextField id={`stage-type-${stage.id}`} label="Stage Type" value={stage.stageType} path={["coreDesign", "stages", index, "stageType"]} client={client} />
         <SelectField id={`stage-group-${stage.id}`} label="Parent Stage Group" value={stage.stageGroupId ?? ""} options={[{ value: "", label: "No parent" }, ...groups.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "stages", index, "stageGroupId"]} client={client} emptyDeletes />
         <TextField id={`stage-duration-${stage.id}`} label="Duration in seconds (0 for untimed)" value={stage.durationSeconds ?? 0} path={["coreDesign", "stages", index, "durationSeconds"]} client={client} type="number" />
-        <p className="rule-sentence">WHEN this Stage is ended THEN continue to {stages.find(({ id }) => id === stage.transitions[0]?.targetStageId)?.name ?? "the end of the simulation"}.</p>
+        <SelectField id={`stage-transition-mode-${stage.id}`} label="Outgoing branch behavior" value={stage.transitionMode ?? "exclusive"}
+          options={[{ value: "exclusive", label: "Choose one passing branch" }, { value: "parallel", label: "Start all passing branches" }]}
+          path={["coreDesign", "stages", index, "transitionMode"]} client={client} />
+        {stage.transitionMode === "parallel" && <SelectField id={`stage-parallel-join-${stage.id}`} label="Parallel join Stage" value={stage.parallelJoinStageId ?? ""}
+          options={[{ value: "", label: "Choose a join Stage" }, ...stages.filter(({ id, joinMode }) => id !== stage.id && joinMode !== undefined).map(({ id, name }) => ({ value: id, label: name }))]}
+          path={["coreDesign", "stages", index, "parallelJoinStageId"]} client={client} emptyDeletes />}
+        <SelectField id={`stage-join-mode-${stage.id}`} label="Incoming merge behavior" value={stage.joinMode ?? ""}
+          options={[{ value: "", label: "Not a merge" }, { value: "all", label: "Wait for all branches" }, { value: "first", label: "Accept first branch" }]}
+          path={["coreDesign", "stages", index, "joinMode"]} client={client} emptyDeletes />
+        <fieldset className="nested-editor"><legend>Transitions</legend>{stage.transitions.map((transition, transitionIndex) => <div className="field-row" key={transition.id}>
+          <SelectField id={`stage-transition-target-${transition.id}`} label="Target Stage" value={transition.targetStageId}
+            options={stages.filter(({ id }) => id !== stage.id).map(({ id, name }) => ({ value: id, label: name }))}
+            path={["coreDesign", "stages", index, "transitions", transitionIndex, "targetStageId"]} client={client} />
+          <TextField id={`stage-transition-priority-${transition.id}`} label="Priority" value={transition.priority ?? transitionIndex}
+            path={["coreDesign", "stages", index, "transitions", transitionIndex, "priority"]} client={client} type="number" />
+          <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "stages", index, "transitions"], transitionIndex)}>Remove transition</button>
+        </div>)}
+          <button className="btn-secondary compact" type="button" disabled={stages.length < 2} onClick={() => {
+            const target = stages.find(({ id }) => id !== stage.id);
+            if (target !== undefined) client.appendAtPath(["coreDesign", "stages", index, "transitions"], {
+              id: identifier(), targetStageId: target.id, label: `Continue to ${target.name}`, mode: "manual", priority: stage.transitions.length
+            });
+          }}>Add transition</button>
+        </fieldset>
         <div className="item-actions">
           <button className="btn-secondary compact" type="button" disabled={!canReorder || index === 0} onClick={() => reorderStage(index, -1)}>Earlier</button>
           <button className="btn-secondary compact" type="button" disabled={!canReorder || index === stages.length - 1} onClick={() => reorderStage(index, 1)}>Later</button>
           <button className="btn-danger compact" type="button" disabled={!canReorder} onClick={() => { if (confirm(`Remove ${stage.name}? References will remain visible as validation errors.`)) replaceSequentialStages(stages.filter((_, candidate) => candidate !== index)); }}>Remove</button>
         </div>
       </div></details></li>)}</ol>
-    {!canReorder && <p className="hint">Reordering is unavailable while an advanced branching transition is present (OPEN-005).</p>}
+    {!canReorder && <p className="hint">Reordering is unavailable while an advanced branching transition is present.</p>}
     {canReorder && <AddButton label="Add next Stage" onClick={addStage} />}
   </Workspace>;
 }
@@ -239,7 +264,7 @@ function FormsEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
 function WorkflowEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const workflows = coreArray(core, "workflows");
   const roles = coreArray(core, "sessionRoles");
-  return <Workspace id="workflows" title="Workflows" intro="Start from the guarded review template. Advanced branches, loops, and timers remain unavailable pending OPEN-006.">
+  return <Workspace id="workflows" title="Workflows" intro="Build bounded conditional review paths. Every state must remain reachable and able to terminate; loops remain unavailable.">
     <div className="editor-list">{workflows.map((workflow, index) => <details className="editor-item" id={`workflows-${workflow.id}`} key={workflow.id}><summary><span>{workflow.name}</span><span className="badge badge-muted">{workflow.states.length} states</span></summary><div className="item-body">
       <TextField id={`workflow-name-${workflow.id}`} label="Workflow name" value={workflow.name} path={["coreDesign", "workflows", index, "name"]} client={client} />
       <SelectField id={`workflow-initial-${workflow.id}`} label="Initial state" value={workflow.initialState} options={workflow.states.map(({ key, label }) => ({ value: key, label }))} path={["coreDesign", "workflows", index, "initialState"]} client={client} />
@@ -247,8 +272,35 @@ function WorkflowEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
         <TextField id={`workflow-state-${workflow.id}-${stateIndex}`} label="State label" value={state.label} path={["coreDesign", "workflows", index, "states", stateIndex, "label"]} client={client} />
         <SelectField id={`workflow-kind-${workflow.id}-${stateIndex}`} label="State kind" value={state.kind} options={["draft", "task", "review", "approval", "wait", "terminal", "cancelled"].map((value) => ({ value, label: value }))} path={["coreDesign", "workflows", index, "states", stateIndex, "kind"]} client={client} />
         {state.kind === "task" || state.kind === "review" || state.kind === "approval" ? <MultiCheck legend="Holder Session Roles" values={state.holderSessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "workflows", index, "states", stateIndex, "holderSessionRoleIds"]} client={client} /> : null}
+        {state.kind === "approval" && <div className="field"><label htmlFor={`workflow-quorum-${workflow.id}-${stateIndex}`}>Approval rule</label>
+          <select id={`workflow-quorum-${workflow.id}-${stateIndex}`} value={state.quorum?.rule ?? ""} onChange={(event) => event.target.value === ""
+            ? client.deleteAtPath(["coreDesign", "workflows", index, "states", stateIndex, "quorum"])
+            : client.setAtPath(["coreDesign", "workflows", index, "states", stateIndex, "quorum"], {
+              rule: event.target.value, ...(event.target.value === "quorum" ? { minimumApprovals: 1 } : {})
+            })}>
+            <option value="">Role permission only</option><option value="any_one">Any one</option><option value="majority">Majority</option>
+            <option value="quorum">Fixed quorum</option><option value="unanimous">Unanimous</option>
+          </select></div>}
+        {state.quorum?.rule === "quorum" && <TextField id={`workflow-quorum-min-${workflow.id}-${stateIndex}`} label="Minimum approvals" value={state.quorum.minimumApprovals ?? 1} type="number" path={["coreDesign", "workflows", index, "states", stateIndex, "quorum", "minimumApprovals"]} client={client} />}
       </div></li>)}</ol>
-      <div className="rule-list">{workflow.transitions.map((transition) => <p className="rule-sentence" key={transition.id}>WHEN <strong>{transition.from ?? "an Artifact is created"}</strong> AND a permitted Session Role chooses <strong>{transition.label ?? transition.command}</strong> THEN move to <strong>{transition.to}</strong>.</p>)}</div>
+      <AddButton label="Add Workflow state" onClick={() => client.appendAtPath(["coreDesign", "workflows", index, "states"], {
+        key: identifier(), label: "New state", kind: "task", holderSessionRoleIds: roles[0] === undefined ? [] : [roles[0].id]
+      })} />
+      <div className="rule-list">{workflow.transitions.map((transition, transitionIndex) => <fieldset className="nested-editor" key={transition.id}><legend>{transition.label ?? transition.command}</legend>
+        <div className="field"><label htmlFor={`workflow-from-${transition.id}`}>From state</label><select id={`workflow-from-${transition.id}`}
+          value={transition.from ?? ""} onChange={(event) => client.setAtPath(["coreDesign", "workflows", index, "transitions", transitionIndex, "from"], event.target.value === "" ? null : event.target.value)}>
+          <option value="">Artifact creation</option>{workflow.states.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+        </select></div>
+        <TextField id={`workflow-command-${transition.id}`} label="Command" value={transition.command} path={["coreDesign", "workflows", index, "transitions", transitionIndex, "command"]} client={client} />
+        <SelectField id={`workflow-to-${transition.id}`} label="Target state" value={transition.to} options={workflow.states.map(({ key, label }) => ({ value: key, label }))} path={["coreDesign", "workflows", index, "transitions", transitionIndex, "to"]} client={client} />
+        <MultiCheck legend="Allowed Session Roles" values={transition.allowedSessionRoleIds} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "workflows", index, "transitions", transitionIndex, "allowedSessionRoleIds"]} client={client} />
+        <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "workflows", index, "transitions"], transitionIndex)}>Remove transition</button>
+      </fieldset>)}</div>
+      <AddButton label="Add Workflow transition" onClick={() => client.appendAtPath(["coreDesign", "workflows", index, "transitions"], {
+        id: identifier(), from: workflow.initialState, command: "artifact.advance", label: "Advance",
+        to: workflow.states.find(({ kind }) => kind === "terminal")?.key ?? workflow.initialState,
+        allowedSessionRoleIds: roles[0] === undefined ? [] : [roles[0].id], priority: 0
+      })} />
       <ItemActions path={["coreDesign", "workflows"]} index={index} count={workflows.length} client={client} label={workflow.name} />
     </div></details>)}</div>
     <AddButton label="Add review Workflow template" disabled={roles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "workflows"], basicWorkflow("New review Workflow", roles[0]?.id))} />
@@ -423,6 +475,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
       <FormsEditor core={core} client={client} />
       <WorkflowEditor core={core} client={client} />
       <PolicyEditor core={core} client={client} />
+      <AdvancedLogicEditor core={core} scenario={scenario} client={client} />
       <PollEditor core={core} client={client} />
       <VoiceEditor core={core} client={client} />
       <PluginCatalogEditor projectId={projectId} core={core} client={client} />

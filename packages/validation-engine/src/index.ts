@@ -150,7 +150,7 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
   const stateVariables = new Set(records(core.stateVariables).map((item) => String(item.id)));
   for (const inject of records(scenario.injects)) {
     for (const effect of records(inject.effects)) {
-      if (typeof effect.targetStateVariableId === "string" && !stateVariables.has(effect.targetStateVariableId)) {
+      if (typeof effect.stateVariableId === "string" && !stateVariables.has(effect.stateVariableId)) {
         const id = String(inject.id);
         issues.push(issue("effect.reference_missing", `Inject ${id} has an effect that references a missing State Variable.`, `scenario.injects.${id}`, id));
       }

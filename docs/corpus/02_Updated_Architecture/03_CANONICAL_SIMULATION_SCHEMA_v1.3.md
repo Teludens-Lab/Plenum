@@ -6,7 +6,7 @@
 |---|---|
 | Document ID | CDM |
 | Number | 03 |
-| Version | 1.3.2 |
+| Version | 1.3.3 |
 | Date | 2026-10-21 |
 | Status | Draft for review. v1.2 addendum merged (DEC-26). Header previously read 1.1.0 in a file named v1.2; corrected. |
 | Owner | Technical Lead, with Methodology Lead for meaning |
@@ -260,6 +260,9 @@ interface StageDefinition {
   visibleModuleIds?: string[];
   entryGate?: Gate;
   completionGate?: Gate;
+  transitionMode?: "exclusive" | "parallel";
+  parallelJoinStageId?: string;
+  joinMode?: "all" | "first";
   transitions: StageTransition[];
   onEnter?: AutomationAction[];
   onExit?: AutomationAction[];
@@ -286,7 +289,7 @@ interface OperatorControlDefinition {
 }
 ```
 
-Permitted Stage structures (parallel, conditional, continuous) are OPEN-005; until resolved, validators accept sequential and nested sequential structures only.
+Approved Stage structures are acyclic sequential and nested Stages, priority-ordered conditional transitions, and bounded parallel forks with an explicit join and `all` or `first` completion. Parallel branches must be finite automatic paths without participant activities, completion requirements, positive-duration timers, nested parallel forks, or manual transitions. Loops and continuously timed structures are prohibited.
 
 ## 9. Activities, artifacts and forms
 
@@ -432,6 +435,7 @@ interface WorkflowTransition {
   to: string;
   allowedSessionRoleIds: string[];
   gate?: Gate;
+  priority?: number;
   notifySessionRoleIds?: string[];
   notifyCreator?: boolean;           // notify the creating Participant only
   actions?: AutomationAction[];
@@ -457,7 +461,7 @@ interface AutomationAction {
 }
 ```
 
-Validation rejects workflows with no initial state, no terminal state, unreachable states, unassigned task states, conflicting transitions (same `from` and `command` for the same role), and approvals with no eligible approver. Expressiveness beyond this is OPEN-006.
+Validation rejects workflows with no initial state, no terminal state, unreachable states, unassigned task states, approvals with no eligible approver, or a state without a path to termination. Transitions sharing `from`, `command` and role use unique priorities and may have at most one ungated lowest-priority fallback. Typed Gate conditions, assignment/quorum metadata and bounded automation are approved; loops, continuously running timers and authored code are prohibited. Human adjudication execution remains PS-410.
 
 ### 10.1 Reference workflow (DEC-42)
 
@@ -639,7 +643,7 @@ interface StateEffect {
   scopeReference?: string;
   operation: "set" | "increment" | "decrement" | "multiply";
   value: number | string | boolean;
-  delaySeconds?: number;             // delayed effects: scheduling rules OPEN-018
+  delaySeconds?: number;             // one-shot, Release-pinned, 0..604800; cancellable only before due
   rationale?: string;
 }
 
@@ -649,6 +653,11 @@ interface CapabilityDefinition {
   ownerTeamId?: string;
   states: Array<"available" | "ready" | "committed" | "degraded" | "exhausted" | "recovering" | "unavailable">;
   initialState: string;
+  mode?: "boolean" | "counted";
+  initialQuantity?: number;
+  maximumQuantity?: number;
+  consumable?: boolean;
+  renewal?: { everyStageType: string; amount: number };
   activationGate?: Gate;
   degradationEffects?: StateEffect[];
   recoverySeconds?: number;
@@ -671,7 +680,7 @@ interface ResourceAllocation {
 }
 ```
 
-Capability and Resource changes are recorded as transactions (§16), never as direct field edits.
+Capability and Resource changes are recorded as transactions (§16), never as direct field edits. Counted Capability consumption and renewal are atomic, bounded by zero and `maximumQuantity`, and tied to their source Command. Resource replenishment occurs atomically on entry to the configured Stage type.
 
 ### 13.2 Polls — DEC-46
 
@@ -1081,12 +1090,13 @@ Offline Participant bundles are runtime-generated, policy-filtered projections �
 
 ## 21. Open questions
 
-OPEN-004 (concept activation), OPEN-005 (Stage structures), OPEN-006 (workflow expressiveness), OPEN-010 (form constraints), OPEN-012 (compatibility), OPEN-018 (modeling questions), OPEN-024 (classification), OPEN-028 (secret ballots). OPEN-021 is resolved by DEC-59 and DEC-60.
+OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-012 (compatibility), the remaining non-PS-400 parts of OPEN-018 (modeling questions), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005 and the PS-400 baseline of OPEN-006 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
 
 ## Change log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.3 | 2026-10-22 | Approved bounded conditional/parallel Stage semantics, prioritized gated workflow transitions, counted Capability renewal/consumption, and one-shot delayed State Effects for PS-400. |
 | 1.3.2 | 2026-10-21 | Added Reviewer and Research Analyst to the Organization Role vocabulary under DEC-61. Runtime validation support remains a separate implementation change. |
 | 1.3.1 | 2026-10-17 | Added `PollDefinition` (§13.2), `VoiceChannelDefinition` (§13.3), `ModelCompositionDefinition` and a digest-pinned `PluginBinding` (§14.2); renamed `CommunicationChannel` to `MessageChannel` and `channels` to `messageChannels` (DEC-51); removed `requireHumanApproval` (DEC-54); added validator rules and runtime mappings. |
 | 1.3.0 | 2026-10-17 | Split Core Design, Scenario and manifest (DEC-31); replaced phases with Stages and Stage Groups (DEC-33); replaced `RoleDefinition` with `SessionRoleDefinition` and removed platform scope (DEC-44); added capability catalog; defined previously undefined types (ActorSelector, AssignmentRule, QuorumDefinition, FactReference, ExpressionDefinition, FieldValidation, ValidationRule, EditabilityRule, FormUiOptions, NavigationDefinition, ReportSection, ReportFilter, InputMapping, RubricDefinition, DecisionRule, EffectMapping, OperatorControlDefinition, ResourceAllocation, PluginBinding, ValidationProfile, AccessPolicyDefinition and others); replaced VisibilityRule with default-deny Information Policy; added decision-bearing artifacts, capabilities, resources, research and measurement types; added DEC-42 reference workflow; merged v1.2 addendum. |

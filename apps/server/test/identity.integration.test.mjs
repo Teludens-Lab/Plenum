@@ -85,7 +85,11 @@ import {
   releaseFloor,
   submitPluginArtifact,
   verifyImportedPackage,
-  withOrganizationTransaction
+  withOrganizationTransaction,
+  applyCapabilityQuantityChange,
+  applyDueStateValueChanges,
+  cancelScheduledStateValueChange,
+  scheduleStateValueChange
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -218,7 +222,8 @@ async function applyMigrations() {
     "apps/server/migrations/015_collaboration_runtime.sql",
     "apps/server/migrations/016_voice_consent_assets.sql",
     "apps/server/migrations/017_session_access.sql",
-    "apps/server/migrations/018_identity_roles_and_governance.sql"
+    "apps/server/migrations/018_identity_roles_and_governance.sql",
+    "apps/server/migrations/019_world_state_automation.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1354,8 +1359,14 @@ test("EXT-06/07/08/09/10/17/18/20 isolates runs and applies one approved effect 
     (SELECT value FROM runtime.state_values WHERE id=$1) value,
     (SELECT count(*) FROM extension.approval_decisions WHERE proposal_id=$2) decisions,
     (SELECT count(*) FROM extension.effect_receipts WHERE proposal_id=$2) effects,
-    (SELECT count(*) FROM evidence.events WHERE aggregate_id=$2 AND event_type='effect_proposal.applied') events`, [stateValueId, proposalId]);
-  assert.deepEqual(outcome.rows[0], { value: 15, decisions: "1", effects: "1", events: "1" });
+    (SELECT count(*) FROM evidence.events WHERE aggregate_id=$2 AND event_type='effect_proposal.applied') events,
+    (SELECT count(*) FROM runtime.state_transactions WHERE target_id=$1 AND source_type='plugin') transactions`, [stateValueId, proposalId]);
+  assert.deepEqual(outcome.rows[0], { value: 15, decisions: "1", effects: "1", events: "1", transactions: "1" });
+  const transaction = (await owner.query(
+    `SELECT previous_value,new_value,source_reference,source_command_id,actor_person_id,rationale,version
+       FROM runtime.state_transactions WHERE target_id=$1`, [stateValueId])).rows[0];
+  assert.deepEqual(transaction, { previous_value: 10, new_value: 15, source_reference: proposalId,
+    source_command_id: acceptedCommandId, actor_person_id: ids.personA, rationale: "Reviewed fixture", version: "2" });
 
   const staleProposalId = "23000000-0000-4000-8000-000000000019";
   const staleProposalHash = `sha256:${"f".repeat(64)}`;
@@ -1852,4 +1863,44 @@ test("DEC-61 Research Analyst exports only a granted, PII-free Evidence index", 
     exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID()),
     (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
   );
+});
+
+test("PS-400-T02 consumes counted capabilities atomically and applies or cancels pinned delayed effects once", async () => {
+  const capabilityId = "ps400-response-team";
+  const capabilityInstanceId = randomUUID();
+  await owner.query(`INSERT INTO runtime.capability_instances
+    (id,organization_id,session_id,governing_release_id,capability_id,scope_reference,state,quantity,version)
+    VALUES ($1,$2,$3,$4,$5,'','available',2,1)`,
+  [capabilityInstanceId, ids.orgA, ids.sessionA, ids.releaseA, capabilityId]);
+  const source = (commandId, rationale) => ({ type: "workflow", reference: "ps400-capability-test", commandId,
+    actorPersonId: ids.personA, rationale });
+  const consumed = await applyCapabilityQuantityChange(owner, {
+    organizationId: ids.orgA, sessionId: ids.sessionA, governingReleaseId: ids.releaseA
+  }, { capabilityId, operation: "consume", amount: 1, maximumQuantity: 3 }, source(randomUUID(), "Use one response team"));
+  assert.deepEqual({ previous: consumed.previousValue, next: consumed.newValue, operation: consumed.operation },
+    { previous: 2, next: 1, operation: "consume" });
+  await assert.rejects(applyCapabilityQuantityChange(owner, {
+    organizationId: ids.orgA, sessionId: ids.sessionA, governingReleaseId: ids.releaseA
+  }, { capabilityId, operation: "consume", amount: 2, maximumQuantity: 3 }, source(randomUUID(), "Over-consume")), /insufficient/u);
+
+  const stateVariableId = "ps400-delayed-risk";
+  const stateValueId = randomUUID();
+  await owner.query(`INSERT INTO runtime.state_values
+    (id,organization_id,session_id,governing_release_id,state_variable_id,scope_reference,value,version)
+    VALUES ($1,$2,$3,$4,$5,'','0'::jsonb,1)`, [stateValueId, ids.orgA, ids.sessionA, ids.releaseA, stateVariableId]);
+  const scheduledId = await scheduleStateValueChange(owner, {
+    organizationId: ids.orgA, sessionId: ids.sessionA, governingReleaseId: ids.releaseA
+  }, { stateVariableId, operation: "increment", value: 5, delaySeconds: 30 }, 0,
+  source(randomUUID(), "Apply a one-shot delayed increase"));
+  await owner.query("UPDATE runtime.scheduled_state_effects SET due_at=transaction_timestamp()-interval '1 second' WHERE id=$1", [scheduledId]);
+  assert.equal((await applyDueStateValueChanges(owner, { organizationId: ids.orgA, sessionId: ids.sessionA })).length, 1);
+  assert.equal((await applyDueStateValueChanges(owner, { organizationId: ids.orgA, sessionId: ids.sessionA })).length, 0);
+  assert.equal((await owner.query("SELECT value FROM runtime.state_values WHERE id=$1", [stateValueId])).rows[0].value, 5);
+
+  const cancelledId = await scheduleStateValueChange(owner, {
+    organizationId: ids.orgA, sessionId: ids.sessionA, governingReleaseId: ids.releaseA
+  }, { stateVariableId, operation: "increment", value: 9, delaySeconds: 60 }, 0,
+  source(randomUUID(), "Cancel before due"));
+  assert.equal(await cancelScheduledStateValueChange(owner, { organizationId: ids.orgA, sessionId: ids.sessionA }, cancelledId), true);
+  assert.equal((await owner.query("SELECT status,governing_release_id FROM runtime.scheduled_state_effects WHERE id=$1", [cancelledId])).rows[0].status, "cancelled");
 });

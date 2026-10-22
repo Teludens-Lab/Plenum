@@ -13,6 +13,11 @@ export interface StudioClientState {
 
 const REMOTE = Symbol("remote");
 
+interface PendingUpdate {
+  update: string;
+  changeCount: number;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) {
@@ -41,7 +46,7 @@ function toYValue(value: unknown): unknown {
 
 export class StudioCollaborationClient {
   readonly document = new Y.Doc();
-  private readonly pending = new Map<string, string>();
+  private readonly pending = new Map<string, PendingUpdate>();
   private readonly listeners = new Set<(state: StudioClientState) => void>();
   private socket: WebSocket | null = null;
   private inFlightUpdateId: string | null = null;
@@ -64,8 +69,8 @@ export class StudioCollaborationClient {
     this.document.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === REMOTE) return;
       const updateId = crypto.randomUUID();
-      this.pending.set(updateId, bytesToBase64(update));
-      this.setState({ saveState: "saved_on_device", unsynchronizedChanges: this.pending.size, message: null });
+      this.pending.set(updateId, { update: bytesToBase64(update), changeCount: 1 });
+      this.setState({ saveState: "saved_on_device", unsynchronizedChanges: this.pendingChangeCount(), message: null });
       if (!navigator.onLine) this.socket?.close(1001, "Browser offline");
       else this.flush();
     });
@@ -74,8 +79,10 @@ export class StudioCollaborationClient {
   }
 
   connect(): void {
-    if (this.socket !== null) return;
     this.stopped = false;
+    window.addEventListener("offline", this.offline);
+    window.addEventListener("online", this.online);
+    if (this.socket !== null) return;
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${scheme}//${location.host}/v1/projects/${this.projectId}/collaboration`);
     this.socket = socket;
@@ -94,10 +101,12 @@ export class StudioCollaborationClient {
   stop(): void {
     this.stopped = true;
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
-    this.socket?.close(1000, "Studio closed");
+    this.reconnectTimer = null;
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close(1000, "Studio closed");
     window.removeEventListener("offline", this.offline);
     window.removeEventListener("online", this.online);
-    this.document.destroy();
   }
 
   subscribe(listener: (state: StudioClientState) => void): () => void {
@@ -198,7 +207,7 @@ export class StudioCollaborationClient {
       generation: message.generation,
       validation: message.validation ?? this.state.validation,
       saveState: this.pending.size > 0 ? "saved_on_device" : message.saveState ?? this.state.saveState,
-      unsynchronizedChanges: this.pending.size,
+      unsynchronizedChanges: this.pendingChangeCount(),
       message: message.message
     });
     this.flush();
@@ -206,12 +215,25 @@ export class StudioCollaborationClient {
 
   private flush(): void {
     if (this.socket?.readyState !== WebSocket.OPEN || this.inFlightUpdateId !== null) return;
-    const pending = this.pending.entries().next().value as [string, string] | undefined;
+    if (this.pending.size > 1) {
+      const updates = [...this.pending.values()];
+      const updateId = crypto.randomUUID();
+      this.pending.clear();
+      this.pending.set(updateId, {
+        update: bytesToBase64(Y.mergeUpdates(updates.map(({ update }) => base64ToBytes(update)))),
+        changeCount: updates.reduce((total, { changeCount }) => total + changeCount, 0)
+      });
+    }
+    const pending = this.pending.entries().next().value as [string, PendingUpdate] | undefined;
     if (pending === undefined) return;
-    const [updateId, update] = pending;
+    const [updateId, { update }] = pending;
     this.inFlightUpdateId = updateId;
     this.socket.send(JSON.stringify({ contractId: STUDIO_CRDT_CONTRACT_ID, type: "update", updateId,
       generation: this.state.generation, update }));
+  }
+
+  private pendingChangeCount(): number {
+    return [...this.pending.values()].reduce((total, { changeCount }) => total + changeCount, 0);
   }
 
   private setState(patch: Partial<StudioClientState>): void {

@@ -123,7 +123,7 @@ try {
       cpu: os.cpus()[0]?.model ?? "unknown",
       logicalCpuCount: os.cpus().length,
       memoryGiB: Number((os.totalmem() / 1024 ** 3).toFixed(1)),
-      database: "PostgreSQL 18 Docker, loopback"
+      database: "PostgreSQL 18 Docker"
     },
     acceptance: "BLOCKED: OPEN-019 has no approved latency or hardware budgets"
   }, null, 2));

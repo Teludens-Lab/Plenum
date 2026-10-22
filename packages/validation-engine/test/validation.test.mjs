@@ -35,7 +35,7 @@ test("PS-310-T01 REQ-011 defect catalog blocks Publication with targeted message
     ["approval without approver", "workflow.approver_required", (draft) => { draft.coreDesign.workflows[0].states[1] = { key: "with_facilitator", label: "Approval", kind: "approval" }; }],
     ["impossible Inject condition", "scenario.invalid", (draft) => { draft.scenario.injects[0].releaseMode = "gate"; delete draft.scenario.injects[0].releaseGate; }],
     ["inaccessible interface module", "interface.policy_inaccessible", (draft) => { draft.coreDesign.interfaces[0].layout.regions[0].modules[0].configuration.informationPolicyId = "policy-team-control"; }],
-    ["missing effect target", "effect.reference_missing", (draft) => { draft.scenario.injects[0].effects = [{ targetStateVariableId: "missing-state" }]; }],
+    ["missing effect target", "effect.reference_missing", (draft) => { draft.scenario.injects[0].effects = [{ stateVariableId: "missing-state", operation: "set", value: 1 }]; }],
     ["route without recipient", "core_design.invalid", (draft) => { draft.coreDesign.communications.routes[0].recipient = {}; }],
     ["report source unavailable", "report.data_unavailable", (draft) => { draft.coreDesign.reports[0].sections[0].source = "missing-source"; }],
     ["permission contradiction", "permission.contradiction", (draft) => {
@@ -106,4 +106,42 @@ test("PS-320 VOICE-09 validates Media Provider capability per target profile", a
   ];
   const report = validateStudioDraft(draft);
   assert.ok(report.issues.some(({ code, message }) => code === "voice.adapter_capability_missing" && /institutional/u.test(message)));
+});
+
+test("PS-400-T01/T02 validates typed Gates and rejects unknown Facts", async () => {
+  const rehearsal = JSON.parse(await readFile(new URL("../../../definitions/crisis-response/ps-400-rehearsal.json", import.meta.url), "utf8"));
+  const valid = structuredClone(await fixture());
+  valid.coreDesign.stateVariables = [{ ...rehearsal.stateVariable,
+    informationPolicyId: valid.coreDesign.informationPolicies[0].id }];
+  valid.coreDesign.stages[0].completionGate = rehearsal.stages[0].completionGate;
+  assert.equal(validateStudioDraft(valid).valid, true);
+
+  valid.coreDesign.stages[0].completionGate.conditions[0].fact = "state.not-in-the-release";
+  const report = validateStudioDraft(valid);
+  assert.equal(report.valid, false);
+  assert.ok(report.issues.some(({ message }) => /unknown Fact state\.not-in-the-release/u.test(message)));
+});
+
+test("PS-400-T01 validates bounded parallel branches with an explicit join", async () => {
+  const draft = structuredClone(await fixture());
+  const fork = draft.coreDesign.stages[0];
+  const join = draft.coreDesign.stages[1];
+  const controls = { allowStart: false, allowEnd: false, allowReopen: false, allowExtend: false,
+    allowSkip: false, allowReturnToPrevious: false, requireReason: true };
+  const branch = (id) => ({ id, name: id, stageType: "phase", order: 1, timerMode: "none", allowedActivityIds: [],
+    transitions: [{ id: `${id}-join`, targetStageId: join.id, mode: "automatic" }], operatorControls: controls });
+  fork.transitionMode = "parallel";
+  fork.parallelJoinStageId = join.id;
+  fork.transitions = [
+    { id: "fork-a", targetStageId: "bounded-a", mode: "automatic" },
+    { id: "fork-b", targetStageId: "bounded-b", mode: "automatic" }
+  ];
+  join.joinMode = "all";
+  draft.coreDesign.stages.splice(1, 0, branch("bounded-a"), branch("bounded-b"));
+  assert.equal(validateStudioDraft(draft).valid, true);
+
+  draft.coreDesign.stages.find(({ id }) => id === "bounded-b").transitions[0].mode = "manual";
+  const report = validateStudioDraft(draft);
+  assert.equal(report.valid, false);
+  assert.ok(report.issues.some(({ message }) => /bounded automatic logic/u.test(message)));
 });

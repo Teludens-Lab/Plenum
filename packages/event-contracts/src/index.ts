@@ -35,6 +35,7 @@ export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
 export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
 export const MODEL_RUN_CONTRACT_ID = "model-run-v1";
 export const EFFECT_PROPOSAL_CONTRACT_ID = "effect-proposal-v1";
+export const STATE_TRANSACTION_CONTRACT_ID = "state-transaction-v1";
 export const APPROVAL_DECISION_CONTRACT_ID = "approval-decision-v1";
 export const POLL_COMMAND_CONTRACT_ID = "poll-command-v1";
 export const BALLOT_COMMAND_CONTRACT_ID = "ballot-command-v1";
@@ -521,6 +522,27 @@ export interface EffectProposalV1 {
   version: number;
 }
 
+export interface StateTransactionV1 {
+  contractId: typeof STATE_TRANSACTION_CONTRACT_ID;
+  id: string;
+  sessionId: string;
+  governingReleaseId: string;
+  targetKind: "state_value" | "capability" | "resource";
+  targetId: string;
+  definitionId: string;
+  scopeReference: string;
+  operation: "set" | "increment" | "decrement" | "multiply" | "transition" | "consume" | "renew" | "credit" | "debit";
+  previousValue: JsonValue;
+  newValue: JsonValue;
+  sourceType: "inject" | "stage" | "workflow" | "outcome" | "plugin" | "control_intervention";
+  sourceReference: string;
+  sourceCommandId: string;
+  actorPersonId: string;
+  rationale: string;
+  occurredAt: string;
+  version: number;
+}
+
 export interface ApprovalDecisionV1 {
   contractId: typeof APPROVAL_DECISION_CONTRACT_ID;
   id: string;
@@ -569,6 +591,22 @@ export const effectProposalV1Schema = {
     inputDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, outputDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, version: { type: "integer", minimum: 1 }
   }
 } as const satisfies ContractSchema<EffectProposalV1>;
+
+export const stateTransactionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: STATE_TRANSACTION_CONTRACT_ID, title: "State Transaction v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "id", "sessionId", "governingReleaseId", "targetKind", "targetId", "definitionId", "scopeReference",
+    "operation", "previousValue", "newValue", "sourceType", "sourceReference", "sourceCommandId", "actorPersonId", "rationale", "occurredAt", "version"],
+  properties: {
+    contractId: { const: STATE_TRANSACTION_CONTRACT_ID }, id: uuidProperty, sessionId: uuidProperty, governingReleaseId: uuidProperty,
+    targetKind: { enum: ["state_value", "capability", "resource"] }, targetId: uuidProperty,
+    definitionId: { type: "string", minLength: 1 }, scopeReference: { type: "string" },
+    operation: { enum: ["set", "increment", "decrement", "multiply", "transition", "consume", "renew", "credit", "debit"] },
+    previousValue: {}, newValue: {}, sourceType: { enum: ["inject", "stage", "workflow", "outcome", "plugin", "control_intervention"] },
+    sourceReference: { type: "string", minLength: 1 }, sourceCommandId: uuidProperty, actorPersonId: uuidProperty,
+    rationale: { type: "string", minLength: 1 }, occurredAt: utcInstantProperty, version: { type: "integer", minimum: 1 }
+  }
+} as const satisfies ContractSchema<StateTransactionV1>;
 
 export const approvalDecisionV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema", $id: APPROVAL_DECISION_CONTRACT_ID, title: "Approval Decision v1",

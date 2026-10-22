@@ -7,7 +7,7 @@
 - Goal: Support manual, rubric, rules, Plugin, hybrid, and multi-perspective adjudication through one contract.
 - User outcome: Adjudicators can review evidence, explain decisions, override suggestions with rationale, and publish outcomes safely.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false` pending OPEN-018 and owner approval.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-006`, `OPEN-018`, `OPEN-022`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-018`.
 
 ## Prerequisites
 

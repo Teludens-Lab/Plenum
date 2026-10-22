@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `DEC-31`, `DEC-32`, `DEC-33`, `OPEN-004`, `OPEN-005`, `OPEN-006`, `OPEN-010`, `OPEN-018`, `OPEN-022`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `DEC-31`, `DEC-32`, `DEC-33`, `OPEN-004`, `OPEN-010`, `OPEN-018`.
 
 ## Prerequisites
 
@@ -133,7 +133,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No duplicate schema model appears in UI code
 - Unsupported constructs are unavailable, not silently approximated
 
-The approval gate is: Advanced Stage, workflow, and Form capabilities remain bounded by OPEN-005/006/010. A task may be implementation-complete without being release-approved.
+The approval gate is: Advanced Stage and workflow capabilities remain bounded by the approved PS-400 baseline; Form capabilities remain bounded by OPEN-010. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 

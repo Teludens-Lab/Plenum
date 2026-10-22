@@ -587,23 +587,28 @@ function RuntimeView() {
   const [notice, setNotice] = useState<string>("");
   const [pending, setPending] = useState<PendingCommand | null>(null);
   const main = useRef<HTMLElement>(null);
+  const loadVersion = useRef(0);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
     setConnection("loading");
     setError(null);
     try {
       const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };
+      if (version !== loadVersion.current) return;
       setDeviceId(registered.deviceId);
       const headers = { "x-device-id": registered.deviceId };
       const [nextProjection, proposalResponse] = await Promise.all([
         api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers }),
         api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers })
       ]);
+      if (version !== loadVersion.current) return;
       setProjection(nextProjection);
       setEffectProposals(proposalResponse.proposals);
       setConnection("online");
     } catch (cause) {
+      if (version !== loadVersion.current) return;
       setConnection(navigator.onLine ? "error" : "offline");
       setError(cause instanceof Error ? cause.message : "The Runtime could not be loaded.");
     }

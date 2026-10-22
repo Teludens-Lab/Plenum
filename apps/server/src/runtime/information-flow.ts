@@ -7,13 +7,17 @@ import {
 import type {
   RuntimeActorSelectorV1,
   RuntimeInjectDefinitionV1,
-  RuntimeProposalThreadProtocolV1
+  RuntimeProposalThreadProtocolV1,
+  StateVariableDefinitionV1
 } from "@plenum/simulation-schema";
 import type { PoolClient } from "pg";
+import { evaluateGate } from "@plenum/workflow-engine";
 
 import { authorizationError } from "../errors.js";
 import type { SessionAccessContextV1 } from "../identity/context.js";
 import type { CommandDecision, CommandExecutionContext } from "./commands/processor.js";
+import { applyDueStateValueChanges, applyStateValueChange, initializeWorldState, readWorldStateFacts,
+  scheduleStateValueChange } from "./state/world-state.js";
 
 interface InformationRelease {
   coreDesign: {
@@ -26,6 +30,10 @@ interface InformationRelease {
       id: string;
       grants: Array<{ audience: RuntimeActorSelectorV1; fieldsExcluded?: string[] }>;
     }>;
+    stateVariables?: StateVariableDefinitionV1[];
+    capabilities?: Array<{ id: string; initialState: string; informationPolicyId: string; mode?: "boolean" | "counted";
+      initialQuantity?: number; maximumQuantity?: number }>;
+    resourceDefinitions?: Array<{ id: string; informationPolicyId: string }>;
     communications: {
       messageChannels: Array<{
         id: string;
@@ -46,6 +54,9 @@ interface InformationRelease {
   scenario: {
     content: Array<{ id: string; title: string; type: string; body?: string; informationPolicyId: string; version: string }>;
     injects: RuntimeInjectDefinitionV1[];
+    initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }>;
+    initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
+    initialResources?: Array<{ resourceId: string; scopeReference?: string; balance: number }>;
   };
 }
 
@@ -122,7 +133,10 @@ async function readInformationRelease(
     coreDesign: coreDesign as unknown as InformationRelease["coreDesign"],
     scenario: {
       content: Array.isArray(scenario.content) ? scenario.content as InformationRelease["scenario"]["content"] : [],
-      injects: Array.isArray(scenario.injects) ? scenario.injects as RuntimeInjectDefinitionV1[] : []
+      injects: Array.isArray(scenario.injects) ? scenario.injects as RuntimeInjectDefinitionV1[] : [],
+      ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as NonNullable<InformationRelease["scenario"]["initialState"]> } : {}),
+      ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as NonNullable<InformationRelease["scenario"]["initialCapabilities"]> } : {}),
+      ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as NonNullable<InformationRelease["scenario"]["initialResources"]> } : {})
     }
   };
 }
@@ -638,7 +652,8 @@ async function releaseInject(
   releaseId: string,
   release: InformationRelease,
   definition: RuntimeInjectDefinitionV1,
-  instanceId: string
+  instanceId: string,
+  commandId: string
 ): Promise<boolean> {
   const selected = await recipientsFor(client, release, context, definition.recipients);
   const content = release.scenario.content.find(({ id }) => id === definition.contentId);
@@ -655,6 +670,21 @@ async function releaseInject(
   );
   if (inserted.rowCount !== 1) return false;
   await insertInjectRecipients(client, context, instanceId, recipients);
+  await initializeWorldState(client, {
+    organizationId: context.organizationId, sessionId: context.sessionId, governingReleaseId: releaseId
+  }, release.coreDesign, release.scenario);
+  for (const [effectIndex, effect] of (definition.effects ?? []).entries()) {
+    const variable = release.coreDesign.stateVariables?.find(({ id }) => id === effect.stateVariableId);
+    const worldContext = {
+      organizationId: context.organizationId, sessionId: context.sessionId, governingReleaseId: releaseId
+    };
+    const source = {
+      type: "inject", reference: instanceId, commandId, actorPersonId: context.principalId,
+      rationale: effect.rationale ?? `Inject ${definition.id} released`
+    } as const;
+    if ((effect.delaySeconds ?? 0) > 0) await scheduleStateValueChange(client, worldContext, effect, effectIndex, source);
+    else await applyStateValueChange(client, worldContext, effect, source, variable === undefined ? {} : { definition: variable });
+  }
   return true;
 }
 
@@ -664,7 +694,8 @@ async function recordAutomaticInjectRelease(
   releaseId: string,
   commandId: string,
   instanceId: string,
-  definitionId: string
+  definitionId: string,
+  gateExplanations?: ReturnType<typeof evaluateGate>["explanations"]
 ): Promise<void> {
   const sequence = await client.query<{ sequence: string }>(
     `UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
@@ -680,7 +711,8 @@ async function recordAutomaticInjectRelease(
         governing_release_id,authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
      VALUES ($1,$2,$3,$4,'inject.released',1,$5,$6,$7,$8,$9::jsonb,$10,$10,$11,1,transaction_timestamp())`,
     [eventId, context.organizationId, context.sessionId, evidenceSequence, context.principalId, context.participantId,
-      releaseId, context.authorityEpoch, JSON.stringify({ injectInstanceId: instanceId, injectDefinitionId: definitionId }),
+      releaseId, context.authorityEpoch, JSON.stringify({ injectInstanceId: instanceId, injectDefinitionId: definitionId,
+        ...(gateExplanations === undefined ? {} : { gateExplanations }) }),
       commandId, instanceId]
   );
   await client.query(
@@ -698,8 +730,45 @@ export async function releaseStageInjects(
   const released: string[] = [];
   for (const definition of release.scenario.injects.filter((inject) => inject.releaseMode === mode && inject.stageId === stageId)) {
     const instanceId = randomUUID();
-    if (!await releaseInject(input.client, input.context, input.activeReleaseId, release, definition, instanceId)) continue;
+    if (!await releaseInject(input.client, input.context, input.activeReleaseId, release, definition, instanceId, input.command.commandId)) continue;
     await recordAutomaticInjectRelease(input.client, input.context, input.activeReleaseId, input.command.commandId, instanceId, definition.id);
+    released.push(instanceId);
+  }
+  return released;
+}
+
+export async function releaseGateInjects(input: CommandExecutionContext): Promise<string[]> {
+  const release = await readInformationRelease(input.client, input.context, input.activeReleaseId, input.command.commandId);
+  const actor = actorFor(release, input.context);
+  if (actor === undefined) return [];
+  await initializeWorldState(input.client, {
+    organizationId: input.context.organizationId, sessionId: input.context.sessionId, governingReleaseId: input.activeReleaseId
+  }, release.coreDesign, release.scenario);
+  await applyDueStateValueChanges(input.client, input.context, release.coreDesign.stateVariables ?? []);
+  const policyVisible = (policyId: string): boolean => release.coreDesign.informationPolicies
+    .find(({ id }) => id === policyId)?.grants.some(({ audience }) =>
+      selectorAllows(audience, input.context.activeSessionRoleId, actor)) === true;
+  const released: string[] = [];
+  for (const definition of release.scenario.injects.filter((inject) => inject.releaseMode === "gate")) {
+    if (definition.releaseGate === undefined) continue;
+    const facts = await readWorldStateFacts(input.client, input.context, {
+      stateVariableIds: new Set((release.coreDesign.stateVariables ?? []).filter(({ informationPolicyId }) => policyVisible(informationPolicyId)).map(({ id }) => id)),
+      capabilityIds: new Set((release.coreDesign.capabilities ?? []).filter(({ informationPolicyId }) => policyVisible(informationPolicyId)).map(({ id }) => id)),
+      resourceIds: new Set((release.coreDesign.resourceDefinitions ?? []).filter(({ informationPolicyId }) => policyVisible(informationPolicyId)).map(({ id }) => id))
+    });
+    const stage = await currentStageId(input.client, input.context);
+    if (stage !== undefined) facts["session.stage.id"] = stage;
+    facts["session.status"] = input.context.sessionStatus;
+    facts["actor.sessionRoleId"] = input.context.activeSessionRoleId;
+    if (actor.teamId !== undefined) facts["actor.teamId"] = actor.teamId;
+    const clock = await input.client.query<{ now: Date }>("SELECT transaction_timestamp() AS now");
+    facts["time.wallClock"] = clock.rows[0]?.now.toISOString() ?? new Date(0).toISOString();
+    const evaluation = evaluateGate(definition.releaseGate, facts);
+    if (!evaluation.passed) continue;
+    const instanceId = randomUUID();
+    if (!await releaseInject(input.client, input.context, input.activeReleaseId, release, definition, instanceId, input.command.commandId)) continue;
+    await recordAutomaticInjectRelease(input.client, input.context, input.activeReleaseId, input.command.commandId,
+      instanceId, definition.id, evaluation.explanations);
     released.push(instanceId);
   }
   return released;
@@ -752,11 +821,12 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
     if (!role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
       return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The Active Role Context cannot release Injects." };
     }
-    if (!await releaseInject(client, context, activeReleaseId, release, definition, command.aggregateId)) {
+    if (!await releaseInject(client, context, activeReleaseId, release, definition, command.aggregateId, command.commandId)) {
       return { status: "rejected", errorCode: "TARGET_EXISTS", message: "The Inject has already been released." };
     }
+    const releasedInjectIds = await releaseGateInjects(input);
     return { status: "accepted", aggregateVersion: 1, eventType: "inject.released",
-      eventPayload: { injectInstanceId: command.aggregateId, injectDefinitionId: definition.id } };
+      eventPayload: { injectInstanceId: command.aggregateId, injectDefinitionId: definition.id, releasedInjectIds } };
   }
 
   const result = await client.query<InjectInstanceRow>(

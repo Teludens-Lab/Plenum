@@ -20,6 +20,7 @@ function sourceId(path: string): string {
     forms: "forms", artifactTypes: "forms", workflows: "workflows", informationPolicies: "policies",
     interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
     decisionTraceability: "research", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
+    stateVariables: "advanced-logic", capabilities: "advanced-logic", resourceDefinitions: "advanced-logic",
     coreDesign: "overview", draft: "overview", scenario: "overview"
   };
   if (elementId !== undefined && ["teams", "sessionRoles", "seats", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces", "pluginBindings", "compositions"].includes(collection ?? "")) {

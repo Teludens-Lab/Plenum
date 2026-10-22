@@ -149,7 +149,7 @@ THEN [notify] [White Cell]
 AND [unlock] [Adjudication]
 ```
 
-Only structures permitted by OPEN-005 can be built; until it is resolved, sequential and nested sequential structures are allowed.
+The Studio may build acyclic sequential and nested Stages, priority-ordered conditional transitions, and bounded parallel forks with an explicit `all` or `first` join. It must reject loops, continuously timed structures, and parallel branches containing participant work, positive-duration timers, nested forks, completion requirements, or manual transitions.
 
 ## 10. Forms and Artifacts
 

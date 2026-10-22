@@ -17,6 +17,7 @@ import {
   RUNTIME_PROJECTION_CONTRACT_ID,
   MODEL_RUN_CONTRACT_ID,
   EFFECT_PROPOSAL_CONTRACT_ID,
+  STATE_TRANSACTION_CONTRACT_ID,
   APPROVAL_DECISION_CONTRACT_ID,
   VOICE_COMMAND_CONTRACT_ID,
   MEDIA_CREDENTIAL_CONTRACT_ID,
@@ -40,6 +41,7 @@ import {
   runtimeProjectionV1Schema,
   modelRunV1Schema,
   effectProposalV1Schema,
+  stateTransactionV1Schema,
   approvalDecisionV1Schema,
   voiceCommandV1Schema,
   mediaCredentialV1Schema,
@@ -59,8 +61,10 @@ import {
 } from "../packages/plugin-sdk/dist/index.js";
 import {
   COMPOSITION_DEFINITION_CONTRACT_ID,
+  GATE_EXPRESSION_CONTRACT_ID,
   PLUGIN_BINDING_CONTRACT_ID,
   compositionDefinitionV1Schema,
+  gateExpressionV1Schema,
   pluginBindingV1Schema
 } from "../packages/simulation-schema/dist/index.js";
 
@@ -123,6 +127,7 @@ assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
 assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
 assert.equal(modelRunV1Schema.$id, MODEL_RUN_CONTRACT_ID);
 assert.equal(effectProposalV1Schema.$id, EFFECT_PROPOSAL_CONTRACT_ID);
+assert.equal(stateTransactionV1Schema.$id, STATE_TRANSACTION_CONTRACT_ID);
 assert.equal(approvalDecisionV1Schema.$id, APPROVAL_DECISION_CONTRACT_ID);
 assert.equal(voiceCommandV1Schema.$id, VOICE_COMMAND_CONTRACT_ID);
 assert.equal(mediaCredentialV1Schema.$id, MEDIA_CREDENTIAL_CONTRACT_ID);
@@ -136,16 +141,18 @@ assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 assert.equal(pluginBindingV1Schema.$id, PLUGIN_BINDING_CONTRACT_ID);
 assert.equal(compositionDefinitionV1Schema.$id, COMPOSITION_DEFINITION_CONTRACT_ID);
+assert.equal(gateExpressionV1Schema.$id, GATE_EXPRESSION_CONTRACT_ID);
 
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
   syncDeltasV1Schema, syncSnapshotV1Schema, modelRunV1Schema, effectProposalV1Schema,
+  stateTransactionV1Schema,
   approvalDecisionV1Schema, voiceCommandV1Schema, mediaCredentialV1Schema, floorLeaseV1Schema,
   voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
   rolePreviewV1Schema,
-  pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema];
+  pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }

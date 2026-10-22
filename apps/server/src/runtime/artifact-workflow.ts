@@ -1,6 +1,7 @@
 import {
   type CommandEnvelopeV1,
   type JsonObject,
+  type JsonValue,
   type RuntimeActionV1,
   type RuntimeArtifactV1,
   type RuntimeCreateTaskV1,
@@ -12,8 +13,10 @@ import {
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { audienceAllows, type FieldAudience } from "@plenum/policy-engine";
-import { runtimeFormValue, setRuntimeFormValue, validateRuntimeFormPayload, type RuntimeFieldConditionV1, type RuntimeFieldValidationV1 } from "@plenum/simulation-schema";
-import { nextStage, remainingSeconds, resolveWorkflowTransition } from "@plenum/workflow-engine";
+import { runtimeFormValue, setRuntimeFormValue, validateRuntimeFormPayload, type AutomationActionV1, type GateV1,
+  type RuntimeFieldConditionV1, type RuntimeFieldValidationV1, type RuntimeStageDefinitionV1,
+  type StateVariableDefinitionV1 } from "@plenum/simulation-schema";
+import { evaluateGate, nextStage, rehearseStages, remainingSeconds, resolveWorkflowTransition, type GateExplanationV1 } from "@plenum/workflow-engine";
 
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
@@ -28,7 +31,9 @@ import {
   type CommandDecision,
   type CommandExecutionContext
 } from "./commands/processor.js";
-import { executeInformationCommand, getInformationProjection, releaseStageInjects } from "./information-flow.js";
+import { executeInformationCommand, getInformationProjection, releaseGateInjects, releaseStageInjects } from "./information-flow.js";
+import { applyCapabilityQuantityChange, applyDueStateValueChanges, applyResourceTransaction, applyStateValueChange,
+  initializeWorldState, readWorldStateFacts, scheduleStateValueChange } from "./state/world-state.js";
 import { executeVotingCommand, getPollProjection } from "../voting/polls.js";
 import { createVoiceCommandExecutor, getVoiceProjection } from "../comms/voice.js";
 import type { MediaProviderAdapter } from "@plenum/media-adapter";
@@ -94,6 +99,8 @@ interface WorkflowTransitionDefinition {
   notifySessionRoleIds?: string[];
   contentOnly?: boolean;
   editableFieldKeys?: string[];
+  gate?: GateV1;
+  actions?: AutomationActionV1[];
 }
 
 interface WorkflowDefinition {
@@ -116,10 +123,21 @@ interface RuntimeDefinition {
   teamCells?: Array<{ id: string; teamId: string; kind: string; enabled: boolean }>;
   sessionRoles: Array<{ id: string; name: string; capabilities?: Array<{ capability: string }>; isControlRole?: boolean }>;
   seats: Array<{ id: string; sessionRoleIds: string[]; teamId?: string }>;
-  informationPolicies: Array<{ id: string; grants: Array<{ audience: FieldAudience }> }>;
+  informationPolicies: Array<{ id: string; grants: Array<{ audience: FieldAudience; fieldsExcluded?: string[] }> }>;
+  stateVariables?: StateVariableDefinitionV1[];
+  capabilities?: Array<{ id: string; informationPolicyId: string; initialState: string; mode?: "boolean" | "counted";
+    initialQuantity?: number; maximumQuantity?: number; renewal?: { everyStageType: string; amount: number } }>;
+  resourceDefinitions?: Array<{ id: string; informationPolicyId: string; replenishment?: { everyStageType?: string; amount: number } }>;
   stages: Array<{
-    id: string; label: string; name?: string; durationSeconds?: number; timerMode?: "countdown" | "countup" | "none";
-    transitions?: Array<{ id: string; targetStageId: string; mode: "automatic" | "manual" | "automatic_or_manual" }>;
+    id: string; label: string; name?: string; stageType?: string; durationSeconds?: number; timerMode?: "countdown" | "countup" | "none";
+    entryGate?: GateV1;
+    completionGate?: GateV1;
+    transitionMode?: "exclusive" | "parallel";
+    parallelJoinStageId?: string;
+    joinMode?: "all" | "first";
+    transitions?: Array<{ id: string; targetStageId: string; mode: "automatic" | "manual" | "automatic_or_manual"; gate?: GateV1; priority?: number }>;
+    onEnter?: AutomationActionV1[];
+    onExit?: AutomationActionV1[];
     allowedActivityIds?: string[];
     operatorControls?: { allowStart: boolean; allowEnd: boolean; allowReopen: boolean; allowExtend: boolean; allowSkip: boolean; allowReturnToPrevious: boolean; requireReason: boolean };
     completionRequirements?: Array<{
@@ -242,7 +260,11 @@ async function readRelease(
   organizationId: string,
   releaseId: string,
   correlationId: string
-): Promise<{ definition: RuntimeDefinition; releaseLabel: string }> {
+): Promise<{ definition: RuntimeDefinition; releaseLabel: string; initial: {
+  initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }>;
+  initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
+  initialResources?: Array<{ resourceId: string; scopeReference?: string; balance: number }>;
+} }> {
   const result = await client.query<{ snapshot: unknown; release_label: string }>(
     `SELECT revision.snapshot, release.release_label
        FROM registry.releases release
@@ -254,7 +276,17 @@ async function readRelease(
   );
   const row = result.rows[0];
   if (row === undefined) throw authorizationError("NOT_FOUND", "The Release was not found.", correlationId);
-  return { definition: runtimeDefinition(row.snapshot, correlationId), releaseLabel: row.release_label };
+  const snapshot = row.snapshot as Record<string, unknown>;
+  const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
+  return {
+    definition: runtimeDefinition(row.snapshot, correlationId),
+    releaseLabel: row.release_label,
+    initial: {
+      ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }> } : {}),
+      ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }> } : {}),
+      ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as Array<{ resourceId: string; scopeReference?: string; balance: number }> } : {})
+    }
+  };
 }
 
 function formFor(definition: RuntimeDefinition, type: ArtifactTypeDefinition): RuntimeFormDefinition {
@@ -281,6 +313,65 @@ function actorFor(definition: RuntimeDefinition, context: SessionAccessContextV1
   if (role === undefined || seat === undefined || !seat.sessionRoleIds.includes(role.id)) return undefined;
   const team = seat.teamId === undefined ? undefined : definition.teams.find((candidate) => candidate.id === seat.teamId);
   return { ...(team === undefined ? {} : { teamId: team.id, teamLabel: team.name }), seatId: seat.id, isControlRole: role.isControlRole === true };
+}
+
+async function runtimeGateFacts(
+  client: PoolClient,
+  definition: RuntimeDefinition,
+  initial: Awaited<ReturnType<typeof readRelease>>["initial"],
+  context: SessionAccessContextV1,
+  artifact?: { state: string; typeKey: string; payload: JsonObject; ownerTeamId?: string }
+): Promise<Record<string, boolean | number | string>> {
+  await initializeWorldState(client, {
+    organizationId: context.organizationId, sessionId: context.sessionId, governingReleaseId: context.activeReleaseId
+  }, definition, initial);
+  await applyDueStateValueChanges(client, context, definition.stateVariables ?? []);
+  const actor = actorFor(definition, context);
+  const visible = (policyId: string): boolean => {
+    const policy = definition.informationPolicies.find(({ id }) => id === policyId);
+    return actor !== undefined && policy?.grants.some(({ audience }) => audienceAllows({
+      organizationId: context.organizationId, sessionId: context.sessionId, participantId: context.participantId,
+      activeSessionRoleId: context.activeSessionRoleId, ...(actor.teamId === undefined ? {} : { activeTeamId: actor.teamId }),
+      isControlRole: actor.isControlRole, organizationRoles: context.organizationRoles
+    }, audience)) === true;
+  };
+  const facts = await readWorldStateFacts(client, context, {
+    stateVariableIds: new Set((definition.stateVariables ?? []).filter(({ informationPolicyId }) => visible(informationPolicyId)).map(({ id }) => id)),
+    capabilityIds: new Set((definition.capabilities ?? []).filter(({ informationPolicyId }) => visible(informationPolicyId)).map(({ id }) => id)),
+    resourceIds: new Set((definition.resourceDefinitions ?? []).filter(({ informationPolicyId }) => visible(informationPolicyId)).map(({ id }) => id))
+  });
+  const stage = await client.query<{ stage_id: string; status: string; elapsed_seconds: string }>(
+    `SELECT stage_id,status,GREATEST(0,extract(epoch FROM (transaction_timestamp()-COALESCE(started_at,transaction_timestamp())))
+       - accumulated_pause_seconds)::bigint AS elapsed_seconds
+       FROM runtime.session_stage_state WHERE organization_id=$1 AND session_id=$2`,
+    [context.organizationId, context.sessionId]
+  );
+  const clock = await client.query<{ now: Date }>("SELECT transaction_timestamp() AS now");
+  facts["session.status"] = stage.rows[0]?.status ?? "not_started";
+  if (stage.rows[0] !== undefined) {
+    facts["session.stage.id"] = stage.rows[0].stage_id;
+    facts["session.stage.elapsedSeconds"] = Number(stage.rows[0].elapsed_seconds);
+    facts[`stage.${stage.rows[0].stage_id}.status`] = stage.rows[0].status;
+  }
+  facts["actor.sessionRoleId"] = context.activeSessionRoleId;
+  if (actor?.teamId !== undefined) facts["actor.teamId"] = actor.teamId;
+  facts["time.wallClock"] = clock.rows[0]?.now.toISOString() ?? new Date(0).toISOString();
+  if (artifact !== undefined) {
+    facts["artifact.status"] = artifact.state;
+    facts["artifact.typeKey"] = artifact.typeKey;
+    const artifactPolicyId = definition.artifactTypes.find(({ key }) => key === artifact.typeKey)?.informationPolicyId;
+    const artifactGrants = definition.informationPolicies.find(({ id }) => id === artifactPolicyId)?.grants.filter(({ audience }) =>
+      actor !== undefined && audienceAllows({
+        organizationId: context.organizationId, sessionId: context.sessionId, participantId: context.participantId,
+        activeSessionRoleId: context.activeSessionRoleId, ...(actor.teamId === undefined ? {} : { activeTeamId: actor.teamId }),
+        isControlRole: actor.isControlRole, organizationRoles: context.organizationRoles
+      }, audience, artifact.ownerTeamId, artifact.payload)) ?? [];
+    for (const [key, value] of Object.entries(artifact.payload)) {
+      if (artifactGrants.some(({ fieldsExcluded }) => fieldsExcluded?.includes(key) !== true) &&
+          ["boolean", "number", "string"].includes(typeof value)) facts[`artifact.field.${key}`] = value as boolean | number | string;
+    }
+  }
+  return facts;
 }
 
 function artifactAllowed(
@@ -312,21 +403,102 @@ async function activeStageId(client: PoolClient, definition: RuntimeDefinition, 
   return result.rows[0]?.stage_id ?? definition.stages[0]?.id;
 }
 
+function executableStages(definition: RuntimeDefinition): RuntimeStageDefinitionV1[] {
+  return definition.stages.map((stage) => ({
+    ...stage,
+    name: stage.name ?? stage.label,
+    stageType: stage.stageType ?? "stage",
+    allowedActivityIds: stage.allowedActivityIds ?? [],
+    transitions: stage.transitions ?? [],
+    operatorControls: stage.operatorControls ?? {
+      allowStart: false, allowEnd: false, allowReopen: false, allowExtend: false,
+      allowSkip: false, allowReturnToPrevious: false, requireReason: true
+    }
+  }));
+}
+
 function transitionFor(
   workflow: WorkflowDefinition,
   state: string | null,
   operationType: string,
-  activeSessionRoleId: string
+  activeSessionRoleId: string,
+  facts: Readonly<Record<string, boolean | number | string>>
 ): WorkflowTransitionDefinition | CommandDecision {
-  const result = resolveWorkflowTransition(workflow, state, operationType, activeSessionRoleId);
+  const result = resolveWorkflowTransition(workflow, state, operationType, activeSessionRoleId, facts);
   if (result.allowed) return result.transition;
   return result.reason === "PERMISSION_DENIED"
     ? { status: "rejected", errorCode: result.reason, message: "The Active Role Context cannot perform this transition." }
-    : { status: "rejected", errorCode: result.reason, message: "The workflow does not allow this transition." };
+    : { status: "rejected", errorCode: "INVALID_TRANSITION", message: result.reason === "GATE_NOT_SATISFIED"
+      ? "The workflow Gate is not satisfied." : "The workflow does not allow this transition." };
 }
 
 function isDecision(value: WorkflowTransitionDefinition | CommandDecision): value is CommandDecision {
   return "status" in value;
+}
+
+async function applyAutomationEffects(
+  input: CommandExecutionContext,
+  definition: RuntimeDefinition,
+  actions: readonly AutomationActionV1[] | undefined,
+  sourceType: "stage" | "workflow",
+  sourceReference: string,
+  rationale: string
+): Promise<{ transactionIds: string[]; scheduledEffectIds: string[] }> {
+  const transactionIds: string[] = [];
+  const scheduledEffectIds: string[] = [];
+  for (const [effectIndex, action] of (actions ?? []).entries()) {
+    if (action.type !== "apply_effect") continue;
+    const effect = action.parameters as unknown as Parameters<typeof applyStateValueChange>[2];
+    const context = {
+      organizationId: input.context.organizationId, sessionId: input.context.sessionId,
+      governingReleaseId: input.activeReleaseId
+    };
+    const source = {
+      type: sourceType, reference: sourceReference, commandId: input.command.commandId,
+      actorPersonId: input.context.principalId, rationale: effect.rationale ?? rationale
+    } as const;
+    if ((effect.delaySeconds ?? 0) > 0) {
+      scheduledEffectIds.push(await scheduleStateValueChange(input.client, context, effect, effectIndex, source));
+      continue;
+    }
+    const transaction = await applyStateValueChange(input.client, context, effect, source, (() => {
+      const stateDefinition = definition.stateVariables?.find(({ id }) => id === effect.stateVariableId);
+      return stateDefinition === undefined ? {} : { definition: stateDefinition };
+    })());
+    transactionIds.push(transaction.id);
+  }
+  return { transactionIds, scheduledEffectIds };
+}
+
+async function applyStageRenewals(
+  input: CommandExecutionContext,
+  definition: RuntimeDefinition,
+  stageIds: readonly string[],
+  rationale: string
+): Promise<string[]> {
+  const transactionIds: string[] = [];
+  const context = { organizationId: input.context.organizationId, sessionId: input.context.sessionId, governingReleaseId: input.activeReleaseId };
+  for (const stageId of stageIds) {
+    const stage = definition.stages.find(({ id }) => id === stageId);
+    if (stage === undefined) continue;
+    const source = { type: "stage", reference: `${stageId}.entry`, commandId: input.command.commandId,
+      actorPersonId: input.context.principalId, rationale } as const;
+    for (const capability of definition.capabilities ?? []) {
+      if (capability.renewal?.everyStageType !== (stage.stageType ?? "stage") || capability.maximumQuantity === undefined) continue;
+      transactionIds.push((await applyCapabilityQuantityChange(input.client, context, {
+        capabilityId: capability.id, operation: "renew", amount: capability.renewal.amount,
+        maximumQuantity: capability.maximumQuantity
+      }, source)).id);
+    }
+    for (const resource of definition.resourceDefinitions ?? []) {
+      if (resource.replenishment === undefined || resource.replenishment.amount <= 0 ||
+          resource.replenishment.everyStageType !== undefined && resource.replenishment.everyStageType !== (stage.stageType ?? "stage")) continue;
+      transactionIds.push((await applyResourceTransaction(input.client, context, {
+        resourceId: resource.id, operation: "credit", amount: resource.replenishment.amount
+      }, source)).id);
+    }
+  }
+  return transactionIds;
 }
 
 function actionLabel(transition: WorkflowTransitionDefinition): string {
@@ -447,7 +619,7 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     }
     const exists = await client.query("SELECT 1 FROM runtime.artifact_instances WHERE organization_id=$1 AND id=$2", [context.organizationId, command.aggregateId]);
     if (exists.rowCount !== 0) return { status: "rejected", errorCode: "TARGET_EXISTS", message: "The Artifact already exists." };
-    const { definition } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
+    const { definition, initial } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
     const artifactType = typeFor(definition, command.payload.artifactTypeKey);
     if (artifactType === undefined) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "The Artifact Type is not in the Release." };
     const actor = actorFor(definition, context);
@@ -460,7 +632,9 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
       return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This Artifact Type is not available in the current Stage." };
     }
     const workflow = workflowFor(definition, artifactType);
-    const transition = transitionFor(workflow, null, command.operationType, context.activeSessionRoleId);
+    const transition = transitionFor(workflow, null, command.operationType, context.activeSessionRoleId,
+      await runtimeGateFacts(client, definition, initial, context,
+        { state: "", typeKey: artifactType.key, payload: {}, ...(actor.teamId === undefined ? {} : { ownerTeamId: actor.teamId }) }));
     if (isDecision(transition)) return transition;
     const content = jsonPayload(command.payload.content) ?? {};
     if (workflow.states.find((state) => state.key === transition.to)?.kind !== "draft") {
@@ -479,12 +653,15 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
         artifactType.key, workflow.key, formFor(definition, artifactType).formVersion,
         context.participantId, actor.teamId ?? null, transition.to, JSON.stringify(content), visibleRoles([], workflow, transition)]
     );
+    const automation = await applyAutomationEffects(input, definition, transition.actions, "workflow",
+      `${workflow.id}:${transition.from ?? "initial"}->${transition.to}`, `Workflow transition ${transition.command}`);
     return {
       status: "accepted",
       aggregateVersion: 1,
       eventType: eventType(command.operationType),
       eventPayload: { artifactId: command.aggregateId, artifactTypeKey: artifactType.key, fromState: null,
-        toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version: 1 }
+        toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version: 1,
+        stateTransactionIds: automation.transactionIds, scheduledEffectIds: automation.scheduledEffectIds }
     };
   }
 
@@ -503,7 +680,7 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "The Artifact is governed by another Release." };
   }
   const currentVersion = Number(artifact.version);
-  const { definition } = await readRelease(client, context.organizationId, artifact.governing_release_id, command.commandId);
+  const { definition, initial } = await readRelease(client, context.organizationId, artifact.governing_release_id, command.commandId);
   const artifactType = typeFor(definition, artifact.artifact_type_key);
   if (artifactType === undefined) throw new Error(`Release lacks Artifact Type ${artifact.artifact_type_key}`);
   const actor = actorFor(definition, context);
@@ -518,7 +695,10 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
   if (!actor.isControlRole && actor.teamId !== artifact.owner_team_id) {
     return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the owning Team or Control may change this Artifact." };
   }
-  const transition = transitionFor(workflow, artifact.state, command.operationType, context.activeSessionRoleId);
+  const transition = transitionFor(workflow, artifact.state, command.operationType, context.activeSessionRoleId,
+    await runtimeGateFacts(client, definition, initial, context,
+      { state: artifact.state, typeKey: artifact.artifact_type_key, payload: artifact.payload,
+        ...(artifact.owner_team_id === null ? {} : { ownerTeamId: artifact.owner_team_id }) }));
   if (isDecision(transition)) return transition;
   if (transition.contentOnly === true && artifact.creator_participant_id !== context.participantId) {
     return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the creator may edit this Artifact." };
@@ -560,12 +740,15 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     [transition.to, JSON.stringify(payload), visibleRoles(artifact.visible_role_ids, workflow, transition),
       version, context.organizationId, artifact.id]
   );
+  const automation = await applyAutomationEffects(input, definition, transition.actions, "workflow",
+    `${workflow.id}:${artifact.state}->${transition.to}`, `Workflow transition ${transition.command}`);
   return {
     status: "accepted",
     aggregateVersion: version,
     eventType: eventType(command.operationType),
     eventPayload: { artifactId: artifact.id, artifactTypeKey: artifact.artifact_type_key,
-      fromState: artifact.state, toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version }
+      fromState: artifact.state, toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version,
+      stateTransactionIds: automation.transactionIds, scheduledEffectIds: automation.scheduledEffectIds }
   };
 }
 
@@ -609,7 +792,7 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
   if (command.aggregateId !== context.sessionId) {
     return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Stage aggregate was not found." };
   }
-  const { definition } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
+  const { definition, initial } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
   const role = definition.sessionRoles.find((candidate) => candidate.id === context.activeSessionRoleId);
   const capability = command.operationType === "stage.advance" || command.operationType === "stage.return"
     ? "stage.advance" : "timer.control";
@@ -654,9 +837,25 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
   let pausedAt = current.paused_at;
   let pauseSeconds = Number(current.accumulated_pause_seconds);
   let extensionSeconds = Number(current.extension_seconds);
-  const now = new Date();
+  const serverClock = await client.query<{ now: Date }>("SELECT transaction_timestamp() AS now");
+  const now = serverClock.rows[0]?.now;
+  if (now === undefined) throw new Error("Server time is unavailable");
+  const gateExplanations: Array<{ trigger: string; passed: boolean; explanations: GateExplanationV1[] }> = [];
+  let parallelExecution = false;
+  let parallelActionTriggers: string[] | undefined;
+  let parallelEntryStageIds: string[] = [];
+  let parallelExitStageIds: string[] = [];
+  const checkGate = async (trigger: string, gate: GateV1 | undefined): Promise<boolean> => {
+    if (gate === undefined) return true;
+    const evaluation = evaluateGate(gate, await runtimeGateFacts(client, definition, initial, context));
+    gateExplanations.push({ trigger, ...evaluation });
+    return evaluation.passed;
+  };
 
   if (command.operationType === "stage.start" && current.status === "not_started" && stage.operatorControls?.allowStart) {
+    if (!await checkGate(`${stage.id}.entry`, stage.entryGate)) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage entry Gate is not satisfied." };
+    }
     status = "active"; startedAt = now;
   } else if ((command.operationType === "stage.pause" || command.operationType === "timer.pause") && current.status === "active") {
     status = "paused"; pausedAt = now;
@@ -672,6 +871,9 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
   } else if (command.operationType === "stage.end" && current.status !== "not_started" && stage.operatorControls?.allowEnd) {
     if (!await completionRequirementsSatisfied(client, context, definition, stage)) {
       return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion requirements are not satisfied." };
+    }
+    if (!await checkGate(`${stage.id}.completion`, stage.completionGate)) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion Gate is not satisfied." };
     }
     status = "completed"; pausedAt = null;
   } else if (command.operationType === "stage.reopen" && current.status === "completed" && stage.operatorControls?.allowReopen) {
@@ -689,15 +891,50 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
     if (!stage.operatorControls?.allowSkip && !await completionRequirementsSatisfied(client, context, definition, stage)) {
       return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion requirements are not satisfied." };
     }
+    if (!stage.operatorControls?.allowSkip && !await checkGate(`${stage.id}.completion`, stage.completionGate)) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage completion Gate is not satisfied." };
+    }
     const target = textPayload(command.payload.targetStageId);
-    const next = target === undefined ? undefined : nextStage(definition.stages.map((item) => ({
-      ...item, name: item.name ?? item.label, stageType: "stage", allowedActivityIds: item.allowedActivityIds ?? [],
-      transitions: item.transitions ?? [], operatorControls: item.operatorControls ?? {
-        allowStart: false, allowEnd: false, allowReopen: false, allowExtend: false, allowSkip: false, allowReturnToPrevious: false, requireReason: true
+    const stages = executableStages(definition);
+    if (stage.transitionMode === "parallel") {
+      parallelExecution = true;
+      if (target === undefined || target !== stage.parallelJoinStageId) {
+        return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "A parallel fork must advance to its configured join Stage." };
       }
-    })), current.stage_id, target);
+      const join = stages.find(({ id }) => id === target);
+      if (join === undefined) throw new Error(`Release lacks parallel join Stage ${target}`);
+      const rehearsalStages = stages.map((candidate) => candidate.id === join.id ? { ...candidate, transitions: [] } : candidate);
+      const start = rehearsalStages.findIndex(({ id }) => id === stage.id);
+      const ordered = [rehearsalStages[start]!, ...rehearsalStages.filter((_, index) => index !== start)];
+      const { onEnter: _alreadyApplied, ...forkWithoutEntryActions } = ordered[0]!;
+      ordered[0] = forkWithoutEntryActions;
+      const rehearsal = rehearseStages({ stages: ordered,
+        facts: await runtimeGateFacts(client, definition, initial, context), startedAt: now.toISOString(), seed: 0 });
+      if (rehearsal.finalStageId !== join.id) {
+        return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The parallel Stage branches did not satisfy their configured join." };
+      }
+      parallelActionTriggers = [...new Set(rehearsal.trace.filter(({ kind, fired }) => kind === "effect" && fired)
+        .map(({ triggerId }) => triggerId.replace(/\.effect\.\d+$/u, "")))];
+      parallelEntryStageIds = [...new Set(rehearsal.trace.filter(({ kind, fired }) => kind === "entry" && fired)
+        .map(({ triggerId }) => triggerId.replace(/\.entry$/u, "")).filter((id) => id !== stage.id))];
+      parallelExitStageIds = [...new Set(rehearsal.trace.filter(({ kind, fired }) => kind === "transition" && fired)
+        .flatMap(({ triggerId }) => stages.filter((candidate) => candidate.transitions.some(({ id }) => id === triggerId)).map(({ id }) => id)))];
+      for (const item of rehearsal.trace.filter(({ kind }) => kind !== "effect")) {
+        gateExplanations.push({ trigger: item.triggerId, passed: item.fired, explanations: item.explanations });
+      }
+      targetStageId = join.id; status = "active"; startedAt = now; pausedAt = null; pauseSeconds = 0; extensionSeconds = 0;
+    }
+    const next = stage.transitionMode === "parallel" ? stages.find(({ id }) => id === targetStageId) :
+      target === undefined ? undefined : nextStage(stages, current.stage_id, target);
     if (next === undefined) return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Release does not allow this Stage transition." };
-    targetStageId = next.id; status = "active"; startedAt = now; pausedAt = null; pauseSeconds = 0; extensionSeconds = 0;
+    const selectedTransition = stage.transitionMode === "parallel" ? undefined : stage.transitions?.find(({ targetStageId: candidate }) => candidate === next.id);
+    if (stage.transitionMode !== "parallel" && (!await checkGate(selectedTransition?.id ?? `${stage.id}->${next.id}`, selectedTransition?.gate) ||
+        !await checkGate(`${next.id}.entry`, next.entryGate))) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage transition Gate is not satisfied." };
+    }
+    if (stage.transitionMode !== "parallel") {
+      targetStageId = next.id; status = "active"; startedAt = now; pausedAt = null; pauseSeconds = 0; extensionSeconds = 0;
+    }
   } else {
     return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Stage control is not valid in its current state." };
   }
@@ -709,14 +946,48 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
      WHERE organization_id=$8 AND session_id=$9`,
     [targetStageId, status, startedAt, pausedAt, pauseSeconds, extensionSeconds, version, context.organizationId, context.sessionId]
   );
-  const releasedInjectIds = command.operationType === "stage.advance" || command.operationType === "stage.return"
+  const automationResults: Array<Awaited<ReturnType<typeof applyAutomationEffects>>> = [];
+  const enteredStageIds: string[] = [];
+  if (parallelExecution) {
+    for (const trigger of parallelActionTriggers ?? []) {
+      const match = /^(.*)\.(entry|exit)$/u.exec(trigger);
+      const triggeredStage = definition.stages.find(({ id }) => id === match?.[1]);
+      if (triggeredStage !== undefined) automationResults.push(await applyAutomationEffects(input, definition,
+        match?.[2] === "entry" ? triggeredStage.onEnter : triggeredStage.onExit, "stage", trigger, reason));
+    }
+    enteredStageIds.push(...parallelEntryStageIds);
+  } else if (command.operationType === "stage.advance" || command.operationType === "stage.return") {
+    automationResults.push(await applyAutomationEffects(input, definition, stage.onExit, "stage", `${stage.id}.exit`, reason));
+    automationResults.push(await applyAutomationEffects(input, definition,
+      definition.stages.find(({ id }) => id === targetStageId)?.onEnter, "stage", `${targetStageId}.entry`, reason));
+    enteredStageIds.push(targetStageId);
+  } else if (command.operationType === "stage.start") {
+    automationResults.push(await applyAutomationEffects(input, definition, stage.onEnter, "stage", `${stage.id}.entry`, reason));
+    enteredStageIds.push(stage.id);
+  }
+  const stateTransactionIds = [
+    ...automationResults.flatMap(({ transactionIds }) => transactionIds),
+    ...await applyStageRenewals(input, definition, enteredStageIds, reason)
+  ];
+  const scheduledEffectIds = automationResults.flatMap((result) => result.scheduledEffectIds);
+  const releaseParallelInjects = async (): Promise<string[]> => {
+    const ids: string[] = [];
+    for (const stageId of parallelExitStageIds) ids.push(...await releaseStageInjects(input, "stage_exit", stageId));
+    for (const stageId of parallelEntryStageIds) ids.push(...await releaseStageInjects(input, "stage_entry", stageId));
+    ids.push(...await releaseGateInjects(input));
+    return ids;
+  };
+  const releasedInjectIds = parallelExecution
+    ? await releaseParallelInjects()
+    : command.operationType === "stage.advance" || command.operationType === "stage.return"
     ? [
         ...await releaseStageInjects(input, "stage_exit", current.stage_id),
-        ...await releaseStageInjects(input, "stage_entry", targetStageId)
+        ...await releaseStageInjects(input, "stage_entry", targetStageId),
+        ...await releaseGateInjects(input)
       ]
     : command.operationType === "stage.start"
-      ? await releaseStageInjects(input, "stage_entry", targetStageId)
-      : [];
+      ? [...await releaseStageInjects(input, "stage_entry", targetStageId), ...await releaseGateInjects(input)]
+      : await releaseGateInjects(input);
   const after = { stageId: targetStageId, status, version };
   await client.query(
     `INSERT INTO runtime.control_interventions
@@ -738,7 +1009,9 @@ export async function executeStageCommand(input: CommandExecutionContext): Promi
       action === "reopen" ? "reopened" : "started";
   return { status: "accepted", aggregateVersion: version, eventType: `stage.${eventAction}`,
     eventPayload: { fromStageId: current.stage_id, toStageId: targetStageId, status,
-      activeSessionRoleId: context.activeSessionRoleId, version, releasedInjectIds } };
+      activeSessionRoleId: context.activeSessionRoleId, version, releasedInjectIds, stateTransactionIds,
+      scheduledEffectIds,
+      gateExplanations: gateExplanations as unknown as JsonValue } };
 }
 
 function actionsFor(

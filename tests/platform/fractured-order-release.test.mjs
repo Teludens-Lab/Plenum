@@ -297,13 +297,13 @@ test("PS-210-T03 rejects broken Inject content, Stage and response references", 
   missingResponse.materialization.scenario.injects[0].requiredResponseArtifactTypeId = "missing";
   assert.throws(() => compileRelease(missingResponse), /references missing response Artifact Type/);
 
-  for (const releaseMode of ["scheduled", "gate"]) {
-    const undefinedSemantics = structuredClone(source);
-    Object.assign(undefinedSemantics.materialization.scenario.injects[0], releaseMode === "scheduled"
-      ? { releaseMode, scheduledOffsetSeconds: 30 }
-      : { releaseMode, releaseGate: { condition: "unspecified" } });
-    assert.throws(() => compileRelease(undefinedSemantics), /without approved Runtime semantics/);
-  }
+  const scheduled = structuredClone(source);
+  Object.assign(scheduled.materialization.scenario.injects[0], { releaseMode: "scheduled", scheduledOffsetSeconds: 30 });
+  assert.throws(() => compileRelease(scheduled), /without approved Runtime semantics/);
+
+  const malformedGate = structuredClone(source);
+  Object.assign(malformedGate.materialization.scenario.injects[0], { releaseMode: "gate", releaseGate: { condition: "unspecified" } });
+  assert.throws(() => compileRelease(malformedGate), /bounded Gate contract/);
 });
 
 test("PS-210-T01 rejects proposal actions without explicit valid Routes", () => {

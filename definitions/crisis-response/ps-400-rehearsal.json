@@ -1,0 +1,81 @@
+{
+  "seed": 400,
+  "startedAt": "2026-10-22T12:00:00.000Z",
+  "facts": {
+    "state.infrastructure-strain": 70
+  },
+  "stateVariable": {
+    "id": "infrastructure-strain",
+    "name": "Infrastructure strain",
+    "scope": "global",
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 100,
+    "informationPolicyId": "policy-public",
+    "historyMode": "full",
+    "display": "gauge"
+  },
+  "stages": [
+    {
+      "id": "assessment",
+      "name": "Assessment",
+      "stageType": "phase",
+      "allowedActivityIds": [],
+      "completionGate": {
+        "operator": "all",
+        "conditions": [
+          { "fact": "state.infrastructure-strain", "operator": "greater_or_equal", "value": 75 }
+        ]
+      },
+      "transitions": [
+        {
+          "id": "assessment-to-response",
+          "targetStageId": "response",
+          "mode": "manual",
+          "gate": {
+            "operator": "all",
+            "conditions": [
+              { "fact": "state.infrastructure-strain", "operator": "greater_or_equal", "value": 75 }
+            ]
+          }
+        }
+      ],
+      "onEnter": [
+        {
+          "type": "apply_effect",
+          "parameters": {
+            "stateVariableId": "infrastructure-strain",
+            "operation": "increment",
+            "value": 5,
+            "rationale": "Assessment raises observed strain"
+          }
+        }
+      ],
+      "operatorControls": {
+        "allowStart": true,
+        "allowEnd": true,
+        "allowReopen": false,
+        "allowExtend": false,
+        "allowSkip": false,
+        "allowReturnToPrevious": false,
+        "requireReason": true
+      }
+    },
+    {
+      "id": "response",
+      "name": "Response",
+      "stageType": "phase",
+      "allowedActivityIds": [],
+      "transitions": [],
+      "operatorControls": {
+        "allowStart": true,
+        "allowEnd": true,
+        "allowReopen": false,
+        "allowExtend": false,
+        "allowSkip": false,
+        "allowReturnToPrevious": false,
+        "requireReason": true
+      }
+    }
+  ]
+}

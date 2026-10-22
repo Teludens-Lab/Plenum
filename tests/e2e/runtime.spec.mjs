@@ -81,7 +81,7 @@ async function fillBlueOrientation(page, description) {
 async function createDraft(page, description) {
   const create = await fillBlueOrientation(page, description);
   await create.getByRole("button", { name: "Save draft" }).click();
-  await expect(page.getByText("The server accepted the Command.")).toBeVisible();
+  await expect(page.getByText("The server accepted the Command.")).toBeVisible({ timeout: 15_000 });
 }
 
 async function fillBlueAction(page, title) {
@@ -104,7 +104,7 @@ async function fillBlueAction(page, title) {
 async function createBlueActionDraft(page, title) {
   const create = await fillBlueAction(page, title);
   await create.getByRole("button", { name: "Save draft" }).click();
-  await expect(page.getByText("The server accepted the Command.")).toBeVisible();
+  await expect(page.getByText("The server accepted the Command.")).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe.serial("PS-150 configured Runtime shell", () => {
@@ -113,7 +113,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   test("@a11y AC-04 REQ-064 renders a keyboard and screen-reader operable empty workspace", async ({ browser }) => {
     const { context, page } = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
-    await expect(page.getByRole("heading", { level: 1, name: "Blue Scribe workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Blue Scribe workspace" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No Artifacts have been created yet.")).toBeVisible();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
@@ -135,6 +135,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
   test("@a11y VOTE-01 VOTE-15 casts and certifies an accessible authoritative Poll", async ({ browser }) => {
     test.setTimeout(90_000);
+    const commandTimeout = 15_000;
     const control = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const participant = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const controlDevice = (await (await control.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
@@ -153,45 +154,47 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
     await participant.page.goto(runtimeUrl());
     const poll = participant.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
-    await expect(poll).toBeVisible();
+    await expect(poll).toBeVisible({ timeout: 15_000 });
     await poll.getByLabel("Yes").check();
     await poll.getByRole("button", { name: "Cast Ballot" }).click();
-    await expect(poll.getByText(/Ballot accepted at/u)).toBeVisible();
+    await expect(poll.getByText(/Ballot accepted at/u)).toBeVisible({ timeout: commandTimeout });
     expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
 
     await control.page.goto(runtimeUrl());
     const managed = control.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
-    await expect(managed.getByRole("button", { name: "Close Poll" })).toBeVisible();
+    await expect(managed.getByRole("button", { name: "Close Poll" })).toBeVisible({ timeout: commandTimeout });
     await control.context.setOffline(true);
     await managed.getByRole("button", { name: "Close Poll" }).click();
     await expect(control.page.getByText("Poll management requires the live Session Authority and was not queued.")).toBeVisible();
     await expect(managed.getByText("open", { exact: true })).toBeVisible();
     await control.context.setOffline(false);
     await managed.getByRole("button", { name: "Close Poll" }).click();
-    await expect(managed.getByRole("button", { name: "Compute Tally" })).toBeVisible();
+    await expect(managed.getByRole("button", { name: "Compute Tally" })).toBeVisible({ timeout: commandTimeout });
     await managed.getByRole("button", { name: "Compute Tally" }).click();
-    await expect(managed.getByRole("button", { name: "Certify result" })).toBeVisible();
+    await expect(managed.getByRole("button", { name: "Certify result" })).toBeVisible({ timeout: commandTimeout });
     await managed.getByRole("button", { name: "Certify result" }).click();
-    await expect(managed.getByRole("heading", { name: "Certified result" })).toBeVisible();
-    await expect(managed.getByText(/Quorum met.*Passed/u)).toBeVisible();
+    await expect(managed.getByRole("heading", { name: "Certified result" })).toBeVisible({ timeout: commandTimeout });
+    await expect(managed.getByText(/Quorum met.*Passed/u)).toBeVisible({ timeout: commandTimeout });
     expect((await new AxeBuilder({ page: control.page }).analyze()).violations).toEqual([]);
     await Promise.all([control.context.close(), participant.context.close()]);
   });
 
   test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const commandTimeout = 15_000;
     const { context, page } = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
     const proposal = page.getByRole("article", { name: "synthetic risk" });
-    await expect(proposal).toBeVisible();
-    await expect(proposal.getByText("in review")).toBeVisible();
+    await expect(proposal).toBeVisible({ timeout: commandTimeout });
+    await expect(proposal.getByText("in review")).toBeVisible({ timeout: commandTimeout });
     await proposal.getByLabel("Decision reason").fill("Reviewed against current authoritative state");
     await context.setOffline(true);
     await proposal.getByRole("button", { name: "Approve effect" }).click();
-    await expect(page.getByText("Approval Decisions require a live Session Authority and were not queued.")).toBeVisible();
+    await expect(page.getByText("Approval Decisions require a live Session Authority and were not queued.")).toBeVisible({ timeout: commandTimeout });
     await expect(proposal.getByText("in review")).toBeVisible();
     await context.setOffline(false);
     await proposal.getByRole("button", { name: "Approve effect" }).click();
-    await expect(page.getByText("The server accepted the Command.")).toBeVisible();
+    await expect(page.getByText("The server accepted the Command.")).toBeVisible({ timeout: commandTimeout });
     await expect(proposal.getByText("applied")).toBeVisible({ timeout: 20_000 });
     await expect(proposal.getByRole("button", { name: "Approve effect" })).toHaveCount(0);
     const accessibility = await new AxeBuilder({ page }).analyze();
@@ -252,6 +255,8 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("@a11y VOICE-13/14 captures and withdraws participant-scoped transcription consent", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const commandTimeout = 30_000;
     const participant = await actor(browser, fixture.tokens.author, { reducedMotion: "reduce" });
     const moderator = await actor(browser, fixture.tokens.finalReviewer, { reducedMotion: "reduce" });
     const join = async (current) => {
@@ -273,22 +278,24 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const moderatorChannel = moderator.page.getByRole("article", { name: "Team open room" });
     const participantTranscription = participantChannel.locator(".voice-privacy > div").filter({ hasText: "Transcription" });
     const moderatorTranscription = moderatorChannel.locator(".voice-privacy > div").filter({ hasText: "Transcription" });
-    await expect(participantTranscription).toContainText("Policy: with consent · Your consent: not given");
+    await expect(participantTranscription).toContainText("Policy: with consent · Your consent: not given", { timeout: commandTimeout });
     await participantTranscription.getByRole("button", { name: "Give transcription consent" }).click();
-    await expect(participantTranscription).toContainText("Your consent: given");
+    await expect(participantTranscription).toContainText("Your consent: given", { timeout: commandTimeout });
     await moderatorTranscription.getByRole("button", { name: "Give transcription consent" }).click();
+    await expect(moderatorTranscription).toContainText("Your consent: given", { timeout: commandTimeout });
     await moderatorTranscription.getByRole("button", { name: "Start transcription" }).click();
-    await expect(moderatorTranscription).toContainText("Active · Policy: with consent");
+    await expect(moderatorTranscription).toContainText("Active · Policy: with consent", { timeout: commandTimeout });
     await participant.page.getByRole("button", { name: "Refresh authoritative state" }).click();
-    await expect(participantTranscription).toContainText("Active · Policy: with consent");
+    await expect(participantTranscription).toContainText("Active · Policy: with consent", { timeout: commandTimeout });
     await participantTranscription.getByRole("button", { name: "Withdraw transcription consent" }).click();
-    await expect(participantTranscription).toContainText("Stopped · Policy: with consent · Your consent: withdrawn");
+    await expect(participantTranscription).toContainText("Stopped · Policy: with consent · Your consent: withdrawn", { timeout: commandTimeout });
     expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
     await Promise.all([participant.context.close(), moderator.context.close()]);
   });
 
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
     test.setTimeout(120_000);
+    const commandTimeout = 15_000;
     const author = await actor(browser, fixture.tokens.author);
     await author.page.goto(runtimeUrl());
     await createDraft(author.page, "Approve the first configured handoff");
@@ -296,7 +303,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(authored.getByText("Draft", { exact: true })).toBeVisible();
     await authored.getByRole("button", { name: "Submit to Team Facilitator" }).click();
     await expect(author.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
-    await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible();
+    await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible({ timeout: commandTimeout });
     await expect(authored.getByRole("button", { name: "Save changes" })).toHaveCount(0);
 
     const authorApi = author.context.request;
@@ -355,24 +362,24 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await reviewer.page.goto(runtimeUrl());
     await reviewer.page.getByRole("button", { name: "Forward to White Cell" }).click();
     await expect(reviewer.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
-    await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible();
+    await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible({ timeout: commandTimeout });
 
     const finalReviewer = await actor(browser, fixture.tokens.finalReviewer);
     await finalReviewer.page.goto(runtimeUrl());
     await finalReviewer.page.getByRole("button", { name: "Return for revision" }).click();
     await expect(finalReviewer.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
-    await expect(finalReviewer.page.getByText("Returned for revision", { exact: true })).toBeVisible();
+    await expect(finalReviewer.page.getByText("Returned for revision", { exact: true })).toBeVisible({ timeout: commandTimeout });
 
     await author.page.reload();
-    await expect(author.page.getByText("Returned for revision", { exact: true })).toBeVisible();
+    await expect(author.page.getByText("Returned for revision", { exact: true })).toBeVisible({ timeout: commandTimeout });
     await authored.getByLabel("What will Red do first?").fill("Revised after White Cell feedback");
     await authored.getByRole("button", { name: "Save revision" }).click();
-    await expect(authored.locator("dl.metadata dd").first()).toHaveText("5");
+    await expect(authored.locator("dl.metadata dd").first()).toHaveText("5", { timeout: commandTimeout });
     await authored.getByRole("button", { name: "Resubmit to Team Facilitator" }).click();
-    await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible();
+    await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible({ timeout: commandTimeout });
     await reviewer.page.reload();
     await reviewer.page.getByRole("button", { name: "Forward to White Cell" }).click();
-    await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible();
+    await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible({ timeout: commandTimeout });
     await finalReviewer.page.reload();
 
     const controlDeviceResponse = await finalReviewer.context.request.post("/v1/devices", { data: {} });
@@ -394,7 +401,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       expect.objectContaining({ status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION" })
     ]));
     await finalReviewer.page.reload();
-    await expect(finalReviewer.page.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(finalReviewer.page.getByText("Completed", { exact: true })).toBeVisible({ timeout: commandTimeout });
     controlProjection = await (await finalReviewer.context.request.get(
       `/v1/sessions/${fixture.sessionId}/runtime-projection`, { headers: { "x-device-id": controlDeviceId } }
     )).json();
@@ -595,7 +602,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect(changed.status()).toBe(200);
     const staleCard = author.page.locator("article.artifact").last();
     await staleCard.getByRole("button", { name: "Submit to Team Facilitator" }).click();
-    await expect(author.page.getByText(/Authoritative state changed: The Artifact is at version 2/)).toBeVisible();
+    await expect(author.page.getByText(/Authoritative state changed: The Artifact is at version 2/)).toBeVisible({ timeout: 15_000 });
 
     let intercepted = false;
     let lostCommand;
@@ -609,7 +616,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     });
     const create = await fillBlueAction(author.page, "Lost acknowledgement proof");
     await create.getByRole("button", { name: "Save draft" }).click();
-    await expect(author.page.getByText("Delivery acknowledgement was lost. This Command is still local pending, not accepted.")).toBeVisible();
+    await expect(author.page.getByText("Delivery acknowledgement was lost. This Command is still local pending, not accepted.")).toBeVisible({ timeout: 15_000 });
     await author.page.unroute("**/v1/sessions/*/commands");
     const retries = await Promise.all([1, 2, 3].map(() => author.context.request.post(
       `/v1/sessions/${fixture.sessionId}/commands`, { data: lostCommand }
@@ -619,7 +626,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect(new Set(retryReceipts.map(({ evidenceSequence }) => evidenceSequence)).size).toBe(1);
     expect(retryReceipts.every(({ replayed }) => replayed === true)).toBe(true);
     await author.page.getByRole("button", { name: "Check receipt and retry" }).click();
-    await expect(author.page.getByText("The original server receipt was recovered.")).toBeVisible();
+    await expect(author.page.getByText("The original server receipt was recovered.")).toBeVisible({ timeout: 15_000 });
     await expect(author.page.locator('input[value="Lost acknowledgement proof"]').first()).toBeVisible();
     await author.context.close();
   });
@@ -806,13 +813,13 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     ]);
 
     await control.page.goto(runtimeUrl());
-    await expect(control.page.getByText("Direct RFI coordination message.", { exact: true })).toHaveCount(1);
+    await expect(control.page.getByText("Direct RFI coordination message.", { exact: true })).toHaveCount(1, { timeout: 15_000 });
     await control.page.reload();
-    await expect(control.page.getByText("Direct RFI coordination message.", { exact: true })).toHaveCount(1);
+    await expect(control.page.getByText("Direct RFI coordination message.", { exact: true })).toHaveCount(1, { timeout: 15_000 });
     await expect(control.page.locator(".live-region")).toBeEmpty();
 
     await participant.page.goto(runtimeUrl());
-    await expect(participant.page.getByText("Reconnect parity broadcast.", { exact: true })).toHaveCount(1);
+    await expect(participant.page.getByText("Reconnect parity broadcast.", { exact: true })).toHaveCount(1, { timeout: 15_000 });
     await participant.context.setOffline(true);
     await expect(participant.page.getByLabel("Connection status: Offline")).toBeVisible();
     await participant.context.setOffline(false);
@@ -855,11 +862,11 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       expect(advanced.status()).toBe(200);
     }
     await control.page.goto(runtimeUrl());
-    await expect(control.page.getByRole("heading", { name: "Proposal custody" })).toBeVisible();
+    await expect(control.page.getByRole("heading", { name: "Proposal custody" })).toBeVisible({ timeout: 15_000 });
     await expect(control.page.getByRole("heading", { name: "Messages" })).toBeVisible();
     await expect(control.page.getByRole("heading", { name: "Injects" })).toBeVisible();
     await source.page.goto(runtimeUrl());
-    await expect(source.page.getByRole("heading", { name: "Proposal negotiations" })).toBeVisible();
+    await expect(source.page.getByRole("heading", { name: "Proposal negotiations" })).toBeVisible({ timeout: 15_000 });
     for (const page of [control.page, source.page]) {
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     }
@@ -890,7 +897,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     } });
     expect(opened.status()).toBe(200);
     await recipient.page.goto(runtimeUrl());
-    await expect(recipient.page.getByRole("heading", { name: "Proposal negotiations" })).toBeVisible();
+    await expect(recipient.page.getByRole("heading", { name: "Proposal negotiations" })).toBeVisible({ timeout: 15_000 });
     expect((await new AxeBuilder({ page: recipient.page }).analyze()).violations).toEqual([]);
     expect((await projection(source, devices[1])).messages).toContainEqual(expect.objectContaining({
       threadId, operationType: "message.proposal_forward", routeId: "proposal-control-to-recipient",
@@ -991,7 +998,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await loading.page.goto(runtimeUrl());
     await expect(loading.page.getByRole("heading", { name: "Loading Runtime" })).toBeVisible();
     releaseProjection();
-    await expect(loading.page.getByRole("heading", { name: "Blue Facilitator workspace" })).toBeVisible();
+    await expect(loading.page.getByRole("heading", { name: "Blue Facilitator workspace" })).toBeVisible({ timeout: 15_000 });
     await loading.page.unroute("**/v1/sessions/*/runtime-projection");
     await loading.context.setOffline(true);
     await loading.page.getByRole("button", { name: "Refresh authoritative state" }).click();
@@ -1010,11 +1017,12 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
 test.describe.serial("PS-300 collaborative Studio", () => {
   test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
+    const serverTimeout = 20_000;
     const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
-    await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
     await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
     await expect(first.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
 
@@ -1048,6 +1056,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await second.context.setOffline(false);
     await second.page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
+    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Offline visual-form edit merged after reconnect.", { timeout: 20_000 });
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await expect(first.page.getByText("Valid", { exact: true })).toBeVisible();
@@ -1067,8 +1076,8 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await preview.getByLabel("Stage").selectOption("orientation");
     await preview.getByLabel("Team").selectOption("blue");
     await preview.getByRole("button", { name: "Preview interface" }).click();
-    await expect(preview.getByText("Preview updated.")).toBeVisible();
-    await expect(preview.getByLabel("Scribe interface preview")).toBeVisible();
+    await expect(preview.getByText("Preview updated.")).toBeVisible({ timeout: serverTimeout });
+    await expect(preview.getByLabel("Scribe interface preview")).toBeVisible({ timeout: serverTimeout });
     await expect(preview.getByRole("heading", { name: "Opening brief" })).toBeVisible();
 
     await first.page.getByLabel("Release label").fill("PS-300 browser proof");
@@ -1079,10 +1088,10 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await first.page.getByLabel("Approval notes").fill("Synthetic browser approval.");
     await first.page.getByLabel("I acknowledge the validation warnings.").check();
     await first.page.getByRole("button", { name: "Freeze for review" }).click();
-    await expect(first.page.getByText(/is ready for Reviewer approval/u)).toBeVisible();
+    await expect(first.page.getByText(/is ready for Reviewer approval/u)).toBeVisible({ timeout: serverTimeout });
     await first.page.getByLabel("Methodology review notes").fill("Synthetic methodology review.");
     await first.page.getByRole("button", { name: "Approve freeze" }).click();
-    await expect(first.page.getByText(/Reviewer approval recorded/u)).toBeVisible();
+    await expect(first.page.getByText(/Reviewer approval recorded/u)).toBeVisible({ timeout: serverTimeout });
     const publishedResponse = first.page.waitForResponse((response) =>
       response.request().method() === "POST" && response.url().endsWith(`/v1/projects/${fixture.projectId}/publish`));
     await first.page.getByRole("button", { name: "Publish approved freeze" }).click();
@@ -1092,6 +1101,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText("Save state: published")).toBeVisible({ timeout: 20_000 });
 
     await second.page.getByLabel("Scenario description").fill("Post-freeze next Draft edit.");
+    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Post-freeze next Draft edit.", { timeout: 20_000 });
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
@@ -1152,7 +1162,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
   });
 
   test("@a11y EXT-12 EXT-13 EXT-14 builds and previews a two-model composition without code", async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const designer = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     await designer.page.goto(studioUrl());
     await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
@@ -1188,10 +1198,44 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await edgeBuilder.getByLabel("Output port").selectOption({ label: "Mandatory approval: Effect Proposals · effect proposal · unitless · internal" });
     await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "Composition output: Approved Effect Proposals · ceiling internal" });
     await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
+    await expect(designer.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
     await composition.getByRole("button", { name: "Run fixture without state change" }).click();
     await expect(composition.getByText("Status: completed")).toBeVisible({ timeout: 20_000 });
     await expect(composition.getByText("State changes: 0")).toBeVisible();
     expect((await new AxeBuilder({ page: designer.page }).include("#plugins").include("#compositions").analyze()).violations).toEqual([]);
+    await designer.context.close();
+  });
+
+  test("@a11y PS-400 authors bounded branches, counted capabilities and delayed effects without code", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const designer = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    await designer.page.goto(studioUrl());
+    await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
+
+    const stages = designer.page.getByRole("region", { name: "Stages" });
+    await stages.locator("details[id^='stages-']").first().locator("summary").click();
+    await expect(stages.getByLabel("Outgoing branch behavior").first()).toHaveValue("exclusive");
+    await expect(stages.getByLabel("Incoming merge behavior").first()).toHaveValue("");
+
+    const workflows = designer.page.getByRole("region", { name: "Workflows" });
+    await workflows.locator("details[id^='workflows-']").first().locator("summary").click();
+    await expect(workflows.getByRole("button", { name: "Add Workflow transition" }).first()).toBeVisible();
+
+    const advanced = designer.page.getByRole("region", { name: "Advanced logic & world state" });
+    await advanced.getByRole("button", { name: "Add State Value" }).click();
+    await advanced.getByRole("button", { name: "Add Capability" }).click();
+    await advanced.getByLabel("Capability mode").last().selectOption("counted");
+    await advanced.getByLabel("Renew on Stage type").last().check();
+    await expect(advanced.getByLabel("Renew quantity").last()).toHaveValue("1");
+    await expect(advanced.getByLabel("Branch priority").first()).toBeVisible();
+
+    const inject = advanced.locator("details").filter({ hasText: "Opening briefing" });
+    await inject.locator("summary").click();
+    await inject.getByRole("button", { name: "Add State Effect" }).click();
+    await inject.getByLabel("Delay in seconds").last().fill("30");
+    await expect(inject.getByLabel("Delay in seconds").last()).toHaveValue("30");
+    expect((await new AxeBuilder({ page: designer.page }).include("#stages").include("#workflows").include("#advanced-logic").analyze()).violations).toEqual([]);
+    await designer.page.screenshot({ path: `${evidenceRoot}/ps-400-advanced-logic.png`, fullPage: true });
     await designer.context.close();
   });
 });

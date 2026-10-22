@@ -131,7 +131,7 @@ Lifecycle (DEC-40): `draft` → `scheduled` → `eligible` → `released` → `a
 
 ## 11. World state
 
-State Values are stored separately from State Variable definitions. Every change records variable, scope, previous value, new value, operation, source event, source Artifact or Inject, actor, rationale and time (REQ-031). Capability state changes and Resource transactions are recorded the same way. Effects are applied in the same transaction as the Outcome or Inject release that caused them; delayed effects are scheduled records that can be cancelled (OPEN-018).
+State Values are stored separately from State Variable definitions. Every change records variable, scope, previous value, new value, operation, source event, source Artifact or Inject, actor, rationale and time (REQ-031). Capability state changes and Resource transactions are recorded the same way. Immediate effects are applied in the same transaction as the Outcome or Inject release that caused them. Delayed effects are one-shot, Release-pinned records limited to seven days, cancellable only before due, and atomically claimed when applied. Published Release snapshots are immutable; counted Capability consumption and renewal are atomic and never negative.
 
 ## 12. Adjudication
 

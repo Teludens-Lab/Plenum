@@ -25,7 +25,8 @@ const migrations = [
   "apps/server/migrations/015_collaboration_runtime.sql",
   "apps/server/migrations/016_voice_consent_assets.sql",
   "apps/server/migrations/017_session_access.sql",
-  "apps/server/migrations/018_identity_roles_and_governance.sql"
+  "apps/server/migrations/018_identity_roles_and_governance.sql",
+  "apps/server/migrations/019_world_state_automation.sql"
 ];
 
 export default async function globalSetup() {

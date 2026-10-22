@@ -5,6 +5,82 @@ export const RELEASE_MANIFEST_CONTRACT_ID = "release-manifest-v1";
 export const RELEASE_MANIFEST_SCHEMA_ID = RELEASE_MANIFEST_CONTRACT_ID;
 export const PLUGIN_BINDING_CONTRACT_ID = "plugin-binding-v1";
 export const COMPOSITION_DEFINITION_CONTRACT_ID = "composition-definition-v1";
+export const GATE_EXPRESSION_CONTRACT_ID = "gate-expression-v1";
+
+export type RuntimeScalarV1 = boolean | number | string;
+export type GateOperatorV1 = "equals" | "not_equals" | "greater_than" | "less_than" | "greater_or_equal" |
+  "less_or_equal" | "contains" | "exists" | "in" | "not_in";
+
+export interface GateConditionV1 {
+  fact: string;
+  operator: GateOperatorV1;
+  value?: RuntimeScalarV1 | RuntimeScalarV1[];
+  compareTo?: string;
+}
+
+export interface GateV1 {
+  contractId?: typeof GATE_EXPRESSION_CONTRACT_ID;
+  operator: "all" | "any" | "none";
+  conditions: Array<GateConditionV1 | GateV1>;
+}
+
+export interface AutomationActionV1 {
+  type: "notify" | "release_inject" | "unlock_stage" | "apply_effect" | "request_adjudication" | "start_timer" | "custom";
+  target?: string;
+  parameters?: Record<string, unknown>;
+}
+
+export interface StateEffectV1 {
+  stateVariableId: string;
+  scopeReference?: string;
+  operation: "set" | "increment" | "decrement" | "multiply";
+  value: RuntimeScalarV1;
+  delaySeconds?: number;
+  rationale?: string;
+}
+
+export interface StateVariableDefinitionV1 {
+  id: string;
+  name: string;
+  description?: string;
+  scope: "global" | "team" | "relationship" | "location" | "sector" | "asset" | "session_role";
+  type: "integer" | "decimal" | "boolean" | "text" | "enum";
+  minimum?: number;
+  maximum?: number;
+  unit?: string;
+  options?: Array<{ value: string; label: string }>;
+  informationPolicyId: string;
+  editableBySessionRoleIds?: string[];
+  historyMode: "full" | "final_only";
+  display?: "number" | "progress_bar" | "gauge" | "trend" | "status_label" | "hidden";
+}
+
+export interface CapabilityDefinitionV1 {
+  id: string;
+  name: string;
+  ownerTeamId?: string;
+  states: Array<"available" | "ready" | "committed" | "degraded" | "exhausted" | "recovering" | "unavailable">;
+  initialState: string;
+  mode?: "boolean" | "counted";
+  initialQuantity?: number;
+  maximumQuantity?: number;
+  consumable?: boolean;
+  renewal?: { everyStageType: string; amount: number };
+  activationGate?: GateV1;
+  degradationEffects?: StateEffectV1[];
+  recoverySeconds?: number;
+  costs?: Array<{ resourceId: string; amount: number }>;
+  informationPolicyId: string;
+}
+
+export interface ResourceDefinitionV1 {
+  id: string;
+  name: string;
+  unit: string;
+  ownership: "team" | "global";
+  replenishment?: { everyStageType?: string; amount: number };
+  informationPolicyId: string;
+}
 
 export interface ReleaseManifestV1 {
   schemaVersion: string;
@@ -194,6 +270,14 @@ export interface RuntimeWorkflowStateV1 {
   kind: "draft" | "task" | "review" | "approval" | "wait" | "terminal" | "cancelled";
   holderSessionRoleIds?: string[];
   holderRelation?: "creator";
+  assignment?: {
+    mode: "specific_participant" | "session_role" | "team_session_role" | "control_group" | "first_available" | "all_eligible";
+    sessionRoleIds?: string[];
+    teamSelector?: "creator_team" | "any" | { teamIds: string[] };
+  };
+  dueAfterSeconds?: number;
+  quorum?: { rule: "any_one" | "majority" | "quorum" | "unanimous" | "lead_after_peers"; minimumApprovals?: number; leadSessionRoleId?: string };
+  automation?: AutomationActionV1[];
 }
 
 export interface RuntimeWorkflowTransitionV1 {
@@ -208,6 +292,9 @@ export interface RuntimeWorkflowTransitionV1 {
   contentOnly?: boolean;
   editableFieldKeys?: string[];
   precondition?: string;
+  gate?: GateV1;
+  priority?: number;
+  actions?: AutomationActionV1[];
 }
 
 export interface RuntimeWorkflowDefinitionV1 {
@@ -283,10 +370,10 @@ export interface RuntimeInjectDefinitionV1 {
   releaseMode: "manual" | "scheduled" | "stage_entry" | "stage_exit" | "gate";
   scheduledOffsetSeconds?: number;
   stageId?: string;
-  releaseGate?: Record<string, unknown>;
+  releaseGate?: GateV1;
   requiredResponseArtifactTypeId?: string;
   responseDeadlineSeconds?: number;
-  effects?: unknown[];
+  effects?: StateEffectV1[];
   followOnInjectIds?: string[];
   controlNotesContentId?: string;
 }
@@ -420,7 +507,14 @@ export interface RuntimeStageDefinitionV1 {
   durationSeconds?: number;
   timerMode?: "countdown" | "countup" | "none";
   allowedActivityIds: string[];
-  transitions: Array<{ id: string; targetStageId: string; label?: string; mode: "automatic" | "manual" | "automatic_or_manual" }>;
+  entryGate?: GateV1;
+  completionGate?: GateV1;
+  transitionMode?: "exclusive" | "parallel";
+  parallelJoinStageId?: string;
+  joinMode?: "all" | "first";
+  transitions: Array<{ id: string; targetStageId: string; label?: string; mode: "automatic" | "manual" | "automatic_or_manual"; gate?: GateV1; priority?: number }>;
+  onEnter?: AutomationActionV1[];
+  onExit?: AutomationActionV1[];
   operatorControls: {
     allowStart: boolean; allowEnd: boolean; allowReopen: boolean; allowExtend: boolean;
     allowSkip: boolean; allowReturnToPrevious: boolean; requireReason: boolean;
@@ -505,6 +599,9 @@ export interface RuntimeCoreDesignV1 {
   polls?: RuntimePollDefinitionV1[];
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
+  stateVariables?: StateVariableDefinitionV1[];
+  capabilities?: CapabilityDefinitionV1[];
+  resourceDefinitions?: ResourceDefinitionV1[];
   pluginBindings: PluginBindingV1[];
   compositions?: ModelCompositionV1[];
   platformAdapters?: PlatformAdapterV1[];
@@ -530,6 +627,9 @@ export interface ScenarioV1 {
   tags: string[];
   content?: Array<{ id: string; title: string; type: string; body?: string; informationPolicyId: string; version: string }>;
   injects?: RuntimeInjectDefinitionV1[];
+  initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: RuntimeScalarV1 }>;
+  initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
+  initialResources?: Array<{ resourceId: string; scopeReference?: string; balance: number }>;
   [key: string]: unknown;
 }
 
@@ -636,6 +736,43 @@ export const compositionDefinitionV1Schema = {
     version: nonEmptyStringProperty, nodes: { type: "array", items: { type: "object" } },
     edges: { type: "array", items: { type: "object" } }, fixtures: { type: "array", items: { type: "object" } },
     graphDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, dependencyClosure: { type: "array", items: { type: "object" } }
+  }
+} as const;
+
+export const gateExpressionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: GATE_EXPRESSION_CONTRACT_ID,
+  title: "Gate Expression v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["contractId", "operator", "conditions"],
+  properties: {
+    contractId: { const: GATE_EXPRESSION_CONTRACT_ID },
+    operator: { enum: ["all", "any", "none"] },
+    conditions: { type: "array", minItems: 1, maxItems: 32, items: { oneOf: [{ $ref: "#/$defs/gate" }, { $ref: "#/$defs/condition" }] } }
+  },
+  $defs: {
+    gate: {
+      type: "object",
+      additionalProperties: false,
+      required: ["operator", "conditions"],
+      properties: {
+        contractId: { const: GATE_EXPRESSION_CONTRACT_ID },
+        operator: { enum: ["all", "any", "none"] },
+        conditions: { type: "array", minItems: 1, maxItems: 32, items: { oneOf: [{ $ref: "#/$defs/gate" }, { $ref: "#/$defs/condition" }] } }
+      }
+    },
+    condition: {
+      type: "object",
+      additionalProperties: false,
+      required: ["fact", "operator"],
+      properties: {
+        fact: { type: "string", minLength: 1 },
+        operator: { enum: ["equals", "not_equals", "greater_than", "less_than", "greater_or_equal", "less_or_equal", "contains", "exists", "in", "not_in"] },
+        value: {},
+        compareTo: { type: "string", minLength: 1 }
+      }
+    }
   }
 } as const;
 
@@ -786,6 +923,101 @@ function uniqueIds(items: readonly { id: string }[], label: string): Set<string>
   return ids;
 }
 
+export type RuntimeFactTypeV1 = "boolean" | "number" | "text" | "unknown";
+
+export function gateFactTypes(
+  coreDesign: CoreDesignV1,
+  scenario?: Pick<ScenarioV1, "injects">
+): ReadonlyMap<string, RuntimeFactTypeV1> {
+  const facts = new Map<string, RuntimeFactTypeV1>([
+    ["session.status", "text"], ["session.stage.id", "text"], ["session.stage.elapsedSeconds", "number"],
+    ["artifact.status", "text"], ["artifact.typeKey", "text"], ["actor.sessionRoleId", "text"],
+    ["actor.teamId", "text"], ["time.simulation", "text"], ["time.wallClock", "text"]
+  ]);
+  for (const stage of coreDesign.stages ?? []) facts.set(`stage.${stage.id}.status`, "text");
+  const workflows = new Map((coreDesign.workflows ?? []).map((workflow) => [workflow.id, workflow]));
+  for (const artifact of coreDesign.artifactTypes ?? []) {
+    facts.set(`teams.submittedCount.${artifact.key}`, "number");
+    for (const state of workflows.get(artifact.workflowId)?.states ?? []) {
+      facts.set(`artifacts.count.${artifact.key}.${state.key}`, "number");
+    }
+  }
+  for (const form of coreDesign.forms ?? []) {
+    for (const field of form.sections.flatMap((section) => section.fields)) facts.set(`artifact.field.${field.key}`, "unknown");
+  }
+  for (const variable of coreDesign.stateVariables ?? []) {
+    const type = variable.type === "integer" || variable.type === "decimal" ? "number" :
+      variable.type === "boolean" ? "boolean" : "text";
+    facts.set(`state.${variable.id}`, type);
+    if (variable.scope === "team") {
+      for (const team of coreDesign.teams ?? []) facts.set(`state.${variable.id}.team.${team.id}`, type);
+    }
+  }
+  for (const resource of coreDesign.resourceDefinitions ?? []) facts.set(`resource.${resource.id}.balance`, "number");
+  for (const capability of coreDesign.capabilities ?? []) {
+    facts.set(`capability.${capability.id}.status`, "text");
+    if (capability.mode === "counted") facts.set(`capability.${capability.id}.quantity`, "number");
+  }
+  for (const inject of scenario?.injects ?? []) facts.set(`inject.${inject.id}.status`, "text");
+  return facts;
+}
+
+function valueType(value: RuntimeScalarV1): Exclude<RuntimeFactTypeV1, "unknown"> {
+  return typeof value === "number" ? "number" : typeof value === "boolean" ? "boolean" : "text";
+}
+
+/** Validates one bounded, declarative Gate without interpreting authored text as code. */
+export function assertGateDefinition(
+  gate: GateV1,
+  facts: ReadonlyMap<string, RuntimeFactTypeV1>,
+  label = "Gate"
+): void {
+  let nodes = 0;
+  const visit = (candidate: GateV1, depth: number): void => {
+    nodes += 1;
+    if (depth > 8 || nodes > 64 || !["all", "any", "none"].includes(candidate.operator) ||
+        candidate.conditions.length === 0 || candidate.conditions.length > 32 ||
+        (candidate.contractId !== undefined && candidate.contractId !== GATE_EXPRESSION_CONTRACT_ID)) {
+      throw new Error(`${label} exceeds the bounded Gate contract`);
+    }
+    for (const item of candidate.conditions) {
+      if ("conditions" in item) {
+        visit(item, depth + 1);
+        continue;
+      }
+      nodes += 1;
+      if (nodes > 64 || !facts.has(item.fact)) throw new Error(`${label} references unknown Fact ${item.fact}`);
+      if (item.compareTo !== undefined && !facts.has(item.compareTo)) throw new Error(`${label} references unknown Fact ${item.compareTo}`);
+      if (item.compareTo !== undefined && item.value !== undefined) throw new Error(`${label} condition must compare to a Fact or a value, not both`);
+      if (item.operator === "exists") {
+        if (item.value !== undefined || item.compareTo !== undefined) throw new Error(`${label} exists condition cannot declare a comparison value`);
+        continue;
+      }
+      if (item.value === undefined && item.compareTo === undefined) throw new Error(`${label} condition needs a comparison value`);
+      const factType = facts.get(item.fact)!;
+      const comparisonType = item.compareTo === undefined ? undefined : facts.get(item.compareTo);
+      if (comparisonType !== undefined && factType !== "unknown" && comparisonType !== "unknown" && factType !== comparisonType) {
+        throw new Error(`${label} compares incompatible Fact types`);
+      }
+      if (["greater_than", "less_than", "greater_or_equal", "less_or_equal"].includes(item.operator) &&
+          (factType !== "number" || (item.value !== undefined && (Array.isArray(item.value) || typeof item.value !== "number")))) {
+        throw new Error(`${label} numeric comparison requires number Facts and values`);
+      }
+      if ((item.operator === "in" || item.operator === "not_in") && !Array.isArray(item.value)) {
+        throw new Error(`${label} ${item.operator} comparison requires a value list`);
+      }
+      const values = Array.isArray(item.value) ? item.value : item.value === undefined ? [] : [item.value];
+      if (factType !== "unknown" && values.some((value) => valueType(value) !== factType)) {
+        throw new Error(`${label} comparison value does not match Fact type ${factType}`);
+      }
+      if (item.operator === "contains" && factType !== "text" && factType !== "unknown") {
+        throw new Error(`${label} contains comparison requires a text Fact`);
+      }
+    }
+  };
+  visit(gate, 1);
+}
+
 const classificationRank = { public: 0, internal: 1, confidential: 2, restricted: 3 } as const;
 
 export function assertModelComposition(
@@ -902,6 +1134,9 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   const resources = uniqueIds(runtime.resources ?? [], "Resource");
   const seats = uniqueIds(runtime.seats, "Seat");
   const stageGroups = uniqueIds(runtime.stageGroups, "Stage Group");
+  const stateVariables = uniqueIds(runtime.stateVariables ?? [], "State Variable");
+  const capabilities = uniqueIds(runtime.capabilities ?? [], "Capability Definition");
+  const worldResources = uniqueIds(runtime.resourceDefinitions ?? [], "Resource Definition");
   uniqueIds(runtime.polls ?? [], "Poll Definition");
   uniqueIds(runtime.communications.voiceChannels ?? [], "Voice Channel Definition");
   uniqueIds(runtime.compositions ?? [], "Model Composition");
@@ -909,6 +1144,28 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
 
   const reference = (ids: Set<string>, id: string, label: string): void => {
     if (!ids.has(id)) throw new Error(`${label} references missing identifier ${id}`);
+  };
+  const facts = gateFactTypes(runtime);
+  const stateEffect = (effect: StateEffectV1, label: string): void => {
+    reference(stateVariables, effect.stateVariableId, label);
+    if (!["set", "increment", "decrement", "multiply"].includes(effect.operation) ||
+        effect.delaySeconds !== undefined && (!Number.isSafeInteger(effect.delaySeconds) || effect.delaySeconds < 0 || effect.delaySeconds > 604_800) ||
+        effect.rationale !== undefined && effect.rationale.trim().length === 0) throw new Error(`${label} is invalid`);
+    const variable = runtime.stateVariables?.find(({ id }) => id === effect.stateVariableId);
+    const expected = variable?.type === "integer" || variable?.type === "decimal" ? "number" :
+      variable?.type === "boolean" ? "boolean" : "string";
+    if (typeof effect.value !== expected || (variable?.type === "integer" && !Number.isSafeInteger(effect.value)) ||
+        effect.operation !== "set" && typeof effect.value !== "number") throw new Error(`${label} has an incompatible value`);
+  };
+  const automation = (action: AutomationActionV1, label: string): void => {
+    if (action.type === "apply_effect") {
+      if (typeof action.parameters !== "object" || action.parameters === null || Array.isArray(action.parameters)) {
+        throw new Error(`${label} has no State Effect`);
+      }
+      stateEffect(action.parameters as unknown as StateEffectV1, label);
+    } else {
+      throw new Error(`${label} uses ${action.type} without approved Runtime semantics`);
+    }
   };
   const selector = (value: RuntimeActorSelectorV1, label: string): void => {
     const populated = value.public === true || value.includeControlRoles === true || value.ownerTeam === true ||
@@ -961,6 +1218,47 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   for (const cell of runtime.teamCells ?? []) {
     reference(teams, cell.teamId, `Team Cell ${cell.id}`);
     if (cell.kind.length === 0 || cell.name.length === 0) throw new Error(`Team Cell ${cell.id} is incomplete`);
+  }
+  for (const variable of runtime.stateVariables ?? []) {
+    reference(policies, variable.informationPolicyId, `State Variable ${variable.id}`);
+    variable.editableBySessionRoleIds?.forEach((id) => reference(roles, id, `State Variable ${variable.id}`));
+    if (variable.name.trim().length === 0 || variable.minimum !== undefined && variable.maximum !== undefined && variable.minimum > variable.maximum) {
+      throw new Error(`State Variable ${variable.id} has an invalid definition`);
+    }
+    if (variable.type === "enum" && (variable.options?.length ?? 0) === 0) throw new Error(`State Variable ${variable.id} needs enum options`);
+  }
+  for (const resource of runtime.resourceDefinitions ?? []) {
+    reference(policies, resource.informationPolicyId, `Resource Definition ${resource.id}`);
+    if (resource.name.trim().length === 0 || resource.unit.trim().length === 0 ||
+        resource.replenishment !== undefined && (!Number.isFinite(resource.replenishment.amount) || resource.replenishment.amount < 0)) {
+      throw new Error(`Resource Definition ${resource.id} has an invalid definition`);
+    }
+  }
+  for (const capability of runtime.capabilities ?? []) {
+    reference(policies, capability.informationPolicyId, `Capability Definition ${capability.id}`);
+    if (capability.ownerTeamId !== undefined) reference(teams, capability.ownerTeamId, `Capability Definition ${capability.id}`);
+    if (capability.name.trim().length === 0 || capability.states.length === 0 || !capability.states.some((state) => state === capability.initialState)) {
+      throw new Error(`Capability Definition ${capability.id} has an invalid initial state`);
+    }
+    const mode = capability.mode ?? "boolean";
+    if (mode === "boolean" && (capability.initialQuantity !== undefined || capability.maximumQuantity !== undefined ||
+        capability.consumable === true || capability.renewal !== undefined)) {
+      throw new Error(`Capability Definition ${capability.id} has quantity rules in boolean mode`);
+    }
+    if (mode === "counted" && (!Number.isSafeInteger(capability.initialQuantity) || !Number.isSafeInteger(capability.maximumQuantity) ||
+        Number(capability.initialQuantity) < 0 || Number(capability.maximumQuantity) < Number(capability.initialQuantity))) {
+      throw new Error(`Capability Definition ${capability.id} has invalid counted capacity`);
+    }
+    if (capability.renewal !== undefined && (mode !== "counted" || capability.renewal.everyStageType.trim().length === 0 ||
+        !Number.isSafeInteger(capability.renewal.amount) || capability.renewal.amount <= 0)) {
+      throw new Error(`Capability Definition ${capability.id} has invalid renewal rules`);
+    }
+    if (capability.activationGate !== undefined) assertGateDefinition(capability.activationGate, facts, `Capability Definition ${capability.id} activation Gate`);
+    capability.degradationEffects?.forEach((effect) => stateEffect(effect, `Capability Definition ${capability.id} degradation Effect`));
+    capability.costs?.forEach(({ resourceId, amount }) => {
+      reference(worldResources, resourceId, `Capability Definition ${capability.id} cost`);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error(`Capability Definition ${capability.id} has an invalid cost`);
+    });
   }
   if (runtime.identity?.developerLogoResourceId !== undefined) {
     reference(resources, runtime.identity.developerLogoResourceId, "Release identity developer logo");
@@ -1054,8 +1352,89 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       throw new Error(`Voice Channel ${channel.id} has no invitation policy`);
     }
   }
+  for (const group of runtime.stageGroups) {
+    if (group.parentGroupId !== undefined) reference(stageGroups, group.parentGroupId, `Stage Group ${group.id}`);
+    const parents = new Set([group.id]);
+    let parentId = group.parentGroupId;
+    while (parentId !== undefined) {
+      if (parents.has(parentId)) throw new Error(`Stage Group ${group.id} has a nesting cycle`);
+      parents.add(parentId);
+      parentId = runtime.stageGroups.find(({ id }) => id === parentId)?.parentGroupId;
+    }
+  }
+  const incomingStages = new Map<string, string[]>();
+  runtime.stages.forEach((source) => source.transitions.forEach(({ targetStageId }) => {
+    incomingStages.set(targetStageId, [...(incomingStages.get(targetStageId) ?? []), source.id]);
+  }));
   for (const stage of runtime.stages) {
+    if (stage.stageGroupId !== undefined) reference(stageGroups, stage.stageGroupId, `Stage ${stage.id}`);
     stage.transitions.forEach((transition) => reference(stages, transition.targetStageId, `Stage ${stage.id}`));
+    if (stage.entryGate !== undefined) assertGateDefinition(stage.entryGate, facts, `Stage ${stage.id} entry Gate`);
+    if (stage.completionGate !== undefined) assertGateDefinition(stage.completionGate, facts, `Stage ${stage.id} completion Gate`);
+    stage.transitions.forEach((transition) => transition.gate === undefined ||
+      assertGateDefinition(transition.gate, facts, `Stage ${stage.id} transition ${transition.id} Gate`));
+    stage.onEnter?.forEach((action) => automation(action, `Stage ${stage.id} on-enter action`));
+    stage.onExit?.forEach((action) => automation(action, `Stage ${stage.id} on-exit action`));
+    const transitionMode = stage.transitionMode ?? "exclusive";
+    if (transitionMode === "parallel" && stage.transitions.length < 2) {
+      throw new Error(`Stage ${stage.id} needs at least two transitions for a parallel fork`);
+    }
+    if (transitionMode === "parallel") {
+      if (stage.parallelJoinStageId === undefined) throw new Error(`Stage ${stage.id} must name its parallel join Stage`);
+      reference(stages, stage.parallelJoinStageId, `Stage ${stage.id} parallel join`);
+      const join = runtime.stages.find(({ id }) => id === stage.parallelJoinStageId);
+      if (join?.joinMode === undefined) throw new Error(`Stage ${stage.id} parallel join must declare all or first behavior`);
+      const reachesJoin = (startId: string, seen = new Set<string>()): boolean => {
+        if (startId === stage.parallelJoinStageId) return true;
+        if (seen.has(startId)) return false;
+        seen.add(startId);
+        const candidate = runtime.stages.find(({ id }) => id === startId);
+        return candidate !== undefined && candidate.transitions.length > 0 &&
+          candidate.transitions.every(({ targetStageId }) => reachesJoin(targetStageId, new Set(seen)));
+      };
+      if (stage.transitions.some(({ targetStageId }) => !reachesJoin(targetStageId))) {
+        throw new Error(`Stage ${stage.id} has a parallel branch that does not reach its join`);
+      }
+      const inspectBranch = (stageId: string, seen = new Set<string>()): void => {
+        if (stageId === stage.parallelJoinStageId || seen.has(stageId)) return;
+        seen.add(stageId);
+        const branch = runtime.stages.find(({ id }) => id === stageId);
+        if (branch === undefined || branch.transitionMode === "parallel" || (branch.allowedActivityIds?.length ?? 0) > 0 ||
+            (branch.completionRequirements?.length ?? 0) > 0 || (branch.durationSeconds ?? 0) > 0 ||
+            branch.transitions.some(({ mode }) => mode !== "automatic") ||
+            [...(branch.onEnter ?? []), ...(branch.onExit ?? [])].some((action) => action.type === "apply_effect" &&
+              Number((action.parameters as Record<string, unknown> | undefined)?.delaySeconds ?? 0) > 0)) {
+          throw new Error(`Stage ${stage.id} parallel branches must be bounded automatic logic before their join`);
+        }
+        branch.transitions.forEach(({ targetStageId }) => inspectBranch(targetStageId, new Set(seen)));
+      };
+      if (stage.transitions.some(({ mode }) => mode !== "automatic")) {
+        throw new Error(`Stage ${stage.id} parallel fork transitions must be automatic`);
+      }
+      if ([...(stage.onExit ?? [])].some((action) => action.type === "apply_effect" &&
+          Number((action.parameters as Record<string, unknown> | undefined)?.delaySeconds ?? 0) > 0)) {
+        throw new Error(`Stage ${stage.id} parallel fork cannot delay effects inside its atomic branch transaction`);
+      }
+      stage.transitions.forEach(({ targetStageId }) => inspectBranch(targetStageId));
+    } else if (stage.parallelJoinStageId !== undefined) {
+      throw new Error(`Stage ${stage.id} names a parallel join without a parallel fork`);
+    }
+    if (transitionMode === "exclusive" && stage.transitions.length > 1) {
+      const priorities = stage.transitions.map(({ priority }) => priority);
+      const fallback = stage.transitions.filter(({ gate }) => gate === undefined);
+      const minimumPriority = Math.min(...priorities.map(Number));
+      if (priorities.some((priority) => !Number.isSafeInteger(priority)) || new Set(priorities).size !== priorities.length ||
+          fallback.length > 1 || (fallback[0]?.priority !== undefined && fallback[0].priority !== minimumPriority)) {
+        throw new Error(`Stage ${stage.id} conditional branches need unique priorities and Gates before the fallback branch`);
+      }
+    }
+    const incoming = incomingStages.get(stage.id) ?? [];
+    if (stage.joinMode !== undefined && incoming.length < 2) {
+      throw new Error(`Stage ${stage.id} needs at least two incoming branches for a join`);
+    }
+    if (stage.joinMode === undefined && incoming.length > 1) {
+      throw new Error(`Stage ${stage.id} must declare whether its join waits for all branches or accepts the first`);
+    }
     for (const requirement of stage.completionRequirements ?? []) {
       reference(artifactTypes, requirement.artifactTypeId, `Stage ${stage.id} completion requirement`);
       reference(teams, requirement.scope.teamId, `Stage ${stage.id} completion requirement`);
@@ -1080,6 +1459,17 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     runtime.stages.find((stage) => stage.id === id)?.transitions.forEach((transition) => stageQueue.push(transition.targetStageId));
   }
   if (reachableStages.size !== runtime.stages.length) throw new Error("Core Design contains an unreachable Stage");
+  const visitingStages = new Set<string>();
+  const visitedStages = new Set<string>();
+  const visitStage = (id: string): void => {
+    if (visitingStages.has(id)) throw new Error("Core Design contains a cyclic Stage graph");
+    if (visitedStages.has(id)) return;
+    visitingStages.add(id);
+    runtime.stages.find((stage) => stage.id === id)?.transitions.forEach(({ targetStageId }) => visitStage(targetStageId));
+    visitingStages.delete(id);
+    visitedStages.add(id);
+  };
+  if (runtime.stages[0] !== undefined) visitStage(runtime.stages[0].id);
   const referencedForms = new Set(runtime.artifactTypes.map((type) => type.formId));
   for (const form of runtime.forms) {
     if (!referencedForms.has(form.id)) throw new Error(`Form ${form.id} is not used by an Artifact Type`);
@@ -1162,7 +1552,37 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     if (!states.has(workflow.initialState) || !workflow.states.some((state) => state.kind === "terminal")) {
       throw new Error(`Workflow ${workflow.id} needs an initial and terminal state`);
     }
-    const seen = new Set<string>();
+    for (const state of workflow.states) {
+      state.holderSessionRoleIds?.forEach((id) => reference(roles, id, `Workflow ${workflow.id} state ${state.key}`));
+      state.assignment?.sessionRoleIds?.forEach((id) => reference(roles, id, `Workflow ${workflow.id} state ${state.key} assignment`));
+      if (typeof state.assignment?.teamSelector === "object") {
+        state.assignment.teamSelector.teamIds.forEach((id) => reference(teams, id, `Workflow ${workflow.id} state ${state.key} assignment`));
+      }
+      if (state.dueAfterSeconds !== undefined && (!Number.isSafeInteger(state.dueAfterSeconds) || state.dueAfterSeconds < 0)) {
+        throw new Error(`Workflow ${workflow.id} state ${state.key} has an invalid due period`);
+      }
+      if (["task", "review", "approval", "wait"].includes(state.kind) && state.holderRelation === undefined &&
+          (state.holderSessionRoleIds?.length ?? 0) === 0 && state.assignment === undefined) {
+        throw new Error(`Workflow ${workflow.id} state ${state.key} has no assignment`);
+      }
+      if (state.kind === "approval" && (state.holderSessionRoleIds?.length ?? 0) + (state.assignment?.sessionRoleIds?.length ?? 0) === 0) {
+        throw new Error(`Workflow ${workflow.id} state ${state.key} has no eligible approver`);
+      }
+      if (state.quorum !== undefined) {
+        if (state.quorum.minimumApprovals !== undefined && (!Number.isSafeInteger(state.quorum.minimumApprovals) || state.quorum.minimumApprovals < 1)) {
+          throw new Error(`Workflow ${workflow.id} state ${state.key} has an invalid quorum`);
+        }
+        if (state.quorum.rule === "quorum" && state.quorum.minimumApprovals === undefined) {
+          throw new Error(`Workflow ${workflow.id} state ${state.key} must declare its quorum minimum`);
+        }
+        if (state.quorum.rule === "lead_after_peers") {
+          if (state.quorum.leadSessionRoleId === undefined) throw new Error(`Workflow ${workflow.id} state ${state.key} has no lead approver`);
+          reference(roles, state.quorum.leadSessionRoleId, `Workflow ${workflow.id} state ${state.key} quorum`);
+        }
+      }
+      state.automation?.forEach((action) => automation(action, `Workflow ${workflow.id} state ${state.key} automation`));
+    }
+    const transitionGroups = new Map<string, RuntimeWorkflowTransitionV1[]>();
     for (const transition of workflow.transitions) {
       if ((transition.from !== null && !states.has(transition.from)) || !states.has(transition.to)) {
         throw new Error(`Workflow ${workflow.id} has an invalid state reference`);
@@ -1170,8 +1590,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       for (const sessionRoleId of transition.allowedSessionRoleIds) {
         reference(roles, sessionRoleId, `Workflow ${workflow.id}`);
         const key = `${transition.from ?? "<create>"}:${transition.command}:${sessionRoleId}`;
-        if (seen.has(key)) throw new Error(`Workflow ${workflow.id} has a conflicting transition`);
-        seen.add(key);
+        transitionGroups.set(key, [...(transitionGroups.get(key) ?? []), transition]);
       }
       if (transition.contentOnly === true && transition.editableFieldKeys !== undefined) {
         throw new Error(`Workflow ${workflow.id} transition ${transition.id} has conflicting content rules`);
@@ -1184,6 +1603,18 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
           transition.editableFieldKeys.forEach((key) => reference(fieldKeys, key, `Workflow ${workflow.id} transition ${transition.id}`));
         }
       }
+      if (transition.gate !== undefined) assertGateDefinition(transition.gate, facts, `Workflow ${workflow.id} transition ${transition.id} Gate`);
+      transition.actions?.forEach((action) => automation(action, `Workflow ${workflow.id} transition ${transition.id} action`));
+    }
+    for (const candidates of transitionGroups.values()) {
+      if (candidates.length < 2) continue;
+      const priorities = candidates.map(({ priority }) => priority);
+      const fallback = candidates.filter(({ gate }) => gate === undefined);
+      const minimumPriority = Math.min(...priorities.map(Number));
+      if (priorities.some((priority) => !Number.isSafeInteger(priority)) || new Set(priorities).size !== priorities.length ||
+          fallback.length > 1 || (fallback[0]?.priority !== undefined && fallback[0].priority !== minimumPriority)) {
+        throw new Error(`Workflow ${workflow.id} has conflicting transitions without bounded priorities and Gates`);
+      }
     }
     const reachableStates = new Set<string>();
     const stateQueue = workflow.transitions.filter((transition) => transition.from === null).map((transition) => transition.to);
@@ -1194,6 +1625,20 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       workflow.transitions.filter((transition) => transition.from === state).forEach((transition) => stateQueue.push(transition.to));
     }
     if (reachableStates.size !== workflow.states.length) throw new Error(`Workflow ${workflow.id} has an unreachable state`);
+    const terminatingStates = new Set(workflow.states.filter(({ kind }) => kind === "terminal" || kind === "cancelled").map(({ key }) => key));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const transition of workflow.transitions) {
+        if (transition.from !== null && terminatingStates.has(transition.to) && !terminatingStates.has(transition.from)) {
+          terminatingStates.add(transition.from);
+          changed = true;
+        }
+      }
+    }
+    if (workflow.states.some(({ key }) => !terminatingStates.has(key))) {
+      throw new Error(`Workflow ${workflow.id} contains a state with no terminating path`);
+    }
   }
   for (const profile of runtime.interfaces) {
     profile.selectors.sessionRoleIds?.forEach((id) => reference(roles, id, `Interface Profile ${profile.id}`));
@@ -1304,8 +1749,13 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
   const policies = new Set(runtime.informationPolicies.map(({ id }) => id));
   const stages = new Set(runtime.stages.map(({ id }) => id));
   const artifactTypes = new Set(runtime.artifactTypes.map(({ id }) => id));
+  const stateVariables = new Map((runtime.stateVariables ?? []).map((definition) => [definition.id, definition]));
+  const capabilities = new Map((runtime.capabilities ?? []).map((definition) => [definition.id, definition]));
+  const resources = new Set((runtime.resourceDefinitions ?? []).map(({ id }) => id));
+  const teams = new Set(runtime.teams.map(({ id }) => id));
   const content = uniqueIds(scenario.content ?? [], "Scenario content");
   const injects = uniqueIds(scenario.injects ?? [], "Inject Definition");
+  const facts = gateFactTypes(runtime, scenario);
   for (const item of scenario.content ?? []) {
     if (!policies.has(item.informationPolicyId)) throw new Error(`Scenario content ${item.id} references missing Information Policy ${item.informationPolicyId}`);
   }
@@ -1319,9 +1769,8 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
       throw new Error(`Inject ${inject.id} has an invalid scheduled offset`);
     }
     if (inject.releaseMode === "gate" && inject.releaseGate === undefined) throw new Error(`Inject ${inject.id} has no release Gate`);
-    if (inject.releaseMode === "scheduled" || inject.releaseMode === "gate") {
-      throw new Error(`Inject ${inject.id} uses ${inject.releaseMode} release without approved Runtime semantics`);
-    }
+    if (inject.releaseGate !== undefined) assertGateDefinition(inject.releaseGate, facts, `Inject ${inject.id} release Gate`);
+    if (inject.releaseMode === "scheduled") throw new Error(`Inject ${inject.id} uses scheduled release without approved Runtime semantics`);
     if (inject.requiredResponseArtifactTypeId !== undefined && !artifactTypes.has(inject.requiredResponseArtifactTypeId)) {
       throw new Error(`Inject ${inject.id} references missing response Artifact Type ${inject.requiredResponseArtifactTypeId}`);
     }
@@ -1330,6 +1779,14 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
     });
     if (inject.controlNotesContentId !== undefined && !content.has(inject.controlNotesContentId)) {
       throw new Error(`Inject ${inject.id} references missing control notes content ${inject.controlNotesContentId}`);
+    }
+    for (const effect of inject.effects ?? []) {
+      const definition = stateVariables.get(effect.stateVariableId);
+      if (definition === undefined) throw new Error(`Inject ${inject.id} Effect references missing State Variable ${effect.stateVariableId}`);
+      const expected = definition.type === "integer" || definition.type === "decimal" ? "number" :
+        definition.type === "boolean" ? "boolean" : "string";
+      if (typeof effect.value !== expected || definition.type === "integer" && !Number.isSafeInteger(effect.value) ||
+          effect.operation !== "set" && typeof effect.value !== "number") throw new Error(`Inject ${inject.id} Effect has an incompatible value`);
     }
     const recipient = inject.recipients;
     recipient.sessionRoleIds?.forEach((id) => {
@@ -1345,5 +1802,34 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
       recipient.relation !== undefined || recipient.payloadTeamField !== undefined ||
       (recipient.sessionRoleIds?.length ?? 0) > 0 || (recipient.teamIds?.length ?? 0) > 0 || (recipient.seatIds?.length ?? 0) > 0;
     if (!populated) throw new Error(`Inject ${inject.id} has an empty default-deny recipient selector`);
+  }
+  for (const initial of scenario.initialState ?? []) {
+    const definition = stateVariables.get(initial.stateVariableId);
+    if (definition === undefined) throw new Error(`Initial State Value references missing State Variable ${initial.stateVariableId}`);
+    if (definition.scope === "team" && (initial.scopeReference === undefined || !teams.has(initial.scopeReference))) {
+      throw new Error(`Initial State Value ${initial.stateVariableId} references a missing Team scope`);
+    }
+    const expected = definition.type === "integer" || definition.type === "decimal" ? "number" :
+      definition.type === "boolean" ? "boolean" : "string";
+    if (typeof initial.value !== expected || definition.type === "integer" && !Number.isSafeInteger(initial.value) ||
+        typeof initial.value === "number" && (definition.minimum !== undefined && initial.value < definition.minimum ||
+          definition.maximum !== undefined && initial.value > definition.maximum)) {
+      throw new Error(`Initial State Value ${initial.stateVariableId} is incompatible with its definition`);
+    }
+  }
+  for (const initial of scenario.initialCapabilities ?? []) {
+    const definition = capabilities.get(initial.capabilityId);
+    const expectedQuantity = definition?.mode === "counted" ? definition.initialQuantity : undefined;
+    if (definition === undefined || !definition.states.some((state) => state === initial.state) ||
+        (definition.mode === "counted" && (!Number.isSafeInteger(initial.quantity ?? expectedQuantity) ||
+          Number(initial.quantity ?? expectedQuantity) < 0 || Number(initial.quantity ?? expectedQuantity) > Number(definition.maximumQuantity))) ||
+        (definition.mode !== "counted" && initial.quantity !== undefined)) {
+      throw new Error(`Initial Capability ${initial.capabilityId} is invalid`);
+    }
+  }
+  for (const initial of scenario.initialResources ?? []) {
+    if (!resources.has(initial.resourceId) || !Number.isFinite(initial.balance) || initial.balance < 0) {
+      throw new Error(`Initial Resource ${initial.resourceId} is invalid`);
+    }
   }
 }

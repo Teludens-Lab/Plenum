@@ -7,7 +7,7 @@
 - Goal: Classify, review, approve, and activate a new Release while existing work remains pinned by default.
 - User outcome: Operators can improve a live Session with visible impact and no reinterpretation of completed work.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

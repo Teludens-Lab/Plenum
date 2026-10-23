@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "validation-simulation-v1",
+  "title": "PS-430 validation simulation evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "generatedAt",
+    "runtimeBuild",
+    "sourceHashes",
+    "sourceUnchanged",
+    "configurationOnly",
+    "simulations",
+    "nondeterministicAdapterExclusions",
+    "semanticGaps",
+    "clientMutationState",
+    "testIds"
+  ],
+  "properties": {
+    "contractId": { "const": "validation-simulation-v1" },
+    "generatedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*Z$" },
+    "runtimeBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeVersion", "sourceHash", "sourceFileCount", "schemaVersion", "compilerVersion"],
+      "properties": {
+        "nodeVersion": { "type": "string", "pattern": "^v[0-9]+\\." },
+        "sourceHash": { "$ref": "#/$defs/digest" },
+        "sourceFileCount": { "type": "integer", "minimum": 1 },
+        "schemaVersion": { "type": "string" },
+        "compilerVersion": { "type": "string" }
+      }
+    },
+    "sourceHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["before", "afterPolicyNegotiation", "afterCrisisResponse"],
+      "properties": {
+        "before": { "$ref": "#/$defs/digest" },
+        "afterPolicyNegotiation": { "$ref": "#/$defs/digest" },
+        "afterCrisisResponse": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "sourceUnchanged": { "const": true },
+    "configurationOnly": { "const": true },
+    "simulations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "releaseId",
+          "tenantId",
+          "packageDigest",
+          "seed",
+          "startedAt",
+          "traceDigest",
+          "finalStageIds",
+          "finalWorkflowState",
+          "conditionalInjectIds",
+          "protectedFieldOmissions",
+          "status"
+        ],
+        "properties": {
+          "id": { "enum": ["policy-negotiation", "crisis-response"] },
+          "releaseId": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "packageDigest": { "$ref": "#/$defs/digest" },
+          "seed": { "type": "integer", "minimum": 0 },
+          "startedAt": { "type": "string" },
+          "traceDigest": { "$ref": "#/$defs/digest" },
+          "finalStageIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "finalWorkflowState": { "type": "string" },
+          "conditionalInjectIds": { "type": "array", "items": { "type": "string" } },
+          "protectedFieldOmissions": { "type": "array", "items": { "type": "string" } },
+          "status": { "const": "completed" }
+        }
+      }
+    },
+    "nondeterministicAdapterExclusions": { "type": "array", "items": { "type": "string" } },
+    "semanticGaps": { "type": "array", "items": { "type": "string" } },
+    "clientMutationState": { "const": "not_applicable_no_client_mutation" },
+    "testIds": { "type": "array", "items": { "enum": ["PS-430-T01", "PS-430-T02"] }, "minItems": 2, "maxItems": 2, "uniqueItems": true }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

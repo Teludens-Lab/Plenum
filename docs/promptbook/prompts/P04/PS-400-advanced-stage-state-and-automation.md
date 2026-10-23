@@ -7,7 +7,7 @@
 - Goal: Run approved nested or branching Stages, typed Gates, State Values, Capabilities, Resources, and automation without code.
 - User outcome: Designers model a crisis-response simulation with conditional behavior and traceable state effects.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

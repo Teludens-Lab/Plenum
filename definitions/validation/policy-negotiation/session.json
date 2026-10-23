@@ -1,0 +1,34 @@
+{
+  "tenantId": "70000000-0000-4000-8000-000000000430",
+  "sessionId": "71000000-0000-4000-8000-000000000430",
+  "seed": 43001,
+  "startedAt": "2026-10-23T13:00:00.000Z",
+  "expectedFinalStageIds": ["agreement"],
+  "workflow": {
+    "id": "policy-proposal-workflow",
+    "expectedFinalState": "agreed",
+    "steps": [
+      { "operationType": "artifact.create", "sessionRoleId": "delegate", "expectedState": "draft" },
+      { "operationType": "artifact.submit", "sessionRoleId": "delegate", "expectedState": "in_negotiation" },
+      { "operationType": "artifact.return", "sessionRoleId": "moderator", "expectedState": "counterproposal" },
+      { "operationType": "artifact.submit", "sessionRoleId": "delegate", "expectedState": "in_negotiation" },
+      { "operationType": "artifact.accept", "sessionRoleId": "moderator", "expectedState": "agreed" }
+    ],
+    "denied": { "state": "draft", "operationType": "artifact.submit", "sessionRoleId": "moderator", "reason": "PERMISSION_DENIED" }
+  },
+  "projection": {
+    "authorizedContext": { "participantId": "72000000-0000-4000-8000-000000000430", "activeSessionRoleId": "delegate", "activeTeamId": "transit-authority" },
+    "unauthorizedContext": { "participantId": "72000000-0000-4000-8000-000000000431", "activeSessionRoleId": "observer", "activeTeamId": "resident-council" },
+    "resource": {
+      "resourceType": "artifact",
+      "ownerTeamId": "transit-authority",
+      "fields": {
+        "publicStatement": { "classification": "public", "audience": { "public": true }, "value": "Transit service remains available." },
+        "draftTerms": { "classification": "internal", "audience": { "sessionRoleIds": ["delegate"] }, "value": "Synthetic draft terms" },
+        "moderatorNotes": { "classification": "restricted", "audience": { "sessionRoleIds": ["moderator"] }, "value": "Synthetic moderator note" }
+      }
+    },
+    "authorizedFields": ["publicStatement", "draftTerms"],
+    "unauthorizedFields": ["publicStatement"]
+  }
+}

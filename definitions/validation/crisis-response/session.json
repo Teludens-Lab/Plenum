@@ -1,0 +1,32 @@
+{
+  "tenantId": "70000000-0000-4000-8000-000000000431",
+  "sessionId": "71000000-0000-4000-8000-000000000431",
+  "seed": 43002,
+  "startedAt": "2026-10-23T13:05:00.000Z",
+  "expectedFinalStageIds": ["stabilized"],
+  "workflow": {
+    "id": "resource-allocation-workflow",
+    "expectedFinalState": "approved",
+    "steps": [
+      { "operationType": "artifact.create", "sessionRoleId": "field-coordinator", "expectedState": "draft" },
+      { "operationType": "artifact.submit", "sessionRoleId": "field-coordinator", "expectedState": "in_review" },
+      { "operationType": "artifact.accept", "sessionRoleId": "operations-lead", "expectedState": "approved" }
+    ],
+    "denied": { "state": "in_review", "operationType": "artifact.accept", "sessionRoleId": "field-coordinator", "reason": "PERMISSION_DENIED" }
+  },
+  "projection": {
+    "authorizedContext": { "participantId": "72000000-0000-4000-8000-000000000432", "activeSessionRoleId": "operations-lead", "activeTeamId": "emergency-operations", "isControlRole": true },
+    "unauthorizedContext": { "participantId": "72000000-0000-4000-8000-000000000433", "activeSessionRoleId": "field-coordinator", "activeTeamId": "emergency-operations", "isControlRole": false },
+    "resource": {
+      "resourceType": "inject",
+      "ownerTeamId": "emergency-operations",
+      "fields": {
+        "publicStatus": { "classification": "public", "audience": { "public": true }, "value": "Response is active." },
+        "allocationPlan": { "classification": "internal", "audience": { "sessionRoleIds": ["field-coordinator", "operations-lead"] }, "value": "Synthetic allocation plan" },
+        "controlAssessment": { "classification": "restricted", "audience": { "sessionRoleIds": ["operations-lead"] }, "value": "Synthetic control assessment" }
+      }
+    },
+    "authorizedFields": ["publicStatus", "allocationPlan", "controlAssessment"],
+    "unauthorizedFields": ["publicStatus", "allocationPlan"]
+  }
+}

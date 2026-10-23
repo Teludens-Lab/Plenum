@@ -2,7 +2,7 @@
 
 ## Result
 
-The promptbook has 31 vertical tasks across P00-P06. The final 2026-10-17 machine validation passed with 94/94 PRD requirements and 28/28 invariants mapped and no orphan.
+The promptbook has 31 vertical tasks across P00-P06. The current 2026-10-23 machine validation passed with 94/94 PRD requirements and 28/28 invariants mapped and no orphan.
 
 | Check | Result | Evidence / qualification |
 |---|---|---|
@@ -19,11 +19,17 @@ The promptbook has 31 vertical tasks across P00-P06. The final 2026-10-17 machin
 
 ## Status integrity
 
-- PS-000 and PS-001 are marked ready. PS-000's source pin is satisfied; its classification work and all later implementation prerequisites still require actual evidence.
+- PS-430 is verified. Its two synthetic validation simulations compile and complete deterministically on the same Runtime build without any Runtime source change; PS-500 is the next eligible task.
+- `OPEN-004` remains unratified. The generalization evidence does not infer or approve research semantics, methodology effectiveness, or production readiness.
+- PS-500 is the sole task marked ready. Completed tasks through PS-430 retain their evidence references in `tasks.json`.
 - Proposed commands are not represented as executable. Their registry rows name the creating task.
 - Current slice unit/syntax PASS evidence was produced on Node 22.16.0, below the declared Node 24 floor; it does not satisfy PS-001.
 - Historical slice HTTP/database results remain labeled historical, with PostgreSQL 16 rather than target PostgreSQL 18.
-- Browser, accessibility, performance, offline, air-gap, recovery, security review, deployment, and release approval are not claimed.
+- Browser, accessibility, load, air-gap and recovery evidence remains scoped to the local environments recorded by each completed task. Production security review, deployment verification and release approval are not claimed.
+
+## PS-430 generalization evidence
+
+`PS-430-T01/T02` exercise a communication-heavy policy negotiation and a state-heavy crisis response through the existing compiler, Stage rehearsal, Gate evaluation, workflow transition, and policy projection engines. Both runs repeat byte-equivalent traces from fixed seeds and timestamps. The harness records the same SHA-256 Runtime source hash before and after both simulations, rejects a deliberate policy leak, denies unauthorized workflow operations, and denies cross-tenant projections. No schema, engine, migration, dependency, or production-data gap was found; details and exact hashes are in `docs/ps-430-verification.md`.
 
 ## Unresolved blockers and approvals
 

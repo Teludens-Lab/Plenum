@@ -1,0 +1,173 @@
+{
+  "releaseId": "10000000-0000-4000-8000-000000000430",
+  "projectId": "20000000-0000-4000-8000-000000000430",
+  "definitionRevisionId": "30000000-0000-4000-8000-000000000430",
+  "releaseLabel": "Policy Negotiation Validation 1.0",
+  "semanticVersion": "1.0.0",
+  "methodologyVersion": "1.3.1",
+  "publishedBy": "40000000-0000-4000-8000-000000000430",
+  "approvedBy": ["50000000-0000-4000-8000-000000000430"],
+  "publishedAt": "2026-10-23T12:00:00.000Z",
+  "releaseNotes": "Synthetic communication-heavy validation Release for PS-430.",
+  "validationReportId": "60000000-0000-4000-8000-000000000430",
+  "materialization": {
+    "coreDesign": {
+      "teams": [
+        { "id": "transit-authority", "name": "Transit Authority", "objectiveIds": [], "enabled": true },
+        { "id": "labor-coalition", "name": "Labor Coalition", "objectiveIds": [], "enabled": true },
+        { "id": "resident-council", "name": "Resident Council", "objectiveIds": [], "enabled": true }
+      ],
+      "sessionRoles": [
+        {
+          "id": "delegate",
+          "name": "Delegate",
+          "capabilities": [
+            { "capability": "artifact.create" },
+            { "capability": "artifact.submit" },
+            { "capability": "message.send" }
+          ],
+          "interfaceProfileIds": ["delegate-workspace"],
+          "isControlRole": false,
+          "enabled": true
+        },
+        {
+          "id": "moderator",
+          "name": "Moderator",
+          "capabilities": [
+            { "capability": "artifact.forward" },
+            { "capability": "artifact.return" },
+            { "capability": "artifact.accept" }
+          ],
+          "interfaceProfileIds": ["moderator-workspace"],
+          "isControlRole": true,
+          "enabled": true
+        }
+      ],
+      "seats": [
+        { "id": "transit-delegate", "name": "Transit delegate", "sessionRoleIds": ["delegate"], "teamId": "transit-authority", "minOccupancy": 1, "maxOccupancy": 1, "required": true, "joinMode": "operator_assignment" },
+        { "id": "labor-delegate", "name": "Labor delegate", "sessionRoleIds": ["delegate"], "teamId": "labor-coalition", "minOccupancy": 1, "maxOccupancy": 1, "required": true, "joinMode": "operator_assignment" },
+        { "id": "resident-delegate", "name": "Resident delegate", "sessionRoleIds": ["delegate"], "teamId": "resident-council", "minOccupancy": 1, "maxOccupancy": 1, "required": true, "joinMode": "operator_assignment" },
+        { "id": "moderator", "name": "Moderator", "sessionRoleIds": ["moderator"], "minOccupancy": 1, "maxOccupancy": 1, "required": true, "joinMode": "operator_assignment" }
+      ],
+      "stageGroups": [],
+      "stages": [
+        {
+          "id": "opening-statements",
+          "name": "Opening statements",
+          "stageType": "round",
+          "timerMode": "none",
+          "allowedActivityIds": ["policy-proposal"],
+          "transitions": [{ "id": "opening-to-negotiation", "targetStageId": "negotiation", "mode": "manual" }],
+          "operatorControls": { "allowStart": true, "allowEnd": true, "allowReopen": false, "allowExtend": false, "allowSkip": false, "allowReturnToPrevious": false, "requireReason": true }
+        },
+        {
+          "id": "negotiation",
+          "name": "Negotiation",
+          "stageType": "round",
+          "timerMode": "none",
+          "allowedActivityIds": ["policy-proposal"],
+          "transitions": [{ "id": "negotiation-to-agreement", "targetStageId": "agreement", "mode": "manual" }],
+          "operatorControls": { "allowStart": true, "allowEnd": true, "allowReopen": false, "allowExtend": false, "allowSkip": false, "allowReturnToPrevious": true, "requireReason": true }
+        },
+        {
+          "id": "agreement",
+          "name": "Agreement",
+          "stageType": "round",
+          "timerMode": "none",
+          "allowedActivityIds": [],
+          "transitions": [],
+          "operatorControls": { "allowStart": true, "allowEnd": true, "allowReopen": false, "allowExtend": false, "allowSkip": false, "allowReturnToPrevious": false, "requireReason": true }
+        }
+      ],
+      "artifactTypes": [
+        {
+          "id": "policy-proposal",
+          "key": "policyProposal",
+          "name": "Policy Proposal",
+          "formId": "policy-proposal-form",
+          "workflowId": "policy-proposal-workflow",
+          "informationPolicyId": "policy-negotiation",
+          "allowedCreatorSessionRoleIds": ["delegate"],
+          "allowedTeamIds": ["transit-authority", "labor-coalition", "resident-council"],
+          "availableStageIds": ["opening-statements", "negotiation"],
+          "ownership": "team",
+          "decisionBearing": false,
+          "versioning": "full_history",
+          "exportable": true
+        }
+      ],
+      "forms": [
+        {
+          "id": "policy-proposal-form",
+          "name": "Policy Proposal",
+          "formVersion": "1",
+          "sections": [
+            {
+              "id": "proposal",
+              "title": "Proposal",
+              "fields": [
+                { "id": "title", "key": "title", "label": "Title", "type": "short_text", "required": true, "validation": { "minLength": 3, "maxLength": 120 } },
+                { "id": "terms", "key": "terms", "label": "Terms", "type": "long_text", "required": true, "validation": { "minLength": 10, "maxLength": 2000 } }
+              ]
+            }
+          ]
+        }
+      ],
+      "workflows": [
+        {
+          "id": "policy-proposal-workflow",
+          "key": "policyProposalReview",
+          "name": "Proposal and counterproposal review",
+          "initialState": "draft",
+          "states": [
+            { "key": "draft", "label": "Draft", "kind": "draft", "holderRelation": "creator" },
+            { "key": "in_negotiation", "label": "In negotiation", "kind": "review", "holderSessionRoleIds": ["moderator"] },
+            { "key": "counterproposal", "label": "Counterproposal requested", "kind": "draft", "holderRelation": "creator" },
+            { "key": "agreed", "label": "Agreed", "kind": "terminal" }
+          ],
+          "transitions": [
+            { "id": "proposal-create", "from": null, "command": "artifact.create", "to": "draft", "allowedSessionRoleIds": ["delegate"] },
+            { "id": "proposal-submit", "from": "draft", "command": "artifact.submit", "to": "in_negotiation", "allowedSessionRoleIds": ["delegate"] },
+            { "id": "proposal-return", "from": "in_negotiation", "command": "artifact.return", "to": "counterproposal", "allowedSessionRoleIds": ["moderator"] },
+            { "id": "proposal-resubmit", "from": "counterproposal", "command": "artifact.submit", "to": "in_negotiation", "allowedSessionRoleIds": ["delegate"] },
+            { "id": "proposal-accept", "from": "in_negotiation", "command": "artifact.accept", "to": "agreed", "allowedSessionRoleIds": ["moderator"] }
+          ]
+        }
+      ],
+      "informationPolicies": [
+        { "id": "policy-public", "name": "Public", "classification": "public", "grants": [{ "audience": { "public": true } }] },
+        { "id": "policy-negotiation", "name": "Negotiation participants", "classification": "internal", "grants": [{ "audience": { "sessionRoleIds": ["delegate", "moderator"] } }] }
+      ],
+      "communications": {
+        "messageChannels": [
+          { "id": "public-statements", "name": "Public statements", "type": "broadcast", "supportsAttachments": false, "supportsThreading": false, "informationPolicyId": "policy-public" },
+          { "id": "negotiation-channel", "name": "Negotiation channel", "type": "direct", "supportsAttachments": false, "supportsThreading": true, "informationPolicyId": "policy-negotiation" }
+        ],
+        "routes": [
+          { "id": "delegate-to-public", "channelId": "public-statements", "sender": { "sessionRoleIds": ["delegate"] }, "recipient": { "public": true }, "informationPolicyId": "policy-public", "activeStageIds": ["opening-statements", "negotiation"] },
+          { "id": "delegate-counterproposal", "channelId": "negotiation-channel", "sender": { "sessionRoleIds": ["delegate"] }, "recipient": { "sessionRoleIds": ["delegate", "moderator"] }, "informationPolicyId": "policy-negotiation", "activeStageIds": ["negotiation"] }
+        ],
+        "voiceChannels": []
+      },
+      "interfaces": [
+        { "id": "delegate-workspace", "name": "Delegate workspace", "selectors": { "sessionRoleIds": ["delegate"] }, "layout": { "template": "workspace", "regions": [{ "id": "main", "modules": [] }] }, "navigation": { "items": [] } },
+        { "id": "moderator-workspace", "name": "Moderator workspace", "selectors": { "sessionRoleIds": ["moderator"] }, "layout": { "template": "dashboard", "regions": [{ "id": "main", "modules": [] }] }, "navigation": { "items": [] } }
+      ],
+      "reports": [],
+      "pluginBindings": []
+    },
+    "scenario": {
+      "id": "synthetic-policy-negotiation",
+      "name": "Synthetic Policy Negotiation",
+      "description": "Three simulated institutions negotiate a transit continuity agreement.",
+      "deliveryModes": ["in_person", "virtual"],
+      "tags": ["synthetic", "validation", "negotiation"],
+      "content": [
+        { "id": "opening-brief", "title": "Opening brief", "type": "rich_text", "body": "Negotiate a continuity agreement using public statements and counterproposals.", "informationPolicyId": "policy-public", "version": "1" }
+      ],
+      "injects": [
+        { "id": "opening-briefing", "title": "Opening briefing", "contentId": "opening-brief", "recipients": { "public": true }, "releaseMode": "stage_entry", "stageId": "opening-statements" }
+      ]
+    }
+  }
+}

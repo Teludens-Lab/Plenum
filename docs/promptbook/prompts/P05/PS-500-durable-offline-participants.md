@@ -7,7 +7,7 @@
 - Goal: Let disconnected Participants keep permitted work and reconcile safely without becoming an authority.
 - User outcome: A Participant can draft offline, see truthful local status, and receive a clear accepted, rejected, or reconciliation result after reconnect.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

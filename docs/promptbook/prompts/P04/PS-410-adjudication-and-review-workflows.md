@@ -7,7 +7,7 @@
 - Goal: Support manual, rubric, rules, Plugin, hybrid, and multi-perspective adjudication through one contract.
 - User outcome: Adjudicators can review evidence, explain decisions, override suggestions with rationale, and publish outcomes safely.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

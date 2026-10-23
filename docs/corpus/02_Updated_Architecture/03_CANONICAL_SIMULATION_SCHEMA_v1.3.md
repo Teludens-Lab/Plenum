@@ -1015,7 +1015,7 @@ The validator detects at least: duplicate identifiers; missing references; inval
 4. Every Artifact references its Form version; every Workflow Instance pins its Governing Release (INV-021).
 5. Storage migrations may transform representation but must preserve the meaning of historical records (INV-006).
 6. Change classification for live activation follows 08 Canon ยง9 and ADR-004.
-7. Schema and compiler backward-compatibility rules are OPEN-012.
+7. OPEN-012 requires exact schema/compiler versions unless a versioned, deterministic, Technical Lead-approved compatibility adapter is available; unsupported cross-version paths fail closed.
 
 ## 19. Offline projection boundary
 
@@ -1091,7 +1091,7 @@ Offline Participant bundles are runtime-generated, policy-filtered projections โ
 
 ## 21. Open questions
 
-OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-012 (compatibility), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005, the PS-400 baseline of OPEN-006, and OPEN-018 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
+OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005, the PS-400 baseline of OPEN-006, OPEN-012, and OPEN-018 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
 
 ## Change log
 

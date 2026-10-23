@@ -226,7 +226,7 @@ For recorded Command outcomes, the response body is the receipt (§4.1) and the 
 
 ## 9. Compatibility
 
-Breaking API or event changes require a new version or an explicit migration. Releases and historical Sessions keep their original contract references. Consumers declare supported versions; contract tests verify them (REQ-070; OPEN-012).
+Breaking API or event changes require a new version or an explicit migration. Releases and historical Sessions keep their original contract references. Consumers declare supported versions; contract tests verify them. OPEN-012 requires exact Release schema/compiler versions unless a versioned compatibility adapter has deterministic fixtures, reconstruction evidence and Technical Lead approval; unsupported paths fail closed (REQ-070).
 
 ## 10. Session onboarding contracts
 
@@ -341,7 +341,7 @@ Bootstrap, Command submission, receipt lookup, delta catch-up, live push, snapsh
 
 ## 15. Open items
 
-OPEN-012 (compatibility), OPEN-015 (offline Command types and credential lifetime), OPEN-016 (authority transfer), OPEN-022 (remaining engineering ADRs), OPEN-027 (recording and transcription consent), OPEN-028 (secret ballots), OPEN-029 (plugin trust). OPEN-021 is resolved.
+OPEN-015 (offline Command types and credential lifetime), OPEN-016 (authority transfer), OPEN-022 (remaining engineering ADRs), OPEN-027 (recording and transcription consent), OPEN-028 (secret ballots), and OPEN-029 (plugin trust). OPEN-012 and OPEN-021 are resolved.
 
 ## Change log
 

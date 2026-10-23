@@ -494,7 +494,7 @@ The DEC-16 workload (500 Participants per Session, 10 concurrent Sessions, up to
 
 ## 26. Open technical decisions
 
-OPEN-012 (compatibility and compiler determinism), OPEN-016 (authority transfer), OPEN-020 (Package signing), OPEN-022 (JSON Schema compatibility, workflow engine, policy engine, scientific-model sandboxes, report generation), OPEN-029 (plugin trust operations). OPEN-002 is resolved by Product Owner approval on 2026-10-20; OPEN-021 is resolved by DEC-59 and DEC-60.
+OPEN-016 (authority transfer), OPEN-022 (JSON Schema compatibility, workflow engine, policy engine, scientific-model sandboxes, report generation), and OPEN-029 (plugin trust operations). OPEN-002 is resolved by Product Owner approval on 2026-10-20; OPEN-012 is resolved by the exact-version, deterministic-adapter policy; OPEN-020 and OPEN-021 are resolved.
 
 ## Change log
 

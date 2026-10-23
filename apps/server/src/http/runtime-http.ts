@@ -18,6 +18,7 @@ import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
+import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
 import { getAdjudications } from "../adjudication/service.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
@@ -337,6 +338,45 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           deviceId: deviceHeader(request, correlationId),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/release-impact$/u))) {
+        const candidateReleaseId = url.searchParams.get("candidateReleaseId");
+        if (candidateReleaseId === null) {
+          throw authorizationError("VALIDATION_FAILED", "A candidate Release identifier is required.", correlationId);
+        }
+        send(response, 200, await getReleaseImpact(options.pool, principal, pathId(match[1], correlationId),
+          pathId(candidateReleaseId, correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/release-impact-reviews$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["candidateReleaseId", "reportDigest", "existingInstanceHandling"].includes(field)) ||
+            typeof body.candidateReleaseId !== "string" || typeof body.reportDigest !== "string" ||
+            typeof body.existingInstanceHandling !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The impact review request is invalid.", correlationId);
+        }
+        send(response, 201, await reviewReleaseImpact(options.pool, principal, pathId(match[1], correlationId), {
+          candidateReleaseId: body.candidateReleaseId,
+          reportDigest: body.reportDigest,
+          existingInstanceHandling: body.existingInstanceHandling
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/release-activations$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.aggregateId !== sessionId) {
+          throw authorizationError("VALIDATION_FAILED", "The Session path and Command target differ.", correlationId);
+        }
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await activateRelease(options.pool, principal, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/release-history$/u))) {
+        send(response, 200, await getReleaseHistory(options.pool, principal, pathId(match[1], correlationId), correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/adjudications$/u))) {

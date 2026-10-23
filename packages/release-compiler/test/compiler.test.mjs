@@ -3,11 +3,48 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
+  classifyReleaseCompatibility,
   compileModelComposition,
   compileRelease,
   previewCompositionFixture,
   verifyReleasePackage
 } from "../dist/index.js";
+
+const compatibilityRelease = (releaseId, coreDesign = { pluginBindings: [] }, scenario = {
+  id: "scenario-1", name: "Scenario", description: "Description", deliveryModes: ["virtual"], tags: []
+}) => ({ releaseId, schemaVersion: "1.3", compilerVersion: "0.1.0", coreDesign, scenario });
+
+test("AC-07 classifies prospective, additive, consequential, and prohibited live migrations", () => {
+  const before = compatibilityRelease("10000000-0000-4000-8000-000000000001");
+  const prospective = classifyReleaseCompatibility(before, compatibilityRelease(
+    "10000000-0000-4000-8000-000000000002", { pluginBindings: [], presentation: { accent: "gold" } }
+  ));
+  assert.equal(prospective.classification, "safe_prospective");
+  assert.deepEqual(prospective.blockedReasons, []);
+
+  const additive = classifyReleaseCompatibility(before, compatibilityRelease(
+    "10000000-0000-4000-8000-000000000003", { pluginBindings: [], workflows: [{ id: "workflow-new", name: "New" }] }
+  ));
+  assert.equal(additive.classification, "compatibility_dependent");
+
+  const consequential = classifyReleaseCompatibility(
+    compatibilityRelease("10000000-0000-4000-8000-000000000004", { pluginBindings: [], workflows: [{ id: "workflow-1", name: "Before" }] }),
+    compatibilityRelease("10000000-0000-4000-8000-000000000005", { pluginBindings: [], workflows: [{ id: "workflow-1", name: "After" }] })
+  );
+  assert.equal(consequential.classification, "consequential");
+  assert.equal(consequential.requiresImpactReview, true);
+
+  const security = classifyReleaseCompatibility(before, compatibilityRelease(
+    "10000000-0000-4000-8000-000000000006", { pluginBindings: [], accessPolicy: { joinMethods: ["invite"] } }
+  ));
+  assert.equal(security.blockedReasons.length, 1);
+});
+
+test("AC-07 blocks cross-schema activation without an approved compatibility adapter", () => {
+  const before = compatibilityRelease("10000000-0000-4000-8000-000000000001");
+  const after = { ...compatibilityRelease("10000000-0000-4000-8000-000000000002"), schemaVersion: "2.0" };
+  assert.match(classifyReleaseCompatibility(before, after).blockedReasons[0], /compatibility adapter/u);
+});
 
 const input = {
   releaseId: "10000000-0000-4000-8000-000000000001",

@@ -11,7 +11,7 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.3 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; not ratified |
 | `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-026 resolved; formal ratification remains OPEN-001/DEC-22 |
 | `docs/corpus/02_Updated_Architecture/02_PLATFORM_ARCHITECTURE_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns topology and stack; its ADRs are Confirmed or Product Owner Approved, with named specialist sign-offs still required where recorded |
-| `docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review | Technical + Methodology Leads | Yes | Owns portable design types; compatibility OPEN-012 |
+| `docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review | Technical + Methodology Leads | Yes | Owns portable design types; compatibility follows resolved OPEN-012 |
 | `docs/corpus/02_Updated_Architecture/09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns event and error catalogs |
 | `docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md` | 1.3.2 | Draft for review | Product Owner | Yes | Owns no-code authoring behavior |
 | `docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns Runtime behavior |

@@ -1,17 +1,17 @@
 # Contract compatibility matrix
 
-Compatibility policy remains unresolved by OPEN-012. The matrix defines what tasks must prove without choosing that policy silently.
+OPEN-012 is resolved by the fail-closed policy below. Exact versions remain the default; broader support requires an explicit, tested adapter rather than inference.
 
 | Contract | Producer | Consumers | Pin | Breaking-change rule | Persistence impact | Test owner |
 |---|---|---|---|---|---|---|
 | Simulation Release schema (`release-manifest-v1`) | `@plenum/simulation-schema` / Release compiler | Runtime, Studio preview, import | schema `1.3.1` + digest | New version or explicit migration | Historical Sessions keep original | PS-100, PS-130 |
-| Compiler output (`package-import-v1`) | `@plenum/release-compiler` | Registry, import | compiler `0.1.0` + manifest/content/package digests | Exact-version compatibility and deterministic fixture comparison while OPEN-012 remains unresolved | Definition Revision, Release and Package manifest are immutable | PS-130 |
+| Compiler output (`package-import-v1`) | `@plenum/release-compiler` | Registry, import | compiler `0.1.0` + manifest/content/package digests | Exact version unless a versioned adapter has deterministic fixtures, reconstruction evidence and Technical Lead approval | Definition Revision, Release and Package manifest are immutable | PS-130 |
 | HTTP API | Server | Web clients/integrations | `/v1` + schema | New API version or compatible extension | Commands/receipts retained | PS-100 onward |
 | Command envelope | Client | Session Authority | v1 schema | Required-field/semantic break needs new version | Stored payload digest must remain interpretable | PS-120 |
 | Runtime capability Commands (`artifact-command-v1`, `stage-command-v1`, `message-command-v1`, `inject-command-v1`) | Capability owner | Session Authority | namespace-specific operation pattern over `command-envelope-v1` | Breaking payload semantics need a new contract version; one producer per mutation | Governing Release and recorded receipt/event retain original meaning | PS-150, PS-200, PS-210 |
 | Event envelope/type | Feature owner | Projections, reports, integrations | type + integer version | New type version; one producer | Evidence keeps original version | PS-120 |
 | Runtime sync (`runtime-sse-v1`, `sync-deltas-v1`, `sync-snapshot-v1`) | Sync service | `@plenum/sync-client`, Runtime web | opaque UUID cursor + `policy-decision-v1` + `runtime-projection-v1` | Expiry or policy/access/version change requires authorized snapshot; never reinterpret | Server cursor and client cursor are disposable; authoritative state and outbox remain | PS-140 |
-| Package | Registry | Other Deployments | `package-import-v1` + schema/compiler/digests | Exact-version rejection until OPEN-012 defines a support window | Import preserves Release and Definition Revision identity | PS-130, PS-530 |
+| Package | Registry | Other Deployments | `package-import-v1` + schema/compiler/digests | Exact-version rejection unless the approved adapter evidence exists | Import preserves Release and Definition Revision identity | PS-130, PS-530 |
 | Plugin manifest | `@plenum/plugin-sdk` / approved Publisher | Registry, Release compiler, Extension Host | `plugin-manifest-v1` + manifest and Artifact digests | New contract version for required-field or semantic changes | Artifact, Installation, Binding and run provenance retain the original manifest digest | PS-220, PS-230 |
 | Offline Plugin bundle | `@plenum/plugin-sdk` / approved Publisher | Organization registry import | `offline-plugin-bundle-v1` + complete file/dependency closure + detached Ed25519 signature | Exact contract version; reject unknown required content | Imported Artifact and Installation retain bundle and Artifact digests | PS-220, PS-530 |
 | Plugin host API | Extension Host | Plugin Artifact | semver range + digest | Reject incompatible artifact | Runs keep artifact digest | PS-220 |
@@ -20,9 +20,12 @@ Compatibility policy remains unresolved by OPEN-012. The matrix defines what tas
 | Voting Method Adapter | Voting service | Adapter | algorithm version + digest | Deterministic vectors required | Tally and Certification retain method | PS-240 |
 | Media Provider Adapter | Comms service | Provider | interface version + digest | Capability validation per Release/profile | Voice record keeps binding | PS-250 |
 | Persisted Session | Runtime schema | Current/future app | migration chain + Release refs | Expand/backfill/switch/contract | No historical reinterpretation | PS-420, PS-530 |
+| Live Release Activation (`compatibility-report-v1`, `release-activation-v1`) | Release compiler / Session Authority | Studio, Runtime, sync reconciliation | current and candidate Release IDs, schema/compiler versions, canonical report digest and immutable review ID | Same-version descriptive changes may apply prospectively; additive non-security definitions require review; removals/semantic changes are consequential; security topology is new-Session-only; schema/compiler mismatches require an approved adapter | Existing Artifacts, open Polls, Workflow Instances and in-flight Model Compositions keep their Governing Release; new work uses the activated Release; stale aggregate Commands return reconciliation rather than being reinterpreted | PS-420 |
 | Research/report definition | Reporting engine | Exports | definition/metric version | New version, never mutate historical output | Source provenance retained | PS-520 |
 
-Until OPEN-012 resolves, implementation may add compatible fields and explicit adapters, but cannot promise a support window or compiler determinism beyond tested versions.
+The same canonical input and compiler version must produce byte-identical content and digests. Breaking contracts use a new version or explicit migration. Unsupported combinations fail closed.
+
+PS-420 implements the approved `keep_existing` choice from ADR-004/OPEN-008. It does not offer in-place migration or cross-schema/compiler activation. Disruptive definition or security-topology changes require a new Session and the approvals recorded in OPEN-008. Artifact-targeted Commands continue under the Artifact's pinned Release; Commands against a changed Session aggregate must reconcile after activation.
 
 ## Plugin trust matrix
 

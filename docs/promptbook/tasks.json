@@ -91,7 +91,7 @@
     "product_requirements": ["REQ-070", "REQ-071", "INV-019", "INV-022", "INV-028"],
     "source_refs": ["02 Platform v1.3.1 sections 4 and 23", "03 Schema v1.3.1", "09 Contracts v1.3.1", "ADR-007", "ADR-008"],
     "source_evidence": ["references/plenum-runtime-slice/contracts/openapi.yaml", "references/plenum-runtime-slice/package-lock.json"],
-    "depends_on_unratified": ["ADR-008", "OPEN-012", "OPEN-022"],
+    "depends_on_unratified": ["ADR-008", "OPEN-022"],
     "prerequisites": ["PS-001"],
     "prerequisites_verified": true,
     "ready_to_execute": false,
@@ -117,7 +117,7 @@
     "commit_subject": "build(platform): establish shared contract monorepo",
     "commit_body": "Why:\n- Share canonical contracts without replacing the spike.\nWhat:\n- Add the minimum monorepo, contract packages, and build commands.\nVerification:\n- Lint, typecheck, test, and build.\nCompatibility / migrations:\n- No data migration.\nRisks / follow-up:\n- Named Technical Lead sign-off for Approved ADR-008 remains.\nRefs: PS-100, REQ-070, ADR-008",
     "pr_description": "Summary: creates the shared TypeScript kernel. Risks: named Technical Lead sign-off for the approved toolchain remains. Migration: none. Evidence: clean build. Rollback: remove new workspace files and keep the reference slice.",
-    "revisit_triggers": ["ADR-008 changes", "OPEN-012 compatibility policy resolves", "A second deployable becomes justified"]
+    "revisit_triggers": ["ADR-008 changes", "The OPEN-012 compatibility policy changes", "A second deployable becomes justified"]
   },
   {
     "id": "PS-110",
@@ -211,7 +211,7 @@
     "product_requirements": ["REQ-021", "REQ-022", "REQ-023", "REQ-070", "INV-005", "INV-012", "INV-013", "INV-028"],
     "source_refs": ["02 Platform section 7", "03 Schema sections 3, 4, 18", "04 Studio section 23", "OPEN-020"],
     "source_evidence": ["references/plenum-runtime-slice/src/server.mjs", "references/plenum-runtime-slice/migrations/001_core.sql"],
-    "depends_on_unratified": ["ADR-011", "ADR-014", "OPEN-012", "OPEN-013", "OPEN-020"],
+    "depends_on_unratified": ["ADR-011", "ADR-014", "OPEN-013", "OPEN-020"],
     "prerequisites": ["PS-100", "PS-110"],
     "prerequisites_verified": true,
     "ready_to_execute": false,
@@ -237,7 +237,7 @@
     "commit_subject": "feat(registry): compile immutable release packages",
     "commit_body": "Why:\n- Make published simulations portable and stable.\nWhat:\n- Add compiler, Package round-trip, and object adapter.\nVerification:\n- Digest, immutability, and import tests.\nCompatibility / migrations:\n- Adds 007 release package records.\nRisks / follow-up:\n- Signing remains OPEN-020.\nRefs: PS-130, REQ-021, INV-012",
     "pr_description": "Summary: adds immutable Release and Package handling. Risks: canonicalization drift. Migration: 007. Evidence: round-trip and tamper tests. Rollback: retain records and disable new publication route.",
-    "revisit_triggers": ["OPEN-020 resolves", "OPEN-012 resolves", "Object-store evaluation selects a product"]
+    "revisit_triggers": ["OPEN-020 changes", "The OPEN-012 compatibility policy changes", "Object-store evaluation selects a product"]
   },
   {
     "id": "PS-140",
@@ -891,9 +891,9 @@
     "product_requirements": ["REQ-007", "REQ-041", "REQ-042", "INV-005", "INV-006", "INV-010", "INV-021", "INV-023"],
     "source_refs": ["08 Canon section 9", "04 Studio section 24", "05 Runtime section 19", "ADR-004"],
     "source_evidence": ["references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql"],
-    "depends_on_unratified": ["ADR-004", "OPEN-008", "OPEN-012", "OPEN-018"],
+    "depends_on_unratified": [],
     "prerequisites": ["PS-130", "PS-300", "PS-400", "PS-410"],
-    "prerequisites_verified": false,
+    "prerequisites_verified": true,
     "ready_to_execute": false,
     "inspect": ["Existing initial Release Activation", "Compatibility policy and migration gaps", "Queued Command reconciliation behavior"],
     "scope": ["Semantic diff and change classification", "Impact preview", "Approval and activation transaction", "Existing-instance pinning", "Queued Command outcome after activation"],
@@ -903,7 +903,7 @@
     "authorization_privacy": ["Require authorized approver", "Apply security revocations immediately", "Show only impact data the reviewer may see"],
     "concurrency_idempotency_versions": ["Activation has stable Command ID", "Existing instances stay pinned", "In-flight compositions stay pinned", "Queued commands get explicit accepted/rejected/reconciliation outcome"],
     "deliverables": ["Diff/classifier", "Impact UI", "Activation service", "Reconstruction and offline-delay tests"],
-    "migration_ids": ["020_live_release_activation"],
+    "migration_ids": ["021_live_release_activation"],
     "api_contract_ids": ["release-activation-v1", "compatibility-report-v1"],
     "test_ids": ["AC-07", "AC-11", "SYNC-09", "EXT-15"],
     "validation_command_refs": ["CMD-PLATFORM-TEST", "CMD-PLATFORM-INTEGRATION", "CMD-PLATFORM-E2E"],
@@ -911,13 +911,13 @@
     "regression_quality_gates": ["Open Poll remains immutable", "No partial activation", "Release and evidence reconstruction match live state"],
     "docs_continuity": ["Update compatibility matrix", "Update migration policy and PROJECT_STATE.md", "Raise OPEN candidate for unresolved migration class"],
     "risk": "critical",
-    "approval_gate": "Disruptive migration policy blocked by OPEN-008 and compatibility policy by OPEN-012",
-    "implementation_state": "planned",
-    "evidence": [],
+    "approval_gate": "Approved 2026-10-22 by user direction: existing work stays pinned, disruptive topology starts a new Session, and unsupported cross-version activation fails closed",
+    "implementation_state": "verified",
+    "evidence": ["docs/ps-420-verification.md", "CMD-PLATFORM-TEST", "CMD-PLATFORM-INTEGRATION", "CMD-PLATFORM-E2E", "CMD-PROMPTBOOK-VALIDATE"],
     "commit_subject": "feat(runtime): govern live release activation",
-    "commit_body": "Why:\n- Change live Sessions without rewriting history.\nWhat:\n- Add diff, impact review, activation, and pinning.\nVerification:\n- AC-07, AC-11, SYNC-09, EXT-15.\nCompatibility / migrations:\n- Adds 020 activation records.\nRisks / follow-up:\n- Disruptive migration remains gated.\nRefs: PS-420, REQ-007, ADR-004",
-    "pr_description": "Summary: delivers governed live activation. Risks: historical reinterpretation. Migration: 020. Evidence: reconstruction and delayed-command tests. Rollback: activate a forward-fix Release; do not rewrite history.",
-    "revisit_triggers": ["OPEN-008 or OPEN-012 resolves", "A new change class is introduced", "Migration rehearsal finds unsafe cases"]
+    "commit_body": "Why:\n- Change live Sessions without rewriting history.\nWhat:\n- Add diff, impact review, activation, and pinning.\nVerification:\n- AC-07, AC-11, SYNC-09, EXT-15.\nCompatibility / migrations:\n- Adds 021 activation records.\nRisks / follow-up:\n- Unsupported migrations remain fail closed.\nRefs: PS-420, REQ-007, ADR-004",
+    "pr_description": "Summary: delivers governed live activation. Risks: historical reinterpretation. Migration: 021. Evidence: reconstruction and delayed-command tests. Rollback: activate a forward-fix Release; do not rewrite history.",
+    "revisit_triggers": ["The OPEN-008 or OPEN-012 policy changes", "A new change class is introduced", "Migration rehearsal finds unsafe cases"]
   },
   {
     "id": "PS-430",
@@ -933,8 +933,8 @@
     "source_evidence": ["docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md"],
     "depends_on_unratified": ["OPEN-004"],
     "prerequisites": ["PS-400", "PS-410", "PS-420"],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "inspect": ["Generalization exit criteria", "Runtime source diff baseline", "Validation simulation fixtures"],
     "scope": ["Author two materially different Releases", "Run deterministic Sessions", "Prove no Runtime source edits", "Record any schema or engine gaps"],
     "expected_paths": ["definitions/validation/policy-negotiation/", "definitions/validation/crisis-response/", "tests/e2e/generalization/"],
@@ -983,7 +983,7 @@
     "authorization_privacy": ["Minimize cached fields", "Expire and clear controllable data after revocation", "Test stolen-device and other-role bundle leakage"],
     "concurrency_idempotency_versions": ["Dependency-order Commands", "Duplicate delivery commits once", "Activation incompatibility yields reconciliation", "Ballot uses receipt time"],
     "deliverables": ["Offline Outbox", "Local protection", "Reconnect UI", "SYNC-04 through SYNC-17 coverage as applicable"],
-    "migration_ids": ["021_offline_devices"],
+    "migration_ids": ["022_offline_devices"],
     "api_contract_ids": ["offline-outbox-v1", "sync-bootstrap-v1"],
     "test_ids": ["AC-11", "SYNC-04", "SYNC-05", "SYNC-08", "SYNC-09", "SYNC-10", "SYNC-11", "SYNC-14", "SYNC-16", "SYNC-17"],
     "validation_command_refs": ["CMD-PLATFORM-TEST", "CMD-PLATFORM-E2E", "CMD-OFFLINE"],
@@ -995,8 +995,8 @@
     "implementation_state": "planned",
     "evidence": [],
     "commit_subject": "feat(sync): reconcile durable offline commands",
-    "commit_body": "Why:\n- Support disconnected work without false authority.\nWhat:\n- Add protected outbox, reconnect, and reconciliation states.\nVerification:\n- AC-11 and SYNC offline tests.\nCompatibility / migrations:\n- Adds 021 offline device state.\nRisks / follow-up:\n- Device policy remains OPEN-014/015.\nRefs: PS-500, REQ-043, INV-026",
-    "pr_description": "Summary: delivers controlled offline participation. Risks: cached-data loss and stale commands. Migration: 021. Evidence: partition/reconnect tests. Rollback: disable queueing and preserve drafts for export.",
+    "commit_body": "Why:\n- Support disconnected work without false authority.\nWhat:\n- Add protected outbox, reconnect, and reconciliation states.\nVerification:\n- AC-11 and SYNC offline tests.\nCompatibility / migrations:\n- Adds 022 offline device state.\nRisks / follow-up:\n- Device policy remains OPEN-014/015.\nRefs: PS-500, REQ-043, INV-026",
+    "pr_description": "Summary: delivers controlled offline participation. Risks: cached-data loss and stale commands. Migration: 022. Evidence: partition/reconnect tests. Rollback: disable queueing and preserve drafts for export.",
     "revisit_triggers": ["OPEN-014/015 resolves", "Browser storage is replaced", "New command type requests offline support"]
   },
   {
@@ -1023,7 +1023,7 @@
     "authorization_privacy": ["Restrict verification exports", "Redact protected bodies without breaking proof metadata", "Separate signing custody"],
     "concurrency_idempotency_versions": ["One Checkpoint per starting sequence", "Retry signing and anchoring idempotently", "Never skip a committed range"],
     "deliverables": ["Checkpoint worker", "Signer and anchor ports", "Verification CLI/export", "Tamper and recovery evidence"],
-    "migration_ids": ["022_evidence_checkpoints"],
+    "migration_ids": ["023_evidence_checkpoints"],
     "api_contract_ids": ["checkpoint-v1", "verification-export-v1"],
     "test_ids": ["SYNC-13", "PS-510-T01", "PS-510-T02"],
     "validation_command_refs": ["CMD-PLATFORM-TEST", "CMD-PLATFORM-INTEGRATION", "CMD-EVIDENCE-VERIFY"],
@@ -1035,8 +1035,8 @@
     "implementation_state": "planned",
     "evidence": [],
     "commit_subject": "feat(evidence): verify signed checkpoint chains",
-    "commit_body": "Why:\n- Make institutional evidence independently verifiable.\nWhat:\n- Add checkpoint signing, anchoring, and offline verification.\nVerification:\n- Tamper, omission, rotation, and restore drills.\nCompatibility / migrations:\n- Adds 022 checkpoint operations.\nRisks / follow-up:\n- Custody remains OPEN-017.\nRefs: PS-510, REQ-006, ADR-003",
-    "pr_description": "Summary: adds signed and anchored evidence. Risks: key custody and false assurance. Migration: 022. Evidence: tamper drills. Rollback: pause new checkpoints; preserve all records.",
+    "commit_body": "Why:\n- Make institutional evidence independently verifiable.\nWhat:\n- Add checkpoint signing, anchoring, and offline verification.\nVerification:\n- Tamper, omission, rotation, and restore drills.\nCompatibility / migrations:\n- Adds 023 checkpoint operations.\nRisks / follow-up:\n- Custody remains OPEN-017.\nRefs: PS-510, REQ-006, ADR-003",
+    "pr_description": "Summary: adds signed and anchored evidence. Risks: key custody and false assurance. Migration: 023. Evidence: tamper drills. Rollback: pause new checkpoints; preserve all records.",
     "revisit_triggers": ["OPEN-017 or OPEN-014 resolves", "Canonicalization changes", "Signing algorithm rotation"]
   },
   {
@@ -1063,7 +1063,7 @@
     "authorization_privacy": ["Apply consent and field exclusion", "Separate identity from behavior", "Suppress secret Ballots and protected voice assets by default"],
     "concurrency_idempotency_versions": ["Exports are idempotent jobs", "Replay pins all versions and seed", "Regeneration creates a new artifact, not mutation"],
     "deliverables": ["Report engine", "Research export", "Retention/correction workflows", "Replay and divergence report"],
-    "migration_ids": ["023_reporting_research"],
+    "migration_ids": ["024_reporting_research"],
     "api_contract_ids": ["report-definition-v1", "research-export-v1", "replay-divergence-v1"],
     "test_ids": ["AC-06", "PS-520-T01", "PS-520-T02", "PS-520-T03"],
     "validation_command_refs": ["CMD-PLATFORM-TEST", "CMD-PLATFORM-INTEGRATION", "CMD-PLATFORM-E2E", "CMD-REPORT-RECONCILE"],
@@ -1075,8 +1075,8 @@
     "implementation_state": "planned",
     "evidence": [],
     "commit_subject": "feat(reporting): trace exports to session evidence",
-    "commit_body": "Why:\n- Produce trustworthy reports and research data.\nWhat:\n- Add provenance, analytical layers, retention, replay, and exports.\nVerification:\n- Reconciliation, anonymization, and replay tests.\nCompatibility / migrations:\n- Adds 023 reporting records.\nRisks / follow-up:\n- Institutional policies remain open.\nRefs: PS-520, REQ-055, INV-016",
-    "pr_description": "Summary: delivers governed reporting and replay. Risks: privacy and provenance gaps. Migration: 023. Evidence: reconciliation suite. Rollback: stop export jobs and preserve generated artifacts.",
+    "commit_body": "Why:\n- Produce trustworthy reports and research data.\nWhat:\n- Add provenance, analytical layers, retention, replay, and exports.\nVerification:\n- Reconciliation, anonymization, and replay tests.\nCompatibility / migrations:\n- Adds 024 reporting records.\nRisks / follow-up:\n- Institutional policies remain open.\nRefs: PS-520, REQ-055, INV-016",
+    "pr_description": "Summary: delivers governed reporting and replay. Risks: privacy and provenance gaps. Migration: 024. Evidence: reconciliation suite. Rollback: stop export jobs and preserve generated artifacts.",
     "revisit_triggers": ["OPEN-009/017/025 resolve", "Report format changes", "New research classification is approved"]
   },
   {

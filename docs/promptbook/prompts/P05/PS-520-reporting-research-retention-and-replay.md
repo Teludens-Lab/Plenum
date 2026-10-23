@@ -145,7 +145,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-520-reporting-research-retention-and-replay`
 - Proposed subject: `feat(reporting): trace exports to session evidence`
-- Expected migrations: `023_reporting_research`
+- Expected migrations: `024_reporting_research`
 - Expected API/contract IDs: `report-definition-v1`, `research-export-v1`, `replay-divergence-v1`
 
 Proposed body:
@@ -158,7 +158,7 @@ What:
 Verification:
 - Reconciliation, anonymization, and replay tests.
 Compatibility / migrations:
-- Adds 023 reporting records.
+- Adds 024 reporting records.
 Risks / follow-up:
 - Institutional policies remain open.
 Refs: PS-520, REQ-055, INV-016
@@ -166,7 +166,7 @@ Refs: PS-520, REQ-055, INV-016
 
 Proposed PR description:
 
-Summary: delivers governed reporting and replay. Risks: privacy and provenance gaps. Migration: 023. Evidence: reconciliation suite. Rollback: stop export jobs and preserve generated artifacts.
+Summary: delivers governed reporting and replay. Risks: privacy and provenance gaps. Migration: 024. Evidence: reconciliation suite. Rollback: stop export jobs and preserve generated artifacts.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

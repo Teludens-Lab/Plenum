@@ -144,7 +144,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-500-durable-offline-participants`
 - Proposed subject: `feat(sync): reconcile durable offline commands`
-- Expected migrations: `021_offline_devices`
+- Expected migrations: `022_offline_devices`
 - Expected API/contract IDs: `offline-outbox-v1`, `sync-bootstrap-v1`
 
 Proposed body:
@@ -157,7 +157,7 @@ What:
 Verification:
 - AC-11 and SYNC offline tests.
 Compatibility / migrations:
-- Adds 021 offline device state.
+- Adds 022 offline device state.
 Risks / follow-up:
 - Device policy remains OPEN-014/015.
 Refs: PS-500, REQ-043, INV-026
@@ -165,7 +165,7 @@ Refs: PS-500, REQ-043, INV-026
 
 Proposed PR description:
 
-Summary: delivers controlled offline participation. Risks: cached-data loss and stale commands. Migration: 021. Evidence: partition/reconnect tests. Rollback: disable queueing and preserve drafts for export.
+Summary: delivers controlled offline participation. Risks: cached-data loss and stale commands. Migration: 022. Evidence: partition/reconnect tests. Rollback: disable queueing and preserve drafts for export.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

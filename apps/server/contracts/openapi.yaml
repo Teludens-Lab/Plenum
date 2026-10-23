@@ -451,6 +451,69 @@ paths:
               schema: { $ref: "#/components/schemas/PublishedReleaseV1" }
         "400": { description: Package digest or compatibility verification failed. }
         "403": { description: Publisher authority is absent or revoked. }
+  /v1/sessions/{sessionId}/release-impact:
+    get:
+      operationId: previewLiveReleaseImpact
+      x-contract-id: compatibility-report-v1
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: candidateReleaseId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Classified impact with pinned workflows, open Polls, in-flight compositions, and queued Command count. }
+        "403": { description: Active Session Operator authority is absent. }
+        "422": { description: Candidate Release is invalid or unavailable for the Session Project. }
+  /v1/sessions/{sessionId}/release-impact-reviews:
+    post:
+      operationId: reviewLiveReleaseImpact
+      x-contract-id: compatibility-report-v1
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [candidateReleaseId, reportDigest, existingInstanceHandling]
+              properties:
+                candidateReleaseId: { type: string, format: uuid }
+                reportDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+                existingInstanceHandling: { const: keep_existing }
+      responses:
+        "201": { description: Immutable impact-review evidence recorded. }
+        "409": { description: Impact changed and must be reviewed again. }
+  /v1/sessions/{sessionId}/release-activations:
+    post:
+      operationId: activateLiveRelease
+      x-contract-id: release-activation-v1
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommandEnvelopeV1" }
+      responses:
+        "200": { description: Release activation, audit record, evidence event, receipt, and outbox delta committed atomically. }
+        "409": { description: Stale, incompatible, blocked, or unreviewed activation. }
+  /v1/sessions/{sessionId}/release-history:
+    get:
+      operationId: reconstructLiveReleaseHistory
+      x-contract-id: release-activation-v1
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Ordered immutable activation chain and current active Release. }
+        "403": { description: Active Session Operator authority is absent. }
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
@@ -1756,6 +1819,36 @@ components:
             - { type: "null" }
         canReview: { type: boolean }
         canSynthesize: { type: boolean }
+    CompatibilityReportV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, fromReleaseId, toReleaseId, classification, changes, blockedReasons, requiresImpactReview, existingInstanceHandling]
+      properties:
+        contractId: { const: compatibility-report-v1 }
+        fromReleaseId: { type: string, format: uuid }
+        toReleaseId: { type: string, format: uuid }
+        classification: { type: string, enum: [safe_prospective, compatibility_dependent, consequential] }
+        changes: { type: array, items: { type: object } }
+        blockedReasons: { type: array, items: { type: string } }
+        requiresImpactReview: { type: boolean }
+        existingInstanceHandling: { const: keep_existing }
+    ReleaseActivationV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, activationId, sessionId, fromReleaseId, toReleaseId, activationSequence, impactReviewId, compatibilityReportDigest, classification, existingInstanceHandling, activatedBy, activatedAt]
+      properties:
+        contractId: { const: release-activation-v1 }
+        activationId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        fromReleaseId: { type: string, format: uuid }
+        toReleaseId: { type: string, format: uuid }
+        activationSequence: { type: integer, minimum: 2 }
+        impactReviewId: { type: string, format: uuid }
+        compatibilityReportDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        classification: { type: string, enum: [safe_prospective, compatibility_dependent, consequential] }
+        existingInstanceHandling: { const: keep_existing }
+        activatedBy: { type: string, format: uuid }
+        activatedAt: { type: string, format: date-time }
     RuntimeDeltaV1:
       type: object
       additionalProperties: false

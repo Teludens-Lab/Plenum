@@ -7,7 +7,7 @@
 - Goal: Classify, review, approve, and activate a new Release while existing work remains pinned by default.
 - User outcome: Operators can improve a live Session with visible impact and no reinterpretation of completed work.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-004`, `OPEN-008`, `OPEN-012`, `OPEN-018`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No partial activation
 - Release and evidence reconstruction match live state
 
-The approval gate is: Disruptive migration policy blocked by OPEN-008 and compatibility policy by OPEN-012. A task may be implementation-complete without being release-approved.
+The approval gate is: Approved 2026-10-22 by user direction: existing work stays pinned, disruptive topology starts a new Session, and unsupported cross-version activation fails closed. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -144,7 +144,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-420-governed-live-release-activation`
 - Proposed subject: `feat(runtime): govern live release activation`
-- Expected migrations: `020_live_release_activation`
+- Expected migrations: `021_live_release_activation`
 - Expected API/contract IDs: `release-activation-v1`, `compatibility-report-v1`
 
 Proposed body:
@@ -157,18 +157,18 @@ What:
 Verification:
 - AC-07, AC-11, SYNC-09, EXT-15.
 Compatibility / migrations:
-- Adds 020 activation records.
+- Adds 021 activation records.
 Risks / follow-up:
-- Disruptive migration remains gated.
+- Unsupported migrations remain fail closed.
 Refs: PS-420, REQ-007, ADR-004
 ```
 
 Proposed PR description:
 
-Summary: delivers governed live activation. Risks: historical reinterpretation. Migration: 020. Evidence: reconstruction and delayed-command tests. Rollback: activate a forward-fix Release; do not rewrite history.
+Summary: delivers governed live activation. Risks: historical reinterpretation. Migration: 021. Evidence: reconstruction and delayed-command tests. Rollback: activate a forward-fix Release; do not rewrite history.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-008 or OPEN-012 resolves; A new change class is introduced; Migration rehearsal finds unsafe cases.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The OPEN-008 or OPEN-012 policy changes; A new change class is introduced; Migration rehearsal finds unsafe cases.

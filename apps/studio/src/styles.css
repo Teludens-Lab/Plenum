@@ -79,6 +79,14 @@ select { min-height: 2.75rem; }
 .edge-list { display: grid; gap: var(--space-2); padding: 0; list-style: none; }
 .edge-list li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: var(--space-2); border-bottom: 1px solid var(--color-border-default); }
 .fixture-preview { margin-block-start: var(--space-5); }
+.live-changes { margin-top: var(--space-6); }
+.live-change-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: var(--space-4); align-items: end; }
+.live-change-form .field { margin: 0; }
+.impact-preview { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border-default); }
+.impact-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: 0 0 var(--space-5); }
+.impact-counts > div { padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); }
+.impact-counts dt { color: var(--color-text-secondary); font-size: var(--text-sm); }
+.impact-counts dd { margin: var(--space-1) 0 0; font-size: var(--text-xl); font-weight: var(--weight-semibold); }
 
 @media (max-width: 70rem) {
   .visual-editor { grid-template-columns: 1fr; }
@@ -89,7 +97,7 @@ select { min-height: 2.75rem; }
 
 @media (max-width: 47.99rem) {
   .studio-layout { padding: var(--space-5) var(--space-4) var(--space-10); }
-  .grid-fields, .preview-controls, .catalog-card dl > div { grid-template-columns: 1fr; }
+  .grid-fields, .preview-controls, .catalog-card dl > div, .live-change-form, .impact-counts { grid-template-columns: 1fr; }
   .concept-row, .trace-row, .workspace-heading { align-items: stretch; flex-direction: column; }
   .item-id { display: none; }
   .card { padding: var(--space-5); }

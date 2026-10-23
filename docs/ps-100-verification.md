@@ -40,10 +40,10 @@ The platform install and checks ran in a disposable Node 24 container with a ded
 - Database migrations: none.
 - External APIs or deployed services: none.
 - Rollback: remove the new root workspace/configuration and application/package files; the retained reference slice continues independently.
-- Forward fix: contract changes remain additive within v1; breaking-version and migration policy remains unresolved under `OPEN-012`.
+- Forward fix: contract changes remain additive within v1. At PS-100 verification, breaking-version and migration policy was unresolved; OPEN-012 was later resolved on 2026-10-22 with exact-version defaults and explicit tested adapters.
 
 ## Open governance and QA limits
 
 - `ADR-008` was Approved by Product Owner direction on 2026-10-20. Named Technical Lead sign-off remains required.
-- `OPEN-012` compatibility policy and `OPEN-022` remaining engine choices are unresolved.
+- OPEN-012 was resolved on 2026-10-22; `OPEN-022` remaining engine choices are unresolved.
 - Node 26 target execution, browser/UI, PostgreSQL integration, performance, and deployment checks are NOT RUN because PS-100 creates no UI, persistence, or deployable service. The relevant later tasks own those gates.

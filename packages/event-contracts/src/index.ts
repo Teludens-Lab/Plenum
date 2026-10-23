@@ -54,6 +54,43 @@ export const SESSION_ONBOARDING_CONTRACT_ID = "session-onboarding-v1";
 export const READINESS_CONTRACT_ID = "readiness-v1";
 export const ADJUDICATION_REQUEST_CONTRACT_ID = "adjudication-request-v1";
 export const ADJUDICATION_RECORD_CONTRACT_ID = "adjudication-record-v1";
+export const COMPATIBILITY_REPORT_CONTRACT_ID = "compatibility-report-v1";
+export const RELEASE_ACTIVATION_CONTRACT_ID = "release-activation-v1";
+
+export type ReleaseChangeClassV1 = "safe_prospective" | "compatibility_dependent" | "consequential";
+
+export interface CompatibilityChangeV1 extends JsonObject {
+  path: string;
+  kind: "added" | "changed" | "removed";
+  classification: ReleaseChangeClassV1;
+  summary: string;
+}
+
+export interface CompatibilityReportV1 extends JsonObject {
+  contractId: typeof COMPATIBILITY_REPORT_CONTRACT_ID;
+  fromReleaseId: string;
+  toReleaseId: string;
+  classification: ReleaseChangeClassV1;
+  changes: CompatibilityChangeV1[];
+  blockedReasons: string[];
+  requiresImpactReview: boolean;
+  existingInstanceHandling: "keep_existing";
+}
+
+export interface ReleaseActivationV1 extends JsonObject {
+  contractId: typeof RELEASE_ACTIVATION_CONTRACT_ID;
+  activationId: string;
+  sessionId: string;
+  fromReleaseId: string;
+  toReleaseId: string;
+  activationSequence: number;
+  impactReviewId: string;
+  compatibilityReportDigest: string;
+  classification: ReleaseChangeClassV1;
+  existingInstanceHandling: "keep_existing";
+  activatedBy: string;
+  activatedAt: string;
+}
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
 
@@ -126,7 +163,7 @@ export const SESSION_OPERATOR_POLICY_V1 = {
     "stage.start", "stage.end", "stage.reopen", "stage.extend", "stage.skip", "stage.return",
     "timer.pause", "timer.resume", "timer.extend", "inject.release", "inject.cancel",
     "adjudication.route", "plugin_binding.enable", "plugin_binding.disable", "export.request",
-    "delivery.retry", "session.recover", "authority.transfer"
+    "delivery.retry", "session.recover", "authority.transfer", "release.activate"
   ],
   recording: {
     accepted: "command_receipt_evidence_event_and_immutable_audit_record",
@@ -916,6 +953,61 @@ export const rolePreviewV1Schema = {
     content: { type: "array", items: { type: "object" } }
   }
 } as const satisfies ContractSchema<RolePreviewV1>;
+
+export const compatibilityReportV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: COMPATIBILITY_REPORT_CONTRACT_ID,
+  title: "Release Compatibility Report v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["contractId", "fromReleaseId", "toReleaseId", "classification", "changes", "blockedReasons", "requiresImpactReview", "existingInstanceHandling"],
+  properties: {
+    contractId: { const: COMPATIBILITY_REPORT_CONTRACT_ID },
+    fromReleaseId: uuidProperty,
+    toReleaseId: uuidProperty,
+    classification: { enum: ["safe_prospective", "compatibility_dependent", "consequential"] },
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["path", "kind", "classification", "summary"],
+        properties: {
+          path: { type: "string", minLength: 1 },
+          kind: { enum: ["added", "changed", "removed"] },
+          classification: { enum: ["safe_prospective", "compatibility_dependent", "consequential"] },
+          summary: { type: "string", minLength: 1 }
+        }
+      }
+    },
+    blockedReasons: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true },
+    requiresImpactReview: { type: "boolean" },
+    existingInstanceHandling: { const: "keep_existing" }
+  }
+} as const satisfies ContractSchema<CompatibilityReportV1>;
+
+export const releaseActivationV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: RELEASE_ACTIVATION_CONTRACT_ID,
+  title: "Release Activation v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["contractId", "activationId", "sessionId", "fromReleaseId", "toReleaseId", "activationSequence", "impactReviewId", "compatibilityReportDigest", "classification", "existingInstanceHandling", "activatedBy", "activatedAt"],
+  properties: {
+    contractId: { const: RELEASE_ACTIVATION_CONTRACT_ID },
+    activationId: uuidProperty,
+    sessionId: uuidProperty,
+    fromReleaseId: uuidProperty,
+    toReleaseId: uuidProperty,
+    activationSequence: { type: "integer", minimum: 2 },
+    impactReviewId: uuidProperty,
+    compatibilityReportDigest: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    classification: { enum: ["safe_prospective", "compatibility_dependent", "consequential"] },
+    existingInstanceHandling: { const: "keep_existing" },
+    activatedBy: uuidProperty,
+    activatedAt: utcInstantProperty
+  }
+} as const satisfies ContractSchema<ReleaseActivationV1>;
 
 export const eventEnvelopeV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

@@ -18,6 +18,7 @@ export { RELEASE_MANIFEST_CONTRACT_ID };
 export const PACKAGE_IMPORT_CONTRACT_ID = "package-import-v1";
 export const PACKAGE_SCHEMA_VERSION = "1.0.0";
 export { compileModelComposition, previewCompositionFixture, type CompositionPreviewV1 };
+export { classifyReleaseCompatibility, type CompatibilityReleaseInput } from "./compatibility.js";
 
 export interface ReleasePackageV1 extends JsonObject {
   contractId: typeof PACKAGE_IMPORT_CONTRACT_ID;

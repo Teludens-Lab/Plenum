@@ -35,6 +35,6 @@ ADR-011's S3-compatible direction was Approved by Product Owner direction on 202
 ## Open governance and QA limits
 
 - OPEN-020 blocks Package signing for production; no signing policy was selected and signature fields remain empty.
-- OPEN-012 leaves long-term compatibility policy unresolved, so import currently requires exact package schema, Simulation Schema, and compiler versions.
+- At PS-130 verification OPEN-012 was unresolved. Its 2026-10-22 resolution preserves the implemented exact package schema, Simulation Schema and compiler-version requirement unless an explicitly tested adapter is approved.
 - OPEN-013 remains unresolved. ADR-011 and ADR-014 are Approved as of 2026-10-20; their named specialist sign-offs remain.
 - The adapter was tested against a disposable, unauthenticated SeaweedFS service. Production IAM, TLS, encryption, lifecycle/versioning, backup/restore, HTTP handling, browser flow, load, Node 26, deployment and release approval were not tested; those are outside PS-130 or owned by later tasks.

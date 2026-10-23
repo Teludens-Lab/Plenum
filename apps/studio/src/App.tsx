@@ -3,6 +3,7 @@ import type { StudioPublishV1 } from "@plenum/event-contracts";
 
 import { StudioCollaborationClient, type StudioClientState } from "./collaboration/client.js";
 import { VisualCoreDesignEditor } from "./core-design/Editor.js";
+import { LiveReleaseActivation } from "./live-changes/LiveReleaseActivation.js";
 
 const initialState: StudioClientState = { connected: false, generation: 1, saveState: "saved_on_device",
   unsynchronizedChanges: 0, validation: null, message: "Connecting to the collaboration service." };
@@ -155,6 +156,7 @@ export function App() {
           </form>
         </section>
       </div>
+      <LiveReleaseActivation projectId={projectId} />
     </main>
   </>;
 }

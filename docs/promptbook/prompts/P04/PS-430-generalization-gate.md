@@ -7,7 +7,7 @@
 - Goal: Run policy-negotiation and crisis-response designs without Runtime code changes.
 - User outcome: The platform demonstrates that its engines are generic beyond Fractured Order.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

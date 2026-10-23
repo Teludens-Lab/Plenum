@@ -27,7 +27,8 @@ const migrations = [
   "apps/server/migrations/017_session_access.sql",
   "apps/server/migrations/018_identity_roles_and_governance.sql",
   "apps/server/migrations/019_world_state_automation.sql",
-  "apps/server/migrations/020_adjudication_records.sql"
+  "apps/server/migrations/020_adjudication_records.sql",
+  "apps/server/migrations/021_live_release_activation.sql"
 ];
 
 export default async function globalSetup() {
@@ -54,6 +55,8 @@ export default async function globalSetup() {
     const consentChannel = releaseDefinition.coreDesign.communications.voiceChannels.find(({ id }) => id === "team-open-room");
     consentChannel.transcriptionPolicy = "with_consent";
     consentChannel.retentionPolicyId = "voice-short";
+    const activationDefinition = structuredClone(releaseDefinition);
+    activationDefinition.coreDesign.workflows[0].name = `${activationDefinition.coreDesign.workflows[0].name} (revised)`;
     const people = Object.values(fixture.people);
     await owner.query("BEGIN");
     await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-150 synthetic organization')", [fixture.organizationId]);
@@ -93,6 +96,19 @@ export default async function globalSetup() {
         package_schema_version,compiler_version,package_sha256,blob_key,published_by)
        VALUES ($1,$2,$3,$4,1,'S1 proof 1.0.0','1.0.0','0.1.0',repeat('b',64),'fixture://ps-150',$5)`,
       [fixture.releaseId, fixture.organizationId, fixture.projectId, fixture.revisionId, fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO studio.definition_revisions
+       (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+       VALUES ($1,$2,$3,$4::jsonb,repeat('c',64),'1.3.1',$5)`,
+      [fixture.activationRevisionId, fixture.organizationId, fixture.projectId, JSON.stringify(activationDefinition), fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO registry.releases
+       (id,organization_id,project_id,definition_revision_id,release_number,release_label,
+        package_schema_version,compiler_version,package_sha256,blob_key,published_by)
+       VALUES ($1,$2,$3,$4,2,'S1 proof 1.1.0','1.0.0','0.1.0',repeat('d',64),'fixture://ps-420',$5)`,
+      [fixture.activationReleaseId, fixture.organizationId, fixture.projectId, fixture.activationRevisionId, fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by)

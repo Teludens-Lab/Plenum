@@ -144,7 +144,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-510-signed-evidence-and-independent-anchor`
 - Proposed subject: `feat(evidence): verify signed checkpoint chains`
-- Expected migrations: `022_evidence_checkpoints`
+- Expected migrations: `023_evidence_checkpoints`
 - Expected API/contract IDs: `checkpoint-v1`, `verification-export-v1`
 
 Proposed body:
@@ -157,7 +157,7 @@ What:
 Verification:
 - Tamper, omission, rotation, and restore drills.
 Compatibility / migrations:
-- Adds 022 checkpoint operations.
+- Adds 023 checkpoint operations.
 Risks / follow-up:
 - Custody remains OPEN-017.
 Refs: PS-510, REQ-006, ADR-003
@@ -165,7 +165,7 @@ Refs: PS-510, REQ-006, ADR-003
 
 Proposed PR description:
 
-Summary: adds signed and anchored evidence. Risks: key custody and false assurance. Migration: 022. Evidence: tamper drills. Rollback: pause new checkpoints; preserve all records.
+Summary: adds signed and anchored evidence. Risks: key custody and false assurance. Migration: 023. Evidence: tamper drills. Rollback: pause new checkpoints; preserve all records.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

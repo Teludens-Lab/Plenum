@@ -166,13 +166,15 @@ Designs may assign separate reviewers by perspective (economic, diplomatic, info
 
 ## 9. Live change methodology
 
-Live editing (DEC-05) must never change the meaning of what already happened (INV-006). Proposed change classes, pending Methodology Lead approval under ADR-004 and OPEN-008:
+Live editing (DEC-05) must never change the meaning of what already happened (INV-006). The approved ADR-004/OPEN-008 change classes are:
 
 | Class | Examples | Default handling |
 |---|---|---|
 | Safe prospective | Labels, help text, non-sensitive presentation | May apply to new and existing views after activation |
 | Compatibility-dependent | New optional form fields, added Inject, new Stage after the current one | Applies to new work; existing instances stay pinned |
-| Consequential | Permissions, Information Policy, workflow graphs, Gates, Form constraints, Stage order, deadlines, adjudication configuration, Seat topology | Requires impact review, explicit approval and, for existing instances, a validated migration |
+| Consequential | Permissions, Information Policy, workflow graphs, Gates, Form constraints, Stage order, deadlines, adjudication configuration, Seat topology | Requires impact review and explicit approval; existing instances stay pinned and disruptive topology applies only through a new Session |
+
+Live activation never migrates pending Artifacts, open Polls, in-progress Workflow Instances or in-flight Model Compositions. A disruptive definition change requires Methodology Lead approval for a new Session; security/access topology also requires Security Owner approval. Current authorization and revocations still apply immediately.
 
 ## 10. Research and analytical model
 
@@ -231,7 +233,7 @@ This table merges the Foundation's categories (methodology core, FO configuratio
 
 ## 13. Open methodology questions
 
-OPEN-004 (concept activation and dependencies), OPEN-005 (Stage structures), OPEN-006 (workflow expressiveness), OPEN-008 (in-flight migration and authority), OPEN-010 (form constraints), OPEN-018 (schema modeling questions).
+OPEN-004 (concept activation and dependencies) and OPEN-010 (form constraints) remain open. OPEN-005, the PS-400 baseline of OPEN-006, OPEN-008 and OPEN-018 are resolved.
 
 ## Change log
 

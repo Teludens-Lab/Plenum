@@ -90,7 +90,11 @@ import {
   applyCapabilityQuantityChange,
   applyDueStateValueChanges,
   cancelScheduledStateValueChange,
-  scheduleStateValueChange
+  scheduleStateValueChange,
+  activateRelease,
+  getReleaseHistory,
+  getReleaseImpact,
+  reviewReleaseImpact
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -225,7 +229,8 @@ async function applyMigrations() {
     "apps/server/migrations/017_session_access.sql",
     "apps/server/migrations/018_identity_roles_and_governance.sql",
     "apps/server/migrations/019_world_state_automation.sql",
-    "apps/server/migrations/020_adjudication_records.sql"
+    "apps/server/migrations/020_adjudication_records.sql",
+    "apps/server/migrations/021_live_release_activation.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -2041,4 +2046,90 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
   assert.ok(delivery.rows[0].released_at instanceof Date && delivery.rows[0].delivered_at instanceof Date);
   assert.ok(delivery.rows[0].released_at < delivery.rows[0].delivered_at);
   assert.equal(delivery.rows[0].viewed_at, null);
+});
+
+test("AC-07/AC-11 SYNC-09 EXT-15 activates reviewed Releases without rewriting live history", async () => {
+  const current = await owner.query(`SELECT activation.release_id,activation.activation_sequence,revision.snapshot
+    FROM runtime.release_activations activation
+    JOIN registry.releases release ON release.id=activation.release_id
+    JOIN studio.definition_revisions revision ON revision.id=release.definition_revision_id
+    WHERE activation.organization_id=$1 AND activation.session_id=$2
+    ORDER BY activation.activation_sequence DESC LIMIT 1`, [ids.orgA, ids.sessionA]);
+  const currentReleaseId = current.rows[0].release_id;
+  const candidateRevisionId = "27000000-0000-4000-8000-000000000001";
+  const candidateReleaseId = "27000000-0000-4000-8000-000000000002";
+  const openPollId = "27000000-0000-4000-8000-000000000003";
+  const compositionId = "27000000-0000-4000-8000-000000000004";
+  const candidate = structuredClone(current.rows[0].snapshot);
+  candidate.coreDesign.adjudicationModels[0].name = "Updated rules resolution";
+  const snapshotDigest = createHash("sha256").update(JSON.stringify(candidate)).digest("hex");
+  await owner.query(`INSERT INTO studio.definition_revisions
+    (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+    VALUES ($1,$2,$3,$4::jsonb,$5,'ps-420',$6)`,
+    [candidateRevisionId, ids.orgA, ids.projectA, JSON.stringify(candidate), snapshotDigest, ids.personA]);
+  await owner.query(`INSERT INTO registry.releases
+    (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,
+     compiler_version,package_sha256,blob_key,published_by)
+    VALUES ($1,$2,$3,$4,100,'PS-420 fixture','1','1',repeat('e',64),'ps420',$5)`,
+    [candidateReleaseId, ids.orgA, ids.projectA, candidateRevisionId, ids.personA]);
+  await owner.query(`INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)
+    VALUES ($1,$2,$3,$3) ON CONFLICT (organization_id,session_id,person_id) DO UPDATE SET revoked_at=NULL`,
+    [ids.orgA, ids.sessionA, ids.personA]);
+  await owner.query(`INSERT INTO voting.polls
+    (id,organization_id,session_id,governing_release_id,definition_id,definition_revision,definition,
+     definition_sha256,status,opened_at,version,authority_epoch,created_by)
+    VALUES ($1,$2,$3,$4,'ps420-open-poll',1,'{}'::jsonb,repeat('f',64),'open',now(),1,1,$5)`,
+    [openPollId, ids.orgA, ids.sessionA, currentReleaseId, ids.personA]);
+  await owner.query(`INSERT INTO extension.composition_runs
+    (id,organization_id,session_id,governing_release_id,trigger_command_id,graph_digest,input_snapshot_id,
+     input_snapshot,input_digest,execution_policy,authority_epoch,status,correlation_id)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,'{}'::jsonb,$8,'{}'::jsonb,1,'running',$9)`,
+    [compositionId, ids.orgA, ids.sessionA, currentReleaseId, randomUUID(), `sha256:${"a".repeat(64)}`,
+      randomUUID(), `sha256:${"b".repeat(64)}`, randomUUID()]);
+
+  const impact = await getReleaseImpact(app, principal, ids.sessionA, candidateReleaseId, randomUUID());
+  assert.equal(impact.report.classification, "consequential");
+  assert.equal(impact.report.requiresImpactReview, true);
+  assert.deepEqual(impact.report.blockedReasons, []);
+  assert.ok(impact.existingWorkflows.some(({ governing_release_id }) => governing_release_id === currentReleaseId));
+  assert.equal(impact.openPolls.some(({ id }) => id === openPollId), true);
+  assert.equal(impact.inFlightCompositions.some(({ id }) => id === compositionId), true);
+  const review = await reviewReleaseImpact(app, principal, ids.sessionA, {
+    candidateReleaseId, reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing"
+  }, randomUUID());
+  const context = await resolvePrincipalCommandContext(app, principal, ids.sessionA, ids.deviceA, randomUUID());
+  const command = {
+    commandId: "27000000-0000-4000-8000-000000000010",
+    deviceId: ids.deviceA,
+    operationType: "release.activate",
+    aggregateId: ids.sessionA,
+    expectedAggregateVersion: impact.activationSequence,
+    governingReleaseId: currentReleaseId,
+    payload: { candidateReleaseId, impactReviewId: review.impactReviewId,
+      reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" }
+  };
+  const activated = await activateRelease(app, principal, context, command, randomUUID(), ids.deploymentA);
+  assert.deepEqual([activated.status, activated.aggregateVersion], ["accepted", impact.activationSequence + 1]);
+  const replay = await activateRelease(app, principal, context, command, randomUUID(), ids.deploymentA);
+  assert.equal(replay.replayed, true);
+  const stale = await activateRelease(app, principal, context, { ...command,
+    commandId: "27000000-0000-4000-8000-000000000011" }, randomUUID(), ids.deploymentA);
+  assert.deepEqual([stale.status, stale.errorCode], ["needs_reconciliation", "INCOMPATIBLE_RELEASE"]);
+
+  const history = await getReleaseHistory(app, principal, ids.sessionA, randomUUID());
+  assert.equal(history.activeReleaseId, candidateReleaseId);
+  assert.equal(history.activations.at(-1).impactReviewId, review.impactReviewId);
+  const pinned = await owner.query(`SELECT
+    (SELECT governing_release_id FROM voting.polls WHERE id=$1) AS poll_release,
+    (SELECT governing_release_id FROM extension.composition_runs WHERE id=$2) AS composition_release,
+    (SELECT count(*)::int FROM runtime.artifact_instances WHERE session_id=$3 AND governing_release_id=$4) AS workflow_count`,
+    [openPollId, compositionId, ids.sessionA, currentReleaseId]);
+  assert.equal(pinned.rows[0].poll_release, currentReleaseId);
+  assert.equal(pinned.rows[0].composition_release, currentReleaseId);
+  assert.ok(pinned.rows[0].workflow_count > 0);
+  const evidence = await owner.query(`SELECT event_type,body->>'toReleaseId' AS to_release_id
+    FROM evidence.events WHERE session_id=$1 AND command_id=$2`, [ids.sessionA, command.commandId]);
+  assert.deepEqual(evidence.rows[0], { event_type: "release.activated", to_release_id: candidateReleaseId });
+  await assert.rejects(owner.query("UPDATE runtime.release_activation_reviews SET report='{}'::jsonb WHERE id=$1",
+    [review.impactReviewId]), /append-only/iu);
 });

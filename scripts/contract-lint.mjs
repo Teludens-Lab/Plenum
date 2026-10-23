@@ -26,6 +26,8 @@ import {
   STUDIO_CRDT_CONTRACT_ID,
   STUDIO_PUBLISH_CONTRACT_ID,
   ROLE_PREVIEW_CONTRACT_ID,
+  COMPATIBILITY_REPORT_CONTRACT_ID,
+  RELEASE_ACTIVATION_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
   commandEnvelopeV1Schema,
@@ -50,6 +52,8 @@ import {
   studioCrdtV1Schema,
   studioPublishV1Schema,
   rolePreviewV1Schema,
+  compatibilityReportV1Schema,
+  releaseActivationV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
   isCommandOperationType,
@@ -136,6 +140,8 @@ assert.equal(voiceConsentV1Schema.$id, VOICE_CONSENT_CONTRACT_ID);
 assert.equal(studioCrdtV1Schema.$id, STUDIO_CRDT_CONTRACT_ID);
 assert.equal(studioPublishV1Schema.$id, STUDIO_PUBLISH_CONTRACT_ID);
 assert.equal(rolePreviewV1Schema.$id, ROLE_PREVIEW_CONTRACT_ID);
+assert.equal(compatibilityReportV1Schema.$id, COMPATIBILITY_REPORT_CONTRACT_ID);
+assert.equal(releaseActivationV1Schema.$id, RELEASE_ACTIVATION_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
@@ -151,7 +157,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   approvalDecisionV1Schema, voiceCommandV1Schema, mediaCredentialV1Schema, floorLeaseV1Schema,
   voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
-  rolePreviewV1Schema,
+  rolePreviewV1Schema, compatibilityReportV1Schema, releaseActivationV1Schema,
   pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);

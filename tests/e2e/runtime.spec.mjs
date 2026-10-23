@@ -1309,4 +1309,74 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await designer.page.screenshot({ path: `${evidenceRoot}/ps-400-advanced-logic.png`, fullPage: true });
     await designer.context.close();
   });
+
+  test("@a11y AC-07 AC-11 SYNC-09 activates a reviewed Release while live work stays pinned", async ({ browser }) => {
+    test.setTimeout(90_000);
+    expect(databaseUrl).toBeTruthy();
+    const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    try {
+      await pool.query(`INSERT INTO voting.polls
+        (id,organization_id,session_id,governing_release_id,definition_id,definition_revision,definition,
+         definition_sha256,status,opened_at,version,authority_epoch,created_by)
+        SELECT $1,$2,$3,$4,'ps420-browser-open',1,poll,repeat('e',64),'open',now(),1,1,$5
+          FROM studio.definition_revisions revision,
+               jsonb_array_elements(revision.snapshot->'coreDesign'->'polls') poll
+         WHERE revision.id=$6 AND poll->>'id'='synthetic-resolution'`,
+        [fixture.activationPollId, fixture.organizationId, fixture.sessionId, fixture.releaseId,
+          fixture.people.operator, fixture.revisionId]);
+      await pool.query(`INSERT INTO extension.composition_runs
+        (id,organization_id,session_id,governing_release_id,trigger_command_id,graph_digest,input_snapshot_id,
+         input_snapshot,input_digest,execution_policy,authority_epoch,status,correlation_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'{}'::jsonb,$8,'{}'::jsonb,1,'running',$9)`,
+        [fixture.activationCompositionId, fixture.organizationId, fixture.sessionId, fixture.releaseId,
+          "64000000-0000-4000-8000-000000000002", `sha256:${"a".repeat(64)}`,
+          "64000000-0000-4000-8000-000000000003", `sha256:${"b".repeat(64)}`,
+          "64000000-0000-4000-8000-000000000004"]);
+
+      const operator = await actor(browser, fixture.tokens.operator, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+      await operator.page.goto(studioUrl());
+      const liveChanges = operator.page.getByRole("region", { name: "Activate a Release" });
+      await liveChanges.getByLabel("Session ID").fill(fixture.sessionId);
+      await liveChanges.getByLabel("Candidate Release ID").fill(fixture.activationReleaseId);
+      await liveChanges.getByRole("button", { name: "Preview impact" }).click();
+      await expect(liveChanges.getByText("Impact preview is ready for explicit review.")).toBeVisible({ timeout: 20_000 });
+      await expect(liveChanges.getByText("consequential", { exact: true })).toBeVisible();
+      await expect(liveChanges.locator(".impact-counts > div").filter({ hasText: "Open Polls" })).toContainText("1");
+      await expect(liveChanges.locator(".impact-counts > div").filter({ hasText: "In-flight compositions" })).toContainText("1");
+      expect((await new AxeBuilder({ page: operator.page }).include(".live-changes").analyze()).violations).toEqual([]);
+      await liveChanges.getByLabel(/I reviewed this exact impact/u).check();
+      await liveChanges.getByRole("button", { name: "Activate for new work" }).click();
+      await expect(liveChanges.getByText(/is active for new work. Existing work remains pinned/u)).toBeVisible({ timeout: 20_000 });
+      await operator.page.screenshot({ path: `${evidenceRoot}/ps-420-live-release-activation.png`, fullPage: true });
+
+      const historyResponse = await operator.context.request.get(`/v1/sessions/${fixture.sessionId}/release-history`);
+      expect(historyResponse.status()).toBe(200);
+      expect((await historyResponse.json()).activeReleaseId).toBe(fixture.activationReleaseId);
+      const deviceId = (await (await operator.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
+      const staleResponse = await operator.context.request.post(`/v1/sessions/${fixture.sessionId}/release-activations`, { data: {
+        commandId: crypto.randomUUID(), deviceId, operationType: "release.activate", aggregateId: fixture.sessionId,
+        expectedAggregateVersion: 1, governingReleaseId: fixture.releaseId,
+        payload: { candidateReleaseId: fixture.activationReleaseId, impactReviewId: crypto.randomUUID(),
+          reportDigest: "0".repeat(64), existingInstanceHandling: "keep_existing" }
+      } });
+      expect(staleResponse.status()).toBe(409);
+      expect((await staleResponse.json()).status).toBe("needs_reconciliation");
+
+      const author = await apiActor(browser, fixture.tokens.author);
+      const projection = await author.readProjection();
+      expect(projection.releaseId).toBe(fixture.activationReleaseId);
+      const newArtifactId = await createRuntimeArtifact(author, projection, "note");
+      const pinned = await pool.query(`SELECT
+        (SELECT governing_release_id FROM runtime.artifact_instances WHERE id=$1) AS existing_release,
+        (SELECT governing_release_id FROM runtime.artifact_instances WHERE id=$2) AS new_release,
+        (SELECT governing_release_id FROM voting.polls WHERE id=$3) AS poll_release,
+        (SELECT governing_release_id FROM extension.composition_runs WHERE id=$4) AS composition_release`,
+        [fixture.proposalArtifactId, newArtifactId, fixture.activationPollId, fixture.activationCompositionId]);
+      expect(pinned.rows[0]).toEqual({ existing_release: fixture.releaseId, new_release: fixture.activationReleaseId,
+        poll_release: fixture.releaseId, composition_release: fixture.releaseId });
+      await Promise.all([operator.context.close(), author.context.close()]);
+    } finally {
+      await pool.end();
+    }
+  });
 });

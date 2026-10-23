@@ -8,6 +8,7 @@ import { fixture, operatorUrl, runtimeUrl, studioUrl } from "./fixture.mjs";
 
 const evidenceRoot = "output/playwright/ps-150";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
+const databaseUrl = process.env.DATABASE_URL;
 let publishedReleaseId;
 
 async function actor(browser, token, options = {}) {
@@ -58,13 +59,14 @@ async function submitRuntime(instance, projection, operationType, aggregateId, e
   } });
 }
 
-async function createRuntimeArtifact(instance, projection, artifactTypeKey, overrides = {}) {
+async function createRuntimeArtifact(instance, projection, artifactTypeKey, overrides = {}, coauthorParticipantIds = []) {
   const task = projection.createTasks.find((candidate) => candidate.artifactTypeKey === artifactTypeKey);
   expect(task, `Missing create task ${artifactTypeKey}`).toBeDefined();
   const artifactId = crypto.randomUUID();
   const response = await submitRuntime(instance, projection, "artifact.create", artifactId, 0, {
     artifactTypeKey,
-    content: representativePayload(task.form, overrides)
+    content: representativePayload(task.form, overrides),
+    coauthorParticipantIds
   });
   expect(response.status()).toBe(200);
   return artifactId;
@@ -522,8 +524,20 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const red = await apiActor(browser, fixture.tokens.redAuthor);
     const authorProjection = await author.readProjection();
     const notetakerProjection = await notetaker.readProjection();
-    const authorNoteId = await createRuntimeArtifact(author, authorProjection, "note");
+    const authorNoteId = await createRuntimeArtifact(author, authorProjection, "note", {}, [fixture.participants.blueNotetaker]);
     const notetakerNoteId = await createRuntimeArtifact(notetaker, notetakerProjection, "note");
+
+    const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    try {
+      const authors = await pool.query(`SELECT author.display_name,author.organization_name,author.is_command_actor
+        FROM runtime.artifact_revision_authors author JOIN runtime.artifact_revisions revision
+          ON revision.organization_id=author.organization_id AND revision.id=author.artifact_revision_id
+        WHERE revision.artifact_id=$1 AND revision.artifact_version=1 ORDER BY author.author_order`, [authorNoteId]);
+      expect(authors.rows).toEqual([
+        { display_name: "Synthetic Blue author", organization_name: "PS-150 synthetic organization", is_command_actor: true },
+        { display_name: "Synthetic Blue notetaker", organization_name: "PS-150 synthetic organization", is_command_actor: false }
+      ]);
+    } finally { await pool.end(); }
 
     const refreshedAuthor = await author.readProjection();
     expect(refreshedAuthor.artifacts.map(({ id }) => id)).toContain(authorNoteId);
@@ -1204,6 +1218,63 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(composition.getByText("State changes: 0")).toBeVisible();
     expect((await new AxeBuilder({ page: designer.page }).include("#plugins").include("#compositions").analyze()).violations).toEqual([]);
     await designer.context.close();
+  });
+
+  test("@a11y PS-410 reviews, explains and publishes an adjudication without exposing hidden notes", async ({ browser }) => {
+    test.setTimeout(90_000);
+    expect(databaseUrl).toBeTruthy();
+    const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    const actionId = "66000000-0000-4000-8000-000000000001";
+    const requestId = "66000000-0000-4000-8000-000000000002";
+    try {
+      await pool.query(`INSERT INTO runtime.artifact_instances
+        (id,organization_id,session_id,governing_release_id,artifact_type_key,workflow_key,form_version,
+         creator_participant_id,owner_team_id,state,payload,visible_role_ids,version)
+        VALUES ($1,$2,$3,$4,'blue_action','action_submission_review','1.0.0',$5,'blue','completed',
+          '{"title":"Synthetic adjudication Action"}'::jsonb,ARRAY['white_cell'],1)`,
+        [actionId, fixture.organizationId, fixture.sessionId, fixture.releaseId, fixture.participants.author]);
+      await pool.query(`INSERT INTO runtime.adjudication_requests
+        (id,organization_id,session_id,governing_release_id,adjudication_model_id,requested_by_person_id,
+         requested_by_participant_id,requested_by_display_name,requested_by_organization_name)
+        VALUES ($1,$2,$3,$4,'manual-white-cell',$5,$6,'Synthetic final reviewer','PS-150 synthetic organization')`,
+        [requestId, fixture.organizationId, fixture.sessionId, fixture.releaseId,
+          fixture.people.finalReviewer, fixture.participants.finalReviewer]);
+      await pool.query(`INSERT INTO runtime.adjudication_request_actions
+        (id,organization_id,session_id,request_id,artifact_id,artifact_version,artifact_type_key,payload_sha256,payload_snapshot)
+        VALUES (gen_random_uuid(),$1,$2,$3,$4,1,'blue_action',repeat('a',64),'{"title":"Synthetic adjudication Action"}'::jsonb)`,
+        [fixture.organizationId, fixture.sessionId, requestId, actionId]);
+    } finally { await pool.end(); }
+
+    const control = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    await control.page.goto(runtimeUrl());
+    const adjudication = control.page.getByRole("article", { name: "Authorized adjudicator review" });
+    await expect(adjudication).toBeVisible({ timeout: 20_000 });
+    await adjudication.getByLabel("Recommendation").fill("Approve with a bounded narrative consequence");
+    await adjudication.getByLabel("Rationale", { exact: true }).fill("The submitted Action is coherent and supported by the visible evidence.");
+    await adjudication.getByLabel(/Restricted analytical notes/u).fill("Hidden synthetic control note");
+    await adjudication.getByRole("button", { name: "Submit reviewer input" }).click();
+    await adjudication.getByText("Reviewer inputs (1)").click();
+    await expect(adjudication.getByText("Synthetic final reviewer", { exact: true })).toBeVisible({ timeout: 20_000 });
+
+    await adjudication.getByLabel("Final outcome").fill("Action approved");
+    await adjudication.getByLabel("Decision rationale").fill("The authorized adjudicator approved the Action after reviewing its evidence.");
+    await adjudication.getByLabel("Participant-facing rationale").fill("Your Action was approved after review.");
+    await adjudication.getByLabel("Reviewer synthesis").fill("The distinct reviewer input supports approval.");
+    await adjudication.getByRole("button", { name: "Save draft synthesis" }).click();
+    await expect(adjudication.getByRole("heading", { name: "Draft outcome" })).toBeVisible({ timeout: 20_000 });
+    await adjudication.getByText(/^Explanation trace \(/u).click();
+    await expect(adjudication.getByText(/Authorized human judgment required/u)).toBeVisible();
+    expect((await new AxeBuilder({ page: control.page }).include(".adjudication").analyze()).violations).toEqual([]);
+    await adjudication.getByRole("button", { name: "Publish outcome and effects" }).click();
+    await expect(adjudication.getByRole("heading", { name: "Published outcome" })).toBeVisible({ timeout: 20_000 });
+    await control.page.screenshot({ path: `${evidenceRoot}/ps-410-adjudication.png`, fullPage: true });
+
+    const participant = await actor(browser, fixture.tokens.author);
+    await participant.page.goto(runtimeUrl());
+    const published = participant.page.getByRole("article", { name: "Authorized adjudicator review" });
+    await expect(published.getByText("Your Action was approved after review.")).toBeVisible({ timeout: 20_000 });
+    await expect(published.getByText("Hidden synthetic control note")).toHaveCount(0);
+    await Promise.all([control.context.close(), participant.context.close()]);
   });
 
   test("@a11y PS-400 authors bounded branches, counted capabilities and delayed effects without code", async ({ browser }) => {

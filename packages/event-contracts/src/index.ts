@@ -52,6 +52,8 @@ export const VOICE_DEFINITION_CONTRACT_ID = "voice-definition-v1";
 export const VOICE_CONSENT_CONTRACT_ID = "voice-consent-v1";
 export const SESSION_ONBOARDING_CONTRACT_ID = "session-onboarding-v1";
 export const READINESS_CONTRACT_ID = "readiness-v1";
+export const ADJUDICATION_REQUEST_CONTRACT_ID = "adjudication-request-v1";
+export const ADJUDICATION_RECORD_CONTRACT_ID = "adjudication-record-v1";
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
 
@@ -557,6 +559,69 @@ export interface ApprovalDecisionV1 {
   expectedStateVersion: number;
   commandId: string;
   decidedAt: string;
+}
+
+export type AdjudicationMechanismV1 = "manual" | "rubric" | "rules" | "plugin" | "hybrid";
+
+export interface AdjudicationTraceEntryV1 extends JsonObject {
+  source: "manual" | "rubric" | "rule" | "plugin" | "review";
+  referenceId: string;
+  passed: boolean | null;
+  explanation: string;
+  details: JsonValue;
+}
+
+export interface AdjudicationReviewV1 {
+  id: string;
+  perspectiveId: string;
+  recommendation: JsonValue;
+  rationale: string;
+  evidenceArtifactIds: string[];
+  hiddenAnalyticalNotes?: string;
+  confidence: number;
+  reviewerPersonId: string;
+  reviewerSessionRoleId: string;
+  reviewerDisplayName: string;
+  reviewerOrganizationName: string;
+  submittedAt: string;
+}
+
+export interface AdjudicationRecordV1 {
+  contractId: typeof ADJUDICATION_RECORD_CONTRACT_ID;
+  id: string;
+  requestId: string;
+  status: "draft" | "published";
+  mechanism: AdjudicationMechanismV1;
+  outcome: JsonValue;
+  rationale: string;
+  participantRationale: string;
+  confidence: number;
+  synthesis: string;
+  explanationTrace: AdjudicationTraceEntryV1[];
+  suggestion: JsonValue | null;
+  overrideRationale: string | null;
+  effects: JsonValue[];
+  publicationScope: JsonObject;
+  leadDisplayName: string;
+  leadOrganizationName: string;
+  version: number;
+  publishedAt: string | null;
+}
+
+export interface AdjudicationRequestV1 {
+  contractId: typeof ADJUDICATION_REQUEST_CONTRACT_ID;
+  id: string;
+  modelId: string;
+  modelName: string;
+  mechanism: AdjudicationMechanismV1;
+  status: "requested" | "in_progress" | "drafted" | "published" | "cancelled" | "failed";
+  version: number;
+  actionSnapshots: Array<{ artifactId: string; artifactVersion: number; artifactTypeKey: string; payload: JsonObject }>;
+  perspectives: Array<{ id: string; label: string; reviewerSessionRoleIds: string[] }>;
+  reviews: AdjudicationReviewV1[];
+  record: AdjudicationRecordV1 | null;
+  canReview: boolean;
+  canSynthesize: boolean;
 }
 
 const uuidProperty = { type: "string", format: "uuid" } as const;

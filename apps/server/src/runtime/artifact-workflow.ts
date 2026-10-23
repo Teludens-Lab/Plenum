@@ -26,6 +26,7 @@ import {
 } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { createCompositionRunExecutor, executeEffectProposalCommand, type ExtensionRunPlan } from "../extensions/runtime.js";
+import { executeAdjudicationCommand } from "../adjudication/service.js";
 import {
   processSessionCommand,
   type CommandDecision,
@@ -98,6 +99,7 @@ interface WorkflowTransitionDefinition {
   allowedSessionRoleIds: string[];
   notifySessionRoleIds?: string[];
   contentOnly?: boolean;
+  allowNonCreatorEdit?: boolean;
   editableFieldKeys?: string[];
   gate?: GateV1;
   actions?: AutomationActionV1[];
@@ -608,8 +610,63 @@ async function acceptedProposalReferencesValid(
   return true;
 }
 
+async function recordArtifactRevision(
+  client: PoolClient,
+  context: SessionAccessContextV1,
+  command: CommandEnvelopeV1,
+  artifact: { id: string; version: number; governingReleaseId: string; state: string; payload: JsonObject },
+  authorParticipantIds: string[]
+): Promise<void> {
+  const revisionId = randomUUID();
+  await client.query(
+    `INSERT INTO runtime.artifact_revisions
+       (id,organization_id,session_id,artifact_id,artifact_version,governing_release_id,state,payload,
+        author_person_id,author_participant_id,author_display_name,author_organization_name,command_id)
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,person.display_name,organization.name,$11
+       FROM identity.persons person JOIN identity.organizations organization ON organization.id=$2
+      WHERE person.id=$9`,
+    [revisionId, context.organizationId, context.sessionId, artifact.id, artifact.version, artifact.governingReleaseId,
+      artifact.state, JSON.stringify(artifact.payload), context.principalId, context.participantId, command.commandId]
+  );
+  await client.query(
+    `INSERT INTO runtime.artifact_revision_authors
+       (id,organization_id,session_id,artifact_revision_id,person_id,participant_id,display_name,organization_name,
+        is_command_actor,author_order)
+     SELECT gen_random_uuid(),$1,$2,$3,participant.person_id,participant.id,person.display_name,organization.name,
+       participant.id=$4,authors.ordinality-1
+       FROM unnest($5::uuid[]) WITH ORDINALITY AS authors(participant_id,ordinality)
+       JOIN runtime.participants participant ON participant.organization_id=$1 AND participant.session_id=$2
+        AND participant.id=authors.participant_id
+       JOIN identity.persons person ON person.id=participant.person_id
+       JOIN identity.organizations organization ON organization.id=$1`,
+    [context.organizationId, context.sessionId, revisionId, context.participantId, authorParticipantIds]
+  );
+}
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+async function revisionAuthorParticipantIds(client: PoolClient, context: SessionAccessContextV1, command: CommandEnvelopeV1): Promise<string[] | undefined> {
+  const requested = command.payload.coauthorParticipantIds;
+  if (requested === undefined) return [context.participantId];
+  if (!Array.isArray(requested) || requested.length > 20 || requested.some((id) => typeof id !== "string" || !uuid.test(id))) return undefined;
+  if (!command.operationType.startsWith("artifact.") || !["artifact.create", "artifact.edit"].includes(command.operationType)) return undefined;
+  const coauthors = [...new Set(requested as string[])].filter((id) => id !== context.participantId);
+  if (coauthors.length > 0) {
+    const participants = await client.query(
+      `SELECT id FROM runtime.participants WHERE organization_id=$1 AND session_id=$2 AND id=ANY($3::uuid[])`,
+      [context.organizationId, context.sessionId, coauthors]
+    );
+    if (participants.rowCount !== coauthors.length) return undefined;
+  }
+  return [context.participantId, ...coauthors];
+}
+
 export async function executeArtifactCommand(input: CommandExecutionContext): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
+  const revisionAuthors = await revisionAuthorParticipantIds(client, context, command);
+  if (revisionAuthors === undefined) {
+    return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Artifact co-authors must be current Participants in this Session." };
+  }
   if (command.operationType === "artifact.create") {
     if (command.governingReleaseId !== activeReleaseId) {
       return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "New Artifacts use the active Release." };
@@ -653,6 +710,8 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
         artifactType.key, workflow.key, formFor(definition, artifactType).formVersion,
         context.participantId, actor.teamId ?? null, transition.to, JSON.stringify(content), visibleRoles([], workflow, transition)]
     );
+    await recordArtifactRevision(client, context, command, { id: command.aggregateId, version: 1,
+      governingReleaseId: activeReleaseId, state: transition.to, payload: content }, revisionAuthors);
     const automation = await applyAutomationEffects(input, definition, transition.actions, "workflow",
       `${workflow.id}:${transition.from ?? "initial"}->${transition.to}`, `Workflow transition ${transition.command}`);
     return {
@@ -661,6 +720,7 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
       eventType: eventType(command.operationType),
       eventPayload: { artifactId: command.aggregateId, artifactTypeKey: artifactType.key, fromState: null,
         toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version: 1,
+        revisionAuthorParticipantIds: revisionAuthors,
         stateTransactionIds: automation.transactionIds, scheduledEffectIds: automation.scheduledEffectIds }
     };
   }
@@ -700,7 +760,7 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
       { state: artifact.state, typeKey: artifact.artifact_type_key, payload: artifact.payload,
         ...(artifact.owner_team_id === null ? {} : { ownerTeamId: artifact.owner_team_id }) }));
   if (isDecision(transition)) return transition;
-  if (transition.contentOnly === true && artifact.creator_participant_id !== context.participantId) {
+  if (transition.contentOnly === true && artifact.creator_participant_id !== context.participantId && transition.allowNonCreatorEdit !== true) {
     return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the creator may edit this Artifact." };
   }
   let payload = artifact.payload;
@@ -740,6 +800,8 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     [transition.to, JSON.stringify(payload), visibleRoles(artifact.visible_role_ids, workflow, transition),
       version, context.organizationId, artifact.id]
   );
+  await recordArtifactRevision(client, context, command, { id: artifact.id, version,
+    governingReleaseId: artifact.governing_release_id, state: transition.to, payload }, revisionAuthors);
   const automation = await applyAutomationEffects(input, definition, transition.actions, "workflow",
     `${workflow.id}:${artifact.state}->${transition.to}`, `Workflow transition ${transition.command}`);
   return {
@@ -748,6 +810,7 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     eventType: eventType(command.operationType),
     eventPayload: { artifactId: artifact.id, artifactTypeKey: artifact.artifact_type_key,
       fromState: artifact.state, toState: transition.to, activeSessionRoleId: context.activeSessionRoleId, version,
+      revisionAuthorParticipantIds: revisionAuthors,
       stateTransactionIds: automation.transactionIds, scheduledEffectIds: automation.scheduledEffectIds }
   };
 }
@@ -1023,7 +1086,7 @@ function actionsFor(
 ): RuntimeActionV1[] {
   return workflow.transitions
     .filter((transition) => mayMutate && transition.from === state && transition.allowedSessionRoleIds.includes(activeSessionRoleId) &&
-      (transition.contentOnly !== true || createdByMe))
+      (transition.contentOnly !== true || createdByMe || transition.allowNonCreatorEdit === true))
     .map(asAction);
 }
 
@@ -1189,6 +1252,7 @@ export async function submitRuntimeCommand(
 ) {
   const execute = command.operationType.startsWith("stage.") || command.operationType.startsWith("timer.") ? executeStageCommand :
     command.operationType.startsWith("artifact.") ? executeArtifactCommand :
+      command.operationType.startsWith("adjudication.") ? executeAdjudicationCommand :
       command.operationType.startsWith("message.") || command.operationType.startsWith("inject.") ? executeInformationCommand :
       command.operationType === "composition_run.start" ? createCompositionRunExecutor(extensionRunPlans) :
       command.operationType.startsWith("effect_proposal.") ? executeEffectProposalCommand :

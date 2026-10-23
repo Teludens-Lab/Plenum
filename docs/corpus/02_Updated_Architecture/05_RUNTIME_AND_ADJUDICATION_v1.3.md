@@ -139,6 +139,12 @@ State Values are stored separately from State Variable definitions. Every change
 
 An Adjudication Request names the Decision Records, the Adjudication Model, the policy-filtered context and a correlation key. An Adjudication Record carries outcome, rationale, evidence references, confidence, effects, publication scope, origin (human or plugin), version and review disposition (REQ-036, 08 Canon §8.2).
 
+OPEN-018 fixes the cardinality and revision rules: each Decision Record contains exactly one Action, while one Adjudication Request may snapshot several Decision Records/Actions. Submitted Action revisions are immutable and carry stable Person/Organization identifiers plus submission-time name and Organization snapshots. Reviewer inputs remain separate by perspective; restricted analytical notes are stored and projected separately from participant-facing rationale. An authorized lead synthesizes the final draft. A system or Plugin suggestion may be overridden only with an explicit rationale.
+
+Publication is an online, authoritative Command and the only path that makes the outcome participant-visible or applies/schedules effects. The Runtime locks the request version, publishes the narrative and effects in one transaction, and rejects stale competing drafts or publications. Plugin contributions must reference applied proposals pinned by proposal hash, Governing Release and Authority Epoch; failed, timed-out, stale or merely staged proposals cannot become accepted adjudication input.
+
+Information access and delivery are distinct. Access is current authorization evaluated server-side under the Governing Release Information Policy at release, delivery, query and projection time. Delivery is immutable per-recipient evidence that a particular authorized record version was made available at server time; it does not grant access and does not prove viewing. `released`, `delivered`, `viewed` and `acknowledged` are separate facts. Revocation stops future retrieval and redelivery but cannot erase a device copy; restricted delivery history remains retained.
+
 ### 12.2 Mechanisms
 
 | Mechanism | Behavior |

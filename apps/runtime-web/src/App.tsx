@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import {
   type CommandEnvelopeV1,
   type CommandReceiptV1,
+  type AdjudicationRequestV1,
   type ErrorEnvelopeV1,
   type EffectProposalV1,
   type JsonObject,
@@ -27,6 +28,7 @@ import {
   type RuntimeFormDefinitionV1
 } from "@plenum/simulation-schema";
 import { VoiceControls } from "./voice/VoiceControls.js";
+import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "error";
 
@@ -583,6 +585,7 @@ function RuntimeView() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [projection, setProjection] = useState<RuntimeProjectionV1 | null>(null);
   const [effectProposals, setEffectProposals] = useState<EffectProposalV1[]>([]);
+  const [adjudications, setAdjudications] = useState<AdjudicationRequestV1[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string>("");
   const [pending, setPending] = useState<PendingCommand | null>(null);
@@ -599,13 +602,15 @@ function RuntimeView() {
       if (version !== loadVersion.current) return;
       setDeviceId(registered.deviceId);
       const headers = { "x-device-id": registered.deviceId };
-      const [nextProjection, proposalResponse] = await Promise.all([
+      const [nextProjection, proposalResponse, adjudicationResponse] = await Promise.all([
         api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers }),
-        api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers })
+        api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers }),
+        api<{ adjudications: AdjudicationRequestV1[] }>(`/v1/sessions/${id}/adjudications`, { headers })
       ]);
       if (version !== loadVersion.current) return;
       setProjection(nextProjection);
       setEffectProposals(proposalResponse.proposals);
+      setAdjudications(adjudicationResponse.adjudications);
       setConnection("online");
     } catch (cause) {
       if (version !== loadVersion.current) return;
@@ -686,11 +691,17 @@ function RuntimeView() {
 
   const sendInformation: SendInformation = (operationType, aggregateId, expectedAggregateVersion, payload) => {
     if (projection === null || deviceId === null) return;
+    const publication = operationType === "adjudication.publish";
+    if (publication && !navigator.onLine) {
+      setConnection("offline");
+      setNotice("Adjudication publication requires the live Session Authority and was not queued.");
+      return;
+    }
     void post({
       commandId: crypto.randomUUID(), deviceId, operationType, aggregateId, expectedAggregateVersion,
       governingReleaseId: projection.releaseId, activeSessionRoleId: projection.activeSessionRoleId,
       deviceObservedAt: new Date().toISOString(), payload
-    });
+    }, !publication);
   };
 
   const sendPoll: SendPoll = (operationType, poll, payload) => {
@@ -804,6 +815,7 @@ function RuntimeView() {
       {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <VoiceControls projection={projection}
         online={connection === "online"} disabled={pending !== null} command={sendVoice} floor={sendFloor} notice={setNotice} />}
       <EffectProposalReview proposals={effectProposals} disabled={pending !== null} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
+      <AdjudicationReview adjudications={adjudications} disabled={pending !== null} send={sendInformation} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>
   </Shell>;

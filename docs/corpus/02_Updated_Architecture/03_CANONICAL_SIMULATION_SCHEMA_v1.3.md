@@ -314,7 +314,7 @@ interface ArtifactTypeDefinition {
   workflowId: string;
   ownership: "individual" | "team" | "session";
   decisionBearing: boolean;          // DEC-35
-  actionFormId?: string;             // schema for Actions inside a Decision Record (OPEN-018)
+  actionFormId?: string;             // schema for the single Action inside a Decision Record (OPEN-018 resolved)
   versioning: "none" | "draft_versions" | "full_history";
   informationPolicyId: string;
   allowedCreatorSessionRoleIds: string[];
@@ -957,11 +957,12 @@ interface ObjectiveDefinition {
   id: string;
   title: string;
   description?: string;
-  attachTo: { teamId?: string; sessionRoleId?: string; scenario?: boolean }; // OPEN-018
   informationPolicyId: string;
   measurementIds?: string[];
   priority?: number;
 }
+
+// Objectives apply to the Simulation Release/package as a whole. Team and Session Role guidance is governed Content.
 
 interface AccessPolicyDefinition {
   joinMethods: Array<"invitation" | "code_and_verified_email" | "sso" | "code_and_guest_pin" | "waiting_room" | "open_seat_selection" | "operator_assignment">;
@@ -986,7 +987,7 @@ Runtime records are not part of a Release. Their storage is owned by the Postgre
 |---|---|---|
 | Participant, Seat Assignment | principal, seat, session role, team, valid-from, valid-to | Data Model |
 | Artifact | type key, Form version, Governing Release, state, payload, version, creator | Data Model |
-| Decision Record and Action | Artifact with `decisionBearing`; Actions as child records | Data Model; OPEN-018 |
+| Decision Record and Action | Artifact with `decisionBearing`; exactly one Action child record | Data Model; OPEN-018 |
 | Workflow Instance | definition key, Governing Release, current state, version | Data Model |
 | Information object and delivery | content or record ID; delivered-to, opened-at, acknowledged-at | Data Model |
 | Inject Instance | definition ID, state, per-recipient acknowledgement and response | Data Model |
@@ -1090,7 +1091,7 @@ Offline Participant bundles are runtime-generated, policy-filtered projections â
 
 ## 21. Open questions
 
-OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-012 (compatibility), the remaining non-PS-400 parts of OPEN-018 (modeling questions), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005 and the PS-400 baseline of OPEN-006 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
+OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-012 (compatibility), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005, the PS-400 baseline of OPEN-006, and OPEN-018 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
 
 ## Change log
 

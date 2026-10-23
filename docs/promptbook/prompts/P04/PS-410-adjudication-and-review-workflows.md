@@ -7,7 +7,7 @@
 - Goal: Support manual, rubric, rules, Plugin, hybrid, and multi-perspective adjudication through one contract.
 - User outcome: Adjudicators can review evidence, explain decisions, override suggestions with rationale, and publish outcomes safely.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false` pending OPEN-018 and owner approval.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation is verified.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-018`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - DEC-54 carve-out remains correct
 - Historical review inputs remain attributable
 
-The approval gate is: Methodology doctrine and unresolved modeling questions require owner review. A task may be implementation-complete without being release-approved.
+The approval gate is: Approved 2026-10-22 by Product Owner direction through resolved OPEN-018; formal security/accessibility review and production release authorization remain separate gates. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -144,7 +144,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-410-adjudication-and-review-workflows`
 - Proposed subject: `feat(adjudication): publish explainable outcomes`
-- Expected migrations: `019_adjudication_records`
+- Expected migrations: `020_adjudication_records`
 - Expected API/contract IDs: `adjudication-request-v1`, `adjudication-record-v1`
 
 Proposed body:
@@ -157,18 +157,18 @@ What:
 Verification:
 - Conflict, denial, trace, and outcome tests.
 Compatibility / migrations:
-- Adds 019 adjudication records.
+- Adds 020 adjudication records.
 Risks / follow-up:
-- Modeling questions remain OPEN-018.
+- Formal review and production release authorization remain pending.
 Refs: PS-410, REQ-036, INV-008
 ```
 
 Proposed PR description:
 
-Summary: delivers explainable adjudication. Risks: hidden evidence and concurrent approvals. Migration: 019. Evidence: mechanism matrix. Rollback: stop new publications and preserve drafts.
+Summary: delivers explainable adjudication. Risks: hidden evidence and concurrent approvals. Migration: 020. Evidence: mechanism matrix. Rollback: stop new publications and preserve drafts.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-018 resolves; Doctrine changes; A new adjudication mechanism is approved.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-018 is amended; Doctrine changes; A new adjudication mechanism is approved.

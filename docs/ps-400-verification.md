@@ -30,7 +30,7 @@ Client mutation-state handling remains the existing collaborative Studio contrac
 | delayed State Effects | Integer delay `0..604800` | One-shot, Release-pinned, pre-due cancellation | Implemented |
 | loops and continuous timing | Rejected/not modeled | Not executed | Prohibited by PS-400 |
 
-`OPEN-005` and the PS-400 baseline of `OPEN-006` are resolved. The delayed-effect, snapshot and Capability parts of `OPEN-018` are resolved; its adjudication, information-delivery and objective-modeling questions remain open for their owning tasks. `OPEN-022` remains at its resolved baseline.
+`OPEN-005` and the PS-400 baseline of `OPEN-006` are resolved. The delayed-effect, snapshot and Capability parts of `OPEN-018` were resolved here; its remaining adjudication, information-delivery and objective-modeling questions were resolved with PS-410 on 2026-10-22. `OPEN-022` remains at its resolved baseline.
 
 ## Evidence
 

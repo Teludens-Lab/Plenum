@@ -290,6 +290,7 @@ export interface RuntimeWorkflowTransitionV1 {
   notifySessionRoleIds?: string[];
   notifyCreator?: boolean;
   contentOnly?: boolean;
+  allowNonCreatorEdit?: boolean;
   editableFieldKeys?: string[];
   precondition?: string;
   gate?: GateV1;
@@ -576,8 +577,31 @@ export interface DecisionTraceV1 {
   measurementDefinitionIds: string[];
 }
 
+export interface ObjectiveDefinitionV1 {
+  id: string;
+  name: string;
+  description: string;
+  successMeasures?: string[];
+}
+
+export interface AdjudicationModelDefinitionV1 {
+  id: string;
+  name: string;
+  mechanism: "manual" | "rubric" | "rules" | "plugin" | "hybrid";
+  appliesToArtifactTypeIds: string[];
+  reviewerSessionRoleIds: string[];
+  leadReviewerSessionRoleIds: string[];
+  perspectives: Array<{ id: string; label: string; reviewerSessionRoleIds: string[] }>;
+  rubric?: Array<{ id: string; label: string; weight: number; minimum: number; maximum: number }>;
+  rules?: Array<{ id: string; label: string; when: GateV1; outcome: RuntimeScalarV1 }>;
+  pluginBindingIds?: string[];
+  publicationScope: { public?: boolean; sessionRoleIds?: string[]; teamIds?: string[] };
+}
+
 export interface RuntimeCoreDesignV1 {
   methodologyConcepts?: MethodologyConceptV1[];
+  /** Release-wide objectives; role and Team guidance belongs in governed content. */
+  objectives?: ObjectiveDefinitionV1[];
   teams: Array<{ id: string; name: string; objectiveIds: string[]; enabled: boolean }>;
   teamCells?: RuntimeTeamCellDefinitionV1[];
   sessionRoles: Array<{
@@ -597,6 +621,7 @@ export interface RuntimeCoreDesignV1 {
     voiceChannels: RuntimeVoiceChannelDefinitionV1[];
   };
   polls?: RuntimePollDefinitionV1[];
+  adjudicationModels?: AdjudicationModelDefinitionV1[];
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
   stateVariables?: StateVariableDefinitionV1[];
@@ -1210,6 +1235,31 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     }
   }
   for (const composition of runtime.compositions ?? []) assertModelComposition(composition, runtime.pluginBindings, roles);
+  uniqueIds(runtime.adjudicationModels ?? [], "Adjudication Model");
+  for (const model of runtime.adjudicationModels ?? []) {
+    if (model.appliesToArtifactTypeIds.length === 0 || model.reviewerSessionRoleIds.length === 0 ||
+        model.leadReviewerSessionRoleIds.length === 0) throw new Error(`Adjudication Model ${model.id} is incomplete`);
+    for (const id of model.appliesToArtifactTypeIds) {
+      reference(artifactTypes, id, `Adjudication Model ${model.id}`);
+      if (runtime.artifactTypes.find((type) => type.id === id)?.decisionBearing !== true) {
+        throw new Error(`Adjudication Model ${model.id} applies to a non-decision Artifact Type`);
+      }
+    }
+    model.reviewerSessionRoleIds.forEach((id) => reference(roles, id, `Adjudication Model ${model.id}`));
+    model.leadReviewerSessionRoleIds.forEach((id) => reference(roles, id, `Adjudication Model ${model.id}`));
+    uniqueIds(model.perspectives, `Adjudication Model ${model.id} perspective`);
+    model.perspectives.forEach((perspective) => perspective.reviewerSessionRoleIds.forEach((id) =>
+      reference(roles, id, `Adjudication Model ${model.id} perspective ${perspective.id}`)));
+    model.rules?.forEach((rule) => assertGateDefinition(rule.when, facts, `Adjudication Model ${model.id} rule ${rule.id}`));
+    model.pluginBindingIds?.forEach((id) => reference(bindingIds, id, `Adjudication Model ${model.id}`));
+    if ((model.mechanism === "plugin" || model.mechanism === "hybrid") && (model.pluginBindingIds?.length ?? 0) === 0) {
+      throw new Error(`Adjudication Model ${model.id} requires a Plugin Binding`);
+    }
+    model.publicationScope.sessionRoleIds?.forEach((id) => reference(roles, id, `Adjudication Model ${model.id} publication scope`));
+    model.publicationScope.teamIds?.forEach((id) => reference(teams, id, `Adjudication Model ${model.id} publication scope`));
+    if (model.publicationScope.public !== true && (model.publicationScope.sessionRoleIds?.length ?? 0) === 0 &&
+        (model.publicationScope.teamIds?.length ?? 0) === 0) throw new Error(`Adjudication Model ${model.id} has an empty publication scope`);
+  }
 
   for (const role of runtime.sessionRoles) {
     role.interfaceProfileIds.forEach((id) => reference(interfaces, id, `Session Role ${role.id}`));
@@ -1594,6 +1644,9 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       }
       if (transition.contentOnly === true && transition.editableFieldKeys !== undefined) {
         throw new Error(`Workflow ${workflow.id} transition ${transition.id} has conflicting content rules`);
+      }
+      if (transition.allowNonCreatorEdit === true && transition.contentOnly !== true) {
+        throw new Error(`Workflow ${workflow.id} transition ${transition.id} allows non-creator editing without content-only editing`);
       }
       if (transition.editableFieldKeys !== undefined) {
         const workflowForms = runtime.artifactTypes.filter((type) => type.workflowId === workflow.id)

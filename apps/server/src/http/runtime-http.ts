@@ -18,6 +18,7 @@ import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
+import { getAdjudications } from "../adjudication/service.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import {
@@ -336,6 +337,13 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           deviceId: deviceHeader(request, correlationId),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/adjudications$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
+        send(response, 200, { adjudications: await getAdjudications(options.pool, context) });
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/readiness$/u))) {

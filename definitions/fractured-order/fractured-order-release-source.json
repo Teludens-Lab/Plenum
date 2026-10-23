@@ -6992,7 +6992,9 @@
               "key": "returned",
               "label": "Returned for revision",
               "kind": "draft",
-              "holderRelation": "creator"
+              "holderSessionRoleIds": [
+                "facilitator"
+              ]
             },
             {
               "key": "completed",
@@ -7002,7 +7004,7 @@
           ],
           "transitions": [
             {
-              "id": "team-create",
+              "id": "action-create",
               "from": null,
               "command": "artifact.create",
               "label": "Save draft",
@@ -7012,7 +7014,7 @@
               ]
             },
             {
-              "id": "team-edit",
+              "id": "action-edit",
               "from": "draft",
               "command": "artifact.edit",
               "label": "Save changes",
@@ -7023,7 +7025,7 @@
               "contentOnly": true
             },
             {
-              "id": "team-submit",
+              "id": "action-submit",
               "from": "draft",
               "command": "artifact.submit",
               "label": "Submit to Team Facilitator",
@@ -7036,7 +7038,19 @@
               ]
             },
             {
-              "id": "team-forward",
+              "id": "action-facilitator-edit",
+              "from": "with_facilitator",
+              "command": "artifact.edit",
+              "label": "Save facilitator edits",
+              "to": "with_facilitator",
+              "allowNonCreatorEdit": true,
+              "allowedSessionRoleIds": [
+                "facilitator"
+              ],
+              "contentOnly": true
+            },
+            {
+              "id": "action-forward",
               "from": "with_facilitator",
               "command": "artifact.forward",
               "label": "Forward to White Cell",
@@ -7049,18 +7063,7 @@
               ]
             },
             {
-              "id": "team-facilitator-return",
-              "from": "with_facilitator",
-              "command": "artifact.return",
-              "label": "Return for revision",
-              "to": "returned",
-              "allowedSessionRoleIds": [
-                "facilitator"
-              ],
-              "notifyCreator": true
-            },
-            {
-              "id": "team-accept",
+              "id": "action-accept",
               "from": "with_white_cell",
               "command": "artifact.accept",
               "label": "Accept",
@@ -7070,7 +7073,7 @@
               ]
             },
             {
-              "id": "team-control-return",
+              "id": "action-control-return",
               "from": "with_white_cell",
               "command": "artifact.return",
               "label": "Return for revision",
@@ -7078,34 +7081,37 @@
               "allowedSessionRoleIds": [
                 "white_cell"
               ],
-              "notifyCreator": true
+              "notifySessionRoleIds": [
+                "facilitator"
+              ]
             },
             {
-              "id": "team-edit-returned",
+              "id": "action-edit-returned",
               "from": "returned",
               "command": "artifact.edit",
               "label": "Save revision",
               "to": "returned",
+              "allowNonCreatorEdit": true,
               "allowedSessionRoleIds": [
-                "scribe"
+                "facilitator"
               ],
               "contentOnly": true
             },
             {
-              "id": "team-resubmit",
+              "id": "action-resubmit",
               "from": "returned",
               "command": "artifact.submit",
-              "label": "Resubmit to Team Facilitator",
-              "to": "with_facilitator",
+              "label": "Resubmit to White Cell",
+              "to": "with_white_cell",
               "allowedSessionRoleIds": [
-                "scribe"
+                "facilitator"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "white_cell"
               ]
             }
           ],
-          "description": "Scribe creates, edits and submits; Team Facilitator returns or forwards; White Cell returns or accepts; returned work is revised and resubmitted through the same custody chain.",
+          "description": "Scribe creates and submits one Action record; the Team Facilitator may edit before forwarding; White Cell accepts or returns it; the Facilitator edits returned work and resubmits it to White Cell. Every submitted revision remains attributable.",
           "artifactFamily": "action",
           "custodyChain": [
             "scribe",
@@ -7718,7 +7724,36 @@
           "contentDigest": "ad2971e9f4ed1e9f4090c2382f1e3d4acf06b212abf3920d66aa8adebca86f9f"
         }
       ],
-      "adjudicationModels": [],
+      "objectives": [],
+      "adjudicationModels": [
+        {
+          "id": "manual-white-cell",
+          "name": "Authorized adjudicator review",
+          "mechanism": "manual",
+          "appliesToArtifactTypeIds": [
+            "blue-action",
+            "red-move-response"
+          ],
+          "reviewerSessionRoleIds": [
+            "white_cell"
+          ],
+          "leadReviewerSessionRoleIds": [
+            "white_cell"
+          ],
+          "perspectives": [
+            {
+              "id": "control-assessment",
+              "label": "Control assessment",
+              "reviewerSessionRoleIds": [
+                "white_cell"
+              ]
+            }
+          ],
+          "publicationScope": {
+            "public": true
+          }
+        }
+      ],
       "interfaces": [
         {
           "id": "participant-author",
@@ -8254,7 +8289,6 @@
         }
       ],
       "initialState": [],
-      "objectives": [],
       "tags": [
         "strategy",
         "three-move",

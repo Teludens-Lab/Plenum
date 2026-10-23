@@ -84,6 +84,17 @@ Requests that never reach the Session — unauthenticated, malformed, from a non
 
 Receipts are readable only by the submitting Principal and authorized operators.
 
+### 4.2 Adjudication commands and projection
+
+Adjudication mutations use `POST /v1/sessions/{sessionId}/commands` with the standard envelope:
+
+- `adjudication.request` snapshots one or more authorized single-Action records under one Adjudication Model;
+- `adjudication.review` appends one attributable perspective input and keeps restricted analytical notes separate;
+- `adjudication.draft` creates or revises the authorized lead synthesis, explanation trace, suggestion and override rationale;
+- `adjudication.publish` publishes the draft and applies or schedules its effects transactionally.
+
+`GET /v1/sessions/{sessionId}/adjudications` re-evaluates current access and omits unauthorized requests, reviews and fields server-side. Unpublished requests are visible only to configured reviewers. Published records follow their Release-owned publication scope. Returning a published record records `released`/`delivered` evidence but does not grant later access or mark it viewed.
+
 ## 5. Event contract
 
 Every event type defines: name and integer version; owning producer (exactly one); consumers; trigger; payload schema; correlation and causation IDs; Session ID; Governing Release; aggregate ID and version; Evidence Sequence; ordering (strict per Session); delivery guarantee (at least once to consumers, deduplicated by event ID); retry and dead-letter behavior; retention; classification.
@@ -110,7 +121,7 @@ Names follow DEC-38 (`<aggregate>.<past participle>`). All are version 1 unless 
 | Inject | `inject.scheduled`, `inject.released`, `inject.acknowledged`, `inject.responded`, `inject.cancelled`, `inject.expired` |
 | Information | `information.released`, `information.viewed`, `information.acknowledged` |
 | State | `state_value.changed`, `capability.allocated`, `capability.degraded`, `capability.recovered`, `resource.consumed`, `resource.replenished`, `objective_status.changed` |
-| Adjudication | `adjudication_request.created`, `adjudication_record.drafted`, `adjudication_record.finalized`, `outcome.published`, `effect.applied` |
+| Adjudication | `adjudication.requested`, `adjudication.reviewed`, `adjudication.drafted`, `adjudication.published`, `effect.applied`, `effect.scheduled` |
 | Plugin registry | `plugin_artifact.approved`, `plugin_artifact.revoked`, `plugin_installation.installed`, `plugin_installation.unavailable`, `plugin_binding.enabled`, `plugin_binding.disabled` |
 | Model execution and approval | `composition_run.started`, `composition_run.completed`, `composition_run.failed`, `model_run.started`, `model_run.completed`, `model_run.failed`, `effect_proposal.staged`, `effect_proposal.approved`, `effect_proposal.rejected`, `effect_proposal.returned`, `effect_proposal.applied` |
 | Control | `intervention.recorded` |
@@ -135,7 +146,7 @@ Every workflow contract defines: name; aggregate; initial state; terminal states
 | Approval | Release-defined quorum rules (03 §10) |
 | Inject | Glossary §7.5 |
 | Information delivery | `pending` → `released` → `delivered` → `viewed` → `acknowledged`; exit `withdrawn` (future deliveries only) |
-| Adjudication | `requested` → `in_progress` → `drafted` → `approved` → `published`; exits `failed`, `cancelled` |
+| Adjudication | `requested` → `in_progress` → `drafted` → `published`; publication is the authorized lead approval; exits `failed`, `cancelled` |
 | Poll | Glossary §7.9 |
 | Effect Proposal | Glossary §7.11 |
 | Floor Lease | Glossary §7.12 |

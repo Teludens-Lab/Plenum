@@ -454,7 +454,7 @@ paths:
   /v1/sessions/{sessionId}/commands:
     post:
       operationId: processSessionCommand
-      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1, poll-command-v1, ballot-command-v1, certification-v1, voice-command-v1, media-credential-v1]
+      x-contract-ids: [artifact-command-v1, stage-command-v1, inject-command-v1, message-command-v1, approval-decision-v1, adjudication-request-v1, adjudication-record-v1, poll-command-v1, ballot-command-v1, certification-v1, voice-command-v1, media-credential-v1]
       security: [{ SessionCookie: [] }]
       parameters:
         - in: path
@@ -528,6 +528,27 @@ paths:
                 required: [proposals]
                 properties:
                   proposals: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/EffectProposalV1" } }
+        "403": { description: Current Participant, Device, or active Session Role is unavailable. }
+  /v1/sessions/{sessionId}/adjudications:
+    get:
+      operationId: getAdjudications
+      x-contract-ids: [adjudication-request-v1, adjudication-record-v1]
+      description: Returns only currently authorized requests and published outcomes; restricted reviewer inputs remain server-filtered.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Device-ID, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Tenant-, Session-, role- and publication-scope-filtered adjudications.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [adjudications]
+                properties:
+                  adjudications: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/AdjudicationRequestV1" } }
         "403": { description: Current Participant, Device, or active Session Role is unavailable. }
   /v1/sessions/{sessionId}/extension-provenance:
     get:
@@ -1690,6 +1711,51 @@ components:
         inputDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
         outputDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
         version: { type: integer, minimum: 1 }
+    AdjudicationRecordV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, id, requestId, status, mechanism, outcome, rationale, participantRationale, confidence, synthesis, explanationTrace, suggestion, overrideRationale, effects, publicationScope, leadDisplayName, leadOrganizationName, version, publishedAt]
+      properties:
+        contractId: { const: adjudication-record-v1 }
+        id: { type: string, format: uuid }
+        requestId: { type: string, format: uuid }
+        status: { type: string, enum: [draft, published] }
+        mechanism: { type: string, enum: [manual, rubric, rules, plugin, hybrid] }
+        outcome: {}
+        rationale: { type: string, minLength: 1 }
+        participantRationale: { type: string, minLength: 1 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        synthesis: { type: string, minLength: 1 }
+        explanationTrace: { type: array, items: { type: object } }
+        suggestion: {}
+        overrideRationale: { type: [string, "null"] }
+        effects: { type: array, maxItems: 100, items: {} }
+        publicationScope: { type: object }
+        leadDisplayName: { type: string, minLength: 1 }
+        leadOrganizationName: { type: string, minLength: 1 }
+        version: { type: integer, minimum: 1 }
+        publishedAt: { type: [string, "null"], format: date-time }
+    AdjudicationRequestV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, id, modelId, modelName, mechanism, status, version, actionSnapshots, perspectives, reviews, record, canReview, canSynthesize]
+      properties:
+        contractId: { const: adjudication-request-v1 }
+        id: { type: string, format: uuid }
+        modelId: { type: string, minLength: 1 }
+        modelName: { type: string, minLength: 1 }
+        mechanism: { type: string, enum: [manual, rubric, rules, plugin, hybrid] }
+        status: { type: string, enum: [requested, in_progress, drafted, published, cancelled, failed] }
+        version: { type: integer, minimum: 1 }
+        actionSnapshots: { type: array, maxItems: 100, items: { type: object } }
+        perspectives: { type: array, items: { type: object } }
+        reviews: { type: array, items: { type: object } }
+        record:
+          oneOf:
+            - { $ref: "#/components/schemas/AdjudicationRecordV1" }
+            - { type: "null" }
+        canReview: { type: boolean }
+        canSynthesize: { type: boolean }
     RuntimeDeltaV1:
       type: object
       additionalProperties: false

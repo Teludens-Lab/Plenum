@@ -127,6 +127,15 @@ dd { margin: 0; overflow-wrap: anywhere; }
 code { font-family: var(--font-mono); }
 .credential { overflow-wrap: anywhere; padding: var(--space-3); color: var(--color-status-success); background: var(--color-status-success-bg); border-radius: var(--radius-md); }
 .effect-proposal details { margin-top: var(--space-4); }
+.adjudication form, .adjudication-record, .adjudication details { margin-top: var(--space-5); }
+.adjudication fieldset { margin: 0 0 var(--space-4); padding: 0; border: 0; }
+.adjudication legend { font-weight: var(--weight-semibold); }
+.action-snapshots { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
+.action-snapshots li { overflow-wrap: anywhere; }
+.action-snapshots span { color: var(--color-text-secondary); }
+.review-input { margin-block: var(--space-3); padding: var(--space-3); border-inline-start: 3px solid var(--color-border-strong); }
+.review-input p { margin: var(--space-1) 0; }
+.hidden-note { color: var(--color-status-warning); }
 .effect-proposal summary { cursor: pointer; font-weight: var(--weight-medium); }
 .proposal-provenance { display: grid; gap: var(--space-3); margin: var(--space-3) 0; }
 .proposal-provenance dd { font-size: var(--text-sm); }

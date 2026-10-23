@@ -116,7 +116,7 @@ graph TD
 | PS-340 | P03 | PS-110, PS-150, PS-310 | - | No |
 | PS-350 | P03 | PS-200, PS-210, PS-230, PS-240, PS-250, PS-300, PS-310, PS-320, PS-330, PS-340 | OPEN-001, ADR-001, ADR-002, ADR-003, ADR-004 | No |
 | PS-400 | P04 | PS-310, PS-350 | - | No (verified complete) |
-| PS-410 | P04 | PS-230, PS-400 | OPEN-018 | No |
+| PS-410 | P04 | PS-230, PS-400 | - | No (verified complete) |
 | PS-420 | P04 | PS-130, PS-300, PS-400, PS-410 | ADR-004, OPEN-008, OPEN-012, OPEN-018 | No |
 | PS-430 | P04 | PS-400, PS-410, PS-420 | OPEN-004 | No |
 | PS-500 | P05 | PS-140, PS-240, PS-250, PS-420 | ADR-001, ADR-010, OPEN-014, OPEN-015 | No |

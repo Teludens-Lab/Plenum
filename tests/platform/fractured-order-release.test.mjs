@@ -161,12 +161,16 @@ test("PS-200-T03 validates each scoped Industry Strategic Orientation", () => {
   assert.ok(issues.some(({ field }) => field === "businessOverview"));
 });
 
-test("PS-200-T01 makes Action revision/resubmission and accepted-proposal evidence explicit", () => {
+test("PS-410 makes Facilitator-owned Action revision/resubmission and accepted-proposal evidence explicit", () => {
   const core = source.materialization.coreDesign;
   const workflow = core.workflows.find(({ id }) => id === "workflow-action");
   assert.deepEqual(workflow.custodyChain, ["scribe", "facilitator", "white_cell"]);
-  assert.ok(workflow.transitions.some(({ from, command, to }) => from === "returned" && command === "artifact.edit" && to === "returned"));
-  assert.ok(workflow.transitions.some(({ from, command, to }) => from === "returned" && command === "artifact.submit" && to === "with_facilitator"));
+  assert.ok(workflow.transitions.some(({ from, command, to, allowedSessionRoleIds }) => from === "with_facilitator" &&
+    command === "artifact.edit" && to === "with_facilitator" && allowedSessionRoleIds.includes("facilitator")));
+  assert.ok(workflow.transitions.some(({ from, command, to, allowedSessionRoleIds }) => from === "returned" &&
+    command === "artifact.edit" && to === "returned" && allowedSessionRoleIds.includes("facilitator")));
+  assert.ok(workflow.transitions.some(({ from, command, to, allowedSessionRoleIds }) => from === "returned" &&
+    command === "artifact.submit" && to === "with_white_cell" && allowedSessionRoleIds.includes("facilitator")));
   for (const id of ["blue-action", "red-move-response"]) {
     const type = core.artifactTypes.find((candidate) => candidate.id === id);
     assert.equal(type.workflowId, "workflow-action");

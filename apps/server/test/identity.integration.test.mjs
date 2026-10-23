@@ -64,6 +64,7 @@ import {
   revokePluginArtifact,
   submitRuntimeCommand,
   getEffectProposals,
+  getAdjudications,
   exportExtensionProvenance,
   executePendingModelRun,
   computeBuiltInTally,
@@ -223,7 +224,8 @@ async function applyMigrations() {
     "apps/server/migrations/016_voice_consent_assets.sql",
     "apps/server/migrations/017_session_access.sql",
     "apps/server/migrations/018_identity_roles_and_governance.sql",
-    "apps/server/migrations/019_world_state_automation.sql"
+    "apps/server/migrations/019_world_state_automation.sql",
+    "apps/server/migrations/020_adjudication_records.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1903,4 +1905,140 @@ test("PS-400-T02 consumes counted capabilities atomically and applies or cancels
   source(randomUUID(), "Cancel before due"));
   assert.equal(await cancelScheduledStateValueChange(owner, { organizationId: ids.orgA, sessionId: ids.sessionA }, cancelledId), true);
   assert.equal((await owner.query("SELECT status,governing_release_id FROM runtime.scheduled_state_effects WHERE id=$1", [cancelledId])).rows[0].status, "cancelled");
+});
+
+test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accepts one competing synthesis", async () => {
+  const requestId = "26000000-0000-4000-8000-000000000001";
+  const actionA = "26000000-0000-4000-8000-000000000002";
+  const actionB = "26000000-0000-4000-8000-000000000003";
+  const nonAction = "26000000-0000-4000-8000-000000000018";
+  const invalidRequestId = "26000000-0000-4000-8000-000000000019";
+  const revisionId = "26000000-0000-4000-8000-000000000004";
+  const releaseId = "26000000-0000-4000-8000-000000000005";
+  const reviewerAssignmentId = "26000000-0000-4000-8000-000000000006";
+  const outsiderParticipantId = "26000000-0000-4000-8000-000000000007";
+  const outsiderAssignmentId = "26000000-0000-4000-8000-000000000008";
+  const outsiderDeviceId = "26000000-0000-4000-8000-000000000009";
+  const adjudicationDefinition = { coreDesign: {
+    adjudicationModels: [{ id: "rules-resolution", name: "Rules resolution", mechanism: "rules",
+      appliesToArtifactTypeIds: ["action"],
+      reviewerSessionRoleIds: ["ps410-reviewer"], leadReviewerSessionRoleIds: ["ps410-reviewer"],
+      perspectives: [{ id: "operational", label: "Operational", reviewerSessionRoleIds: ["ps410-reviewer"] }],
+      rules: [{ id: "ready", label: "Both Actions are ready", when: { operator: "all", conditions: [
+        { fact: "actions.ready", operator: "equals", value: true }
+      ] }, outcome: "accept" }], publicationScope: { public: true } }],
+    artifactTypes: [{ id: "action", key: "action", decisionBearing: true }], stateVariables: []
+  }, scenario: {} };
+  await owner.query(`INSERT INTO studio.definition_revisions
+    (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+    VALUES ($1,$2,$3,$4::jsonb,repeat('c',64),'ps-410',$5)`,
+    [revisionId, ids.orgA, ids.projectA, JSON.stringify(adjudicationDefinition), ids.personA]);
+  await owner.query(`INSERT INTO registry.releases
+    (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,
+     compiler_version,package_sha256,blob_key,published_by)
+    VALUES ($1,$2,$3,$4,99,'PS-410 fixture','1','1',repeat('d',64),'ps410',$5)`,
+    [releaseId, ids.orgA, ids.projectA, revisionId, ids.personA]);
+  await owner.query(`INSERT INTO runtime.release_activations
+    (id,organization_id,project_id,session_id,release_id,previous_activation_id,activation_sequence,compatibility_policy,approved_by)
+    SELECT gen_random_uuid(),organization_id,project_id,session_id,$1,id,activation_sequence+1,'{}'::jsonb,$2
+      FROM runtime.release_activations WHERE organization_id=$3 AND session_id=$4 ORDER BY activation_sequence DESC LIMIT 1`,
+    [releaseId, ids.personA, ids.orgA, ids.sessionA]);
+  await owner.query(`INSERT INTO runtime.seat_assignments
+    (id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by)
+    VALUES ($1,$2,$3,$4,'ps410-reviewer','ps410-reviewer-seat',$5)`,
+    [reviewerAssignmentId, ids.orgA, ids.sessionA, ids.participantA, ids.personA]);
+  await owner.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4)",
+    [outsiderParticipantId, ids.orgA, ids.sessionA, ids.personE]);
+  await owner.query("INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3)",
+    [ids.orgA, ids.sessionA, outsiderParticipantId]);
+  await owner.query("INSERT INTO runtime.seat_assignments(id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by) VALUES ($1,$2,$3,$4,'ps410-outsider','ps410-outsider-seat',$5)",
+    [outsiderAssignmentId, ids.orgA, ids.sessionA, outsiderParticipantId, ids.personA]);
+  await owner.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3)",
+    [outsiderDeviceId, ids.orgA, ids.personE]);
+  await owner.query(`INSERT INTO runtime.artifact_instances
+    (id,organization_id,session_id,governing_release_id,artifact_type_key,workflow_key,form_version,
+     creator_participant_id,state,payload,visible_role_ids,version)
+    VALUES ($1,$3,$4,$5,'action','action','1',$6,'completed',$7::jsonb,ARRAY['ps410-reviewer'],3),
+           ($2,$3,$4,$5,'action','action','1',$6,'completed',$8::jsonb,ARRAY['ps410-reviewer'],2),
+           ($9,$3,$4,$5,'note','note','1',$6,'completed',$10::jsonb,ARRAY['ps410-reviewer'],1)`,
+    [actionA, actionB, ids.orgA, ids.sessionA, releaseId, ids.participantA,
+      JSON.stringify({ title: "Synthetic Action A" }), JSON.stringify({ title: "Synthetic Action B" }), nonAction,
+      JSON.stringify({ notes: "Not an Action" })]);
+  const context = { principalId: ids.personA, principalType: "person", authenticationSessionId: "unused",
+    deviceId: ids.deviceA, organizationId: ids.orgA, sessionId: ids.sessionA, sessionStatus: "active",
+    participantId: ids.participantA, seatAssignmentIds: [reviewerAssignmentId], activeSessionRoleId: "ps410-reviewer",
+    seatId: "ps410-reviewer-seat", organizationRoles: ["operator"], activeReleaseId: releaseId,
+    authenticationStrength: "mfa", featureFlags: [], authorityEpoch: 1, accessRevision: 1 };
+  const command = (commandId, operationType, version, payload) => ({ commandId, deviceId: ids.deviceA,
+    operationType, aggregateId: requestId, expectedAggregateVersion: version, governingReleaseId: releaseId,
+    activeSessionRoleId: "ps410-reviewer", payload });
+  const ineligible = await submitRuntimeCommand(app, context, { ...command("26000000-0000-4000-8000-00000000001a",
+    "adjudication.request", 0, { modelId: "rules-resolution", actionIds: [nonAction] }), aggregateId: invalidRequestId },
+    randomUUID(), ids.deploymentA);
+  assert.deepEqual([ineligible.status, ineligible.errorCode], ["rejected", "REFERENCE_INVALID"]);
+  const requested = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000010",
+    "adjudication.request", 0, { modelId: "rules-resolution", actionIds: [actionA, actionB] }), randomUUID(), ids.deploymentA);
+  assert.equal(requested.status, "accepted");
+  const directPublish = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000011",
+    "adjudication.publish", 1, {}), randomUUID(), ids.deploymentA);
+  assert.deepEqual([directPublish.status, directPublish.errorCode], ["rejected", "INVALID_TRANSITION"]);
+
+  await owner.query("UPDATE runtime.artifact_instances SET creator_participant_id=$1,visible_role_ids='{}' WHERE id=ANY($2::uuid[])",
+    [outsiderParticipantId, [actionA, actionB]]);
+  assert.deepEqual(await getAdjudications(app, context), []);
+  const policyDenied = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-00000000001c",
+    "adjudication.review", 1, { perspectiveId: "operational", recommendation: "approve", rationale: "No current evidence access",
+      confidence: 0.8, evidenceArtifactIds: [actionA] }), randomUUID(), ids.deploymentA);
+  assert.deepEqual([policyDenied.status, policyDenied.errorCode], ["rejected", "PERMISSION_DENIED"]);
+  await owner.query("UPDATE runtime.artifact_instances SET creator_participant_id=$1,visible_role_ids=ARRAY['ps410-reviewer'] WHERE id=ANY($2::uuid[])",
+    [ids.participantA, [actionA, actionB]]);
+
+  const hiddenContext = { ...context, principalId: ids.personE, participantId: outsiderParticipantId,
+    deviceId: outsiderDeviceId, seatAssignmentIds: [outsiderAssignmentId], seatId: "ps410-outsider-seat", activeSessionRoleId: "ps410-outsider",
+    organizationRoles: [] };
+  assert.deepEqual(await getAdjudications(app, hiddenContext), []);
+  const reviewed = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000012",
+    "adjudication.review", 1, { perspectiveId: "operational", recommendation: "approve", rationale: "Evidence supports approval",
+      hiddenAnalyticalNotes: "Restricted reviewer note", confidence: 0.8, evidenceArtifactIds: [actionA] }), randomUUID(), ids.deploymentA);
+  assert.equal(reviewed.status, "accepted");
+  const duplicateReview = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-00000000001b",
+    "adjudication.review", 2, { perspectiveId: "operational", recommendation: "approve", rationale: "Duplicate review",
+      confidence: 0.8, evidenceArtifactIds: [actionA] }), randomUUID(), ids.deploymentA);
+  assert.deepEqual([duplicateReview.status, duplicateReview.errorCode], ["rejected", "CONFLICT"]);
+
+  const draftPayload = { outcome: "reject", rationale: "Lead judgment", participantRationale: "The Actions require revision",
+    synthesis: "The review was considered separately", confidence: 0.7, overrideRationale: "New control information supersedes the rule",
+    effects: [], facts: { "actions.ready": true }, rubricScores: {}, pluginProposalIds: [] };
+  const malformedEffect = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000017",
+    "adjudication.draft", 2, { ...draftPayload, effects: [{ operation: "execute", value: "unbounded" }] }), randomUUID(), ids.deploymentA);
+  assert.deepEqual([malformedEffect.status, malformedEffect.errorCode], ["rejected", "VALIDATION_FAILED"]);
+  const competing = await Promise.all([
+    submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000013", "adjudication.draft", 2, draftPayload), randomUUID(), ids.deploymentA),
+    submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000014", "adjudication.draft", 2, { ...draftPayload, outcome: "accept" }), randomUUID(), ids.deploymentA)
+  ]);
+  assert.equal(competing.filter(({ status }) => status === "accepted").length, 1);
+  assert.equal(competing.filter(({ status }) => status === "needs_reconciliation").length, 1);
+  const workspace = await getAdjudications(app, context);
+  assert.equal(workspace[0].actionSnapshots.length, 2);
+  assert.equal(workspace[0].reviews[0].hiddenAnalyticalNotes, "Restricted reviewer note");
+  assert.ok(workspace[0].record.explanationTrace.some(({ source }) => source === "rule"));
+
+  const denied = await submitRuntimeCommand(app, hiddenContext, { ...command("26000000-0000-4000-8000-000000000015",
+    "adjudication.publish", 3, {}), deviceId: outsiderDeviceId, activeSessionRoleId: "ps410-outsider" }, randomUUID(), ids.deploymentA);
+  assert.deepEqual([denied.status, denied.errorCode], ["rejected", "PERMISSION_DENIED"]);
+  const published = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000016",
+    "adjudication.publish", 3, {}), randomUUID(), ids.deploymentA);
+  assert.equal(published.status, "accepted");
+  const participantView = await getAdjudications(app, hiddenContext);
+  assert.equal(participantView.length, 1);
+  assert.deepEqual(participantView[0].reviews, []);
+  assert.equal(participantView[0].record.rationale, participantView[0].record.participantRationale);
+  assert.deepEqual(participantView[0].record.explanationTrace, []);
+  assert.equal(participantView[0].record.suggestion, null);
+  const delivery = await owner.query(`SELECT released_at,delivered_at,viewed_at FROM runtime.adjudication_deliveries
+    WHERE adjudication_record_id=$1 AND recipient_participant_id=$2`, [participantView[0].record.id, outsiderParticipantId]);
+  assert.equal(delivery.rowCount, 1);
+  assert.ok(delivery.rows[0].released_at instanceof Date && delivery.rows[0].delivered_at instanceof Date);
+  assert.ok(delivery.rows[0].released_at < delivery.rows[0].delivered_at);
+  assert.equal(delivery.rows[0].viewed_at, null);
 });

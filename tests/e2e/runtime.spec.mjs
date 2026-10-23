@@ -135,11 +135,60 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await context.close();
   });
 
+  test("@a11y AC-11 SYNC-04/05 survives restart and reconciles one encrypted offline Command", async ({ browser }) => {
+    test.setTimeout(90_000);
+    const uniqueDraft = "Durable offline restart proof";
+    const { context, page } = await actor(browser, fixture.tokens.author, {
+      viewport: { width: 1280, height: 720 }, reducedMotion: "reduce"
+    });
+    await page.goto(runtimeUrl());
+    await expect(page.getByRole("heading", { level: 1, name: "Blue Scribe workspace" })).toBeVisible({ timeout: 15_000 });
+    await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    const create = await fillBlueOrientation(page, uniqueDraft);
+    await create.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByText("Saved on this device as local pending. It has not been submitted.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Offline Outbox" })).toBeVisible();
+    await expect(page.getByText("local pending", { exact: true })).toBeVisible();
+    const rawStorage = await page.evaluate(async () => new Promise((resolve, reject) => {
+      const open = indexedDB.open("plenum-offline-v1");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const getAll = open.result.transaction("runtime").objectStore("runtime").getAll();
+        getAll.onerror = () => reject(getAll.error);
+        getAll.onsuccess = () => resolve(JSON.stringify(getAll.result));
+      };
+    }));
+    expect(rawStorage).not.toContain(uniqueDraft);
+    expect(rawStorage).not.toContain("artifact.create");
+    await page.close();
+
+    await context.setOffline(false);
+    const restored = await context.newPage();
+    await restored.goto(runtimeUrl());
+    await expect(restored.getByText("Reconnect complete: 1 accepted.")).toBeVisible({ timeout: 20_000 });
+    const restoredArtifact = restored.getByRole("article", { name: "Blue Strategic Orientation" });
+    await expect(restoredArtifact.getByLabel("What will Red do first?")).toHaveValue(uniqueDraft, { timeout: 15_000 });
+    await restored.reload();
+    await expect(restoredArtifact.getByLabel("What will Red do first?")).toHaveValue(uniqueDraft, { timeout: 15_000 });
+    expect((await new AxeBuilder({ page: restored }).analyze()).violations).toEqual([]);
+
+    const database = new Pool({ connectionString: databaseUrl, max: 1 });
+    const committed = await database.query(
+      "SELECT count(*)::int AS count FROM runtime.artifact_instances WHERE organization_id=$1 AND session_id=$2 AND payload::text LIKE $3",
+      [fixture.organizationId, fixture.sessionId, `%${uniqueDraft}%`]
+    );
+    await database.end();
+    expect(committed.rows[0].count).toBe(1);
+    await context.close();
+  });
+
   test("@a11y VOTE-01 VOTE-15 casts and certifies an accessible authoritative Poll", async ({ browser }) => {
     test.setTimeout(90_000);
     const commandTimeout = 15_000;
     const control = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const participant = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
+    const lateParticipant = await actor(browser, fixture.tokens.redAuthor, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const controlDevice = (await (await control.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
     const participantDevice = (await (await participant.context.request.post("/v1/devices", { data: {} })).json()).deviceId;
     const projection = async (current, deviceId) => (await current.context.request.get(
@@ -153,6 +202,17 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       payload: { definitionId: "synthetic-resolution", definitionRevision: 1 }
     } });
     expect(opened.status()).toBe(200);
+
+    await lateParticipant.page.goto(runtimeUrl());
+    const latePoll = lateParticipant.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
+    await expect(latePoll).toBeVisible({ timeout: commandTimeout });
+    await lateParticipant.context.setOffline(true);
+    await lateParticipant.page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await latePoll.getByLabel("No").check();
+    await latePoll.getByRole("button", { name: "Cast Ballot" }).click();
+    await expect(lateParticipant.page.getByText("Saved on this device as local pending. It has not been submitted.")).toBeVisible();
+    await expect(lateParticipant.page.getByText("local pending", { exact: true })).toBeVisible();
+    await lateParticipant.page.close();
 
     await participant.page.goto(runtimeUrl());
     const poll = participant.page.getByRole("article", { name: "Adopt the synthetic accessibility resolution?" });
@@ -172,13 +232,22 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await control.context.setOffline(false);
     await managed.getByRole("button", { name: "Close Poll" }).click();
     await expect(managed.getByRole("button", { name: "Compute Tally" })).toBeVisible({ timeout: commandTimeout });
+
+    await lateParticipant.context.setOffline(false);
+    const lateReconnect = await lateParticipant.context.newPage();
+    await lateReconnect.goto(runtimeUrl());
+    await expect(lateReconnect.getByText("Reconnect complete: 1 rejected.")).toBeVisible({ timeout: 20_000 });
+    await expect(lateReconnect.getByText("The Poll is not accepting Ballots.")).toBeVisible();
+    await expect(lateReconnect.getByText("rejected", { exact: true })).toBeVisible();
+    await expect(lateReconnect.getByLabel("Editable local draft")).toBeVisible();
+
     await managed.getByRole("button", { name: "Compute Tally" }).click();
     await expect(managed.getByRole("button", { name: "Certify result" })).toBeVisible({ timeout: commandTimeout });
     await managed.getByRole("button", { name: "Certify result" }).click();
     await expect(managed.getByRole("heading", { name: "Certified result" })).toBeVisible({ timeout: commandTimeout });
     await expect(managed.getByText(/Quorum met.*Passed/u)).toBeVisible({ timeout: commandTimeout });
     expect((await new AxeBuilder({ page: control.page }).analyze()).violations).toEqual([]);
-    await Promise.all([control.context.close(), participant.context.close()]);
+    await Promise.all([control.context.close(), participant.context.close(), lateParticipant.context.close()]);
   });
 
   test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
@@ -194,6 +263,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await proposal.getByRole("button", { name: "Approve effect" }).click();
     await expect(page.getByText("Approval Decisions require a live Session Authority and were not queued.")).toBeVisible({ timeout: commandTimeout });
     await expect(proposal.getByText("in review")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Offline Outbox" })).toHaveCount(0);
     await context.setOffline(false);
     await proposal.getByRole("button", { name: "Approve effect" }).click();
     await expect(page.getByText("The server accepted the Command.")).toBeVisible({ timeout: commandTimeout });
@@ -639,8 +709,8 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const retryReceipts = await Promise.all(retries.map((response) => response.json()));
     expect(new Set(retryReceipts.map(({ evidenceSequence }) => evidenceSequence)).size).toBe(1);
     expect(retryReceipts.every(({ replayed }) => replayed === true)).toBe(true);
-    await author.page.getByRole("button", { name: "Check receipt and retry" }).click();
-    await expect(author.page.getByText("The original server receipt was recovered.")).toBeVisible({ timeout: 15_000 });
+    await expect(author.page.getByText("Reconnect complete: 1 accepted.")).toBeVisible({ timeout: 15_000 });
+    await expect(author.page.getByRole("region", { name: "Offline Outbox" }).getByText("artifact.create")).toHaveCount(0);
     await expect(author.page.locator('input[value="Lost acknowledgement proof"]').first()).toBeVisible();
     await author.context.close();
   });

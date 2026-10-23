@@ -170,9 +170,9 @@ async function openPoll({ client, context, command, activeReleaseId }: CommandEx
 async function castBallot({ client, context, command }: CommandExecutionContext, row: PollRow): Promise<CommandDecision> {
   const version = Number(row.version);
   if (command.governingReleaseId !== row.governing_release_id) return fail("INCOMPATIBLE_RELEASE", "The Poll is governed by another Release.", true);
-  if (command.expectedAggregateVersion !== version) return fail("STALE_AGGREGATE_VERSION", `The Poll is at version ${version}.`, true);
   if (row.status !== "open" || (row.deadline_at !== null && row.deadline_at.getTime() < Date.now()))
     return fail(row.status === "closed" || row.deadline_at !== null ? "DEADLINE_EXPIRED" : "INVALID_TRANSITION", "The Poll is not accepting Ballots.");
+  if (command.expectedAggregateVersion !== version) return fail("STALE_AGGREGATE_VERSION", `The Poll is at version ${version}.`, true);
   const selected = choices(command.payload.optionIds), capability = command.payload.ballotCapability;
   if (Number(command.payload.pollDefinitionRevision) !== row.definition_revision || typeof capability !== "string" ||
       selected === undefined || !validChoices(row.definition, selected)) return fail("VALIDATION_FAILED", "The Ballot does not match the frozen Poll Definition.");

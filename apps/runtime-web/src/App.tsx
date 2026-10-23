@@ -20,6 +20,16 @@ import {
   type RuntimeVoiceChannelV1,
   type FloorLeaseV1
 } from "@plenum/event-contracts";
+import type { OfflineCommandV1, OfflineOutboxV1, SyncBootstrapV1 } from "@plenum/event-contracts";
+import {
+  canQueueOffline,
+  createOfflineOutbox,
+  enqueueOfflineCommand,
+  minimizeOfflineProjection,
+  orderedOfflineCommands,
+  recordOfflineReceipt,
+  updateOfflineDraft
+} from "@plenum/sync-client";
 import {
   runtimeFieldConditionMatches,
   runtimeFormValue,
@@ -29,13 +39,12 @@ import {
 } from "@plenum/simulation-schema";
 import { VoiceControls } from "./voice/VoiceControls.js";
 import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
+import { OfflineRuntimeStore } from "./offline/storage.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "error";
 
-interface PendingCommand {
-  status: "local_pending";
-  command: CommandEnvelopeV1;
-}
+const DEVICE_STORAGE_KEY = "plenum.runtime.deviceId";
+const offlineStore = new OfflineRuntimeStore();
 
 class ApiError extends Error {
   constructor(readonly status: number, readonly envelope: ErrorEnvelopeV1) {
@@ -97,6 +106,103 @@ function StatePage({ connection, title, message, retry }: {
       </section>
     </main>
   </Shell>;
+}
+
+const clearsOfflineData = (error: ApiError): boolean =>
+  ["ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED", "PERMISSION_DENIED"]
+    .includes(error.envelope.error.code);
+
+async function submitQueuedCommand(sessionId: string, command: CommandEnvelopeV1): Promise<CommandReceiptV1> {
+  try {
+    return await api<CommandReceiptV1>(`/v1/sessions/${sessionId}/commands/${command.commandId}`);
+  } catch (cause) {
+    if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+  }
+  const response = await fetch(`/v1/sessions/${sessionId}/commands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(command)
+  });
+  const body: unknown = await response.json();
+  if (isCommandReceipt(body)) return body;
+  if (typeof body === "object" && body !== null && "error" in body) {
+    throw new ApiError(response.status, body as ErrorEnvelopeV1);
+  }
+  throw new Error(`Command returned an invalid response with status ${response.status}`);
+}
+
+async function reconcileOfflineOutbox(sessionId: string, outbox: OfflineOutboxV1): Promise<{
+  outbox: OfflineOutboxV1;
+  accepted: number;
+  rejected: number;
+  reconciliation: number;
+}> {
+  let current = outbox;
+  let accepted = 0;
+  let rejected = 0;
+  let reconciliation = 0;
+  for (const entry of orderedOfflineCommands(outbox.entries.filter(({ status }) =>
+    status === "local_pending" || status === "received"))) {
+    const receipt = await submitQueuedCommand(sessionId, entry.command);
+    current = recordOfflineReceipt(current, receipt);
+    if (receipt.status === "accepted") {
+      accepted += 1;
+      current = { ...current, entries: current.entries.filter(({ command }) => command.commandId !== receipt.commandId) };
+    } else if (receipt.status === "rejected") rejected += 1;
+    else if (receipt.status === "needs_reconciliation") reconciliation += 1;
+  }
+  return { outbox: current, accepted, rejected, reconciliation };
+}
+
+function OfflineDraftEditor({ entry, save }: { entry: OfflineCommandV1; save(payload: JsonObject): Promise<void> }) {
+  const [error, setError] = useState("");
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = new FormData(event.currentTarget).get("draft");
+    try {
+      const payload: unknown = JSON.parse(String(value));
+      if (typeof payload !== "object" || payload === null || Array.isArray(payload)) throw new Error("object required");
+      setError("");
+      void save(payload as JsonObject);
+    } catch {
+      setError("Draft data must be a JSON object.");
+    }
+  };
+  return <form className="offline-draft" onSubmit={submit}>
+    <label htmlFor={`offline-draft-${entry.command.commandId}`}>Editable local draft</label>
+    <textarea id={`offline-draft-${entry.command.commandId}`} name="draft" rows={6}
+      defaultValue={JSON.stringify(entry.draftPayload, null, 2)} aria-describedby={`offline-error-${entry.command.commandId}`} />
+    <p id={`offline-error-${entry.command.commandId}`} className="field-error">{error}</p>
+    <button className="btn-secondary" type="submit">Save draft on this device</button>
+  </form>;
+}
+
+function OfflineOutboxPanel({ outbox, retry, saveDraft }: {
+  outbox: OfflineOutboxV1;
+  retry(): void;
+  saveDraft(commandId: string, payload: JsonObject): Promise<void>;
+}) {
+  if (outbox.entries.length === 0) return null;
+  const pending = outbox.entries.some(({ status }) => status === "local_pending" || status === "received");
+  return <section className="status-panel status-warning offline-outbox" aria-labelledby="offline-outbox-title">
+    <div>
+      <h2 id="offline-outbox-title">Offline Outbox</h2>
+      <p><code>local_pending</code> means saved on this device, not submitted.</p>
+    </div>
+    <ol className="offline-command-list">
+      {outbox.entries.map((entry) => <li key={entry.command.commandId}>
+        <div className="card-heading">
+          <strong>{entry.command.operationType}</strong>
+          <span className="badge badge-state">{entry.status.replaceAll("_", " ")}</span>
+        </div>
+        {entry.receipt?.message === null || entry.receipt?.message === undefined ? null : <p>{entry.receipt.message}</p>}
+        {entry.status === "rejected" || entry.status === "needs_reconciliation"
+          ? <OfflineDraftEditor entry={entry} save={(payload) => saveDraft(entry.command.commandId, payload)} />
+          : null}
+      </li>)}
+    </ol>
+    {pending ? <button className="btn-secondary" type="button" onClick={retry}>Reconcile with Session Authority</button> : null}
+  </section>;
 }
 
 type FieldEditorProps = {
@@ -582,15 +688,18 @@ function PollCard({ poll, disabled, send }: { poll: RuntimePollV1; disabled: boo
 function RuntimeView() {
   const id = sessionId();
   const [connection, setConnection] = useState<ConnectionState>("loading");
-  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(() => localStorage.getItem(DEVICE_STORAGE_KEY));
+  const [bootstrap, setBootstrap] = useState<SyncBootstrapV1 | null>(null);
+  const [outbox, setOutbox] = useState<OfflineOutboxV1 | null>(null);
   const [projection, setProjection] = useState<RuntimeProjectionV1 | null>(null);
   const [effectProposals, setEffectProposals] = useState<EffectProposalV1[]>([]);
   const [adjudications, setAdjudications] = useState<AdjudicationRequestV1[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string>("");
-  const [pending, setPending] = useState<PendingCommand | null>(null);
   const main = useRef<HTMLElement>(null);
   const loadVersion = useRef(0);
+  const pending = outbox?.entries.some(({ status }) => status === "local_pending" || status === "received") === true;
+  const submitting = connection === "online" && pending;
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
@@ -601,19 +710,97 @@ function RuntimeView() {
       const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };
       if (version !== loadVersion.current) return;
       setDeviceId(registered.deviceId);
+      localStorage.setItem(DEVICE_STORAGE_KEY, registered.deviceId);
       const headers = { "x-device-id": registered.deviceId };
-      const [nextProjection, proposalResponse, adjudicationResponse] = await Promise.all([
+      const [nextBootstrap, initialProjection, proposalResponse, adjudicationResponse] = await Promise.all([
+        api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap`, { headers }),
         api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers }),
         api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers }),
         api<{ adjudications: AdjudicationRequestV1[] }>(`/v1/sessions/${id}/adjudications`, { headers })
       ]);
       if (version !== loadVersion.current) return;
+      const previous = await offlineStore.load(id, registered.deviceId);
+      const sameScope = previous !== null &&
+        previous.bootstrap.participantId === nextBootstrap.participantId &&
+        previous.bootstrap.activeSessionRoleId === nextBootstrap.activeSessionRoleId;
+      let nextOutbox = sameScope ? {
+        ...previous.outbox,
+        authorityEpoch: nextBootstrap.authorityEpoch,
+        accessRevision: nextBootstrap.accessRevision,
+        credentialExpiresAt: nextBootstrap.credentialExpiresAt
+      } : createOfflineOutbox(nextBootstrap);
+      let nextProjection = initialProjection;
+      const unresolved = nextOutbox.entries.some(({ status }) => status === "local_pending" || status === "received");
+      if (unresolved) {
+        const reconciled = await reconcileOfflineOutbox(id, nextOutbox);
+        nextOutbox = reconciled.outbox;
+        if (reconciled.accepted > 0) {
+          nextProjection = await api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers });
+        }
+        const outcomes = [
+          reconciled.accepted === 0 ? "" : `${reconciled.accepted} accepted`,
+          reconciled.rejected === 0 ? "" : `${reconciled.rejected} rejected`,
+          reconciled.reconciliation === 0 ? "" : `${reconciled.reconciliation} need reconciliation`
+        ].filter(Boolean).join(", ");
+        if (outcomes.length > 0) setNotice(`Reconnect complete: ${outcomes}.`);
+      }
+      await offlineStore.save({
+        bootstrap: nextBootstrap,
+        projection: minimizeOfflineProjection(nextProjection),
+        outbox: nextOutbox
+      });
+      if (version !== loadVersion.current) return;
+      setBootstrap(nextBootstrap);
+      setOutbox(nextOutbox);
       setProjection(nextProjection);
       setEffectProposals(proposalResponse.proposals);
       setAdjudications(adjudicationResponse.adjudications);
       setConnection("online");
     } catch (cause) {
       if (version !== loadVersion.current) return;
+      if (cause instanceof ApiError && clearsOfflineData(cause) && deviceId !== null) {
+        await offlineStore.clear(id, deviceId);
+        setBootstrap(null);
+        setOutbox(null);
+        setProjection(null);
+        if (cause.envelope.error.code === "DEVICE_NOT_REGISTERED") {
+          localStorage.removeItem(DEVICE_STORAGE_KEY);
+          setDeviceId(null);
+        }
+        setConnection("error");
+        setError(`${cause.message} Protected offline data was cleared.`);
+        return;
+      }
+      if (deviceId !== null) {
+        let cached: Awaited<ReturnType<typeof offlineStore.load>>;
+        try {
+          cached = await offlineStore.load(id, deviceId);
+        } catch (storageError) {
+          setConnection("error");
+          setError(storageError instanceof Error ? storageError.message : "Protected offline data could not be read.");
+          return;
+        }
+        if (cached !== null && Date.parse(cached.bootstrap.credentialExpiresAt) <= Date.now()) {
+          await offlineStore.save({ ...cached, projection: null });
+          setBootstrap(cached.bootstrap);
+          setOutbox(cached.outbox);
+          setProjection(null);
+          setConnection("error");
+          setError("The offline credential expired. Local drafts were retained, but cached Session data and submission are unavailable until re-authentication.");
+          return;
+        }
+        if (cached !== null && cached.projection !== null && !(cause instanceof ApiError && cause.envelope.error.code === "AUTH_EXPIRED")) {
+          setBootstrap(cached.bootstrap);
+          setOutbox(cached.outbox);
+          setProjection(cached.projection);
+          setEffectProposals([]);
+          setAdjudications([]);
+          setConnection("offline");
+          setNotice("Using the protected offline view. Local pending work is not submitted.");
+          return;
+        }
+        if (cached !== null) setOutbox(cached.outbox);
+      }
       setConnection(navigator.onLine ? "error" : "offline");
       setError(cause instanceof Error ? cause.message : "The Runtime could not be loaded.");
     }
@@ -628,20 +815,29 @@ function RuntimeView() {
     return () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); };
   }, [load]);
 
-  const handleReceipt = async (receipt: CommandReceiptV1) => {
-    setPending(null);
-    if (receipt.status === "accepted") setNotice(receipt.replayed ? "The original server receipt was recovered." : "The server accepted the Command.");
-    else setNotice(receipt.status === "needs_reconciliation" ? `Authoritative state changed: ${receipt.message ?? receipt.errorCode}.` : `Command refused: ${receipt.message ?? receipt.errorCode}.`);
-    await load();
-    requestAnimationFrame(() => main.current?.focus());
-  };
-
-  const post = async (command: CommandEnvelopeV1, replayable = true): Promise<CommandReceiptV1 | null> => {
-    if (id === null) return null;
-    if (replayable) {
-      setPending({ status: "local_pending", command });
-      setNotice("Saved on this device. Waiting for a server receipt.");
-    } else setNotice("Submitting live operation. It will not be queued or replayed after reconnect.");
+  const post = async (command: CommandEnvelopeV1): Promise<CommandReceiptV1 | null> => {
+    if (id === null || bootstrap === null || outbox === null || projection === null) return null;
+    const queueable = canQueueOffline(command, bootstrap);
+    if (!queueable && !navigator.onLine) {
+      setConnection("offline");
+      setNotice("This operation requires the live Session Authority and was not queued.");
+      return null;
+    }
+    let storedOutbox = outbox;
+    if (queueable) {
+      storedOutbox = enqueueOfflineCommand(outbox, command, new Date().toISOString());
+      try {
+        await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: storedOutbox });
+      } catch (cause) {
+        setNotice(cause instanceof Error
+          ? `The Command was not queued because protected device storage failed: ${cause.message}`
+          : "The Command was not queued because protected device storage failed.");
+        return null;
+      }
+      setOutbox(storedOutbox);
+      setNotice("Saved on this device as local pending. It has not been submitted.");
+      if (!navigator.onLine) { setConnection("offline"); return null; }
+    } else setNotice("Submitting a live-only operation. It will not enter the Offline Outbox.");
     try {
       const response = await fetch(`/v1/sessions/${id}/commands`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command)
@@ -653,19 +849,36 @@ function RuntimeView() {
         }
         throw new Error(`Command returned an invalid response with status ${response.status}`);
       }
-      await handleReceipt(body);
+      if (queueable) {
+        let resolved = recordOfflineReceipt(storedOutbox, body);
+        if (body.status === "accepted") {
+          resolved = { ...resolved, entries: resolved.entries.filter(({ command: queued }) => queued.commandId !== body.commandId) };
+        }
+        await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: resolved });
+        setOutbox(resolved);
+      }
+      if (body.status === "accepted") setNotice(body.replayed ? "The original server receipt was recovered." : "The server accepted the Command.");
+      else setNotice(body.status === "needs_reconciliation"
+        ? `Authoritative state changed: ${body.message ?? body.errorCode}. Your local draft was kept.`
+        : `Command refused: ${body.message ?? body.errorCode}. Your local draft was kept.`);
+      await load();
+      requestAnimationFrame(() => main.current?.focus());
       return body;
     } catch (cause) {
       if (cause instanceof ApiError) {
-        setPending(null);
+        if (clearsOfflineData(cause)) {
+          await offlineStore.clear(id, bootstrap.deviceId);
+          setBootstrap(null);
+          setOutbox(null);
+          setProjection(null);
+        }
         setConnection("error");
         setNotice(`Command failed: ${cause.message}`);
         return null;
       }
       setConnection(navigator.onLine ? "error" : "offline");
-      setNotice(replayable ? "Delivery acknowledgement was lost. This Command is still local pending, not accepted."
-        : "The live operation failed without acknowledgement and was not queued.");
-      if (!replayable) setPending(null);
+      setNotice(queueable ? "Delivery acknowledgement was lost. This Command is still local pending, not accepted."
+        : "The live-only operation failed without acknowledgement and was not queued.");
       return null;
     }
   };
@@ -701,7 +914,7 @@ function RuntimeView() {
       commandId: crypto.randomUUID(), deviceId, operationType, aggregateId, expectedAggregateVersion,
       governingReleaseId: projection.releaseId, activeSessionRoleId: projection.activeSessionRoleId,
       deviceObservedAt: new Date().toISOString(), payload
-    }, !publication);
+    });
   };
 
   const sendPoll: SendPoll = (operationType, poll, payload) => {
@@ -723,7 +936,7 @@ function RuntimeView() {
     }
     const receipt = await post({ commandId: crypto.randomUUID(), deviceId, operationType,
       aggregateId: channel.id, expectedAggregateVersion: channel.version, governingReleaseId: channel.governingReleaseId,
-      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload }, false);
+      activeSessionRoleId: projection.activeSessionRoleId, deviceObservedAt: new Date().toISOString(), payload });
     return receipt;
   };
 
@@ -749,7 +962,8 @@ function RuntimeView() {
       } satisfies CommandEnvelopeV1) });
       const receipt: unknown = await response.json();
       if (!isCommandReceipt(receipt)) throw new Error(`Approval Decision returned an invalid response with status ${response.status}`);
-      await handleReceipt(receipt);
+      setNotice(receipt.status === "accepted" ? "The server accepted the Command." : receipt.message ?? "The Approval Decision was not accepted.");
+      await load();
     } catch (cause) {
       setNotice(cause instanceof Error ? `Approval Decision was not queued: ${cause.message}` : "Approval Decision was not queued.");
       await load();
@@ -757,15 +971,16 @@ function RuntimeView() {
   };
 
   const retryPending = async () => {
-    if (pending === null || id === null) return;
-    setNotice("Checking for the original server receipt before retrying.");
-    try {
-      const receipt = await api<CommandReceiptV1>(`/v1/sessions/${id}/commands/${pending.command.commandId}`);
-      await handleReceipt(receipt);
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 404) await post(pending.command);
-      else setNotice(cause instanceof Error ? cause.message : "Receipt lookup failed.");
-    }
+    setNotice("Checking original receipts before ordered reconnect.");
+    await load();
+  };
+
+  const saveOfflineDraft = async (commandId: string, payload: JsonObject) => {
+    if (bootstrap === null || projection === null || outbox === null) return;
+    const updated = updateOfflineDraft(outbox, commandId, payload);
+    await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: updated });
+    setOutbox(updated);
+    setNotice("The revised draft is saved on this device. It has not been submitted.");
   };
 
   if (projection === null) {
@@ -786,36 +1001,33 @@ function RuntimeView() {
         <p>{projection.currentStageLabel ?? "Session workspace"} · Session {projection.sessionStatus}</p>
       </section>
       <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
-      {pending === null ? null : <section className="status-panel status-warning" aria-labelledby="pending-title">
-        <div><h2 id="pending-title">Command awaiting confirmation</h2><p><code>local_pending</code> is not a server acceptance.</p></div>
-        <button className="btn-secondary" type="button" onClick={() => void retryPending()}>Check receipt and retry</button>
-      </section>}
+      {outbox === null ? null : <OfflineOutboxPanel outbox={outbox} retry={() => void retryPending()} saveDraft={saveOfflineDraft} />}
       {formModule === undefined ? null : <section aria-labelledby="create-heading">
         <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="create-heading">{formModule.title}</h2></div>
         {projection.createTasks.length === 0 ? <p className="empty-state">{formModule.emptyStateText}</p>
           : <div className="card-grid">{projection.createTasks.map((task) => <CreateTask key={task.artifactTypeKey} task={task}
-              disabled={pending !== null} send={send} />)}</div>}
+              disabled={submitting} send={send} />)}</div>}
       </section>}
       {taskModule === undefined ? null : <section aria-labelledby="tasks-heading">
         <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="tasks-heading">{taskModule.title}</h2></div>
         {projection.artifacts.length === 0 ? <p className="empty-state">{taskModule.emptyStateText}</p>
           : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
-              artifact={artifact} disabled={pending !== null} send={send} />)}</div>}
+              artifact={artifact} disabled={submitting} send={send} />)}</div>}
       </section>}
       {messageModules.map((module) => <MessageInbox key={module.id} module={module} projection={projection}
-        disabled={pending !== null} send={sendInformation} />)}
+        disabled={submitting} send={sendInformation} />)}
       {proposalModules.map((module) => <ProposalThreads key={module.id} module={module} projection={projection}
-        disabled={pending !== null} send={sendInformation} />)}
+        disabled={submitting} send={sendInformation} />)}
       {injectModules.map((module) => <InjectInbox key={module.id} module={module} projection={projection}
-        disabled={pending !== null} send={sendInformation} />)}
+        disabled={submitting} send={sendInformation} />)}
       {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
         <div className="section-heading"><p className="eyebrow">Authoritative voting</p><h2 id="polls-heading">Polls</h2></div>
-        <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={pending !== null} send={sendPoll} />)}</div>
+        <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>
       </section>}
       {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <VoiceControls projection={projection}
-        online={connection === "online"} disabled={pending !== null} command={sendVoice} floor={sendFloor} notice={setNotice} />}
-      <EffectProposalReview proposals={effectProposals} disabled={pending !== null} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
-      <AdjudicationReview adjudications={adjudications} disabled={pending !== null} send={sendInformation} />
+        online={connection === "online"} disabled={submitting} command={sendVoice} floor={sendFloor} notice={setNotice} />}
+      <EffectProposalReview proposals={effectProposals} disabled={submitting} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
+      <AdjudicationReview adjudications={adjudications} disabled={submitting} send={sendInformation} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
     </main>
   </Shell>;

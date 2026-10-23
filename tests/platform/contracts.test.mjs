@@ -10,11 +10,15 @@ import {
   RUNTIME_SSE_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
+  SYNC_BOOTSTRAP_CONTRACT_ID,
+  OFFLINE_OUTBOX_CONTRACT_ID,
   MODEL_RUN_CONTRACT_ID,
   EFFECT_PROPOSAL_CONTRACT_ID,
   APPROVAL_DECISION_CONTRACT_ID,
   COMPATIBILITY_REPORT_CONTRACT_ID,
   RELEASE_ACTIVATION_CONTRACT_ID,
+  CHECKPOINT_CONTRACT_ID,
+  VERIFICATION_EXPORT_CONTRACT_ID,
   SESSION_OPERATOR_POLICY_V1,
   commandEnvelopeV1Schema,
   commandReceiptV1Schema,
@@ -23,11 +27,15 @@ import {
   runtimeSseV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
+  syncBootstrapV1Schema,
+  offlineOutboxV1Schema,
   modelRunV1Schema,
   effectProposalV1Schema,
   approvalDecisionV1Schema,
   compatibilityReportV1Schema,
   releaseActivationV1Schema,
+  checkpointV1Schema,
+  verificationExportV1Schema,
   isCommandOperationType,
   isPastTenseEventType
 } from "@plenum/event-contracts";
@@ -72,12 +80,15 @@ test("PS-100-T01: versioned contracts are shared by server and frontend consumer
   assert.equal(eventEnvelopeV1Schema.properties.eventVersion.const, 1);
   assert.equal(commandReceiptV1Schema.additionalProperties, false);
   assert.deepEqual(
-    [RUNTIME_SSE_CONTRACT_ID, SYNC_DELTAS_CONTRACT_ID, SYNC_SNAPSHOT_CONTRACT_ID],
-    ["runtime-sse-v1", "sync-deltas-v1", "sync-snapshot-v1"]
+    [RUNTIME_SSE_CONTRACT_ID, SYNC_DELTAS_CONTRACT_ID, SYNC_SNAPSHOT_CONTRACT_ID,
+      SYNC_BOOTSTRAP_CONTRACT_ID, OFFLINE_OUTBOX_CONTRACT_ID],
+    ["runtime-sse-v1", "sync-deltas-v1", "sync-snapshot-v1", "sync-bootstrap-v1", "offline-outbox-v1"]
   );
   assert.equal(runtimeSseV1Schema.additionalProperties, false);
   assert.equal(syncDeltasV1Schema.additionalProperties, false);
   assert.equal(syncSnapshotV1Schema.additionalProperties, false);
+  assert.equal(syncBootstrapV1Schema.additionalProperties, false);
+  assert.equal(offlineOutboxV1Schema.additionalProperties, false);
   assert.deepEqual(
     [MODEL_RUN_CONTRACT_ID, EFFECT_PROPOSAL_CONTRACT_ID, APPROVAL_DECISION_CONTRACT_ID],
     ["model-run-v1", "effect-proposal-v1", "approval-decision-v1"]
@@ -87,6 +98,8 @@ test("PS-100-T01: versioned contracts are shared by server and frontend consumer
   assert.equal(approvalDecisionV1Schema.additionalProperties, false);
   assert.equal(compatibilityReportV1Schema.$id, COMPATIBILITY_REPORT_CONTRACT_ID);
   assert.equal(releaseActivationV1Schema.$id, RELEASE_ACTIVATION_CONTRACT_ID);
+  assert.equal(checkpointV1Schema.$id, CHECKPOINT_CONTRACT_ID);
+  assert.equal(verificationExportV1Schema.$id, VERIFICATION_EXPORT_CONTRACT_ID);
   assert.equal(canonicalizeJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
   assert.equal(isCommandOperationType(command.operationType), true);
   assert.equal(isCommandOperationType("artifact.submitted"), false);

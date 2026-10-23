@@ -28,7 +28,9 @@ const migrations = [
   "apps/server/migrations/018_identity_roles_and_governance.sql",
   "apps/server/migrations/019_world_state_automation.sql",
   "apps/server/migrations/020_adjudication_records.sql",
-  "apps/server/migrations/021_live_release_activation.sql"
+  "apps/server/migrations/021_live_release_activation.sql",
+  "apps/server/migrations/022_offline_devices.sql",
+  "apps/server/migrations/023_evidence_checkpoints.sql"
 ];
 
 export default async function globalSetup() {

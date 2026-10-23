@@ -1,9 +1,16 @@
 import type {
+  CommandEnvelopeV1,
+  CommandReceiptV1,
   JsonObject,
+  OfflineCommandV1,
+  OfflineOutboxV1,
+  RuntimeProjectionV1,
   RuntimeDeltaV1,
+  SyncBootstrapV1,
   SyncDeltasV1,
   SyncSnapshotV1
 } from "@plenum/event-contracts";
+import { OFFLINE_OUTBOX_CONTRACT_ID, OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 } from "@plenum/event-contracts";
 
 export type RuntimeConnectivity = "disconnected" | "connecting" | "catching_up" | "live" | "snapshot_required";
 export type RuntimeSyncTransport = "sse" | "polling";
@@ -25,6 +32,193 @@ export interface RuntimeSyncStorage {
 }
 
 const MAX_SEEN_DELTA_IDS = 512;
+
+export const OFFLINE_QUEUEABLE_OPERATION_TYPES = OFFLINE_QUEUEABLE_COMMAND_TYPES_V1;
+
+export const OFFLINE_OUTBOX_SCHEMA_VERSION = 1;
+
+export interface SealedOfflineOutboxV1 {
+  schemaVersion: typeof OFFLINE_OUTBOX_SCHEMA_VERSION;
+  iv: string;
+  ciphertext: string;
+}
+
+export function canQueueOffline(command: CommandEnvelopeV1, bootstrap: SyncBootstrapV1, now = Date.now()): boolean {
+  return !bootstrap.isControlRole &&
+    Date.parse(bootstrap.credentialExpiresAt) > now &&
+    command.deviceId === bootstrap.deviceId &&
+    command.activeSessionRoleId === bootstrap.activeSessionRoleId &&
+    bootstrap.offlineCommandTypes.includes(command.operationType);
+}
+
+export function createOfflineOutbox(bootstrap: SyncBootstrapV1): OfflineOutboxV1 {
+  return {
+    contractId: OFFLINE_OUTBOX_CONTRACT_ID,
+    sessionId: bootstrap.sessionId,
+    deviceId: bootstrap.deviceId,
+    participantId: bootstrap.participantId,
+    activeSessionRoleId: bootstrap.activeSessionRoleId,
+    authorityEpoch: bootstrap.authorityEpoch,
+    accessRevision: bootstrap.accessRevision,
+    credentialExpiresAt: bootstrap.credentialExpiresAt,
+    entries: []
+  };
+}
+
+export function enqueueOfflineCommand(
+  outbox: OfflineOutboxV1,
+  command: CommandEnvelopeV1,
+  queuedAt: string
+): OfflineOutboxV1 {
+  if (outbox.entries.some((entry) => entry.command.commandId === command.commandId)) return outbox;
+  const queueSequence = outbox.entries.reduce((maximum, entry) => Math.max(maximum, entry.queueSequence), -1) + 1;
+  return {
+    ...outbox,
+    entries: [...outbox.entries, {
+      command,
+      draftPayload: command.payload,
+      queuedAt,
+      queueSequence,
+      status: "local_pending",
+      receipt: null
+    }]
+  };
+}
+
+const dependencyRank: Readonly<Record<string, number>> = {
+  "artifact.create": 0,
+  "artifact.edit": 1,
+  "artifact.submit": 2
+};
+
+export function orderedOfflineCommands(entries: readonly OfflineCommandV1[]): OfflineCommandV1[] {
+  return [...entries].sort((left, right) => {
+    if (left.command.aggregateId === right.command.aggregateId) {
+      const rank = (dependencyRank[left.command.operationType] ?? 0) - (dependencyRank[right.command.operationType] ?? 0);
+      if (rank !== 0) return rank;
+    }
+    return left.queueSequence - right.queueSequence;
+  });
+}
+
+export function recordOfflineReceipt(
+  outbox: OfflineOutboxV1,
+  receipt: CommandReceiptV1
+): OfflineOutboxV1 {
+  return {
+    ...outbox,
+    entries: outbox.entries.map((entry) => entry.command.commandId === receipt.commandId
+      ? { ...entry, status: receipt.status, receipt }
+      : entry)
+  };
+}
+
+export function updateOfflineDraft(
+  outbox: OfflineOutboxV1,
+  commandId: string,
+  draftPayload: JsonObject
+): OfflineOutboxV1 {
+  return {
+    ...outbox,
+    entries: outbox.entries.map((entry) => entry.command.commandId === commandId
+      ? { ...entry, draftPayload }
+      : entry)
+  };
+}
+
+export function minimizeOfflineProjection(projection: RuntimeProjectionV1): RuntimeProjectionV1 {
+  return {
+    ...projection,
+    modules: projection.modules.filter(({ type }) => ["session_status", "artifact_form", "task_list"].includes(type)),
+    createTasks: projection.createTasks.filter((task) =>
+      OFFLINE_QUEUEABLE_OPERATION_TYPES.includes(
+        task.action.operationType as typeof OFFLINE_QUEUEABLE_OPERATION_TYPES[number]
+      )),
+    artifacts: projection.artifacts.map((artifact) => ({
+      ...artifact,
+      actions: artifact.actions.filter((action) =>
+        OFFLINE_QUEUEABLE_OPERATION_TYPES.includes(action.operationType as typeof OFFLINE_QUEUEABLE_OPERATION_TYPES[number]))
+    })),
+    messages: [],
+    injects: [],
+    polls: projection.polls.filter((poll) => poll.status === "open" && poll.eligible && !poll.hasVoted).map((poll) => ({
+      ...poll,
+      canManage: false,
+      canCertify: false,
+      tally: null,
+      certification: null
+    })),
+    voiceChannels: []
+  };
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+function outboxScope(outbox: Pick<OfflineOutboxV1, "sessionId" | "deviceId" | "participantId" | "activeSessionRoleId">): string {
+  return [outbox.sessionId, outbox.deviceId, outbox.participantId, outbox.activeSessionRoleId].join(":");
+}
+
+export async function generateOfflineOutboxKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+
+export async function sealOfflineData(value: unknown, key: CryptoKey, scope: string): Promise<SealedOfflineOutboxV1> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(scope) },
+    key,
+    new TextEncoder().encode(JSON.stringify(value))
+  );
+  return {
+    schemaVersion: OFFLINE_OUTBOX_SCHEMA_VERSION,
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext))
+  };
+}
+
+export async function openOfflineData(
+  sealed: SealedOfflineOutboxV1,
+  key: CryptoKey,
+  scope: string
+): Promise<unknown> {
+  if (sealed.schemaVersion !== OFFLINE_OUTBOX_SCHEMA_VERSION) throw new Error("Unsupported offline storage schema");
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(sealed.iv), additionalData: new TextEncoder().encode(scope) },
+    key,
+    base64ToBytes(sealed.ciphertext)
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext)) as unknown;
+}
+
+export async function sealOfflineOutbox(outbox: OfflineOutboxV1, key: CryptoKey): Promise<SealedOfflineOutboxV1> {
+  return sealOfflineData(outbox, key, outboxScope(outbox));
+}
+
+export async function openOfflineOutbox(
+  sealed: SealedOfflineOutboxV1,
+  key: CryptoKey,
+  expected: Pick<OfflineOutboxV1, "sessionId" | "deviceId" | "participantId" | "activeSessionRoleId">
+): Promise<OfflineOutboxV1> {
+  if (sealed.schemaVersion !== OFFLINE_OUTBOX_SCHEMA_VERSION) throw new Error("Unsupported Offline Outbox schema");
+  try {
+    const value = await openOfflineData(sealed, key, outboxScope(expected));
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("object required");
+    const outbox = value as Partial<OfflineOutboxV1>;
+    if (outbox.contractId !== OFFLINE_OUTBOX_CONTRACT_ID || outboxScope(outbox as OfflineOutboxV1) !== outboxScope(expected) ||
+        !Array.isArray(outbox.entries)) throw new Error("scope mismatch");
+    return outbox as OfflineOutboxV1;
+  } catch {
+    throw new Error("Offline Outbox is corrupt or belongs to another scope");
+  }
+}
 
 export function createRuntimeSyncState(): RuntimeSyncState {
   return {

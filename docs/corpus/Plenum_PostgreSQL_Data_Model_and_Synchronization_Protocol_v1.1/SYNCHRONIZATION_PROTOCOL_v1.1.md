@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Document ID | SYNC |
-| Version | 1.1.1 |
-| Date | 2026-10-17 |
-| Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001, ADR-002 and ADR-010; named specialist sign-offs remain required. OPEN-002 is resolved. |
+| Version | 1.1.2 |
+| Date | 2026-10-23 |
+| Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001, ADR-002 and ADR-010; named specialist sign-offs remain required. OPEN-002, OPEN-014, OPEN-015 and OPEN-017 are resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner (role placeholders — OPEN-001) |
 | Reads from | 01 PRD; 02 Platform; 05 Runtime; 06 Data, Security and Reporting; 09 Contracts; 10 Extension Framework; 11 Polling and Voting; 12 Voice and Radio; PostgreSQL Logical Data Model v1.1; Decision Register; Glossary |
@@ -46,7 +46,7 @@ Routes are versioned under `/v1`. Transport choices follow ADR-010.
 | Push-to-talk floor control | `POST /v1/sessions/{id}/voice-channels/{channelId}/floor-requests` and `/renew`, `/release` | The one exception to the command endpoint (DEC-48); online only; never queued or replayed | No |
 | Voice media | WebRTC through the media provider with a Media Credential from `voice_channel.join` | Outside this protocol (ADR-017) | No |
 
-**Authentication.** The server derives Organization, Person, Participant, Seat Assignments and Active Role Context from credentials and current assignments. `organizationId`, actor and authority fields supplied by clients are ignored. Devices are bound to a Person. When credentials expire, the client keeps only drafts permitted by policy and submits nothing until re-authenticated (OPEN-015).
+**Authentication.** The server derives Organization, Person, Participant, Seat Assignments and Active Role Context from credentials and current assignments. `organizationId`, actor and authority fields supplied by clients are ignored. Devices are bound to a Person. Offline authority expires absolutely eight hours after server issuance and cannot renew offline. On expiry, the client keeps only drafts permitted by policy and queues or submits nothing until re-authenticated (OPEN-015).
 
 ## 3. Command envelope and receipt
 
@@ -119,12 +119,12 @@ ONLINE_SYNCED ── connection to authority lost ──> OFFLINE_READY
 ### 4.2 Queueing rules
 
 - The draft and the queued Command are persisted locally before the client shows "saved on this device" (REQ-043).
-- **Queueable offline (proposal, pending OPEN-015):** Commands whose workflow transition is permitted to a non-control Session Role (for example `artifact.create`, `artifact.edit`, `artifact.submit`). **Never queued:** Commands requiring a control role (`isControlRole`), adjudication, Stage, timer, Session-status and Release-activation Commands. Queued Commands are provisional regardless; the Session Authority decides on reconnection.
+- **Queueable offline (OPEN-015):** only `artifact.create`, `artifact.edit`, `artifact.submit` and `ballot.cast`, when permitted to an eligible non-control Session Role. **Never queued:** Commands requiring a control role (`isControlRole`), adjudication, Stage, timer, Session status, Release Activation, voice, Floor, composition, effect approval or another Approval Decision. New Command types default to live-only. Queued Commands are provisional regardless; the Session Authority decides on reconnection.
 - Cached timers and Stage are estimates; the server's deadlines decide eligibility. A late Command may be rejected even though it was drafted in time.
 
 ### 4.3 Feature rules — DEC-46 to DEC-58
 
-These rules are fixed by product decisions and do not wait for OPEN-015.
+These rules are fixed by product decisions and the resolved OPEN-015 policy.
 
 | Command or call | Offline behavior |
 |---|---|
@@ -229,12 +229,13 @@ Air-gapped Sessions are authoritative locally from creation. A cloud and an inst
 
 ## 13. Institution-owned values
 
-Offline credential lifetime; managed-device posture; permitted offline Commands by security class (OPEN-015); transfer runbook (OPEN-016); recording and transcription consent handling (OPEN-027); RPO and RTO (OPEN-017); signing custody and anchor cadence (OPEN-014); retention of objects and cursors; Command size, outbox and delta limits; plugins permitted in air-gapped mode. Their absence blocks production release, not implementation and testing of these contracts.
+OPEN-014, OPEN-015 and OPEN-017 now define the managed-device posture, key custody, offline lifetime and Command allowlist, and recovery/anchor targets. Deployments must implement and evidence those approved values. Institution-owned values still awaiting resolution include the transfer runbook (OPEN-016), recording and transcription consent handling (OPEN-027), retention of objects and cursors, Command size, outbox and delta limits, and plugins permitted in air-gapped mode. Their absence blocks production release, not implementation and testing of these contracts.
 
 ## Change log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.2 | 2026-10-23 | Applied resolved OPEN-014/015/017 policy: eight-hour offline authority, the exact four-Command allowlist, managed-device/key-custody constraints and recovery/anchor targets. |
 | 1.1.1 | 2026-10-17 | Added §4.3 offline feature rules for Ballots, voice, floor control and Effect Proposal approvals (DEC-48, INV-026); floor endpoints and voice media in the transport table; SYNC-16 and SYNC-17; split §4 into subsections. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms and DEC-37 outcomes (renamed NEEDS_REVIEW to NEEDS_RECONCILIATION); recorded rejections with evidence (DEC-43); canonical digest; `activeSessionRoleId`; listed requests refused without receipts; SSE stream and WebSocket collaboration per ADR-010; proposed offline-queueable Command rule pending OPEN-015; moved the error catalog to 09 §8.1; added implementation status to every acceptance test. |
 | 1.0.0 | 2026-10-17 | Initial proposal (archived). |

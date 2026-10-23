@@ -28,8 +28,12 @@ import {
   ROLE_PREVIEW_CONTRACT_ID,
   COMPATIBILITY_REPORT_CONTRACT_ID,
   RELEASE_ACTIVATION_CONTRACT_ID,
+  CHECKPOINT_CONTRACT_ID,
+  VERIFICATION_EXPORT_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
+  SYNC_BOOTSTRAP_CONTRACT_ID,
+  OFFLINE_OUTBOX_CONTRACT_ID,
   commandEnvelopeV1Schema,
   artifactCommandV1Schema,
   stageCommandV1Schema,
@@ -54,8 +58,12 @@ import {
   rolePreviewV1Schema,
   compatibilityReportV1Schema,
   releaseActivationV1Schema,
+  checkpointV1Schema,
+  verificationExportV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
+  syncBootstrapV1Schema,
+  offlineOutboxV1Schema,
   isCommandOperationType,
   isPastTenseEventType
 } from "../packages/event-contracts/dist/index.js";
@@ -142,8 +150,12 @@ assert.equal(studioPublishV1Schema.$id, STUDIO_PUBLISH_CONTRACT_ID);
 assert.equal(rolePreviewV1Schema.$id, ROLE_PREVIEW_CONTRACT_ID);
 assert.equal(compatibilityReportV1Schema.$id, COMPATIBILITY_REPORT_CONTRACT_ID);
 assert.equal(releaseActivationV1Schema.$id, RELEASE_ACTIVATION_CONTRACT_ID);
+assert.equal(checkpointV1Schema.$id, CHECKPOINT_CONTRACT_ID);
+assert.equal(verificationExportV1Schema.$id, VERIFICATION_EXPORT_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
+assert.equal(syncBootstrapV1Schema.$id, SYNC_BOOTSTRAP_CONTRACT_ID);
+assert.equal(offlineOutboxV1Schema.$id, OFFLINE_OUTBOX_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 assert.equal(pluginBindingV1Schema.$id, PLUGIN_BINDING_CONTRACT_ID);
 assert.equal(compositionDefinitionV1Schema.$id, COMPOSITION_DEFINITION_CONTRACT_ID);
@@ -152,12 +164,13 @@ assert.equal(gateExpressionV1Schema.$id, GATE_EXPRESSION_CONTRACT_ID);
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
-  syncDeltasV1Schema, syncSnapshotV1Schema, modelRunV1Schema, effectProposalV1Schema,
+  syncDeltasV1Schema, syncSnapshotV1Schema, syncBootstrapV1Schema, offlineOutboxV1Schema,
+  modelRunV1Schema, effectProposalV1Schema,
   stateTransactionV1Schema,
   approvalDecisionV1Schema, voiceCommandV1Schema, mediaCredentialV1Schema, floorLeaseV1Schema,
   voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
-  rolePreviewV1Schema, compatibilityReportV1Schema, releaseActivationV1Schema,
+  rolePreviewV1Schema, compatibilityReportV1Schema, releaseActivationV1Schema, checkpointV1Schema, verificationExportV1Schema,
   pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);

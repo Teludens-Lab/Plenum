@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | CEW |
 | Number | 09 |
-| Version | 1.3.1 |
-| Date | 2026-10-17 |
+| Version | 1.3.2 |
+| Date | 2026-10-23 |
 | Status | Draft for review. v1.2 addendum merged; header previously read 1.0.0 in a file named v1.2; section numbering repaired (DEC-26). |
 | Owner | Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner (role placeholders — OPEN-001) |
@@ -341,12 +341,13 @@ Bootstrap, Command submission, receipt lookup, delta catch-up, live push, snapsh
 
 ## 15. Open items
 
-OPEN-015 (offline Command types and credential lifetime), OPEN-016 (authority transfer), OPEN-022 (remaining engineering ADRs), OPEN-027 (recording and transcription consent), OPEN-028 (secret ballots), and OPEN-029 (plugin trust). OPEN-012 and OPEN-021 are resolved.
+OPEN-016 (authority transfer), OPEN-022 (remaining engineering ADRs), OPEN-027 (recording and transcription consent), OPEN-028 (secret ballots), and OPEN-029 (plugin trust). OPEN-012, OPEN-015 and OPEN-021 are resolved.
 
 ## Change log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.2 | 2026-10-23 | Recorded OPEN-015 as resolved; the exact offline Command allowlist and eight-hour authority policy remain owned by the Decision Register and Synchronization Protocol. |
 | 1.3.1 | 2026-10-17 | Added poll, voice, plugin-registry and model-execution events; Poll, Effect Proposal, Floor Lease and Plugin Artifact state machines; eleven error codes; §12.1 to §12.3 contracts with the push-to-talk exception (DEC-48); replaced `plugin_execution` and `plugin_output` events with `model_run` and `effect_proposal`. |
 | 1.3.0 | 2026-10-17 | Merged v1.2 addendum; replaced `run` routes and fields with Session terms; adopted DEC-37 outcomes and DEC-43 rejection evidence; renamed events to DEC-38 convention and added the full catalog; made this document the owner of the canonical error-code catalog; added Studio and Release contracts; repaired section numbering. |
 | 1.2.0 | 2026-10-17 | Reconciliation addendum (archived). Header incorrectly read 1.0.0. |

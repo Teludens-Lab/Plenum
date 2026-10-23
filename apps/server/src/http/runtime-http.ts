@@ -20,6 +20,7 @@ import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
 import { getAdjudications } from "../adjudication/service.js";
+import { getRuntimeBootstrap, getRuntimeDeltas, getRuntimeSnapshot, getRuntimeSse } from "../sync/runtime-sync.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
 import {
@@ -118,6 +119,15 @@ function statusForReceipt(receipt: CommandReceiptV1): number {
 function send(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(body));
+}
+
+function sendSse(response: ServerResponse, body: string): void {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store",
+    connection: "keep-alive"
+  });
+  response.end(body);
 }
 
 function sendArtifact(response: ServerResponse, artifact: { contentType: string; filename: string; bytes: Uint8Array }): void {
@@ -338,6 +348,34 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           deviceId: deviceHeader(request, correlationId),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/sync\/(bootstrap|snapshot|deltas|stream)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const deviceId = deviceHeader(request, correlationId);
+        const requestedRole = url.searchParams.get("activeSessionRoleId") ?? undefined;
+        const base = {
+          pool: options.pool,
+          principal,
+          sessionId,
+          deviceId,
+          ...(requestedRole === undefined ? {} : { activeSessionRoleId: requestedRole }),
+          correlationId
+        };
+        if (match[2] === "bootstrap") {
+          send(response, 200, await getRuntimeBootstrap(base));
+          return true;
+        }
+        if (match[2] === "snapshot") {
+          send(response, 200, await getRuntimeSnapshot(base));
+          return true;
+        }
+        const cursor = url.searchParams.get("cursor") ?? request.headers["last-event-id"];
+        if (typeof cursor !== "string") {
+          throw authorizationError("SYNC_CURSOR_EXPIRED", "A Projection Cursor is required.", correlationId);
+        }
+        if (match[2] === "deltas") send(response, 200, await getRuntimeDeltas({ ...base, cursor }));
+        else sendSse(response, (await getRuntimeSse({ ...base, cursor })).body);
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/release-impact$/u))) {

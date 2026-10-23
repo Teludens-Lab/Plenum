@@ -27,6 +27,8 @@ export const DOMAIN_EVENT_CONTRACT_ID = "domain-event-v1";
 export const RUNTIME_SSE_CONTRACT_ID = "runtime-sse-v1";
 export const SYNC_DELTAS_CONTRACT_ID = "sync-deltas-v1";
 export const SYNC_SNAPSHOT_CONTRACT_ID = "sync-snapshot-v1";
+export const SYNC_BOOTSTRAP_CONTRACT_ID = "sync-bootstrap-v1";
+export const OFFLINE_OUTBOX_CONTRACT_ID = "offline-outbox-v1";
 export const ARTIFACT_COMMAND_CONTRACT_ID = "artifact-command-v1";
 export const STAGE_COMMAND_CONTRACT_ID = "stage-command-v1";
 export const INJECT_COMMAND_CONTRACT_ID = "inject-command-v1";
@@ -56,6 +58,15 @@ export const ADJUDICATION_REQUEST_CONTRACT_ID = "adjudication-request-v1";
 export const ADJUDICATION_RECORD_CONTRACT_ID = "adjudication-record-v1";
 export const COMPATIBILITY_REPORT_CONTRACT_ID = "compatibility-report-v1";
 export const RELEASE_ACTIVATION_CONTRACT_ID = "release-activation-v1";
+export const CHECKPOINT_CONTRACT_ID = "checkpoint-v1";
+export const VERIFICATION_EXPORT_CONTRACT_ID = "verification-export-v1";
+
+export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
+  "artifact.create",
+  "artifact.edit",
+  "artifact.submit",
+  "ballot.cast"
+] as const;
 
 export type ReleaseChangeClassV1 = "safe_prospective" | "compatibility_dependent" | "consequential";
 
@@ -90,6 +101,71 @@ export interface ReleaseActivationV1 extends JsonObject {
   existingInstanceHandling: "keep_existing";
   activatedBy: string;
   activatedAt: string;
+}
+
+export interface EvidenceProofEventV1 extends JsonObject {
+  id: string;
+  sequence: number;
+  eventType: string;
+  eventVersion: number;
+  commandId: string | null;
+  actorPersonId: string | null;
+  actorParticipantId: string | null;
+  governingReleaseId: string;
+  authorityEpoch: number;
+  correlationId: string | null;
+  causationId: string | null;
+  aggregateId: string | null;
+  aggregateVersion: number | null;
+  occurredAt: string;
+  recordedAt: string;
+  bodyDigest: string;
+}
+
+export interface EvidenceCheckpointV1 extends JsonObject {
+  contractId: typeof CHECKPOINT_CONTRACT_ID;
+  checkpointId: string;
+  sessionId: string;
+  firstSequence: number;
+  lastSequence: number;
+  previousCheckpointDigest: string | null;
+  batchMerkleRoot: string;
+  canonicalization: "plenum-evidence-v1";
+  algorithm: "sha256";
+  checkpointDigest: string;
+  createdAt: string;
+}
+
+export interface EvidenceCheckpointSignatureV1 extends JsonObject {
+  keyId: string;
+  algorithm: "Ed25519";
+  signature: string;
+  publicKeyJwk: JsonObject;
+  signedAt: string;
+}
+
+export interface EvidenceAnchorReceiptV1 extends JsonObject {
+  endpoint: string;
+  reference: string;
+  anchoredDigest: string;
+  keyId: string;
+  verificationResult: "pending" | "verified" | "failed";
+  recordedAt: string;
+}
+
+export interface VerificationCheckpointV1 extends JsonObject {
+  checkpoint: EvidenceCheckpointV1;
+  events: EvidenceProofEventV1[];
+  signature: EvidenceCheckpointSignatureV1;
+  anchorReceipts: EvidenceAnchorReceiptV1[];
+}
+
+export interface VerificationExportV1 extends JsonObject {
+  contractId: typeof VERIFICATION_EXPORT_CONTRACT_ID;
+  sessionId: string;
+  generatedAt: string;
+  lastEvidenceSequence: number;
+  checkpoints: VerificationCheckpointV1[];
 }
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
@@ -237,6 +313,48 @@ export interface SyncSnapshotV1 {
   cursor: string;
   state: JsonObject;
   aggregateVersions: Record<string, number>;
+}
+
+export interface SyncBootstrapV1 {
+  contractId: typeof SYNC_BOOTSTRAP_CONTRACT_ID;
+  sessionId: string;
+  deviceId: string;
+  participantId: string;
+  seatAssignmentIds: string[];
+  activeSessionRoleId: string;
+  isControlRole: boolean;
+  authorityDeploymentId: string;
+  authorityEpoch: number;
+  accessRevision: number;
+  governingReleaseId: string;
+  credentialExpiresAt: string;
+  serverTime: string;
+  projectionVersion: string;
+  policyVersion: string;
+  offlineCommandTypes: string[];
+}
+
+export type OfflineCommandStatusV1 = "local_pending" | CommandOutcomeStatus;
+
+export interface OfflineCommandV1 {
+  command: CommandEnvelopeV1;
+  draftPayload: JsonObject;
+  queuedAt: string;
+  queueSequence: number;
+  status: OfflineCommandStatusV1;
+  receipt: CommandReceiptV1 | null;
+}
+
+export interface OfflineOutboxV1 {
+  contractId: typeof OFFLINE_OUTBOX_CONTRACT_ID;
+  sessionId: string;
+  deviceId: string;
+  participantId: string;
+  activeSessionRoleId: string;
+  authorityEpoch: number;
+  accessRevision: number;
+  credentialExpiresAt: string;
+  entries: OfflineCommandV1[];
 }
 
 export type RuntimeSseEventV1 =
@@ -665,6 +783,31 @@ const uuidProperty = { type: "string", format: "uuid" } as const;
 const utcInstantProperty = { type: "string", format: "date-time" } as const;
 const jsonObjectProperty = { type: "object" } as const;
 
+export const checkpointV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: CHECKPOINT_CONTRACT_ID, title: "Evidence Checkpoint v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "checkpointId", "sessionId", "firstSequence", "lastSequence", "previousCheckpointDigest",
+    "batchMerkleRoot", "canonicalization", "algorithm", "checkpointDigest", "createdAt"],
+  properties: {
+    contractId: { const: CHECKPOINT_CONTRACT_ID }, checkpointId: uuidProperty, sessionId: uuidProperty,
+    firstSequence: { type: "integer", minimum: 1 }, lastSequence: { type: "integer", minimum: 1 },
+    previousCheckpointDigest: { type: ["string", "null"], pattern: "^[0-9a-f]{64}$" },
+    batchMerkleRoot: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    canonicalization: { const: "plenum-evidence-v1" }, algorithm: { const: "sha256" },
+    checkpointDigest: { type: "string", pattern: "^[0-9a-f]{64}$" }, createdAt: utcInstantProperty
+  }
+} as const satisfies ContractSchema<EvidenceCheckpointV1>;
+
+export const verificationExportV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: VERIFICATION_EXPORT_CONTRACT_ID, title: "Evidence Verification Export v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "sessionId", "generatedAt", "lastEvidenceSequence", "checkpoints"],
+  properties: {
+    contractId: { const: VERIFICATION_EXPORT_CONTRACT_ID }, sessionId: uuidProperty, generatedAt: utcInstantProperty,
+    lastEvidenceSequence: { type: "integer", minimum: 0 }, checkpoints: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<VerificationExportV1>;
+
 export const modelRunV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema", $id: MODEL_RUN_CONTRACT_ID, title: "Model Run v1",
   type: "object", additionalProperties: false,
@@ -1086,6 +1229,92 @@ export const commandReceiptV1Schema = {
     replayed: { type: "boolean" }
   }
 } as const satisfies ContractSchema<CommandReceiptV1>;
+
+export const syncBootstrapV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: SYNC_BOOTSTRAP_CONTRACT_ID,
+  title: "Runtime sync bootstrap v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "contractId", "sessionId", "deviceId", "participantId", "seatAssignmentIds",
+    "activeSessionRoleId", "isControlRole", "authorityDeploymentId", "authorityEpoch",
+    "accessRevision", "governingReleaseId", "credentialExpiresAt", "serverTime",
+    "projectionVersion", "policyVersion", "offlineCommandTypes"
+  ],
+  properties: {
+    contractId: { const: SYNC_BOOTSTRAP_CONTRACT_ID },
+    sessionId: uuidProperty,
+    deviceId: uuidProperty,
+    participantId: uuidProperty,
+    seatAssignmentIds: { type: "array", items: uuidProperty, minItems: 1, uniqueItems: true },
+    activeSessionRoleId: { type: "string", minLength: 1 },
+    isControlRole: { type: "boolean" },
+    authorityDeploymentId: { type: "string", minLength: 1 },
+    authorityEpoch: { type: "integer", minimum: 1 },
+    accessRevision: { type: "integer", minimum: 1 },
+    governingReleaseId: uuidProperty,
+    credentialExpiresAt: utcInstantProperty,
+    serverTime: utcInstantProperty,
+    projectionVersion: { type: "string", minLength: 1 },
+    policyVersion: { type: "string", minLength: 1 },
+    offlineCommandTypes: {
+      type: "array",
+      items: { type: "string", enum: [...OFFLINE_QUEUEABLE_COMMAND_TYPES_V1] },
+      uniqueItems: true
+    }
+  }
+} as const satisfies ContractSchema<SyncBootstrapV1>;
+
+export const offlineOutboxV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: OFFLINE_OUTBOX_CONTRACT_ID,
+  title: "Offline Outbox v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "contractId", "sessionId", "deviceId", "participantId", "activeSessionRoleId",
+    "authorityEpoch", "accessRevision", "credentialExpiresAt", "entries"
+  ],
+  properties: {
+    contractId: { const: OFFLINE_OUTBOX_CONTRACT_ID },
+    sessionId: uuidProperty,
+    deviceId: uuidProperty,
+    participantId: uuidProperty,
+    activeSessionRoleId: { type: "string", minLength: 1 },
+    authorityEpoch: { type: "integer", minimum: 1 },
+    accessRevision: { type: "integer", minimum: 1 },
+    credentialExpiresAt: utcInstantProperty,
+    entries: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["command", "draftPayload", "queuedAt", "queueSequence", "status", "receipt"],
+        properties: {
+          command: {
+            type: "object",
+            additionalProperties: false,
+            required: commandEnvelopeV1Schema.required,
+            properties: commandEnvelopeV1Schema.properties
+          },
+          draftPayload: jsonObjectProperty,
+          queuedAt: utcInstantProperty,
+          queueSequence: { type: "integer", minimum: 0 },
+          status: { type: "string", enum: ["local_pending", "received", "accepted", "rejected", "needs_reconciliation"] },
+          receipt: {
+            anyOf: [{ type: "null" }, {
+              type: "object",
+              additionalProperties: false,
+              required: commandReceiptV1Schema.required,
+              properties: commandReceiptV1Schema.properties
+            }]
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ContractSchema<OfflineOutboxV1>;
 
 export const domainEventV1Schema = {
   ...eventEnvelopeV1Schema,

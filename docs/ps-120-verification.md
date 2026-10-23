@@ -20,4 +20,4 @@ Date: 2026-10-18. Status: implementation evidence, not release approval.
 
 Migration `006_command_kernel.sql` is additive. It extends receipts and events with correlation and aggregate metadata and adds one recorded outcome per Command. Recovery is forward-fix; no destructive rollback is authorized after production data uses the new columns/index.
 
-ADR-001, ADR-003 and ADR-015 are Confirmed; ADR-014 was Approved on 2026-10-20 with named Technical Lead sign-off remaining. OPEN-016 authority transfer and OPEN-017 recovery/custody remain unresolved. No publisher is implemented: committed rows stay `pending` for the later outbox worker, so no external call occurs inside the transaction.
+ADR-001, ADR-003 and ADR-015 are Confirmed; ADR-014 was Approved on 2026-10-20 with named Technical Lead sign-off remaining. OPEN-016 authority transfer remains unresolved. OPEN-017 recovery/custody was resolved by user direction on 2026-10-23; its implementation remains assigned to PS-510/530. No publisher is implemented: committed rows stay `pending` for the later outbox worker, so no external call occurs inside the transaction.

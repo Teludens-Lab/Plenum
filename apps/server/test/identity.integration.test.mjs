@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomUUID, sign as signBytes } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +36,7 @@ import {
   getReadiness,
   getPluginCatalog,
   getRuntimeDeltas,
+  getRuntimeBootstrap,
   getRuntimeSnapshot,
   getRuntimeSse,
   importReleasePackage,
@@ -94,7 +95,10 @@ import {
   activateRelease,
   getReleaseHistory,
   getReleaseImpact,
-  reviewReleaseImpact
+  reviewReleaseImpact,
+  createDueEvidenceCheckpoint,
+  exportEvidenceVerification,
+  verifyEvidenceExport
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -230,7 +234,9 @@ async function applyMigrations() {
     "apps/server/migrations/018_identity_roles_and_governance.sql",
     "apps/server/migrations/019_world_state_automation.sql",
     "apps/server/migrations/020_adjudication_records.sql",
-    "apps/server/migrations/021_live_release_activation.sql"
+    "apps/server/migrations/021_live_release_activation.sql",
+    "apps/server/migrations/022_offline_devices.sql",
+    "apps/server/migrations/023_evidence_checkpoints.sql"
   ]) {
     await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -257,7 +263,8 @@ async function seed() {
     );
     await client.query(`INSERT INTO studio.definition_revisions
       (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
-      VALUES ($1,$2,$3,'{}',repeat('a',64),'v1',$4),($5,$6,$7,'{}',repeat('b',64),'v1',$8)`,
+      VALUES ($1,$2,$3,'{"sessionRoles":[{"id":"role-a","isControlRole":false},{"id":"role-control","isControlRole":true}]}',repeat('a',64),'v1',$4),
+             ($5,$6,$7,'{"sessionRoles":[{"id":"role-b","isControlRole":false}]}',repeat('b',64),'v1',$8)`,
       [ids.revisionA, ids.orgA, ids.projectA, ids.personA, ids.revisionB, ids.orgB, ids.projectB, ids.personB]);
     await client.query(`INSERT INTO registry.releases
       (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
@@ -609,6 +616,52 @@ test("Game Master projection requires Operator authorization and remains tenant/
   );
 });
 
+test("AC-11/SYNC-08/SYNC-14 bootstrap derives offline authority and policy from trusted server state", async () => {
+  const input = {
+    pool: app,
+    principal,
+    sessionId: ids.sessionA,
+    deviceId: ids.deviceA,
+    activeSessionRoleId: "role-a",
+    correlationId: randomUUID()
+  };
+  const bootstrap = await getRuntimeBootstrap(input);
+  assert.deepEqual(bootstrap.offlineCommandTypes,
+    ["artifact.create", "artifact.edit", "artifact.submit", "ballot.cast"]);
+  assert.deepEqual({
+    participantId: bootstrap.participantId,
+    activeSessionRoleId: bootstrap.activeSessionRoleId,
+    authorityEpoch: bootstrap.authorityEpoch,
+    governingReleaseId: bootstrap.governingReleaseId,
+    credentialExpiresAt: bootstrap.credentialExpiresAt
+  }, {
+    participantId: ids.participantA,
+    activeSessionRoleId: "role-a",
+    authorityEpoch: 1,
+    governingReleaseId: ids.releaseA,
+    credentialExpiresAt: principal.expiresAt.toISOString()
+  });
+  const metadata = await owner.query(
+    "SELECT offline_policy_version,offline_enabled_at IS NOT NULL AS enabled,last_offline_bootstrap_at IS NOT NULL AS bootstrapped FROM sync.devices WHERE id=$1",
+    [ids.deviceA]
+  );
+  assert.deepEqual(metadata.rows[0], { offline_policy_version: "offline-outbox-v1", enabled: true, bootstrapped: true });
+
+  const controlAssignment = randomUUID();
+  await owner.query(
+    `INSERT INTO runtime.seat_assignments
+      (id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by)
+     VALUES ($1,$2,$3,$4,'role-control','seat-control',$5)`,
+    [controlAssignment, ids.orgA, ids.sessionA, ids.participantA, ids.personA]
+  );
+  const control = await getRuntimeBootstrap({
+    ...input, activeSessionRoleId: "role-control", correlationId: randomUUID()
+  });
+  assert.equal(control.isControlRole, true);
+  assert.deepEqual(control.offlineCommandTypes, []);
+  await owner.query("UPDATE runtime.seat_assignments SET valid_to=transaction_timestamp() WHERE id=$1", [controlAssignment]);
+});
+
 test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async () => {
   const context = await withOrganizationTransaction(app, ids.orgA, (client) =>
     resolveSessionAccessContext(client, principal, {
@@ -888,6 +941,17 @@ test("revocation invalidates Authentication Sessions and active projections", as
       deviceId: ids.deviceA,
       activeSessionRoleId: "role-c",
       correlationId: "e0000000-0000-4000-8000-000000000011"
+    }),
+    (error) => error?.envelope?.error?.code === "AUTH_EXPIRED"
+  );
+  await assert.rejects(
+    getRuntimeBootstrap({
+      pool: app,
+      principal,
+      sessionId: ids.sessionA,
+      deviceId: ids.deviceA,
+      activeSessionRoleId: "role-c",
+      correlationId: randomUUID()
     }),
     (error) => error?.envelope?.error?.code === "AUTH_EXPIRED"
   );
@@ -2132,4 +2196,70 @@ test("AC-07/AC-11 SYNC-09 EXT-15 activates reviewed Releases without rewriting l
   assert.deepEqual(evidence.rows[0], { event_type: "release.activated", to_release_id: candidateReleaseId });
   await assert.rejects(owner.query("UPDATE runtime.release_activation_reviews SET report='{}'::jsonb WHERE id=$1",
     [review.impactReviewId]), /append-only/iu);
+});
+
+test("SYNC-13 creates, anchors, exports, and independently verifies a due Evidence checkpoint", async () => {
+  const pair = generateKeyPairSync("ed25519");
+  const publicKeyJwk = pair.publicKey.export({ format: "jwk" });
+  let anchorInput;
+  const checkpoint = await createDueEvidenceCheckpoint(app, ids.orgA, ids.sessionA, {
+    async signCheckpoint(input) {
+      return {
+        keyId: "kms/evidence/integration-1",
+        algorithm: "Ed25519",
+        signature: signBytes(null, input.digestBytes, pair.privateKey),
+        publicKeyJwk
+      };
+    }
+  }, {
+    async anchorCheckpoint(input) {
+      anchorInput = input;
+      return {
+        endpoint: "integration-custodian",
+        reference: `integration-custodian/${input.checkpointId}`,
+        anchoredDigest: input.checkpointDigest,
+        verificationResult: "verified",
+        recordedAt: new Date()
+      };
+    }
+  }, new Date(Date.now() + 6 * 60 * 1_000));
+  assert.ok(checkpoint);
+  assert.deepEqual(Object.keys(anchorInput).sort(), [
+    "checkpointCreatedAt", "checkpointDigest", "checkpointId", "firstSequence", "idempotencyKey",
+    "keyId", "lastSequence", "sessionId"
+  ]);
+  assert.equal(await createDueEvidenceCheckpoint(app, ids.orgA, ids.sessionA, {
+    async signCheckpoint() { throw new Error("No second signature expected"); }
+  }, {
+    async anchorCheckpoint() { throw new Error("No second anchor expected"); }
+  }, new Date(Date.now() + 12 * 60 * 1_000)), null);
+
+  const exported = await exportEvidenceVerification(app, principalD, ids.sessionA, randomUUID());
+  await assert.rejects(
+    exportEvidenceVerification(app, principalE, ids.sessionA, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  assert.equal(exported.checkpoints.length, 1);
+  assert.equal("body" in exported.checkpoints[0].events[0], false);
+  const receipt = exported.checkpoints[0].anchorReceipts[0];
+  assert.deepEqual(verifyEvidenceExport(exported, { "kms/evidence/integration-1": publicKeyJwk }, [{
+    endpoint: receipt.endpoint,
+    reference: receipt.reference,
+    anchoredDigest: receipt.anchoredDigest,
+    keyId: receipt.keyId
+  }]), { verified: true, issues: [] });
+
+  await owner.query(`INSERT INTO evidence.events
+    (id,organization_id,session_id,sequence,event_type,event_version,governing_release_id,authority_epoch,body)
+    VALUES (gen_random_uuid(),$1,$2,1,'checkpoint.tested',1,$3,1,'{}'::jsonb)`, [ids.orgB, ids.sessionB, ids.releaseB]);
+  await owner.query("UPDATE evidence.session_sequences SET next_sequence=2 WHERE session_id=$1", [ids.sessionB]);
+  await assert.rejects(createDueEvidenceCheckpoint(app, ids.orgB, ids.sessionB, {
+    async signCheckpoint(input) {
+      return { keyId: "kms/evidence/failure-test", algorithm: "Ed25519",
+        signature: signBytes(null, input.digestBytes, pair.privateKey), publicKeyJwk };
+    }
+  }, {
+    async anchorCheckpoint() { throw new Error("synthetic custodian outage"); }
+  }, new Date(Date.now() + 6 * 60 * 1_000)), /custodian outage/iu);
+  assert.equal((await owner.query("SELECT count(*) FROM evidence.checkpoint_batches WHERE session_id=$1", [ids.sessionB])).rows[0].count, "0");
 });

@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | PGLDM |
-| Version | 1.1.2 |
-| Date | 2026-10-21 |
+| Version | 1.1.3 |
+| Date | 2026-10-23 |
 | Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001 to ADR-005 and ADR-014 to ADR-016; named specialist sign-offs remain required. OPEN-002 is resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -270,14 +270,15 @@ Checkpoints cover non-overlapping, ordered sequence ranges and chain to the prev
 | DB-12 | At most one active Floor Lease exists per push-to-talk channel under concurrent requests. | Not implemented |
 | DB-13 | An Effect Proposal is applied at most once, and only with a matching Approval Decision. | Not implemented |
 
-## 14. Open operational parameters
+## 14. Operational parameters
 
-PostgreSQL minor version pinning and hosting (ADR-009); RPO and RTO (OPEN-017); signing key custody and HSM or KMS choice (OPEN-014); classification boundary (OPEN-024); offline credential lifetime and outbox limits (OPEN-015); Package signing (OPEN-020); secret-ballot key custody (OPEN-028); recording retention (OPEN-027); plugin signing keys (OPEN-029).
+OPEN-014, OPEN-015 and OPEN-017 resolve the managed-device, signing-key custody, offline credential/Command, RPO/RTO and independent-anchor parameters. Their implementation and operational evidence remain required. Open parameters are PostgreSQL minor version pinning and hosting (ADR-009), classification boundary (OPEN-024), Package signing (OPEN-020), secret-ballot key custody (OPEN-028), recording retention (OPEN-027) and plugin signing keys (OPEN-029).
 
 ## Change log
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.3 | 2026-10-23 | Recorded resolved OPEN-014/015/017 operational policy and separated approved values from remaining open parameters. |
 | 1.1.2 | 2026-10-21 | Recorded DEC-61 Reviewer and Research Analyst roles and the explicit migration gap from the implemented four-role constraint. |
 | 1.1.1 | 2026-10-17 | Added `voting`, `comms` and `extension` schemas (ADR-016) with entity catalogs §4.7 to §4.9 and DB-11 to DB-13. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms; added persons, Organization Role memberships and seat assignments (DEC-44); moved Release-defined identifiers out of `CHECK` constraints (DEC-45); added project-consistency foreign keys, application role, append-only triggers and corrected row-level security; recorded rejected and reconciliation receipts with evidence (DEC-43); split checkpoint storage into batches, signatures and anchors; replaced inline SQL with the tested migrations 001–004; added entity catalog with implementation status and acceptance test status. |

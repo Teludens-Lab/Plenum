@@ -6,9 +6,9 @@
 |---|---|
 | Document ID | DSR |
 | Number | 06 |
-| Version | 1.3.1 |
-| Date | 2026-10-17 |
-| Status | Draft for review. v1.2 amendment merged (DEC-26). |
+| Version | 1.3.2 |
+| Date | 2026-10-23 |
+| Status | Draft for review. v1.2 amendment merged (DEC-26). OPEN-014, OPEN-015 and OPEN-017 are resolved; production implementation evidence remains required. |
 | Owner | Security Owner, with Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner (role placeholders — OPEN-001) |
 | Reads from | 01 PRD; 08 Canon; 02 Platform; 03 Schema; Decision Register; Glossary |
@@ -76,8 +76,8 @@ Implements DEC-20 under confirmed ADR-003.
 - A Session state change and its Evidence Event commit atomically, with a strictly increasing per-Session Evidence Sequence (REQ-053).
 - Evidence rows cannot be updated or deleted: enforced by database privileges and immutability triggers, not only by application convention.
 - Checkpoints cover contiguous sequence ranges using a stable canonical serialization (not raw JSONB text), chain to the previous Checkpoint digest, and are signed with a key identified by key ID.
-- Checkpoint digests are anchored with an independently controlled custodian. Without an independent anchor, a privileged party could rewrite both events and chain; tamper evidence is claimed only once anchoring is in place (OPEN-017).
-- Signing keys live outside the database under segregated custody; air-gapped profiles use institution-controlled key systems (OPEN-014).
+- Checkpoint digests are anchored with an independently controlled custodian. Without an independent anchor, a privileged party could rewrite both events and chain; tamper evidence is claimed only once anchoring is in place (resolved OPEN-017; implementation evidence pending).
+- Signing keys live outside the database under segregated custody; air-gapped profiles use institution-controlled key systems (resolved OPEN-014; implementation evidence pending).
 - Cryptographic integrity proves records were not altered after commit. It does not prove human inputs were accurate, device clocks were correct, or that history is absolutely immutable.
 - Required procedures: key rotation, correction by compensating event, retention, redaction of protected fields in exports, verification export, compromise response.
 
@@ -122,7 +122,7 @@ Observations, Derived Metrics, Analytical Notes and Findings are stored and pres
 - Offline bundles are Participant-scoped projections, never a full Release (03 §19). Each states provenance, Governing Release, projection version, permitted fields, cache expiry and sensitivity.
 - On-device data and Offline Outboxes are protected at rest where the platform allows; browser storage alone does not meet high-assurance requirements (REQ-008).
 - On reconnection the server re-checks authentication, membership, current revocations and device policy.
-- Revocation cannot guarantee erasure of material already delivered to a device. High-security deployments need an explicit device-custody model and accreditation, not a generic compliance claim (OPEN-014, OPEN-015).
+- Revocation cannot guarantee erasure of material already delivered to a device. High-security deployments must implement and accredit the resolved OPEN-014/015 device-custody policy rather than make a generic compliance claim.
 
 ## 19. Security controls
 
@@ -149,7 +149,7 @@ Publication requires a named owner, semantic version, validation report, release
 
 - Backups cover PostgreSQL and object storage together so a restore is consistent: Releases, assets, Evidence Sequence, Checkpoints, signatures and Anchors (REQ-066).
 - Every restore drill verifies the checkpoint chain end to end and reports any proof that cannot be recovered.
-- Each Deployment's release configuration states availability, RTO, RPO, maximum event-processing delay, maximum state-update delay, maximum submission latency, backup frequency, restore-test frequency, audit retention, export recovery behavior and monitoring thresholds (REQ-067; OPEN-017, OPEN-019).
+- Each Deployment's release configuration states availability, the resolved OPEN-017 RTO/RPO and recovery cadence, maximum event-processing delay, maximum state-update delay, maximum submission latency, audit retention, export recovery behavior and monitoring thresholds; capacity targets remain governed by OPEN-019 (REQ-067).
 - Security and recovery tests are acceptance gates, not post-launch tasks.
 - The DEC-16 workload is a sizing assumption; no throughput or uptime is promised until measured.
 
@@ -183,6 +183,7 @@ Tampered Evidence Event; missing Evidence Event; rewritten chain without indepen
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.2 | 2026-10-23 | Recorded resolved OPEN-014/015/017 device, key-custody, offline-authority, anchor and recovery policy; implementation and accreditation evidence remain required. |
 | 1.3.1 | 2026-10-17 | Added §24 (ballot secrecy, recordings and transcripts, plugin data); retention levels now name Message Channels (DEC-51), Voice Channel recordings and Polls; extension and voice security controls; accessibility for ballots and voice; new mandatory negative tests. |
 | 1.3.0 | 2026-10-17 | Merged v1.2 amendment; retired v1.1 table list and artifact DDL in favor of Data Model v1.1; separated Audit Records from Evidence Events; specified database-enforced immutability; removed Supabase-specific assumptions; adopted Glossary terms; renumbered sections. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |

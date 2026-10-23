@@ -35,5 +35,5 @@ Cursor expiry follows the current Authentication Session expiry. The implementat
 ## Open governance and QA limits
 
 - ADR-010 is Approved as of 2026-10-20 and ADR-015 is Confirmed; named Technical Lead and Security Owner sign-offs for ADR-010 remain.
-- OPEN-015 remains unresolved. No Offline Outbox, offline credential policy or provisional Command submission was added.
+- At PS-140 completion, no Offline Outbox, offline credential policy or provisional Command submission was added. OPEN-015 was resolved by user direction on 2026-10-23 and its implementation baseline was added by PS-500; the approved eight-hour production authority still requires follow-up enforcement evidence.
 - No HTTP server composition, browser workflow, HTTP/2/proxy test, sustained SSE connection, reconnect-burst load test, Node 26 run, deployment or release approval was performed. PS-150 owns the first rendered end-to-end Runtime flow; PS-540 owns measured reconnect load.

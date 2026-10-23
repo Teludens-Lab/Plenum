@@ -36,7 +36,7 @@ In simple terms: much of the product works locally, but production approval need
 | 2 | GAP-02 recording/transcription consent | PS-320, PS-550 | PS-310 and policy owners available | OPEN-027 is resolved and consent behavior passes |
 | 3 | GAP-03 secret-ballot custody | PS-320, PS-550 | PS-310 and security/research owners available | OPEN-028 is resolved and privacy tests pass |
 | 4 | GAP-04 Plugin trust operations | PS-330, PS-530, PS-550, PS-600 | Existing PS-220/230 evidence available | Production trust/key/revocation procedures pass |
-| 5 | GAP-05 persistent offline-device policy | PS-500 | PS-420 complete and OPEN-014/015 inputs supplied | Durable outbox and reconciliation evidence pass |
+| 5 | GAP-05 persistent offline-device policy | PS-500 | PS-420 complete and resolved OPEN-014/015 policy available | Durable outbox plus approved expiry, retention and device-control evidence pass |
 | 6 | GAP-06 backup and restore rehearsal | PS-530 | PS-500/510/520 complete | Isolated restore meets approved RPO/RTO and integrity checks |
 | 7 | GAP-07 institutional media validation | PS-530, PS-540 | Deployable media profile and approved test network exist | LAN/TLS/TURN/firewall/restart evidence passes |
 | 8 | GAP-08 load and capacity evidence | PS-540 | PS-350, PS-500 and PS-530 complete | All approved workloads have named-environment results |
@@ -236,7 +236,7 @@ Let permitted work survive a browser or device restart without letting the offli
 
 Implement the approved persistent offline Draft and Command outbox policy for Plenum.
 
-Before editing, obtain decisions for device data-at-rest protection, supported device/browser posture, credential lifetime, maximum disconnection duration, revocation behavior, retention/expiry, device loss, local deletion, shared-device restrictions, and the final allowlist of offline-command types.
+Use the resolved OPEN-014/015 policy for device data-at-rest protection, supported device/browser posture, the absolute eight-hour offline authority, revocation, 30-day encrypted-draft retention, device loss, local deletion, shared-device restrictions, and the exact four-Command allowlist. Do not substitute different values without a new Decision Register change.
 
 Use the existing synchronization contracts and server-authoritative receipts. Local state must visibly remain `local_pending`; it must never appear submitted or accepted until the server returns the canonical result. Queue only explicitly permitted Commands. Never queue voice/Floor operations, Stage/Session control, adjudication, composition execution, Effect approvals, or other prohibited live-authority actions.
 
@@ -268,7 +268,7 @@ Prove that an institution can recover the complete system without losing the int
 
 Create and run a non-production backup/restore rehearsal for the exact release candidate and deployment profile.
 
-Obtain approved RPO, RTO, retention, residency, encryption, backup-custody, and independent evidence-anchor custody targets. Inventory PostgreSQL, object storage, Release packages, Plugin bundles/trust data, media metadata and any approved recordings, signer/anchor references, configuration, and required secrets. State which materials are deliberately excluded and how they are reprovisioned.
+Use the resolved OPEN-017 RPO ≤15 minutes, RTO ≤4 hours, quarterly and pre-major-release restore cadence, separated custody and independent-anchor requirements. Obtain only the still-institution-specific retention, residency and recording decisions. Inventory PostgreSQL, object storage, Release packages, Plugin bundles/trust data, media metadata and any approved recordings, signer/anchor references, configuration, and required secrets. State which materials are deliberately excluded and how they are reprovisioned.
 
 Create repeatable backup and isolated-restore procedures. Restore into a clean target with no connection to production. Verify migrations, tenant isolation, row counts and constraints, object digests, Release/Definition provenance, event sequences, Command receipts, evidence checkpoint chains, Plugin provenance, Poll certification, and the ability to start the restored application safely.
 

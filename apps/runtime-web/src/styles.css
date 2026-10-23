@@ -109,6 +109,12 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .status-panel { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); padding: var(--space-4); border-radius: var(--radius-md); }
 .status-panel h2, .status-panel p { margin: 0; }
 .status-warning { border: 1px solid var(--color-status-warning); background: var(--color-status-warning-bg); }
+.offline-outbox { display: grid; align-items: stretch; }
+.offline-command-list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.offline-command-list li { min-width: 0; padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-bg-surface); }
+.offline-draft { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.offline-draft label { font-weight: var(--weight-medium); }
+.offline-draft textarea { width: 100%; resize: vertical; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: var(--space-3); background: var(--color-bg-elevated); color: var(--color-text-primary); font-family: var(--font-mono); }
 .live-region:empty { display: none; }
 .live-region { margin-bottom: var(--space-4); color: var(--color-text-secondary); }
 .refresh { margin-top: var(--space-8); }

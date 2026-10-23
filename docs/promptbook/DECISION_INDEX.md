@@ -23,7 +23,8 @@ Pointer table only. Decision text and status live exclusively in `03_Governance_
 | OPEN-003 | Resolved; the official snapshot pins source identity but does not itself prove parity | PS-000, PS-200, PS-350 |
 | OPEN-007 | Resolved; use the ADR-012 deployment-profile federation rules | PS-110, PS-340, PS-530 |
 | OPEN-004..013 | Methodology, Stage/workflow/form/compatibility/publication policy gates | PS-300, PS-310, PS-400, PS-410, PS-420 |
-| OPEN-014..020 | Device/key/offline/authority/recovery/capacity/signing operational gates | PS-001, PS-130, PS-500, PS-510, PS-530, PS-540 |
+| OPEN-014, OPEN-015, OPEN-017 | Resolved 2026-10-23: managed-device/key custody, offline authority/allowlist, and recovery/anchor policy; implementation evidence remains with PS-500/510/530/550 | PS-500, PS-510, PS-530, PS-550 |
+| OPEN-016, OPEN-018..020 | Authority transfer, remaining capacity and signing operational gates | PS-001, PS-130, PS-510, PS-530, PS-540 |
 | OPEN-021 | Resolved; do not reopen taxonomy | PS-220, PS-330 |
 | OPEN-025 | Resolved by DEC-61; migration 018 and role-specific runtime workflows implemented, operational release evidence remains required | PS-110, PS-340, PS-520 |
 | OPEN-022..026 | Engine, classification, role, and Canon substance gates | PS-220, PS-310, PS-400, PS-410, PS-520 |

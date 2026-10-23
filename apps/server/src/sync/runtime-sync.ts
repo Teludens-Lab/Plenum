@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
+  OFFLINE_OUTBOX_CONTRACT_ID,
+  OFFLINE_QUEUEABLE_COMMAND_TYPES_V1,
+  SYNC_BOOTSTRAP_CONTRACT_ID,
   type JsonObject,
   type JsonValue,
   type RuntimeDeltaV1,
   type RuntimeSseV1,
+  type SyncBootstrapV1,
   type SyncDeltasV1,
   type SyncSnapshotV1
 } from "@plenum/event-contracts";
@@ -41,6 +45,63 @@ export interface RuntimeSyncInput {
 
 export interface RuntimeDeltaInput extends RuntimeSyncInput {
   cursor: string;
+}
+
+export async function getRuntimeBootstrap(input: RuntimeSyncInput): Promise<SyncBootstrapV1> {
+  return withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
+    const context = await currentContext(client, input);
+    const result = await client.query<{
+      deployment_id: string;
+      snapshot: unknown;
+      server_time: Date;
+    }>(
+      `SELECT authority.deployment_id,revision.snapshot,transaction_timestamp() AS server_time
+         FROM runtime.session_authorities authority
+         JOIN registry.releases release
+           ON release.organization_id=authority.organization_id AND release.id=$3
+         JOIN studio.definition_revisions revision
+           ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+        WHERE authority.organization_id=$1 AND authority.session_id=$2 AND authority.status='active'`,
+      [context.organizationId, context.sessionId, context.activeReleaseId]
+    );
+    const row = result.rows[0];
+    if (row === undefined || !isRecord(row.snapshot)) {
+      throw authorizationError("INCOMPATIBLE_RELEASE", "The active Release cannot initialize offline participation.", input.correlationId);
+    }
+    const design = isRecord(row.snapshot.coreDesign) ? row.snapshot.coreDesign : row.snapshot;
+    const role = Array.isArray(design.sessionRoles)
+      ? design.sessionRoles.find((candidate) => isRecord(candidate) && candidate.id === context.activeSessionRoleId)
+      : undefined;
+    if (!isRecord(role)) {
+      throw authorizationError("INCOMPATIBLE_RELEASE", "The active Release lacks the Active Role Context.", input.correlationId);
+    }
+    const isControlRole = role.isControlRole === true;
+    await client.query(
+      `UPDATE sync.devices
+          SET offline_policy_version=$1,offline_enabled_at=COALESCE(offline_enabled_at,transaction_timestamp()),
+              last_offline_bootstrap_at=transaction_timestamp()
+        WHERE organization_id=$2 AND id=$3 AND person_id=$4 AND revoked_at IS NULL`,
+      [OFFLINE_OUTBOX_CONTRACT_ID, context.organizationId, input.deviceId, context.principalId]
+    );
+    return {
+      contractId: SYNC_BOOTSTRAP_CONTRACT_ID,
+      sessionId: context.sessionId,
+      deviceId: input.deviceId,
+      participantId: context.participantId,
+      seatAssignmentIds: context.seatAssignmentIds,
+      activeSessionRoleId: context.activeSessionRoleId,
+      isControlRole,
+      authorityDeploymentId: row.deployment_id,
+      authorityEpoch: context.authorityEpoch,
+      accessRevision: context.accessRevision,
+      governingReleaseId: context.activeReleaseId,
+      credentialExpiresAt: input.principal.expiresAt.toISOString(),
+      serverTime: row.server_time.toISOString(),
+      projectionVersion: RUNTIME_PROJECTION_VERSION,
+      policyVersion: POLICY_DECISION_VERSION,
+      offlineCommandTypes: isControlRole ? [] : [...OFFLINE_QUEUEABLE_COMMAND_TYPES_V1]
+    };
+  });
 }
 
 interface EventRow {

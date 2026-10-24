@@ -81,7 +81,7 @@ export async function runIsolatedPlugin(input: ExtensionHostInvocation): Promise
     child.once("error", (error) => finish(new Error(`Extension Host could not start: ${error.message}`)));
     child.once("close", (code) => {
       if (settled) return;
-      if (code === 137) return finish(new Error("Plugin execution timed out"));
+      if (code === 124 || code === 137) return finish(new Error("Plugin execution timed out"));
       if (code !== 0) return finish(new Error("Plugin execution failed in isolation"));
       try {
         const value = JSON.parse(Buffer.concat(stdout).toString("utf8")) as unknown;

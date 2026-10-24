@@ -265,7 +265,7 @@ Checkpoints cover non-overlapping, ordered sequence ranges and chain to the prev
 | DB-07 | A revoked Participant receives no new protected projection. | Not implemented (no revocation endpoint) |
 | DB-08 | An expired cursor triggers a safe snapshot resynchronization. | Not implemented |
 | DB-09 | Schema upgrades preserve reading of old data. | Not run |
-| DB-10 | The load fixture meets agreed capacity targets. | Not run (OPEN-019) |
+| DB-10 | The load fixture meets agreed capacity targets. | One local PS-540 characterization run completed with zero integrity mismatch but substantial database waiting and command/Floor latency failures against the approved targets; soak and clean reruns remain required. |
 | DB-11 | A second accepted Ballot for one Seat Assignment cannot commit when revoting is off; an open Poll's frozen fields cannot change. | Not implemented |
 | DB-12 | At most one active Floor Lease exists per push-to-talk channel under concurrent requests. | Not implemented |
 | DB-13 | An Effect Proposal is applied at most once, and only with a matching Approval Decision. | Not implemented |

@@ -14,7 +14,7 @@
 | Data/migration | PostgreSQL 18, expand/backfill/switch/contract, compatibility, forward-fix | Data owner / Pending |
 | Recovery | Backup creation, isolated restore, integrity verification, measured RPO/RTO | Operations / Pending |
 | Accessibility | Keyboard, focus, semantics, contrast, zoom/reflow, errors, reduced motion | QA/accessibility / Pending |
-| Performance | Named hardware/load, workload, percentile/error/saturation evidence against approved target | Performance owner / Blocked by OPEN-019 |
+| Performance | Named hardware/load, workload, percentile/error/saturation evidence against approved target | Targets approved; PS-545 must remediate the PS-540 command/Floor failures and complete three clean acceptance runs |
 | Deployment | Hosted, managed LAN, fully disconnected; clean install/upgrade/rollback where supported | Operations / Pending |
 | Air gap | Network-deny run with complete dependency and asset bundle | Operations/security / Pending |
 | Observability | Scrubbed structured logs, metrics, correlation and actionable failure diagnosis | Operations / Pending |

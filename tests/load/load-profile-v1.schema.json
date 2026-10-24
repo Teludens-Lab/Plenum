@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "load-profile-v1",
+  "type": "object",
+  "required": ["contractId", "profile", "testId", "status", "generatedAt", "environment", "conditions", "latencyMs", "integrity", "failureRecovery", "saturation", "cost", "acceptance"],
+  "properties": {
+    "contractId": { "const": "load-profile-v1" },
+    "profile": { "enum": ["application", "voting", "voice", "extensions"] },
+    "testId": { "enum": ["SYNC-15", "VOTE-14", "VOICE-12", "EXT-19"] },
+    "status": { "enum": ["MEASURED", "MEASURED_WITH_GAP", "FAIL"] },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "environment": { "type": "object", "additionalProperties": true },
+    "conditions": { "type": "object", "additionalProperties": true },
+    "latencyMs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["samples", "p50", "p95", "p99", "max", "errors"],
+        "properties": {
+          "samples": { "type": "integer", "minimum": 0 },
+          "p50": { "type": "number", "minimum": 0 },
+          "p95": { "type": "number", "minimum": 0 },
+          "p99": { "type": "number", "minimum": 0 },
+          "max": { "type": "number", "minimum": 0 },
+          "errors": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "integrity": { "type": "object", "additionalProperties": true },
+    "failureRecovery": { "type": "object", "additionalProperties": true },
+    "saturation": { "type": "object", "additionalProperties": true },
+    "cost": { "type": "object", "additionalProperties": true },
+    "acceptance": {
+      "type": "object",
+      "required": ["status", "reason"],
+      "properties": {
+        "status": { "const": "BLOCKED" },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -38,8 +38,8 @@ In simple terms: much of the product works locally, but production approval need
 | 4 | GAP-04 Plugin trust operations | PS-330, PS-530, PS-550, PS-600 | Existing PS-220/230 evidence available | Production trust/key/revocation procedures pass |
 | 5 | GAP-05 persistent offline-device policy | PS-500 | PS-420 complete and resolved OPEN-014/015 policy available | Durable outbox plus approved expiry, retention and device-control evidence pass |
 | 6 | GAP-06 backup and restore rehearsal | PS-530 | PS-500/510/520 complete | Isolated restore meets approved RPO/RTO and integrity checks |
-| 7 | GAP-07 institutional media validation | PS-530, PS-540 | Deployable media profile and approved test network exist | LAN/TLS/TURN/firewall/restart evidence passes |
-| 8 | GAP-08 load and capacity evidence | PS-540 | PS-350, PS-500 and PS-530 complete | All approved workloads have named-environment results |
+| 7 | GAP-07 institutional media validation | PS-530, PS-540, PS-545 | Deployable media profile and approved test network exist | LAN/TLS/TURN/firewall/restart evidence passes |
+| 8 | GAP-08 load and capacity evidence | PS-540, PS-545 | PS-350, PS-500 and PS-530 complete | All approved workloads pass three named-environment runs |
 | 9 | GAP-09 manual assistive-technology review | PS-550 | Stable release candidate exists | Required journeys pass human AT review or defects are resolved |
 | 10 | GAP-10 Fractured Order parity and AC-01–AC-13 | PS-350, PS-420, PS-430, PS-500, PS-550 | P03 complete; P04/P05 evidence available where required | Every acceptance row has objective evidence, including deferred AC-07 from PS-420 and AC-11 from PS-420/PS-500 |
 | 11 | GAP-11 final go/no-go package | PS-550 | GAP-01–10 complete | Owners sign or release remains blocked |
@@ -294,7 +294,7 @@ Prove that voice works across realistic institutional network boundaries and rec
 
 ### Governing links
 
-- ADR-013, ADR-017, `OPEN-027`, VOICE-06/07/12/13, PS-250, PS-530, PS-540, PS-550.
+- ADR-013, ADR-017, `OPEN-027`, VOICE-06/07/12/13, PS-250, PS-530, PS-540, PS-545, PS-550.
 
 ### Ready-to-use prompt
 
@@ -332,13 +332,13 @@ Replace planning assumptions with measured behavior on named hardware and approv
 
 ### Governing links
 
-- `DEC-16`, approved OPEN-019 recommendation, DB-10, SYNC-15, VOTE-14, VOICE-12, EXT-19, PS-540.
+- `DEC-16`, approved OPEN-019 targets, DB-10, SYNC-15, VOTE-14, VOICE-12, EXT-19, PS-540, PS-545.
 
 ### Ready-to-use prompt
 
-Implement and run the PS-540 load profiles only against an approved isolated environment.
+Use PS-545 to diagnose and remove the command and Floor bottlenecks measured by PS-540, then rerun every approved load profile against an approved isolated environment.
 
-Before running load, obtain Technical Lead and Operations Owner sign-off on the OPEN-019 budgets. Record hardware, operating system, container/runtime versions, network topology, database/object/media configuration, build and Release digests, data size, actor mix, activity rates, warm-up, duration, repetitions, and monitoring method.
+OPEN-019 Product Owner, Technical Lead, and Operations Owner sign-off was recorded on 2026-10-24. Run against those approved budgets and record hardware, operating system, container/runtime versions, network topology, database/object/media configuration, build and Release digests, data size, actor mix, activity rates, warm-up, duration, repetitions, and monitoring method.
 
 Create separate profiles for:
 
@@ -356,6 +356,7 @@ Acceptance:
 - PASS/FAIL is evaluated against approved budgets, not invented thresholds.
 - Recovery after saturation or dependency restart is observed.
 - Any proposed cache, broker, replica, or service split is supported by a measured bottleneck and an operational-cost analysis.
+- The complete profile passes three consecutive runs without weakening authorization, authority, ordering, Evidence, receipt, outbox or Floor-priority guarantees.
 
 Register `CMD-LOAD-APP`, `CMD-LOAD-VOTING`, `CMD-LOAD-VOICE`, and `CMD-LOAD-EXTENSIONS` only after reproducible passes. Never target production.
 

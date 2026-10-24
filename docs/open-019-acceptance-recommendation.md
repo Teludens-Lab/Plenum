@@ -1,6 +1,8 @@
 # OPEN-019 measurable acceptance recommendation
 
-Status: **APPROVED by Product Owner direction on 2026-10-20; Technical Lead and Operations Owner sign-offs remain required**. These numbers are accepted criteria, not current SLOs or verified capacity claims.
+Status: **APPROVED by the Owner acting as Product Owner, Technical Lead, and Operations Owner on 2026-10-24; OPEN-019 resolved**. These numbers are the accepted release criteria, not a claim that the current build meets them.
+
+Measurement update, 2026-10-24: PS-540 completed one local 10 x 500 characterization run. Integrity held, but accepted-command p95 was 15.38 seconds and radio-floor p95 was 12.61 seconds, both above the recommendations. The required soak, three consecutive runs, institutional LAN/TURN media measures and named sign-offs remain outstanding; see `docs/performance/PS-540-reference-load.md`.
 
 ## Named baseline
 
@@ -19,9 +21,9 @@ Run a 30-minute warm-up, a 60-minute mixed steady-state workload and the followi
 5. Execute the approved Extension concurrency limit with valid, timeout, invalid-output and unavailable-host cases.
 6. Run voice separately with named room, listener, active-speaker, relay and bitrate assumptions; media traffic must not be mixed into the authoritative command SLO.
 
-## Recommended pass thresholds
+## Approved pass thresholds
 
-| Measure | Recommended acceptance threshold |
+| Measure | Approved acceptance threshold |
 |---|---|
 | Accepted command receipt | p95 ≤ 500 ms; p99 ≤ 1 s steady state and ≤ 2 s during declared bursts |
 | Authorized projection update after acceptance | p95 ≤ 1 s; p99 ≤ 2 s |
@@ -35,9 +37,9 @@ Run a 30-minute warm-up, a 60-minute mixed steady-state workload and the followi
 
 For voice, recommend join p95 ≤ 3 seconds, floor-grant p95 ≤ 500 ms, median speech-start latency ≤ 300 ms and packet loss below 1% on the named LAN profile. The owner must approve or replace these media thresholds after selecting the conferencing/SFU topology.
 
-## Evidence required to close OPEN-019
+## Evidence required to pass capacity acceptance
 
 - Raw latency distributions (not averages), error counts, integrity reconciliation and saturation time series for all three runs.
 - Exact workload generator, seeds, configuration and environment manifest sufficient to repeat the run.
 - A separate voice report and Extension report, because their infrastructure and failure modes differ from ordinary Runtime commands.
-- Technical Lead and Operations Owner sign-off on the baseline and thresholds before the first result is treated as an acceptance gate.
+- Owner, Technical Lead, and Operations Owner sign-off is complete. The measurements must now meet the approved thresholds; approval does not waive a failed result.

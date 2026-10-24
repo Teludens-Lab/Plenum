@@ -7,7 +7,7 @@ Pointer table only. Decision text and status live exclusively in `03_Governance_
 | DEC-01..05 | Model optional concepts, reusable Core Design, governed live change | PS-310, PS-400, PS-420 |
 | DEC-06..12 | Preserve deployment breadth, visual authoring, guarded workflows, artifacts, information asymmetry, Plugins, curated UI | PS-210, PS-220, PS-310, PS-530 |
 | DEC-13..14 | Exclude AI authoring; prove Fractured Order from configuration | PS-000, PS-200, PS-350 |
-| DEC-15..20 | Collaboration, workload assumption, offline/LAN, single authority, three profiles, verifiable evidence | PS-120, PS-300, PS-500, PS-510, PS-530, PS-540 |
+| DEC-15..20 | Collaboration, workload assumption, offline/LAN, single authority, three profiles, verifiable evidence | PS-120, PS-300, PS-500, PS-510, PS-530, PS-540, PS-545 |
 | DEC-21..29 | Use rebuilt corpus and label parallel spike work non-authoritative | Every task; especially PS-001 and PS-100 |
 | DEC-30..40 | Use canonical Session/Stage/Artifact/Event terms, outcomes, naming, and lifecycles | Every implementation prompt |
 | DEC-41..45 | Preserve deferred AI boundary and the reference workflow; DEC-44 is superseded by DEC-61 | PS-150, PS-200, PS-350 |
@@ -24,7 +24,8 @@ Pointer table only. Decision text and status live exclusively in `03_Governance_
 | OPEN-007 | Resolved; use the ADR-012 deployment-profile federation rules | PS-110, PS-340, PS-530 |
 | OPEN-004..013 | Methodology, Stage/workflow/form/compatibility/publication policy gates | PS-300, PS-310, PS-400, PS-410, PS-420 |
 | OPEN-014, OPEN-015, OPEN-017 | Resolved 2026-10-23: managed-device/key custody, offline authority/allowlist, and recovery/anchor policy; implementation evidence remains with PS-500/510/530/550 | PS-500, PS-510, PS-530, PS-550 |
-| OPEN-016, OPEN-018..020 | Authority transfer, remaining capacity and signing operational gates | PS-001, PS-130, PS-510, PS-530, PS-540 |
+| OPEN-019 | Resolved 2026-10-24: Owner, Technical Lead, and Operations Owner approved the measurable capacity targets; current PS-540 command/Floor failures remain release blockers assigned to PS-545 | PS-540, PS-545, PS-550 |
+| OPEN-016, OPEN-018, OPEN-020 | Authority transfer and remaining signing operational gates | PS-001, PS-130, PS-510, PS-530 |
 | OPEN-021 | Resolved; do not reopen taxonomy | PS-220, PS-330 |
 | OPEN-025 | Resolved by DEC-61; migration 018 and role-specific runtime workflows implemented, operational release evidence remains required | PS-110, PS-340, PS-520 |
 | OPEN-022..026 | Engine, classification, role, and Canon substance gates | PS-220, PS-310, PS-400, PS-410, PS-520 |

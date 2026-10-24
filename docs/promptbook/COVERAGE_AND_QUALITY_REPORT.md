@@ -2,7 +2,7 @@
 
 ## Result
 
-The promptbook has 31 vertical tasks across P00-P06. The current 2026-10-23 machine validation passed with 94/94 PRD requirements and 28/28 invariants mapped and no orphan.
+The promptbook has 32 vertical tasks across P00-P06. The current 2026-10-24 machine validation passed with 94/94 PRD requirements and 28/28 invariants mapped and no orphan.
 
 | Check | Result | Evidence / qualification |
 |---|---|---|
@@ -19,9 +19,9 @@ The promptbook has 31 vertical tasks across P00-P06. The current 2026-10-23 mach
 
 ## Status integrity
 
-- PS-430 is verified. Its two synthetic validation simulations compile and complete deterministically on the same Runtime build without any Runtime source change; PS-500 is the next eligible task.
+- PS-430 remains verified. PS-500 through PS-530 are complete, and PS-540 has an implemented load harness plus one local characterization; PS-545 is the next eligible task.
 - `OPEN-004` remains unratified. The generalization evidence does not infer or approve research semantics, methodology effectiveness, or production readiness.
-- PS-500 is the sole task marked ready. Completed tasks through PS-430 retain their evidence references in `tasks.json`.
+- PS-545 is the sole task marked ready. It owns measured bottleneck diagnosis, minimal optimization and three clean approved-profile reruns. PS-550 is blocked on PS-545. PS-540 is implemented but not capacity-verified; OPEN-019 is resolved, while the failed approved targets and incomplete acceptance evidence are recorded in `tasks.json` and `docs/performance/PS-540-reference-load.md`.
 - Proposed commands are not represented as executable. Their registry rows name the creating task.
 - Current slice unit/syntax PASS evidence was produced on Node 22.16.0, below the declared Node 24 floor; it does not satisfy PS-001.
 - Historical slice HTTP/database results remain labeled historical, with PostgreSQL 16 rather than target PostgreSQL 18.
@@ -41,13 +41,13 @@ The promptbook has 31 vertical tasks across P00-P06. The current 2026-10-23 mach
 
 ## Overlarge-task review
 
-Tasks are vertical outcomes rather than file-layer work. Higher-risk tasks PS-200, PS-250, PS-330, PS-420, PS-500, PS-530, and PS-550 deliberately have strong prerequisites and acceptance boundaries. If implementation inspection shows one cannot be completed and reviewed as a focused change, split it through change control while preserving the original outcome and traceability.
+Tasks are vertical outcomes rather than file-layer work. Higher-risk tasks PS-200, PS-250, PS-330, PS-420, PS-500, PS-530, PS-545, and PS-550 deliberately have strong prerequisites and acceptance boundaries. If implementation inspection shows one cannot be completed and reviewed as a focused change, split it through change control while preserving the original outcome and traceability.
 
 ## Architecture and fiction audit
 
 - Approved: ADR-006 and ADR-007 only.
 - Confirmed scope: DEC-01..20 and DEC-41..60.
-- Assumed choices, OPEN items and outstanding named specialist sign-offs remain labeled in prompt metadata and matrices; no task may call them resolved.
+- Assumed choices, remaining OPEN items and outstanding named specialist sign-offs remain labeled in prompt metadata and matrices; resolved OPEN-019 does not convert failed measurements into a pass.
 - Candidate libraries are suggestions until the owning task records necessity, compatibility, maintenance/security/license checks, version pin, and deletion/migration path.
 - No application, deployment, or production-readiness claim is made by this generator.
 

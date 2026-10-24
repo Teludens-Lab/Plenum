@@ -1,0 +1,43 @@
+{
+  "contractId": "load-profile-config-v1",
+  "seed": "ps-540-reference-v1",
+  "sessions": 10,
+  "participantsPerSession": 500,
+  "application": {
+    "concurrency": 50,
+    "commandsPerSession": 100
+  },
+  "voting": {
+    "concurrency": 50,
+    "ballotsPerSession": 500
+  },
+  "voice": {
+    "controlConcurrency": 50,
+    "floorRequestsPerSession": 500,
+    "mediaRoom": {
+      "rooms": 1,
+      "listeners": 49,
+      "activeSpeakers": 1,
+      "relay": "none-local-loopback",
+      "durationSeconds": 20
+    }
+  },
+  "extensions": {
+    "concurrency": 4,
+    "validRuns": 24,
+    "timeoutRuns": 2,
+    "invalidOutputRuns": 2
+  },
+  "recommendedThresholds": {
+    "status": "OWNER_TECHNICAL_LEAD_AND_OPERATIONS_OWNER_APPROVED_2026_10_24",
+    "commandReceiptP95Ms": 500,
+    "commandReceiptP99BurstMs": 2000,
+    "reconnectP95Ms": 10000,
+    "reconnectP99Ms": 30000,
+    "fanoutP95Ms": 5000,
+    "ballotReceiptP99Ms": 2000,
+    "certificationAfterCloseMs": 5000,
+    "voiceFloorGrantP95Ms": 500,
+    "recoveryMs": 300000
+  }
+}

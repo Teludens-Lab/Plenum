@@ -125,7 +125,7 @@ try {
       memoryGiB: Number((os.totalmem() / 1024 ** 3).toFixed(1)),
       database: "PostgreSQL 18 Docker"
     },
-    acceptance: "BLOCKED: OPEN-019 has no approved latency or hardware budgets"
+    acceptance: "MEASUREMENT_ONLY: OPEN-019 targets are approved, but this focused 500-Participant run is not the complete acceptance profile"
   }, null, 2));
 } finally {
   await pool.end();

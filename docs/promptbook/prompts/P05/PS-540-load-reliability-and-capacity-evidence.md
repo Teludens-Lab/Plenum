@@ -7,7 +7,7 @@
 - Goal: Measure the DEC-16 planning workload on named hardware against owner-approved budgets.
 - User outcome: Release owners know observed limits and failure behavior instead of relying on capacity claims.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -29,7 +29,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-019`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -131,9 +131,9 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 
 - Functional suites pass before and after load
 - No production environment is targeted
-- OPEN-019 remains a gate until targets are approved
+- Approved capacity targets remain a release gate and failed measurements block acceptance
 
-The approval gate is: Acceptance budgets and capacity release decision blocked by OPEN-019. A task may be implementation-complete without being release-approved.
+The approval gate is: OPEN-019 targets are approved; capacity acceptance remains blocked by failed command/Floor latency and incomplete acceptance runs. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -161,7 +161,7 @@ Verification:
 Compatibility / migrations:
 - None.
 Risks / follow-up:
-- Targets remain OPEN-019.
+- Approved command and Floor targets currently fail; optimize and rerun.
 Refs: PS-540, REQ-002, DEC-16
 ```
 
@@ -173,4 +173,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-019 resolves; Hardware or topology changes; Measured saturation crosses budget.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: Command or Floor paths are optimized; Hardware or topology changes; Measured saturation crosses budget; Authorized owners amend a target.

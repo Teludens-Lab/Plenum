@@ -32,6 +32,10 @@
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
     "test:generalization": "npm run build --silent && node --test tests/e2e/generalization/generalization.test.mjs",
     "test:load:information": "npm run build --silent && node tests/load/information-flow-load.mjs",
+    "load:app": "npm run build --silent && node scripts/run-load-profile.mjs app",
+    "load:voting": "npm run build --silent && node scripts/run-load-profile.mjs voting",
+    "load:voice": "npm run build --silent && node scripts/run-load-profile.mjs voice",
+    "load:extensions": "npm run build --silent && node scripts/run-load-profile.mjs extensions",
     "validate:promptbook": "node docs/promptbook/scripts/validate-promptbook.mjs",
     "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web && npm run build:web --workspace @plenum/studio",
     "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs"

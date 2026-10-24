@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-10-23.
+Updated: 2026-10-24.
 
 ## Repository
 
@@ -55,7 +55,7 @@ Updated: 2026-10-23.
 - Historical 2026-10-17 slice record: migrate/smoke/dbtest PASS on PostgreSQL 16, real browser and Pg18 NOT RUN.
 - Fractured Order exported tree re-index: PASS; actual tree `771510b6180bd4826dc5688789d131f2109eeb62` matched the pinned snapshot.
 - `CMD-PARITY` inventory validation: PASS on Node 24.22.0; pin/tree, exact source-manifest coverage, evidence anchors, resolved OPEN-026 classifications and fixture targets passed at 17 PASS / 0 BLOCKED / 0 OUT_OF_SCOPE. AC-09 PASS with no waiver.
-- `CMD-PROMPTBOOK-VALIDATE`: PASS after render; 31 tasks, REQ 94/94, INV 28/28 and no dependency cycles.
+- `CMD-PROMPTBOOK-VALIDATE`: PASS after render on Node 24.22.1; 32 tasks, REQ 94/94, INV 28/28, no dependency cycles or warnings; PS-545 is first eligible.
 - PS-001 supported-stack preflight: Node 24.22.0, npm 11.19.1, PostgreSQL 18.6, and `pg` 8.23.1 recorded in `docs/reference-slice-verification.md`.
 - `CMD-SLICE-CHECK`, `CMD-SLICE-UNIT`, `CMD-SLICE-MIGRATE`, `CMD-SLICE-SEED`, `CMD-SLICE-START`, and `CMD-SLICE-SMOKE`: PASS on the supported stack; smoke passed 31/31.
 - `CMD-SLICE-BROWSER`: PASS in managed Chromium 155; the seeded Designer created a project and received HTTP 201. A nonfunctional `/favicon.ico` request returned 401.

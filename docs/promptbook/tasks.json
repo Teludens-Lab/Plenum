@@ -1169,7 +1169,7 @@
     "goal": "Remove the measured command and radio-Floor bottlenecks and pass the approved capacity profile without weakening authority or integrity.",
     "user_outcome": "Participants receive timely command receipts and Floor decisions under the approved workload, with repeatable evidence rather than a waiver.",
     "product_requirements": ["REQ-002", "REQ-032", "REQ-067", "REQ-068", "INV-017", "INV-019"],
-    "source_refs": ["DEC-16", "ADR-005", "resolved OPEN-019", "DB-10", "SYNC-15", "VOICE-12", "PS-540 evidence"],
+    "source_refs": ["DEC-16", "ADR-005", "OPEN-019", "SYNC-15", "VOICE-12"],
     "source_evidence": ["docs/performance/PS-540-reference-load.md", "docs/open-019-acceptance-recommendation.md"],
     "depends_on_unratified": [],
     "prerequisites": ["PS-540"],

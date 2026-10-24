@@ -19,11 +19,9 @@ Authoritative sources and sections:
 
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — DEC-16
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — ADR-005
-- resolved OPEN-019 — unresolved source alias; stop and resolve through SOURCE_REGISTER.md before editing
-- DB-10 — unresolved source alias; stop and resolve through SOURCE_REGISTER.md before editing
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — OPEN-019
 - `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md` — SYNC-15
 - `docs/corpus/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md` — VOICE-12
-- PS-540 evidence — unresolved source alias; stop and resolve through SOURCE_REGISTER.md before editing
 
 Observed source evidence:
 

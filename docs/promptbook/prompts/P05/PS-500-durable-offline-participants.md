@@ -7,7 +7,7 @@
 - Goal: Let disconnected Participants keep permitted work and reconcile safely without becoming an authority.
 - User outcome: A Participant can draft offline, see truthful local status, and receive a clear accepted, rejected, or reconciliation result after reconnect.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -17,7 +17,7 @@ Requirement-row authority: `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` — r
 
 Authoritative sources and sections:
 
-- `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md` — Sync v1.1.1 sections 4-7 and 12
+- `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md` — Sync v1.1.2 sections 4-7 and 12
 - `docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md` — 06 Data section 18
 - `docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md` — 05 Runtime section 18
 
@@ -25,7 +25,7 @@ Observed source evidence:
 
 - docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. `ADR-001` and `ADR-010` retain their recorded status. OPEN-014 and OPEN-015 are resolved; implementation must enforce and evidence their managed-device, retention, eight-hour authority and exact allowlist policy.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-001`, `ADR-010`.
 
 ## Prerequisites
 
@@ -109,9 +109,9 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then late Ballot is rejected
 - Given the documented preconditions, when the task behavior is exercised, then floor and Approval requests are absent from outbox and not replayed
 - Given the documented preconditions, when the task behavior is exercised, then duplicate reconnect commits once
-- Given the documented preconditions, when eight hours elapse without reauthentication, then no new Command is queued or submitted
-- Given the documented preconditions, when an encrypted draft reaches 30 days, then it is purged without exposing its contents
-- Given the documented preconditions, when a device is shared, unmanaged, or an unprotected high-security browser profile, then offline storage is disabled
+- Given the documented preconditions, when the task behavior is exercised, then offline authority expires absolutely after eight hours without offline renewal
+- Given the documented preconditions, when the task behavior is exercised, then encrypted unsynchronized drafts are purged after 30 days
+- Given the documented preconditions, when the task behavior is exercised, then shared, unmanaged, and unprotected high-security browser profiles cannot enable offline storage
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -138,7 +138,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Hidden data is absent from bundles
 - No automatic authority failover
 
-The approval gate is: the resolved OPEN-014/015 policy must be implemented and evidenced on accredited production devices. A task may be implementation-complete without being release-approved.
+The approval gate is: Resolved OPEN-014/015 device, retention and authority policy must be implemented and evidenced on accredited production devices. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -166,7 +166,7 @@ Verification:
 Compatibility / migrations:
 - Adds 022 offline device state.
 Risks / follow-up:
-- Approved OPEN-014/015 device, retention and authority limits still require production enforcement and accreditation evidence.
+- Enforce and evidence the resolved OPEN-014/015 device, retention and authority policy.
 Refs: PS-500, REQ-043, INV-026
 ```
 
@@ -178,4 +178,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: the OPEN-014/015 policy changes; browser storage is replaced; a new Command type requests offline support.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The OPEN-014/015 policy changes; Browser storage is replaced; New command type requests offline support.

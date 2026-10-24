@@ -60,6 +60,9 @@ export const COMPATIBILITY_REPORT_CONTRACT_ID = "compatibility-report-v1";
 export const RELEASE_ACTIVATION_CONTRACT_ID = "release-activation-v1";
 export const CHECKPOINT_CONTRACT_ID = "checkpoint-v1";
 export const VERIFICATION_EXPORT_CONTRACT_ID = "verification-export-v1";
+export const REPORT_DEFINITION_CONTRACT_ID = "report-definition-v1";
+export const RESEARCH_EXPORT_CONTRACT_ID = "research-export-v1";
+export const REPLAY_DIVERGENCE_CONTRACT_ID = "replay-divergence-v1";
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
   "artifact.create",
@@ -166,6 +169,48 @@ export interface VerificationExportV1 extends JsonObject {
   generatedAt: string;
   lastEvidenceSequence: number;
   checkpoints: VerificationCheckpointV1[];
+}
+
+export type ReportKindV1 = "session_archive" | "after_action" | "team" | "control" | "research_dataset" | "organization_archive";
+
+export interface ReportDefinitionV1 extends JsonObject {
+  contractId: typeof REPORT_DEFINITION_CONTRACT_ID;
+  definitionKey: string;
+  definitionVersion: number;
+  reportKind: ReportKindV1;
+  includedDataClasses: string[];
+  excludedDataClasses: string[];
+  analyticalLayers: Array<"observation" | "derived_metric" | "analytical_note" | "finding">;
+}
+
+export interface ResearchExportV1 extends JsonObject {
+  contractId: typeof RESEARCH_EXPORT_CONTRACT_ID;
+  exportId: string;
+  projectId: string;
+  sessionIds: string[];
+  releaseIds: string[];
+  generatedAt: string;
+  exportDefinitionVersion: number;
+  anonymizationProfile: string;
+  purposeLabel: string;
+  includedDataClasses: string[];
+  excludedDataClasses: string[];
+  reproducibilityManifests: JsonObject[];
+  observations: JsonObject[];
+  derivedMetrics: JsonObject[];
+  analyticalNotes: JsonObject[];
+  findings: JsonObject[];
+  provenance: JsonObject;
+}
+
+export interface ReplayDivergenceV1 extends JsonObject {
+  contractId: typeof REPLAY_DIVERGENCE_CONTRACT_ID;
+  sessionId: string;
+  generatedAt: string;
+  manifestDigest: string;
+  matched: boolean;
+  comparedEvents: number;
+  divergences: JsonObject[];
 }
 
 export type StudioSaveStateV1 = "saved_on_device" | "synchronized" | "validation_required" | "published";
@@ -807,6 +852,49 @@ export const verificationExportV1Schema = {
     lastEvidenceSequence: { type: "integer", minimum: 0 }, checkpoints: { type: "array", items: { type: "object" } }
   }
 } as const satisfies ContractSchema<VerificationExportV1>;
+
+export const reportDefinitionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: REPORT_DEFINITION_CONTRACT_ID, title: "Report Definition v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "definitionKey", "definitionVersion", "reportKind", "includedDataClasses", "excludedDataClasses", "analyticalLayers"],
+  properties: {
+    contractId: { const: REPORT_DEFINITION_CONTRACT_ID }, definitionKey: { type: "string", minLength: 1 },
+    definitionVersion: { type: "integer", minimum: 1 },
+    reportKind: { enum: ["session_archive", "after_action", "team", "control", "research_dataset", "organization_archive"] },
+    includedDataClasses: { type: "array", items: { type: "string" } },
+    excludedDataClasses: { type: "array", items: { type: "string" } },
+    analyticalLayers: { type: "array", items: { enum: ["observation", "derived_metric", "analytical_note", "finding"] } }
+  }
+} as const satisfies ContractSchema<ReportDefinitionV1>;
+
+export const researchExportV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: RESEARCH_EXPORT_CONTRACT_ID, title: "Research Export v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "exportId", "projectId", "sessionIds", "releaseIds", "generatedAt", "exportDefinitionVersion",
+    "anonymizationProfile", "purposeLabel", "includedDataClasses", "excludedDataClasses", "reproducibilityManifests",
+    "observations", "derivedMetrics", "analyticalNotes", "findings", "provenance"],
+  properties: {
+    contractId: { const: RESEARCH_EXPORT_CONTRACT_ID }, exportId: uuidProperty, projectId: uuidProperty,
+    sessionIds: { type: "array", items: uuidProperty }, releaseIds: { type: "array", items: uuidProperty },
+    generatedAt: utcInstantProperty, exportDefinitionVersion: { type: "integer", minimum: 1 },
+    anonymizationProfile: { type: "string", minLength: 1 }, purposeLabel: { type: "string", minLength: 1 },
+    includedDataClasses: { type: "array", items: { type: "string" } }, excludedDataClasses: { type: "array", items: { type: "string" } },
+    reproducibilityManifests: { type: "array", items: jsonObjectProperty }, observations: { type: "array", items: jsonObjectProperty },
+    derivedMetrics: { type: "array", items: jsonObjectProperty }, analyticalNotes: { type: "array", items: jsonObjectProperty },
+    findings: { type: "array", items: jsonObjectProperty }, provenance: jsonObjectProperty
+  }
+} as const satisfies ContractSchema<ResearchExportV1>;
+
+export const replayDivergenceV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: REPLAY_DIVERGENCE_CONTRACT_ID, title: "Replay Divergence v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "sessionId", "generatedAt", "manifestDigest", "matched", "comparedEvents", "divergences"],
+  properties: {
+    contractId: { const: REPLAY_DIVERGENCE_CONTRACT_ID }, sessionId: uuidProperty, generatedAt: utcInstantProperty,
+    manifestDigest: { type: "string", pattern: "^[0-9a-f]{64}$" }, matched: { type: "boolean" },
+    comparedEvents: { type: "integer", minimum: 0 }, divergences: { type: "array", items: jsonObjectProperty }
+  }
+} as const satisfies ContractSchema<ReplayDivergenceV1>;
 
 export const modelRunV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema", $id: MODEL_RUN_CONTRACT_ID, title: "Model Run v1",

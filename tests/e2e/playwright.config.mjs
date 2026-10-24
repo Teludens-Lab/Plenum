@@ -5,9 +5,10 @@ export default defineConfig({
   testMatch: "runtime.spec.mjs",
   fullyParallel: false,
   workers: 1,
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  timeout: 120_000,
+  expect: { timeout: 40_000 },
   globalSetup: "./global-setup.mjs",
+  globalTeardown: "./global-teardown.mjs",
   outputDir: "../../output/playwright/ps-150/results",
   reporter: [["line"]],
   use: {

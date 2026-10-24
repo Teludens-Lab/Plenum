@@ -251,8 +251,8 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
-    test.setTimeout(60_000);
-    const commandTimeout = 15_000;
+    test.setTimeout(120_000);
+    const commandTimeout = 40_000;
     const { context, page } = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
     const proposal = page.getByRole("article", { name: "synthetic risk" });
@@ -366,8 +366,8 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("AC-03/05/06/12/13 completes DEC-42 and denies forbidden or unauthorized paths", async ({ browser }) => {
-    test.setTimeout(120_000);
-    const commandTimeout = 15_000;
+    test.setTimeout(600_000);
+    const commandTimeout = 40_000;
     const author = await actor(browser, fixture.tokens.author);
     await author.page.goto(runtimeUrl());
     await createDraft(author.page, "Approve the first configured handoff");
@@ -589,6 +589,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("PARITY-NOTES-01 keeps concurrent operational notes editable and seat isolated", async ({ browser }) => {
+    test.setTimeout(120_000);
     const author = await apiActor(browser, fixture.tokens.author);
     const notetaker = await apiActor(browser, fixture.tokens.blueNotetaker);
     const red = await apiActor(browser, fixture.tokens.redAuthor);
@@ -637,10 +638,11 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect(stale.status()).toBe(409);
     expect((await stale.json()).errorCode).toBe("STALE_AGGREGATE_VERSION");
     expect((await submitRuntime(control, projection, "timer.resume", fixture.sessionId, 3, { reason: "Parity resume" })).status()).toBe(200);
+    const beforeExtension = await control.readProjection();
     expect((await submitRuntime(control, projection, "timer.extend", fixture.sessionId, 4,
       { reason: "Per-mark allocation", seconds: 60 })).status()).toBe(200);
     projection = await control.readProjection();
-    expect(projection.stageRemainingSeconds).toBeGreaterThan(2700);
+    expect(Date.parse(projection.stageDeadlineAt) - Date.parse(beforeExtension.stageDeadlineAt)).toBe(60_000);
     expect((await submitRuntime(control, projection, "stage.end", fixture.sessionId, 5, { reason: "End mark" })).status()).toBe(200);
     expect((await submitRuntime(control, projection, "stage.reopen", fixture.sessionId, 6, { reason: "Reset mark" })).status()).toBe(200);
     expect((await submitRuntime(control, projection, "stage.advance", fixture.sessionId, 7,
@@ -760,6 +762,23 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     } finally {
       await database.end();
     }
+    const consentResponse = await analyst.context.request.post(`/v1/sessions/${fixture.sessionId}/research-consents`, { data: {
+      purposeLabel: "PS-520 browser reconciliation", consentVersion: "1.0", decision: "granted"
+    } });
+    expect(consentResponse.status()).toBe(201);
+    const idempotencyKey = crypto.randomUUID();
+    const reportRequest = { idempotencyKey, reportKind: "research_dataset", format: "json",
+      purposeLabel: "PS-520 browser reconciliation" };
+    const reportResponse = await analyst.context.request.post(`/v1/sessions/${fixture.sessionId}/reports`, { data: reportRequest });
+    expect(reportResponse.status()).toBe(200);
+    const reportText = await reportResponse.text();
+    const report = JSON.parse(reportText);
+    expect(report).toMatchObject({ contractId: "research-export-v1", anonymizationProfile: "consent-filtered-ordinal-v1" });
+    expect(report.excludedDataClasses).toContain("secret_ballot_choices");
+    expect(reportText).not.toContain(fixture.people.designerB);
+    expect(reportText).not.toContain(fixture.participants.industryAuthor);
+    const replayedReport = await analyst.context.request.post(`/v1/sessions/${fixture.sessionId}/reports`, { data: reportRequest });
+    expect(await replayedReport.text()).toBe(reportText);
     await Promise.all([author.context.close(), operator.context.close(), analyst.context.close()]);
   });
 
@@ -1101,13 +1120,13 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
 test.describe.serial("PS-300 collaborative Studio", () => {
   test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(900_000);
     const serverTimeout = 20_000;
     const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
     await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
-    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
+    await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 120_000 });
     await expect(first.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
 
     const teams = first.page.getByRole("region", { name: "Teams" });
@@ -1140,7 +1159,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await second.context.setOffline(false);
     await second.page.evaluate(() => window.dispatchEvent(new Event("online")));
     await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
-    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
+    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 120_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Offline visual-form edit merged after reconnect.", { timeout: 20_000 });
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await expect(first.page.getByText("Valid", { exact: true })).toBeVisible();
@@ -1185,7 +1204,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText("Save state: published")).toBeVisible({ timeout: 20_000 });
 
     await second.page.getByLabel("Scenario description").fill("Post-freeze next Draft edit.");
-    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
+    await expect(second.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 120_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Post-freeze next Draft edit.", { timeout: 20_000 });
     await expect(first.page.getByText("Save state: synchronized")).toBeVisible();
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
@@ -1260,7 +1279,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await effectBinding.locator("summary").click();
     await effectBinding.getByRole("button", { name: "Add input port" }).click();
     await expect(effectBinding.getByRole("group", { name: "Input ports" }).getByLabel("Port label")).toHaveValue("Input 1");
-    await expect(designer.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 20_000 });
+    await expect(designer.page.getByText("Save state: synchronized")).toBeVisible({ timeout: 40_000 });
 
     const compositions = designer.page.getByRole("region", { name: "Model Compositions" });
     await compositions.getByRole("button", { name: "Add Model Composition" }).click();

@@ -30,6 +30,9 @@ import {
   RELEASE_ACTIVATION_CONTRACT_ID,
   CHECKPOINT_CONTRACT_ID,
   VERIFICATION_EXPORT_CONTRACT_ID,
+  REPORT_DEFINITION_CONTRACT_ID,
+  RESEARCH_EXPORT_CONTRACT_ID,
+  REPLAY_DIVERGENCE_CONTRACT_ID,
   SYNC_DELTAS_CONTRACT_ID,
   SYNC_SNAPSHOT_CONTRACT_ID,
   SYNC_BOOTSTRAP_CONTRACT_ID,
@@ -60,6 +63,9 @@ import {
   releaseActivationV1Schema,
   checkpointV1Schema,
   verificationExportV1Schema,
+  reportDefinitionV1Schema,
+  researchExportV1Schema,
+  replayDivergenceV1Schema,
   syncDeltasV1Schema,
   syncSnapshotV1Schema,
   syncBootstrapV1Schema,
@@ -152,6 +158,9 @@ assert.equal(compatibilityReportV1Schema.$id, COMPATIBILITY_REPORT_CONTRACT_ID);
 assert.equal(releaseActivationV1Schema.$id, RELEASE_ACTIVATION_CONTRACT_ID);
 assert.equal(checkpointV1Schema.$id, CHECKPOINT_CONTRACT_ID);
 assert.equal(verificationExportV1Schema.$id, VERIFICATION_EXPORT_CONTRACT_ID);
+assert.equal(reportDefinitionV1Schema.$id, REPORT_DEFINITION_CONTRACT_ID);
+assert.equal(researchExportV1Schema.$id, RESEARCH_EXPORT_CONTRACT_ID);
+assert.equal(replayDivergenceV1Schema.$id, REPLAY_DIVERGENCE_CONTRACT_ID);
 assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(syncBootstrapV1Schema.$id, SYNC_BOOTSTRAP_CONTRACT_ID);
@@ -171,6 +180,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   voiceConsentV1Schema,
   studioCrdtV1Schema, studioPublishV1Schema,
   rolePreviewV1Schema, compatibilityReportV1Schema, releaseActivationV1Schema, checkpointV1Schema, verificationExportV1Schema,
+  reportDefinitionV1Schema, researchExportV1Schema, replayDivergenceV1Schema,
   pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);

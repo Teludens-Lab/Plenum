@@ -225,6 +225,66 @@ paths:
             text/html: { schema: { type: string, format: binary } }
             application/zip: { schema: { type: string, format: binary } }
         "403": { description: Research Analyst authority or an active project grant is absent. }
+  /v1/sessions/{sessionId}/research-consents:
+    post:
+      operationId: recordResearchConsent
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [purposeLabel, consentVersion, decision]
+              properties:
+                purposeLabel: { type: string, minLength: 1, maxLength: 400 }
+                consentVersion: { type: string, minLength: 1, maxLength: 100 }
+                decision: { type: string, enum: [granted, withdrawn] }
+      responses:
+        "201": { description: Append-only research consent decision recorded and audited. }
+        "403": { description: Current Session participation is absent. }
+  /v1/sessions/{sessionId}/reports:
+    post:
+      operationId: generateSessionReport
+      x-contract-ids: [report-definition-v1, research-export-v1]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [idempotencyKey, reportKind, format]
+              properties:
+                idempotencyKey: { type: string, format: uuid }
+                reportKind: { type: string, enum: [session_archive, after_action, team, control, research_dataset] }
+                format: { type: string, enum: [json, jsonl, csv, html, pdf, zip] }
+                purposeLabel: { type: string, minLength: 1, maxLength: 400 }
+      responses:
+        "200": { description: Immutable generated artifact; a retry returns the original artifact. }
+        "403": { description: Current role, Research Access Grant, or consent scope is insufficient. }
+        "409": { description: Idempotency key collision. }
+  /v1/sessions/{sessionId}/replay:
+    post:
+      operationId: replaySession
+      x-contract-id: replay-divergence-v1
+      x-authorized-organization-roles: [admin, operator]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Deterministic replay comparison or machine-readable divergence report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReplayDivergenceV1" }
+        "409": { description: Replay adapter is not configured. }
   /v1/plugins/submissions:
     post:
       operationId: submitPluginArtifact
@@ -1284,6 +1344,52 @@ components:
               governingReleaseId: { type: string, format: uuid }
               recordedAt: { type: string, format: date-time }
         nextSequence: { type: [integer, "null"], minimum: 1 }
+    ReportDefinitionV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, definitionKey, definitionVersion, reportKind, includedDataClasses, excludedDataClasses, analyticalLayers]
+      properties:
+        contractId: { const: report-definition-v1 }
+        definitionKey: { type: string, minLength: 1 }
+        definitionVersion: { type: integer, minimum: 1 }
+        reportKind: { type: string, enum: [session_archive, after_action, team, control, research_dataset, organization_archive] }
+        includedDataClasses: { type: array, items: { type: string } }
+        excludedDataClasses: { type: array, items: { type: string } }
+        analyticalLayers: { type: array, items: { type: string, enum: [observation, derived_metric, analytical_note, finding] } }
+    ResearchExportV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, exportId, projectId, sessionIds, releaseIds, generatedAt, exportDefinitionVersion, anonymizationProfile, purposeLabel, includedDataClasses, excludedDataClasses, reproducibilityManifests, observations, derivedMetrics, analyticalNotes, findings, provenance]
+      properties:
+        contractId: { const: research-export-v1 }
+        exportId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        sessionIds: { type: array, items: { type: string, format: uuid } }
+        releaseIds: { type: array, items: { type: string, format: uuid } }
+        generatedAt: { type: string, format: date-time }
+        exportDefinitionVersion: { type: integer, minimum: 1 }
+        anonymizationProfile: { type: string }
+        purposeLabel: { type: string }
+        includedDataClasses: { type: array, items: { type: string } }
+        excludedDataClasses: { type: array, items: { type: string } }
+        reproducibilityManifests: { type: array, items: { type: object } }
+        observations: { type: array, items: { type: object } }
+        derivedMetrics: { type: array, items: { type: object } }
+        analyticalNotes: { type: array, items: { type: object } }
+        findings: { type: array, items: { type: object } }
+        provenance: { type: object }
+    ReplayDivergenceV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, generatedAt, manifestDigest, matched, comparedEvents, divergences]
+      properties:
+        contractId: { const: replay-divergence-v1 }
+        sessionId: { type: string, format: uuid }
+        generatedAt: { type: string, format: date-time }
+        manifestDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        matched: { type: boolean }
+        comparedEvents: { type: integer, minimum: 0 }
+        divergences: { type: array, items: { type: object } }
     StudioPublishV1:
       type: object
       additionalProperties: false

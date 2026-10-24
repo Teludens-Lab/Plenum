@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/docker-compose.yml
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-009`, `ADR-011`, `ADR-012`, `ADR-013`, `ADR-017`, `OPEN-020`, `OPEN-027`, `OPEN-029`. OPEN-014 and OPEN-017 are resolved; deployment and recovery must implement their approved device, key, backup and restore policy.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-009`, `ADR-011`, `ADR-012`, `ADR-013`, `ADR-017`, `OPEN-020`, `OPEN-027`, `OPEN-029`.
 
 ## Prerequisites
 
@@ -112,7 +112,7 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then external-required Plugin is blocked without local replacement
 - Given the documented preconditions, when the task behavior is exercised, then restore preserves Releases, objects, sequences, and proofs
 - Given the documented preconditions, when the task behavior is exercised, then dead letter has visible recovery action
-- Given the documented preconditions, when the isolated restore drill runs, then the recovered system meets RPO ≤15 minutes and RTO ≤4 hours
+- Given the documented preconditions, when the task behavior is exercised, then isolated restore meets RPO ≤15 minutes and RTO ≤4 hours
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -139,7 +139,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Signing gaps remain explicit
 - No production data is used in drills
 
-The approval gate is: production deployment requires evidence that the resolved OPEN-014/017 key, signing and recovery policy is implemented; unresolved consent and trust policies remain separate blockers. A task may be implementation-complete without being release-approved.
+The approval gate is: Production deployment requires evidence for the resolved OPEN-014/017 key, signing and recovery policy; unresolved consent and trust policies remain blockers. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -167,7 +167,7 @@ Verification:
 Compatibility / migrations:
 - Rehearses all migrations.
 Risks / follow-up:
-- Resolved key and recovery policy still needs production evidence; unrelated consent and trust gates remain open.
+- Resolved key and recovery policy still needs production evidence; unrelated consent/trust gates remain open.
 Refs: PS-530, REQ-005, ADR-013
 ```
 
@@ -179,4 +179,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: any deployment ADR changes; a dependency gains an Internet requirement; the approved RPO/RTO changes.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: Any deployment ADR changes; A dependency gains an Internet requirement; The approved RPO/RTO changes.

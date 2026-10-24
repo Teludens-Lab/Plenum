@@ -52,6 +52,8 @@ import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "..
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
+import { generateSessionReport, recordResearchConsent, type ReportFormat } from "../reporting/service.js";
+import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -65,6 +67,7 @@ export interface RuntimeHttpOptions {
   mediaAdapter?: MediaProviderAdapter;
   floorTokenSecret?: string;
   objectStore?: ObjectStore;
+  replayAdapter?: SessionReplayAdapter;
 }
 
 function collaborativePublishInput(body: JsonObject, correlationId: string): CollaborativePublishInput {
@@ -338,6 +341,45 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         const limit = url.searchParams.get("limit");
         send(response, 200, await exportResearchEvidenceIndex(options.pool, principal, pathId(match[1], correlationId), correlationId,
           afterSequence === null ? 0 : Number(afterSequence), limit === null ? 1_000 : Number(limit)));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/research-consents$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["purposeLabel", "consentVersion", "decision"].includes(field)) ||
+            typeof body.purposeLabel !== "string" || typeof body.consentVersion !== "string" ||
+            (body.decision !== "granted" && body.decision !== "withdrawn")) {
+          throw authorizationError("VALIDATION_FAILED", "The research consent request is invalid.", correlationId);
+        }
+        send(response, 201, await recordResearchConsent(options.pool, principal, pathId(match[1], correlationId),
+          body.purposeLabel, body.consentVersion, body.decision, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/reports$/u))) {
+        const body = await readBody(request, correlationId);
+        const reportKinds = new Set(["session_archive", "after_action", "team", "control", "research_dataset"]);
+        const formats = new Set(["json", "jsonl", "csv", "html", "pdf", "zip"]);
+        if (Object.keys(body).some((field) => !["idempotencyKey", "reportKind", "format", "purposeLabel"].includes(field)) ||
+            typeof body.idempotencyKey !== "string" || typeof body.reportKind !== "string" || !reportKinds.has(body.reportKind) ||
+            typeof body.format !== "string" || !formats.has(body.format) ||
+            (body.purposeLabel !== undefined && typeof body.purposeLabel !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The report request is invalid.", correlationId);
+        }
+        const purpose = body.purposeLabel === undefined ? {} : { purposeLabel: body.purposeLabel };
+        const artifact = await generateSessionReport(options.pool, principal, pathId(match[1], correlationId), {
+          idempotencyKey: body.idempotencyKey,
+          reportKind: body.reportKind as "session_archive" | "after_action" | "team" | "control" | "research_dataset",
+          format: body.format as ReportFormat,
+          ...purpose
+        }, correlationId);
+        sendArtifact(response, artifact);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/replay$/u))) {
+        if (options.replayAdapter === undefined) {
+          throw authorizationError("CAPABILITY_UNAVAILABLE", "A deterministic Session replay adapter is not configured.", correlationId);
+        }
+        send(response, 200, await replaySession(options.pool, principal, pathId(match[1], correlationId),
+          options.replayAdapter, correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-projection$/u))) {

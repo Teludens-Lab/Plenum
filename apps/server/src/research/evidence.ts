@@ -1,14 +1,15 @@
-import { createHash, randomUUID } from "node:crypto";
-import { canonicalizeJson, type JsonObject } from "@plenum/event-contracts";
+import { randomUUID } from "node:crypto";
+import { type JsonObject } from "@plenum/event-contracts";
 import type { Pool, PoolClient } from "pg";
 
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { createStoredZip, csvCell as csv, encodeValue as text, escapeHtml as html, sha256 as hash } from "../reporting/formats.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-async function requireCurrentRole(
+export async function requireCurrentOrganizationRole(
   client: PoolClient,
   principal: AuthenticatedPrincipal,
   role: "admin" | "research_analyst",
@@ -59,7 +60,7 @@ export async function grantResearchAccess(
     throw authorizationError("VALIDATION_FAILED", "A project, Research Analyst, protocol reference, and future expiry are required.", correlationId);
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentRole(client, principal, "admin", correlationId);
+    await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
     const target = await client.query(
       `SELECT 1
          FROM studio.simulation_projects project
@@ -98,7 +99,7 @@ export async function revokeResearchAccess(
 ): Promise<void> {
   if (!uuid.test(grantId)) throw authorizationError("INVALID_ID", "The Research Access Grant identifier is invalid.", correlationId);
   await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentRole(client, principal, "admin", correlationId);
+    await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
     const revoked = await client.query(
       `UPDATE evidence.research_access_grants SET revoked_at=transaction_timestamp()
         WHERE organization_id=$1 AND id=$2 AND revoked_at IS NULL`,
@@ -142,7 +143,7 @@ export async function exportResearchEvidenceIndex(
     throw authorizationError("VALIDATION_FAILED", "The research export cursor or limit is invalid.", correlationId);
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentRole(client, principal, "research_analyst", correlationId);
+    await requireCurrentOrganizationRole(client, principal, "research_analyst", correlationId);
     const access = await client.query<{ protocol_reference: string }>(
       `SELECT access_grant.protocol_reference
          FROM runtime.sessions session
@@ -204,49 +205,6 @@ export interface ResearchExportArtifact {
   manifest: JsonObject;
 }
 
-const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
-const text = (value: unknown) => new TextEncoder().encode(typeof value === "string" ? value : canonicalizeJson(value as JsonObject));
-const csv = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-const html = (value: unknown) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-  .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-
-function crc32(bytes: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function zip(files: Array<{ path: string; bytes: Uint8Array }>): Uint8Array {
-  const local: Buffer[] = [];
-  const central: Buffer[] = [];
-  let offset = 0;
-  for (const file of files) {
-    const name = Buffer.from(file.path, "utf8");
-    const body = Buffer.from(file.bytes);
-    const checksum = crc32(body);
-    const header = Buffer.alloc(30 + name.length);
-    header.writeUInt32LE(0x04034b50, 0); header.writeUInt16LE(20, 4); header.writeUInt16LE(0, 6);
-    header.writeUInt16LE(0, 8); header.writeUInt16LE(0, 10); header.writeUInt16LE(33, 12);
-    header.writeUInt32LE(checksum, 14); header.writeUInt32LE(body.length, 18); header.writeUInt32LE(body.length, 22);
-    header.writeUInt16LE(name.length, 26); header.writeUInt16LE(0, 28); name.copy(header, 30);
-    local.push(header, body);
-    const directory = Buffer.alloc(46 + name.length);
-    directory.writeUInt32LE(0x02014b50, 0); directory.writeUInt16LE(20, 4); directory.writeUInt16LE(20, 6);
-    directory.writeUInt16LE(0, 8); directory.writeUInt16LE(0, 10); directory.writeUInt16LE(0, 12);
-    directory.writeUInt16LE(33, 14); directory.writeUInt32LE(checksum, 16); directory.writeUInt32LE(body.length, 20);
-    directory.writeUInt32LE(body.length, 24); directory.writeUInt16LE(name.length, 28); directory.writeUInt32LE(offset, 42);
-    name.copy(directory, 46); central.push(directory); offset += header.length + body.length;
-  }
-  const centralBytes = Buffer.concat(central);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(centralBytes.length, 12); end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...local, centralBytes, end]);
-}
-
 export async function exportResearchEvidenceBundle(
   pool: Pool,
   principal: AuthenticatedPrincipal,
@@ -257,7 +215,7 @@ export async function exportResearchEvidenceBundle(
 ): Promise<ResearchExportArtifact> {
   if (!uuid.test(projectId)) throw authorizationError("VALIDATION_FAILED", "A valid Project is required.", correlationId);
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentRole(client, principal, "research_analyst", correlationId);
+    await requireCurrentOrganizationRole(client, principal, "research_analyst", correlationId);
     const access = await client.query<{ protocol_reference: string }>(
       `SELECT protocol_reference FROM evidence.research_access_grants
         WHERE organization_id=$1 AND project_id=$2 AND analyst_person_id=$3
@@ -323,7 +281,7 @@ export async function exportResearchEvidenceBundle(
       format === "csv" ? { contentType: "text/csv; charset=utf-8", filename: "research-evidence.csv", bytes: csvBytes } :
       format === "html" ? { contentType: "text/html; charset=utf-8", filename: "research-evidence.html", bytes: htmlBytes } :
       { contentType: "application/zip", filename: "research-evidence.zip",
-        bytes: zip([{ path: "manifest.json", bytes: manifestBytes }, ...files.map(({ path, bytes }) => ({ path, bytes }))]) };
+        bytes: createStoredZip([{ path: "manifest.json", bytes: manifestBytes }, ...files.map(({ path, bytes }) => ({ path, bytes }))]) };
     await client.query(
       `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
        VALUES ($1,$2,$3,'research.export_completed',$4,$5::jsonb)`,

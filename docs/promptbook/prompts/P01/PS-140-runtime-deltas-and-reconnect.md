@@ -26,7 +26,7 @@ Observed source evidence:
 - references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql
 - references/plenum-runtime-slice/src/server.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. `ADR-010` still requires its named specialist sign-off. OPEN-015 is resolved; offline work must follow its approved eight-hour authority and exact Command allowlist.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-010`.
 
 ## Prerequisites
 

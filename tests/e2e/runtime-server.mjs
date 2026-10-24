@@ -72,6 +72,12 @@ const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.m
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
 
 const server = createServer(async (request, response) => {
+  if (request.method === "POST" && request.url === "/__test__/shutdown") {
+    response.writeHead(204);
+    response.end();
+    setImmediate(() => void close());
+    return;
+  }
   if (await api(request, response)) return;
   try {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -93,11 +99,21 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 
 server.listen(4173, "127.0.0.1", () => console.log("PS-150 browser fixture listening on http://127.0.0.1:4173"));
 
+let closing = false;
 async function close() {
-  server.close();
-  await collaboration.close();
-  await pool.end();
-  await rm(objectRoot, { recursive: true, force: true });
+  if (closing) return;
+  closing = true;
+  const forcedExit = setTimeout(() => process.exit(0), 2_000);
+  try {
+    await collaboration.close();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    await pool.end();
+    await rm(objectRoot, { recursive: true, force: true });
+  } finally {
+    clearTimeout(forcedExit);
+    process.exit(0);
+  }
 }
 process.on("SIGTERM", () => void close());
 process.on("SIGINT", () => void close());

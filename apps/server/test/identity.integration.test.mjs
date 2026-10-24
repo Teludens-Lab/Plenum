@@ -98,7 +98,15 @@ import {
   reviewReleaseImpact,
   createDueEvidenceCheckpoint,
   exportEvidenceVerification,
-  verifyEvidenceExport
+  verifyEvidenceExport,
+  generateSessionReport,
+  recordResearchConsent,
+  recordAnalysis,
+  createRetentionPolicy,
+  recordCorrection,
+  replaySession,
+  exportOrganizationArchive,
+  importOrganizationArchive
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -212,7 +220,7 @@ const releaseMaterialization = {
   }
 };
 
-async function applyMigrations() {
+async function applyMigrations(database = owner) {
   for (const path of [
     "references/plenum-runtime-slice/migrations/001_core.sql",
     "references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql",
@@ -236,9 +244,64 @@ async function applyMigrations() {
     "apps/server/migrations/020_adjudication_records.sql",
     "apps/server/migrations/021_live_release_activation.sql",
     "apps/server/migrations/022_offline_devices.sql",
-    "apps/server/migrations/023_evidence_checkpoints.sql"
+    "apps/server/migrations/023_evidence_checkpoints.sql",
+    "apps/server/migrations/024_reporting_research.sql"
   ]) {
-    await owner.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
+    await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
+  }
+}
+
+async function createCleanArchiveTarget(archive) {
+  const databaseName = `plenum_archive_${randomUUID().replaceAll("-", "")}`;
+  const adminUrl = new URL(databaseUrl);
+  adminUrl.pathname = "/postgres";
+  const targetUrl = new URL(databaseUrl);
+  targetUrl.pathname = `/${databaseName}`;
+  const admin = new Pool({ connectionString: adminUrl.toString(), max: 1 });
+  await admin.query(`CREATE DATABASE ${databaseName}`);
+  const targetOwner = new Pool({ connectionString: targetUrl.toString(), max: 1 });
+  try {
+    await applyMigrations(targetOwner);
+    const organization = archive.data.organization;
+    const person = archive.data.persons.find(({ id }) => id === principalD.principalId);
+    const adminMembership = archive.data.memberships.find(({ person_id, organization_role }) =>
+      person_id === principalD.principalId && organization_role === "admin");
+    assert.ok(person);
+    assert.ok(adminMembership);
+    await targetOwner.query(
+      "INSERT INTO identity.organizations SELECT * FROM jsonb_populate_record(NULL::identity.organizations,$1::jsonb)",
+      [JSON.stringify(organization)]
+    );
+    await targetOwner.query(
+      "INSERT INTO identity.persons SELECT * FROM jsonb_populate_record(NULL::identity.persons,$1::jsonb)",
+      [JSON.stringify(person)]
+    );
+    await targetOwner.query(
+      "INSERT INTO identity.memberships SELECT * FROM jsonb_populate_record(NULL::identity.memberships,$1::jsonb)",
+      [JSON.stringify(adminMembership)]
+    );
+    await targetOwner.query(`INSERT INTO identity.authentication_sessions
+      (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+      VALUES ($1,$2,$3,'https://archive-bootstrap.invalid','archive-admin','mfa','2099-01-01T00:00:00.000Z')`,
+    [principalD.authenticationSessionId, principalD.organizationId, principalD.principalId]);
+    const targetApp = createDatabasePool(targetUrl.toString());
+    return {
+      owner: targetOwner,
+      app: targetApp,
+      async close() {
+        await targetApp.end();
+        await targetOwner.end();
+        await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1", [databaseName]);
+        await admin.query(`DROP DATABASE ${databaseName}`);
+        await admin.end();
+      }
+    };
+  } catch (error) {
+    await targetOwner.end();
+    await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1", [databaseName]);
+    await admin.query(`DROP DATABASE ${databaseName}`);
+    await admin.end();
+    throw error;
   }
 }
 
@@ -1934,6 +1997,146 @@ test("DEC-61 Research Analyst exports only a granted, PII-free Evidence index", 
     exportResearchEvidenceIndex(app, analyst, ids.sessionA, randomUUID()),
     (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
   );
+});
+
+test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered research, replay, and portable archives", async () => {
+  const analyst = { ...principalC, organizationRoles: ["research_analyst"] };
+  await grantResearchAccess(app, principalD, {
+    projectId: ids.projectA, analystPersonId: ids.personC, protocolReference: "PS-520-SYNTHETIC",
+    expiresAt: new Date("2098-01-01T00:00:00.000Z")
+  }, randomUUID());
+  const next = await owner.query("SELECT COALESCE(max(sequence),0)+1 AS sequence FROM evidence.events WHERE session_id=$1", [ids.sessionA]);
+  const participantEventId = randomUUID();
+  await owner.query(`INSERT INTO evidence.events
+    (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,
+     governing_release_id,authority_epoch,body)
+    VALUES ($1,$2,$3,$4,'research.observed',1,$5,$6,$7,1,$8::jsonb)`,
+  [participantEventId, ids.orgA, ids.sessionA, Number(next.rows[0].sequence), ids.personC, ids.participantC,
+    ids.releaseA, JSON.stringify({ observation: "synthetic behavior", directName: "must-not-export" })]);
+  await owner.query("UPDATE evidence.session_sequences SET next_sequence=$2 WHERE session_id=$1",
+    [ids.sessionA, Number(next.rows[0].sequence) + 1]);
+  await recordResearchConsent(app, analyst, ids.sessionA, "PS-520 purpose", "1.0", "granted", randomUUID());
+  const analysis = await recordAnalysis(app, analyst, ids.sessionA, {
+    layer: "analytical_note", content: { statement: "Synthetic analyst interpretation" },
+    sourceReferences: [`evidence.event:${participantEventId}`], confidence: 0.75,
+    limitations: "Synthetic evidence only"
+  }, randomUUID(), new Date("2026-10-23T11:00:00.000Z"));
+
+  const researchKey = randomUUID();
+  const research = await generateSessionReport(app, analyst, ids.sessionA, {
+    idempotencyKey: researchKey, reportKind: "research_dataset", format: "json", purposeLabel: "PS-520 purpose"
+  }, randomUUID(), new Date("2026-10-23T12:00:00.000Z"));
+  const researchBody = JSON.parse(Buffer.from(research.bytes).toString("utf8"));
+  assert.equal(researchBody.contractId, "research-export-v1");
+  assert.equal(researchBody.observations.some(({ elementId }) => elementId === participantEventId), true);
+  assert.equal(researchBody.observations.every(({ sourceReferences }) => sourceReferences.length > 0), true);
+  assert.equal(researchBody.derivedMetrics[0].measurementDefinitionVersion, 1);
+  assert.equal(researchBody.analyticalNotes[0].elementId, analysis.analysisId);
+  assert.deepEqual(researchBody.analyticalNotes[0].sourceReferences, [`evidence.event:${participantEventId}`]);
+  assert.deepEqual(researchBody.findings, []);
+  const serializedResearch = Buffer.from(research.bytes).toString("utf8");
+  assert.equal(serializedResearch.includes(ids.personC), false);
+  assert.equal(serializedResearch.includes(ids.participantC), false);
+  assert.equal(serializedResearch.includes("must-not-export"), false);
+  assert.ok(researchBody.excludedDataClasses.includes("secret_ballot_choices"));
+  assert.ok(researchBody.excludedDataClasses.includes("protected_voice_assets"));
+  const replayedArtifact = await generateSessionReport(app, analyst, ids.sessionA, {
+    idempotencyKey: researchKey, reportKind: "research_dataset", format: "json", purposeLabel: "PS-520 purpose"
+  }, randomUUID(), new Date("2026-10-24T12:00:00.000Z"));
+  assert.deepEqual([replayedArtifact.artifactId, replayedArtifact.replayed], [research.artifactId, true]);
+  await assert.rejects(generateSessionReport(app, analyst, ids.sessionA, {
+    idempotencyKey: researchKey, reportKind: "research_dataset", format: "csv", purposeLabel: "PS-520 purpose"
+  }, randomUUID()), (error) => error.envelope?.error?.code === "IDEMPOTENCY_COLLISION");
+
+  await recordResearchConsent(app, analyst, ids.sessionA, "PS-520 purpose", "1.0", "withdrawn", randomUUID());
+  const afterWithdrawal = await generateSessionReport(app, analyst, ids.sessionA, {
+    idempotencyKey: randomUUID(), reportKind: "research_dataset", format: "json", purposeLabel: "PS-520 purpose"
+  }, randomUUID());
+  assert.equal(JSON.parse(Buffer.from(afterWithdrawal.bytes).toString("utf8")).observations.some(({ elementId }) => elementId === participantEventId), false);
+
+  const firstStandard = await generateSessionReport(app, principalD, ids.sessionA, {
+    idempotencyKey: randomUUID(), reportKind: "after_action", format: "json"
+  }, randomUUID());
+  await owner.query(`INSERT INTO reporting.measurement_definitions
+    (id,organization_id,measurement_key,version,research_question,definition,created_by)
+    VALUES ($1,$2,'evidence_event_count',2,'Same question, revised validation','{"formula":"count(observations)","validationMethod":"reconciled-v2"}',$3)`,
+  [randomUUID(), ids.orgA, ids.personD]);
+  const secondStandard = await generateSessionReport(app, principalD, ids.sessionA, {
+    idempotencyKey: randomUUID(), reportKind: "after_action", format: "json"
+  }, randomUUID());
+  const firstBody = JSON.parse(Buffer.from(firstStandard.bytes).toString("utf8"));
+  const secondBody = JSON.parse(Buffer.from(secondStandard.bytes).toString("utf8"));
+  assert.equal(firstBody.reportDefinition.excludedDataClasses.includes("direct_identity"), false);
+  assert.equal(firstBody.derivedMetrics[0].measurementDefinitionVersion, 1);
+  assert.equal(secondBody.derivedMetrics[0].measurementDefinitionVersion, 2);
+  assert.notEqual(firstStandard.artifactId, secondStandard.artifactId);
+  for (const format of ["jsonl", "csv", "html", "pdf", "zip"]) {
+    const artifact = await generateSessionReport(app, principalD, ids.sessionA, {
+      idempotencyKey: randomUUID(), reportKind: "session_archive", format
+    }, randomUUID());
+    assert.ok(artifact.bytes.byteLength > 20, `${format} artifact should not be empty`);
+  }
+  await assert.rejects(generateSessionReport(app, principalE, ids.sessionA, {
+    idempotencyKey: randomUUID(), reportKind: "team", format: "json"
+  }, randomUUID()), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+
+  const policy = await createRetentionPolicy(app, principalD, {
+    policyKey: "synthetic-session", version: 1, scopeType: "session", scopeReference: ids.sessionA,
+    periodDays: 3650, legalHoldBehavior: "retain", expiryAction: "archive",
+    archiveDestination: "institutional-cold-store", approvalRequired: true
+  }, randomUUID());
+  const correction = await recordCorrection(app, principalD, { targetReference: `report_artifact:${firstStandard.artifactId}`,
+    originalValue: { label: "old" }, correctedValue: { label: "corrected" }, reason: "Synthetic correction proof",
+    reportsMustRegenerate: true }, randomUUID());
+  await assert.rejects(owner.query("UPDATE reporting.corrections SET reason='overwrite' WHERE id=$1", [correction.correctionId]), /append-only/iu);
+  assert.equal(policy.version, 1);
+
+  const matchedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) { return structuredClone(input); } }, randomUUID());
+  assert.deepEqual([matchedReplay.matched, matchedReplay.divergences.length], [true, 0]);
+  const divergedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) {
+    return { manifest: input.manifest, events: input.events.slice(1) };
+  } }, randomUUID());
+  assert.equal(divergedReplay.matched, false);
+  assert.ok(divergedReplay.divergences.some(({ code }) => code === "event_reordered" || code === "missing_event"));
+
+  const archive = await exportOrganizationArchive(app, principalD, randomUUID(), new Date("2026-10-23T12:00:00.000Z"));
+  assert.equal(archive.dataSha256.length, 64);
+  assert.equal(archive.data.persons.some(({ id }) => id === ids.personC), true);
+  assert.equal(archive.data.analyticalRecords.some(({ id }) => id === analysis.analysisId), true);
+  assert.equal(archive.excludedDataClasses.includes("secret_ballot_choices"), true);
+  const target = await createCleanArchiveTarget(archive);
+  try {
+    const imported = await importOrganizationArchive(target.app, principalD, archive, randomUUID());
+    assert.equal(imported.replayed, false);
+    assert.ok(imported.restoredRows > 0);
+    const restoredTables = {
+      projects: "studio.simulation_projects", collaborativeDocuments: "studio.collaborative_documents",
+      publicationFreezes: "studio.publication_freezes", revisions: "studio.definition_revisions",
+      releases: "registry.releases", sessions: "runtime.sessions", sessionAuthorities: "runtime.session_authorities",
+      activationReviews: "runtime.release_activation_reviews", activations: "runtime.release_activations",
+      participants: "runtime.participants", seatAssignments: "runtime.seat_assignments", artifacts: "runtime.artifact_instances",
+      sessionSequences: "evidence.session_sequences", events: "evidence.events", checkpointBatches: "evidence.checkpoint_batches",
+      checkpointSignatures: "evidence.checkpoint_signatures", anchorReceipts: "evidence.anchor_receipts",
+      reportDefinitions: "reporting.report_definitions", measurementDefinitions: "reporting.measurement_definitions",
+      researchConsents: "reporting.research_consents", analyticalRecords: "reporting.analytical_records",
+      retentionPolicies: "reporting.retention_policies", corrections: "reporting.corrections",
+      exportJobs: "reporting.export_jobs", exportArtifacts: "reporting.export_artifacts"
+    };
+    for (const [key, table] of Object.entries(restoredTables)) {
+      const count = await target.owner.query(`SELECT count(*)::integer AS count FROM ${table} WHERE organization_id=$1`, [ids.orgA]);
+      assert.equal(count.rows[0].count, archive.data[key].length, `${key} should be logically restored`);
+    }
+    const replay = await replaySession(target.app, principalD, ids.sessionA, { async replay(input) { return structuredClone(input); } }, randomUUID());
+    assert.equal(replay.matched, true);
+    const regenerated = await generateSessionReport(target.app, principalD, ids.sessionA, {
+      idempotencyKey: randomUUID(), reportKind: "after_action", format: "json"
+    }, randomUUID());
+    assert.ok(regenerated.bytes.byteLength > 20);
+    const importedAgain = await importOrganizationArchive(target.app, principalD, archive, randomUUID());
+    assert.deepEqual([importedAgain.importId, importedAgain.replayed, importedAgain.restoredRows], [imported.importId, true, 0]);
+  } finally {
+    await target.close();
+  }
 });
 
 test("PS-400-T02 consumes counted capabilities atomically and applies or cancels pinned delayed effects once", async () => {

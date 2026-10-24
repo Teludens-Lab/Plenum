@@ -7,7 +7,7 @@
 - Goal: Create independently verifiable signed Checkpoints over contiguous Evidence ranges.
 - User outcome: An institution can detect modified or missing Session history using an offline verification export.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`; implementation verified 2026-10-23.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. `ADR-003` retains its recorded status. OPEN-014 and OPEN-017 are resolved; implementation must enforce and evidence their signing, anchor, custody, RPO and RTO policy.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-003`.
 
 ## Prerequisites
 
@@ -69,8 +69,8 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 - Sign outside DB
 - Persist anchor receipts
 - Verify missing, modified, reordered, and key-rotation cases
-- Checkpoint every five minutes or 1,000 Evidence Events, whichever occurs first, and at Session close
-- Keep signing keys in an institution-controlled KMS, HSM or hardware token and preserve historical public verification keys
+- Checkpoint every five minutes or 1,000 Evidence Events and at Session close
+- Keep signing keys in an institution-controlled KMS, HSM or hardware token and retain historical public verification keys
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
 
@@ -81,7 +81,7 @@ Before adding a command, event, enum, schema, or error, search its authoritative
 - Restrict verification exports
 - Redact protected bodies without breaking proof metadata
 - Separate signing custody
-- Exclude protected event bodies from the independently held anchor
+- Exclude protected event bodies from the independent anchor
 
 Derive the Principal, Organization, Session, Seat Assignments, Active Role Context, and Authority Epoch from trusted server context. Add at least one negative authorization test. Enforce INV-002 by omitting unauthorized data server-side, not hiding it in the UI.
 
@@ -107,8 +107,8 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then key rotation preserves chain verification
 - Given the documented preconditions, when the task behavior is exercised, then restore drill verifies chain end to end
 - Given the documented preconditions, when the task behavior is exercised, then no integrity claim is made without an anchor
-- Given the documented preconditions, when the approved cadence is reached, then one idempotent Checkpoint is signed and independently anchored
-- Given the documented preconditions, when signing custody rotates, then historical evidence remains verifiable with retained public keys
+- Given the documented preconditions, when the task behavior is exercised, then approved cadence creates one idempotent signed and independently anchored Checkpoint
+- Given the documented preconditions, when the task behavior is exercised, then historical evidence remains verifiable after signing-custody rotation
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -135,7 +135,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Correction uses compensating event
 - Signer has no application DB ownership
 
-The approval gate is: production signing custody, independent anchoring and recovery must conform to the resolved OPEN-014/017 policy and pass their required evidence. A task may be implementation-complete without being release-approved.
+The approval gate is: Resolved OPEN-014/017 signing, anchor, custody and recovery policy must be implemented and evidenced. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -164,7 +164,7 @@ Verification:
 Compatibility / migrations:
 - Adds 023 checkpoint operations.
 Risks / follow-up:
-- Approved OPEN-014/017 custody, checkpoint, anchor and recovery policy still requires implementation and operational evidence.
+- Implement and evidence the resolved OPEN-014/017 custody and recovery policy.
 Refs: PS-510, REQ-006, ADR-003
 ```
 
@@ -176,4 +176,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: the OPEN-014/017 policy changes; canonicalization changes; signing algorithm rotation.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The OPEN-014/017 policy changes; Canonicalization changes; Signing algorithm rotation.

@@ -7,7 +7,7 @@
 - Goal: Produce governed reports and portable research data with source provenance, retention, and replay divergence evidence.
 - User outcome: Operators and analysts receive accurate exports that distinguish captured history, derived metrics, notes, and findings.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -25,7 +25,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/src/server.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-009`, `OPEN-022`. OPEN-017 is resolved; reports and recovery evidence must follow its approved custody and retention consequences.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-009`.
 
 ## Prerequisites
 
@@ -132,7 +132,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Secret Ballots remain excluded
 - Retention does not break evidence proofs
 
-The approval gate is: production retention still requires OPEN-009; resolved OPEN-017/025 recovery and research-role policy must be implemented and evidenced. A task may be implementation-complete without being release-approved.
+The approval gate is: Production retention still requires OPEN-009; resolved OPEN-017/025 recovery and research-role policy must be implemented and evidenced. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -172,4 +172,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-009 resolves or the approved OPEN-017/025 policy changes; report format changes; a new research classification is approved.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-009 resolves or the approved OPEN-017/025 policy changes; Report format changes; New research classification is approved.

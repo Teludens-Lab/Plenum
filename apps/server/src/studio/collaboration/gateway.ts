@@ -119,7 +119,7 @@ export function createStudioCollaborationGateway(options: StudioCollaborationGat
       return true;
     },
     close(): Promise<void> {
-      for (const client of webSockets.clients) client.close(1001, "Server shutting down");
+      for (const client of webSockets.clients) client.terminate();
       return new Promise((resolve) => webSockets.close(() => resolve()));
     }
   };

@@ -7,7 +7,7 @@
 - Goal: Measure the DEC-16 planning workload on named hardware against owner-approved budgets.
 - User outcome: Release owners know observed limits and failure behavior instead of relying on capacity claims.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

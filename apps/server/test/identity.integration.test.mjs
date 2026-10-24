@@ -33,6 +33,7 @@ import {
   createDatabasePool,
   exportReleasePackage,
   getOperatorProjection,
+  retryDeadLetteredRuntimeDelta,
   getReadiness,
   getPluginCatalog,
   getRuntimeDeltas,
@@ -657,18 +658,48 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
 });
 
 test("Game Master projection requires Operator authorization and remains tenant/Session scoped", async () => {
-  const projection = await getOperatorProjection(
-    app, principal, ids.sessionA, "e0000000-0000-4000-8000-000000000010"
+  const failed = await owner.query(
+    `WITH target AS (
+       SELECT id,publication_status,attempts,published_at FROM sync.session_delta_outbox
+        WHERE organization_id=$1 AND session_id=$2 ORDER BY created_at,id LIMIT 1
+     )
+     UPDATE sync.session_delta_outbox item SET publication_status='dead_lettered',attempts=3,published_at=NULL
+      FROM target WHERE item.id=target.id
+      RETURNING item.id,target.publication_status,target.attempts,target.published_at`,
+    [ids.orgA, accessIds.session]
   );
-  assert.equal(projection.sessionId, ids.sessionA);
-  assert.equal(projection.releaseId, ids.releaseA);
+  assert.equal(failed.rowCount, 1);
+  const projection = await getOperatorProjection(
+    app, principal, accessIds.session, "e0000000-0000-4000-8000-000000000010"
+  );
+  assert.equal(projection.sessionId, accessIds.session);
+  assert.equal(projection.releaseId, accessIds.release);
+  assert.equal(projection.deliveryHealth.deadLettered, 1);
+  assert.equal(projection.deliveryHealth.deadLetters[0].attempts, 3);
+
+  await assert.rejects(
+    retryDeadLetteredRuntimeDelta(app, principalD, accessIds.session, failed.rows[0].id, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  assert.deepEqual(
+    await retryDeadLetteredRuntimeDelta(app, principal, accessIds.session, failed.rows[0].id, randomUUID()),
+    { outboxId: failed.rows[0].id, status: "pending" }
+  );
+  const recovery = await owner.query(
+    `SELECT item.publication_status,audit.action
+       FROM sync.session_delta_outbox item
+       JOIN evidence.audit_records audit ON audit.organization_id=item.organization_id AND audit.target_ref='outbox:'||item.id::text
+      WHERE item.organization_id=$1 AND item.id=$2`,
+    [ids.orgA, failed.rows[0].id]
+  );
+  assert.deepEqual(recovery.rows[0], { publication_status: "pending", action: "delivery.dead_letter_retried" });
 
   await assert.rejects(
     getOperatorProjection(
       app, { ...principal, organizationId: ids.orgB, principalId: ids.personB }, ids.sessionA,
       "e0000000-0000-4000-8000-000000000011"
     ),
-    (error) => error?.envelope?.error?.code === "NOT_FOUND"
+    (error) => error?.envelope?.error?.code === "ACCESS_REVOKED"
   );
   await assert.rejects(
     getOperatorProjection(
@@ -676,6 +707,10 @@ test("Game Master projection requires Operator authorization and remains tenant/
       "e0000000-0000-4000-8000-000000000012"
     ),
     (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await owner.query(
+    "UPDATE sync.session_delta_outbox SET publication_status=$1,attempts=$2,published_at=$3 WHERE organization_id=$4 AND id=$5",
+    [failed.rows[0].publication_status, failed.rows[0].attempts, failed.rows[0].published_at, ids.orgA, failed.rows[0].id]
   );
 });
 

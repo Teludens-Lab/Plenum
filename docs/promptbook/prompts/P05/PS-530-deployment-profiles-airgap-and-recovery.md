@@ -7,7 +7,7 @@
 - Goal: Run one image set across all three profiles with local identity, storage, media, Plugins, backup, and restore.
 - User outcome: An institution can install, operate, back up, restore, and verify Plenum without a public network dependency.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

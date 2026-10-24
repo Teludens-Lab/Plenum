@@ -22,7 +22,7 @@ import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpa
 import { getAdjudications } from "../adjudication/service.js";
 import { getRuntimeBootstrap, getRuntimeDeltas, getRuntimeSnapshot, getRuntimeSse } from "../sync/runtime-sync.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
-import { getOperatorProjection } from "../runtime/operator-projection.js";
+import { getOperatorProjection, retryDeadLetteredRuntimeDelta } from "../runtime/operator-projection.js";
 import {
   archiveSession,
   assignParticipant,
@@ -700,6 +700,12 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/operator\/sessions\/([^/]+)$/u))) {
         send(response, 200, await getOperatorProjection(
           options.pool, principal, pathId(match[1], correlationId), correlationId
+        ));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/operator\/sessions\/([^/]+)\/dead-letters\/([^/]+)\/retry$/u))) {
+        send(response, 200, await retryDeadLetteredRuntimeDelta(
+          options.pool, principal, pathId(match[1], correlationId), pathId(match[2], correlationId), correlationId
         ));
         return true;
       }

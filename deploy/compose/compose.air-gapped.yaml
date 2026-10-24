@@ -1,0 +1,8 @@
+services:
+  application:
+    environment:
+      PLENUM_DEPLOYMENT_PROFILE: air_gapped
+networks:
+  plenum:
+    internal: true
+

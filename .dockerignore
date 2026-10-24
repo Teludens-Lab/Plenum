@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+node_modules/.cache
+test-results
+output
+docs
+tests
+docs/corpus/archive
+references/fractured-order
+

@@ -1,0 +1,37 @@
+name: plenum
+services:
+  application:
+    image: ${PLENUM_APPLICATION_IMAGE:?set PLENUM_APPLICATION_IMAGE}
+    command: ["deploy/compose/profile-service.mjs"]
+    restart: unless-stopped
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    environment:
+      PLENUM_DEPLOYMENT_PROFILE: ${PLENUM_DEPLOYMENT_PROFILE:?set PLENUM_DEPLOYMENT_PROFILE}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER}
+      OIDC_PROVIDER_KEY: ${OIDC_PROVIDER_KEY:?set OIDC_PROVIDER_KEY}
+      OIDC_ORGANIZATION_ID: ${OIDC_ORGANIZATION_ID:?set OIDC_ORGANIZATION_ID}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?set OIDC_REDIRECT_URI}
+      MEDIA_URL: ${MEDIA_URL:?set MEDIA_URL}
+      MEDIA_API_KEY: ${MEDIA_API_KEY:?set MEDIA_API_KEY}
+      MEDIA_API_SECRET: ${MEDIA_API_SECRET:?set MEDIA_API_SECRET}
+      MEDIA_ADAPTER_DIGEST: ${MEDIA_ADAPTER_DIGEST:?set MEDIA_ADAPTER_DIGEST}
+      PLENUM_DEPLOYMENT_ID: ${PLENUM_DEPLOYMENT_ID:?set PLENUM_DEPLOYMENT_ID}
+      FLOOR_TOKEN_SECRET: ${FLOOR_TOKEN_SECRET:?set FLOOR_TOKEN_SECRET}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    networks: [plenum]
+    ports: ["${PLENUM_HTTPS_PROXY_PORT:-8080}:8080"]
+networks:
+  plenum: {}
+

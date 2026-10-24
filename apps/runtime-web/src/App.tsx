@@ -1082,6 +1082,16 @@ function OperatorView() {
     finally { setPending(false); }
     return null;
   };
+  const retryDeadLetter = async (outboxId: string) => {
+    if (id === null || pending) return;
+    setPending(true); setNotice("Retrying the failed delivery.");
+    try {
+      await api(`/v1/operator/sessions/${id}/dead-letters/${outboxId}/retry`, { method: "POST", body: "{}" });
+      setNotice("Delivery returned to the pending queue.");
+      await load();
+    } catch (cause) { setNotice(cause instanceof Error ? cause.message : "The delivery retry failed."); }
+    finally { setPending(false); }
+  };
   return <Shell connection={connection}>
     <main id="main-content" className="runtime-layout" tabIndex={-1}>
       <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p>{projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
@@ -1089,6 +1099,17 @@ function OperatorView() {
         <div className="card metric"><span>Participants</span><strong>{projection.participantCount}</strong></div>
         <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount}</strong></div>
         <div className="card metric"><span>Active tasks</span><strong>{projection.activeTasks.length}</strong></div>
+      </section>
+      <section aria-labelledby="delivery-health-title">
+        <div className="section-heading"><p className="eyebrow">Delivery health</p><h2 id="delivery-health-title">Runtime deliveries</h2></div>
+        <p>{projection.deliveryHealth.pending} pending · {projection.deliveryHealth.deadLettered} dead-lettered</p>
+        {projection.deliveryHealth.deadLetters.length === 0 ? <p className="empty-state">No dead-lettered deliveries.</p> :
+          <ul className="readiness-list">{projection.deliveryHealth.deadLetters.map((item) => <li key={item.outboxId}>
+            <span><strong>{item.eventType}</strong> · {item.attempts} failed attempts<br /><small>Queued <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></small></span>
+            <button className="btn-secondary" type="button" disabled={pending} onClick={() => void retryDeadLetter(item.outboxId)}>
+              Retry delivery
+            </button>
+          </li>)}</ul>}
       </section>
       {readiness === null ? null : <section aria-labelledby="staffing-title">
         <div className="section-heading"><p className="eyebrow">Verified onboarding</p><h2 id="staffing-title">Session staffing</h2></div>

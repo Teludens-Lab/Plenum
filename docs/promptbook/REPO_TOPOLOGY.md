@@ -20,6 +20,13 @@ Plenum/
     sync-client/               # Runtime convergence, persistence ordering and fallback state
   scripts/
     contract-lint.mjs          # terminology, naming and workspace-boundary checks
+    *deployment*.mjs           # offline packaging and guarded backup/restore operations
+  deploy/
+    compose/                   # one application image and three profile overlays
+    offline-bundle/            # digest-pinned deployment-manifest-v1
+    identity/ media/           # local Keycloak and LiveKit configuration
+  docs/operations/             # deployment, offline transfer and recovery runbooks
+  tests/deployment/            # profile, no-egress and recovery evidence
   tests/platform/              # PS-100 contract and authorization evidence
   docs/
     corpus/                      # governing product documents and archive
@@ -33,7 +40,7 @@ Plenum/
   rules/                         # QA and universal design standards
 ```
 
-PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`. PS-130 adds deterministic Release Packages and S3-compatible storage. PS-140 adds the transactional outbox publisher and authorized cursor/snapshot/SSE/polling boundary under `apps/server/src/sync/`, with convergence and persistence ordering in `packages/sync-client/`. There is still no HTTP composition root, production deployment/configuration, or rendered frontend.
+PS-100 established the contract skeleton; PS-110 added identity and policy boundaries. PS-120 centralizes authoritative Command processing under `apps/server/src/runtime/commands/`. PS-130 adds deterministic Release Packages and S3-compatible storage. PS-140 adds the transactional outbox publisher and authorized cursor/snapshot/SSE/polling boundary under `apps/server/src/sync/`, with convergence and persistence ordering in `packages/sync-client/`. PS-530 adds the OIDC/S3/media HTTP composition root, static Runtime/Studio delivery, three deployment profiles, signed offline packaging and guarded recovery tooling.
 
 ## Target code topology
 
@@ -65,7 +72,7 @@ Feature modules use public application functions and contracts. Shared infrastru
 |---|---|---|---|---|
 | Local disposable | Unit/integration/browser work | Synthetic only | Developer LAN | Slice and PS-100 contract kernel exist |
 | CI disposable | Repeatable platform gates | Synthetic contract fixtures | Deny unexpected egress | PS-100 commands verified locally; CI provider not configured |
-| Institutional test | LAN, media, backup/restore | Synthetic representative | No public egress lane | Planned by PS-530 |
+| Institutional test | LAN, media, backup/restore | Synthetic representative | No public egress lane | PS-530 focused deployment and restore drill PASS; institutional acceptance pending |
 | Production profiles | Cloud, self-hosted, air-gapped | Governed | Per profile | Not approved |
 
 Production workspaces use the root npm lockfile. The retained reference slice keeps its independent historical lockfile and is not part of the workspace. Node 26 target / 24 floor and PostgreSQL 18 are Approved by Product Owner direction, with named specialist sign-offs still required; PS-100 is verified on Node 24.22.0 with npm 11.19.1 and TypeScript 5.9.3. Plugin, Platform Adapter, image, Release, schema, compiler, and contract versions are digest-pinned where applicable.

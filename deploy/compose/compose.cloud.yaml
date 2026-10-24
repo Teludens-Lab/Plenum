@@ -1,0 +1,5 @@
+services:
+  application:
+    environment:
+      PLENUM_DEPLOYMENT_PROFILE: cloud
+

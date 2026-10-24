@@ -666,6 +666,11 @@ export interface OperatorProjectionV1 {
   artifactsByState: Record<string, number>;
   activeTasks: Array<{ artifactId: string; artifactTypeKey: string; state: string; version: number }>;
   recentEvents: Array<{ type: string; recordedAt: string; aggregateId: string | null }>;
+  deliveryHealth: {
+    pending: number;
+    deadLettered: number;
+    deadLetters: Array<{ outboxId: string; eventId: string; eventType: string; attempts: number; createdAt: string }>;
+  };
 }
 
 export interface ReadinessProjectionV1 {

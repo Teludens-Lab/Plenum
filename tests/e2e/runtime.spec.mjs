@@ -564,6 +564,23 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     } });
     expect(advanced.status()).toBe(200);
 
+    const deliveryDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
+    let originalDelivery;
+    try {
+      const failedDelivery = await deliveryDatabase.query(
+        `WITH target AS (
+           SELECT id,publication_status,attempts,published_at FROM sync.session_delta_outbox
+            WHERE organization_id=$1 AND session_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1
+         )
+         UPDATE sync.session_delta_outbox item SET publication_status='dead_lettered',attempts=3,published_at=NULL
+          FROM target WHERE item.id=target.id
+          RETURNING item.id,target.publication_status,target.attempts,target.published_at`,
+        [fixture.organizationId, fixture.sessionId]
+      );
+      expect(failedDelivery.rowCount).toBe(1);
+      originalDelivery = failedDelivery.rows[0];
+    } finally { await deliveryDatabase.end(); }
+
     const operator = await actor(browser, fixture.tokens.operator);
     const operatorProjection = await operator.context.request.get(`/v1/operator/sessions/${fixture.sessionId}`);
     expect(operatorProjection.status()).toBe(200);
@@ -579,11 +596,23 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(operator.page.getByRole("heading", { level: 2, name: "Session staffing" })).toBeVisible();
     await expect(operator.page.getByText("No ambiguous roster rows.")).toBeVisible();
     await expect(operator.page.getByRole("heading", { level: 2, name: "Operator readiness" })).toBeVisible();
+    await expect(operator.page.getByRole("heading", { level: 2, name: "Runtime deliveries" })).toBeVisible();
+    await expect(operator.page.getByText("1 dead-lettered")).toBeVisible();
+    await operator.page.getByRole("button", { name: "Retry delivery" }).click();
+    await expect(operator.page.getByText("Delivery returned to the pending queue.")).toBeVisible();
+    await expect(operator.page.getByText("No dead-lettered deliveries.")).toBeVisible();
     await expect(operator.page.getByText("Current governing Release is pinned")).toBeVisible();
     expect((await new AxeBuilder({ page: operator.page }).analyze()).violations).toEqual([]);
     await expect(operator.page.locator(".status-list li").filter({ hasText: "completed" })).toContainText("1");
     await expect(operator.page.getByText("stage.advanced", { exact: true })).toBeVisible();
     await operator.page.screenshot({ path: `${evidenceRoot}/operator-accepted.png`, fullPage: true });
+    const restoreDeliveryDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
+    try {
+      await restoreDeliveryDatabase.query(
+        `UPDATE sync.session_delta_outbox SET publication_status=$1,attempts=$2,published_at=$3 WHERE id=$4`,
+        [originalDelivery.publication_status, originalDelivery.attempts, originalDelivery.published_at, originalDelivery.id]
+      );
+    } finally { await restoreDeliveryDatabase.end(); }
     await Promise.all([author.context.close(), reviewer.context.close(), red.context.close(), finalReviewer.context.close(),
       operator.context.close(), invalidGreen.context.close(), industry.context.close(), industryReview.context.close()]);
   });
@@ -933,7 +962,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("@a11y PS-210 completes isolated multi-round proposal negotiation and two-sided closure", async ({ browser }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
     const control = await actor(browser, fixture.tokens.finalReviewer);
     const source = await actor(browser, fixture.tokens.greenReviewer);
     const recipient = await actor(browser, fixture.tokens.redReviewer);

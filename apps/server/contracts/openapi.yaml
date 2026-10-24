@@ -877,6 +877,30 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OperatorProjectionV1" }
         "403": { description: The authenticated Principal is not an Operator. }
+  /v1/operator/sessions/{sessionId}/dead-letters/{outboxId}/retry:
+    post:
+      operationId: retryDeadLetteredRuntimeDelta
+      x-contract-id: operator-projection-v1
+      x-authorized-organization-role: operator
+      x-authorization-scope: [organization, session]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: outboxId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The dead-lettered delivery was returned to the pending queue and audited.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [outboxId, status]
+                properties:
+                  outboxId: { type: string, format: uuid }
+                  status: { const: pending }
+        "403": { description: The authenticated Principal is not a current Operator. }
+        "404": { description: The tenant-scoped dead letter does not exist or is no longer retryable. }
   /v1/projects/{projectId}/sessions:
     post:
       operationId: createSession
@@ -1772,7 +1796,7 @@ components:
     OperatorProjectionV1:
       type: object
       additionalProperties: false
-      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantCount, occupiedSeatCount, artifactsByState, activeTasks, recentEvents]
+      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantCount, occupiedSeatCount, artifactsByState, activeTasks, recentEvents, deliveryHealth]
       properties:
         contractId: { const: operator-projection-v1 }
         sessionId: { type: string, format: uuid }
@@ -1784,6 +1808,25 @@ components:
         artifactsByState: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         activeTasks: { type: array, items: { type: object } }
         recentEvents: { type: array, items: { type: object } }
+        deliveryHealth:
+          type: object
+          additionalProperties: false
+          required: [pending, deadLettered, deadLetters]
+          properties:
+            pending: { type: integer, minimum: 0 }
+            deadLettered: { type: integer, minimum: 0 }
+            deadLetters:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [outboxId, eventId, eventType, attempts, createdAt]
+                properties:
+                  outboxId: { type: string, format: uuid }
+                  eventId: { type: string, format: uuid }
+                  eventType: { type: string, minLength: 1 }
+                  attempts: { type: integer, minimum: 0 }
+                  createdAt: { type: string, format: date-time }
     ReadinessProjectionV1:
       type: object
       additionalProperties: false

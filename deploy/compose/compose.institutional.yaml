@@ -1,0 +1,62 @@
+services:
+  application:
+    environment:
+      PLENUM_DEPLOYMENT_PROFILE: institutional
+      NODE_EXTRA_CA_CERTS: /run/secrets/identity-ca.crt
+    depends_on: [database, storage, identity, media]
+    secrets: [identity-ca]
+  database:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: plenum
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets: [postgres-password]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    networks: [plenum]
+  storage:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: ["server", "-s3", "-dir=/data", "-ip=storage"]
+    volumes: ["object-data:/data"]
+    networks: [plenum]
+  identity:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    command: ["start", "--optimized", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?set KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: ${KEYCLOAK_DATABASE_URL:?set KEYCLOAK_DATABASE_URL}
+      KC_DB_USERNAME: ${KEYCLOAK_DATABASE_USERNAME:?set KEYCLOAK_DATABASE_USERNAME}
+      KC_DB_PASSWORD: ${KEYCLOAK_DATABASE_PASSWORD:?set KEYCLOAK_DATABASE_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?set KEYCLOAK_HOSTNAME}
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /run/secrets/identity-tls.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /run/secrets/identity-tls.key
+      KC_HEALTH_ENABLED: "true"
+    secrets: [identity-tls-cert, identity-tls-key]
+    volumes: ["../identity/keycloak/realm-plenum.json:/opt/keycloak/data/import/realm-plenum.json:ro"]
+    networks:
+      plenum:
+        aliases: [identity.plenum.lan]
+  media:
+    image: livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a
+    command: ["--config", "/etc/livekit.yaml", "--key-file", "/run/secrets/livekit-keys.yaml"]
+    secrets: [livekit-keys]
+    volumes: ["../media/livekit.yaml:/etc/livekit.yaml:ro"]
+    networks: [plenum]
+secrets:
+  postgres-password:
+    file: ${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE}
+  livekit-keys:
+    file: ${LIVEKIT_KEYS_FILE:?set LIVEKIT_KEYS_FILE}
+  identity-ca:
+    file: ${KEYCLOAK_TLS_CERTIFICATE:?set KEYCLOAK_TLS_CERTIFICATE}
+  identity-tls-cert:
+    file: ${KEYCLOAK_TLS_CERTIFICATE:?set KEYCLOAK_TLS_CERTIFICATE}
+  identity-tls-key:
+    file: ${KEYCLOAK_TLS_PRIVATE_KEY:?set KEYCLOAK_TLS_PRIVATE_KEY}
+volumes:
+  postgres-data: {}
+  object-data: {}
+

@@ -3,6 +3,8 @@
 Date: 2026-10-24  
 Status: **Harness implemented; one characterization run completed; capacity acceptance BLOCKED**
 
+Superseding optimization evidence: [`PS-545-optimization.md`](./PS-545-optimization.md). PS-545 materially improves Command, Floor, and fan-out latency; adds durable PostgreSQL settings and raw resource telemetry; corrects the voting workload and soak scheduler; and passes the named lower-capacity-equivalent gate plus representative TURN/TLS media evidence, subject to the documented final-cache soak-timing caveat.
+
 ## Claim boundary
 
 This report measures the DEC-16 planning workload on one local workstation. It is not a production capacity claim or an SLO. `OPEN-019` targets were fully approved on 2026-10-24, but passing them still requires three consecutive production-shaped runs, the 30-minute warm-up/60-minute steady-state period, and an institutional LAN/TURN media run.
@@ -45,7 +47,7 @@ The real-media run connected one audio publisher and 49 subscribers with 0% obse
 
 ## Bottleneck and scaling decision
 
-The command and voice misses coincide with 51 waiting database connections out of a 52-connection peak. Application writes serialize on authoritative Session work; radio requests also serialize per channel and repeatedly calculate queue position across up to 500 contenders. These are the first optimization targets.
+The original sampler reported 51 waiting database connections out of a 52-connection peak. PS-545 later proved that this total incorrectly included idle pooled `ClientRead` connections; it is not a saturation measure. Separate PS-545 lock sampling still confirmed authority tuple-lock contention in the Command path and per-channel serialization in the Floor path, which became the optimization targets.
 
 No cache, broker, database split, or new service is justified by this single local run. First measure query/lock time, bound the voice queue-position work, tune the existing connection/concurrency limits, and repeat on the approved topology. A service split would add operations cost without evidence that process separation is the limiting factor.
 

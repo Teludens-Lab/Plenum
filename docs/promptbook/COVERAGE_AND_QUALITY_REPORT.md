@@ -21,7 +21,7 @@ The promptbook has 32 vertical tasks across P00-P06. The current 2026-10-24 mach
 
 - PS-430 remains verified. PS-500 through PS-530 are complete, and PS-540 has an implemented load harness plus one local characterization; PS-545 is the next eligible task.
 - `OPEN-004` remains unratified. The generalization evidence does not infer or approve research semantics, methodology effectiveness, or production readiness.
-- PS-545 is the sole task marked ready. It owns measured bottleneck diagnosis, minimal optimization and three clean approved-profile reruns. PS-550 is blocked on PS-545. PS-540 is implemented but not capacity-verified; OPEN-019 is resolved, while the failed approved targets and incomplete acceptance evidence are recorded in `tasks.json` and `docs/performance/PS-540-reference-load.md`.
+- PS-545 is verified on the named lower-capacity equivalent with its final-cache soak-timing caveat recorded. PS-550 is the sole task marked ready and owns final security, accessibility, recovery, and release assurance. OPEN-019 remains resolved; production release approval remains separate.
 - Proposed commands are not represented as executable. Their registry rows name the creating task.
 - Current slice unit/syntax PASS evidence was produced on Node 22.16.0, below the declared Node 24 floor; it does not satisfy PS-001.
 - Historical slice HTTP/database results remain labeled historical, with PostgreSQL 16 rather than target PostgreSQL 18.

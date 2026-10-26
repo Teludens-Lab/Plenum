@@ -1,0 +1,28 @@
+{
+  "contractId": "ps-545-institutional-media-recovery-v1",
+  "generatedAt": "2026-10-25T21:09:38.161Z",
+  "topology": "Windows Chromium client to Linux Mint LiveKit over forced TURN/TLS",
+  "injectedFailure": "LiveKit container restart",
+  "recoveryMilliseconds": 11747.73,
+  "network": {
+    "packetsReceived": 3,
+    "packetsLost": 0,
+    "selectedCandidateTypes": [
+      "prflx"
+    ],
+    "selectedProtocols": [
+      "tls"
+    ],
+    "remoteCandidateTypes": [
+      "host"
+    ],
+    "remotePorts": [
+      50026
+    ],
+    "packetLossPercent": 0
+  },
+  "thresholds": {
+    "recoveryMilliseconds": 300000,
+    "packetLossPercent": 1
+  }
+}

@@ -223,7 +223,7 @@ Air-gapped Sessions are authoritative locally from creation. A cloud and an inst
 | SYNC-12 | A partition cannot auto-promote a writer; stale or foreign authority writes are refused. | Partial: foreign and fenced authority refused; no transfer |
 | SYNC-13 | A changed historical event fails independent checkpoint verification. | Not implemented |
 | SYNC-14 | An outbox with expired credentials keeps only permitted drafts; nothing is accepted before re-authentication. | Not implemented |
-| SYNC-15 | The DEC-16 reconnect and submission fixture is measured against agreed targets. | One local PS-540 characterization run completed: reconnect/integrity passed, but command latency failed the approved target; soak and clean reruns remain required. |
+| SYNC-15 | The DEC-16 reconnect and submission fixture is measured against agreed targets. | PS-545 PASS on the owner-approved lower-capacity equivalent: full soak, three final sets, exact integrity, recovery and raw saturation evidence; see the documented final-cache soak-timing caveat. |
 | SYNC-16 | A Ballot queued offline and delivered after the Poll closes is rejected with `DEADLINE_EXPIRED`. | Not implemented |
 | SYNC-17 | After reconnection no stale floor request is replayed and no Approval Decision is accepted from a queue. | Not implemented |
 

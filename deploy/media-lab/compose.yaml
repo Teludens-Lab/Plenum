@@ -1,0 +1,42 @@
+name: plenum-media-lab
+
+services:
+  media:
+    image: livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a
+    command: ["--config", "/etc/livekit.yaml"]
+    restart: unless-stopped
+    secrets:
+      - media-tls-cert
+      - media-tls-key
+    volumes:
+      - ${PLENUM_LAB_LIVEKIT_CONFIG_FILE:?set PLENUM_LAB_LIVEKIT_CONFIG_FILE}:/etc/livekit.yaml:ro
+    ports:
+      - "${PLENUM_LAB_BIND_IP:?set PLENUM_LAB_BIND_IP}:7881:7881/tcp"
+      - "${PLENUM_LAB_BIND_IP:?set PLENUM_LAB_BIND_IP}:443:443/tcp"
+      - "${PLENUM_LAB_BIND_IP:?set PLENUM_LAB_BIND_IP}:50000-50100:50000-50100/udp"
+    networks: [media-lab]
+
+  gateway:
+    image: nginx:1.29.2-alpine@sha256:61e01287e546aac28a3f56839c136b31f590273f3b41187a36f46f6a03bbfe22
+    restart: unless-stopped
+    read_only: true
+    user: "101:101"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    depends_on: [media]
+    secrets: [media-tls-cert, media-tls-key]
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${PLENUM_LAB_BIND_IP:?set PLENUM_LAB_BIND_IP}:8443:8443/tcp"
+    networks: [media-lab]
+
+secrets:
+  media-tls-cert:
+    file: ${PLENUM_LAB_TLS_CERT_FILE:?set PLENUM_LAB_TLS_CERT_FILE}
+  media-tls-key:
+    file: ${PLENUM_LAB_TLS_KEY_FILE:?set PLENUM_LAB_TLS_KEY_FILE}
+
+networks:
+  media-lab: {}

@@ -704,7 +704,7 @@ function RuntimeView() {
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
-    setConnection("loading");
+    setConnection((current) => current === "online" ? current : "loading");
     setError(null);
     try {
       const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };

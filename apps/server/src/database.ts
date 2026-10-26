@@ -17,8 +17,10 @@ export async function withOrganizationTransaction<T>(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(`SET LOCAL ROLE ${databaseRole}`);
-    await client.query("SELECT set_config('app.organization_id', $1, true)", [organizationId]);
+    await client.query(
+      "SELECT set_config('role', $1, true), set_config('app.organization_id', $2, true)",
+      [databaseRole, organizationId]
+    );
     const result = await operation(client);
     await client.query("COMMIT");
     return result;

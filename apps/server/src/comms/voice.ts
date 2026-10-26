@@ -75,7 +75,12 @@ const fail = (errorCode: "VALIDATION_FAILED" | "PERMISSION_DENIED" | "TARGET_NOT
 message: string, reconcile = false): CommandDecision => ({ status: reconcile ? "needs_reconciliation" : "rejected", errorCode, message });
 
 async function readDefinition(client: PoolClient, organizationId: string, releaseId: string): Promise<VoiceDefinition> {
-  const result = await client.query<{ snapshot: unknown }>(`SELECT revision.snapshot FROM registry.releases release
+  const result = await client.query<{ snapshot: unknown }>(`SELECT jsonb_build_object(
+      'communications',COALESCE(revision.snapshot->'coreDesign'->'communications',revision.snapshot->'communications'),
+      'sessionRoles',COALESCE(revision.snapshot->'coreDesign'->'sessionRoles',revision.snapshot->'sessionRoles'),
+      'seats',COALESCE(revision.snapshot->'coreDesign'->'seats',revision.snapshot->'seats'),
+      'platformAdapters',COALESCE(revision.snapshot->'coreDesign'->'platformAdapters',revision.snapshot->'platformAdapters')) AS snapshot
+    FROM registry.releases release
     JOIN studio.definition_revisions revision ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
     WHERE release.organization_id=$1 AND release.id=$2`, [organizationId, releaseId]);
   const snapshot = result.rows[0]?.snapshot;
@@ -110,10 +115,11 @@ async function activeStageId(client: PoolClient, context: SessionAccessContextV1
   [context.organizationId, context.sessionId])).rows[0]?.stage_id;
 }
 
-async function readChannel(client: PoolClient, context: SessionAccessContextV1, id: string, lock = false): Promise<ChannelRow | undefined> {
+async function readChannel(client: PoolClient, context: SessionAccessContextV1, id: string,
+  lock?: "share" | "update"): Promise<ChannelRow | undefined> {
   return (await client.query<ChannelRow>(`SELECT id,governing_release_id,definition_id,definition_revision,definition,status,provider_adapter_digest,
     invited_participant_ids,recording_active,transcription_active,version
-    FROM comms.voice_channels WHERE organization_id=$1 AND session_id=$2 AND id=$3${lock ? " FOR UPDATE" : ""}`,
+    FROM comms.voice_channels WHERE organization_id=$1 AND session_id=$2 AND id=$3${lock === undefined ? "" : ` FOR ${lock.toUpperCase()}`}`,
   [context.organizationId, context.sessionId, id])).rows[0];
 }
 
@@ -225,7 +231,7 @@ async function manageChannel(input: CommandExecutionContext, channel: ChannelRow
         can_moderate=EXCLUDED.can_moderate,valid_until=EXCLUDED.valid_until,revoked_at=NULL,provider_revoked_at=NULL,policy_revision=EXCLUDED.policy_revision,
         access_revision=EXCLUDED.access_revision,authority_epoch=EXCLUDED.authority_epoch,updated_at=transaction_timestamp()`,
     [randomUUID(), context.organizationId, context.sessionId, channel.id, active.id, context.participantId,
-      permissions.includes("transmit"), permissions.includes("moderate"), version, context.accessRevision, context.authorityEpoch]);
+      transmit, permissions.includes("moderate"), version, context.accessRevision, context.authorityEpoch]);
     return { status: "accepted", aggregateVersion: version, eventType: "voice_channel.joined", eventPayload: {
       contractId: VOICE_COMMAND_CONTRACT_ID, channelId: channel.id, seatAssignmentId: active.id, permissions
     } };
@@ -327,7 +333,7 @@ export function createVoiceCommandExecutor(adapter?: MediaProviderAdapter) {
   if (adapter === undefined && input.command.operationType === "voice_channel.join") {
     return fail("CAPABILITY_UNAVAILABLE", "Voice media is not configured.");
   }
-  const channel = await readChannel(input.client, input.context, input.command.aggregateId, true);
+  const channel = await readChannel(input.client, input.context, input.command.aggregateId, "update");
   if (channel === undefined) return fail("TARGET_NOT_FOUND", "The Voice Channel was not found.");
   return manageChannel(input, channel);
   };
@@ -388,7 +394,8 @@ export async function issueMediaCredential(pool: Pool, context: SessionAccessCon
       AND valid_until>transaction_timestamp() AND access_revision=$4 AND authority_epoch=$5`,
     [context.organizationId, channelId, active.id, context.accessRevision, context.authorityEpoch])).rows[0];
     if (row === undefined) throw authorizationError("ACCESS_REVOKED", "The Voice grant is expired or revoked.", correlationId);
-    return { channel, permissions: [row.can_listen ? "listen" as const : null, row.can_transmit ? "transmit" as const : null,
+    return { channel, permissions: [row.can_listen ? "listen" as const : null,
+      row.can_transmit && channel.definition.mode !== "radio_ptt" ? "transmit" as const : null,
       row.can_moderate ? "moderate" as const : null].filter((value): value is MediaPermission => value !== null) };
   });
   return adapter.issueCredential({ organizationId: context.organizationId, sessionId: context.sessionId, channelId,
@@ -425,19 +432,53 @@ const tokenDigest = (token: string) => createHash("sha256").update(token).digest
 
 async function appendFloorEvent(client: PoolClient, context: SessionAccessContextV1, channelId: string,
   requestId: string, eventType: string, payload: JsonObject, correlationId: string): Promise<void> {
-  const sequence = Number((await client.query<{ sequence: string }>(`UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
-    WHERE organization_id=$1 AND session_id=$2 RETURNING next_sequence-1 AS sequence`,
-  [context.organizationId, context.sessionId])).rows[0]?.sequence);
-  if (!Number.isSafeInteger(sequence)) throw new Error("Session evidence sequence is missing");
   const eventId = randomUUID();
-  await client.query(`INSERT INTO evidence.events
-    (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,governing_release_id,
-     authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
-    VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,1,transaction_timestamp())`,
-  [eventId,context.organizationId,context.sessionId,sequence,eventType,context.principalId,context.participantId,
-    context.activeReleaseId,context.authorityEpoch,JSON.stringify(payload),correlationId,requestId,channelId]);
-  await client.query("INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id) VALUES ($1,$2,$3,$4)",
-    [randomUUID(),context.organizationId,context.sessionId,eventId]);
+  const recorded = await client.query(`WITH allocated AS (
+      UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
+       WHERE organization_id=$1 AND session_id=$2 RETURNING next_sequence-1 AS sequence
+    ), inserted_event AS (
+      INSERT INTO evidence.events
+        (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,governing_release_id,
+         authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
+      SELECT $3,$1,$2,allocated.sequence,$4,1,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,1,transaction_timestamp()
+        FROM allocated RETURNING id
+    ) INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id)
+      SELECT $13,$1,$2,inserted_event.id FROM inserted_event RETURNING event_id`,
+  [context.organizationId,context.sessionId,eventId,eventType,context.principalId,context.participantId,
+    context.activeReleaseId,context.authorityEpoch,JSON.stringify(payload),correlationId,requestId,channelId,randomUUID()]);
+  if (recorded.rowCount !== 1) throw new Error("Session evidence sequence is missing");
+}
+
+async function enqueueFloorRequest(client: PoolClient, input: FloorOperationInput,
+  active: ActiveAssignment, priority: number): Promise<number> {
+  const result = await client.query<{ position: string }>(`WITH inserted_request AS (
+      INSERT INTO comms.floor_requests
+        (id,organization_id,session_id,channel_id,request_id,device_id,connection_id,seat_assignment_id,priority,status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued') RETURNING priority
+    ), positioned AS MATERIALIZED (
+      SELECT count(*)+1 AS position FROM comms.floor_requests request CROSS JOIN inserted_request inserted
+       WHERE request.organization_id=$2 AND request.channel_id=$4 AND request.status='queued'
+         AND request.priority>=inserted.priority
+    ), allocated AS (
+      UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
+       WHERE organization_id=$2 AND session_id=$3 RETURNING next_sequence-1 AS sequence
+    ), inserted_event AS (
+      INSERT INTO evidence.events
+        (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,
+         governing_release_id,authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
+      SELECT $10,$2,$3,allocated.sequence,'floor_lease.queued',1,$11,$12,$13,$14,
+        jsonb_build_object('channelId',$4::text,'requestId',$5::text,'queuePosition',positioned.position),
+        $15,$5,$4,1,transaction_timestamp() FROM allocated CROSS JOIN positioned RETURNING id
+    ), inserted_outbox AS (
+      INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id)
+      SELECT $16,$2,$3,inserted_event.id FROM inserted_event RETURNING id
+    ) SELECT positioned.position FROM positioned CROSS JOIN inserted_outbox`,
+  [randomUUID(),input.context.organizationId,input.context.sessionId,input.channelId,input.input.requestId,
+    input.deviceId,input.input.connectionId,active.id,priority,randomUUID(),input.context.principalId,
+    input.context.participantId,input.context.activeReleaseId,input.context.authorityEpoch,input.correlationId,randomUUID()]);
+  const position = Number(result.rows[0]?.position);
+  if (!Number.isSafeInteger(position) || position < 1) throw new Error("Floor queue position is missing");
+  return position;
 }
 
 function asLease(requestId: string, channelId: string, status: FloorLeaseV1["status"], token: string | null,
@@ -448,7 +489,7 @@ function asLease(requestId: string, channelId: string, status: FloorLeaseV1["sta
 
 async function assertFloorAuthority(client: PoolClient, input: FloorOperationInput): Promise<void> {
   const authority = (await client.query<{ deployment_id: string; authority_epoch: string; status: string }>(`SELECT deployment_id,authority_epoch,status
-    FROM runtime.session_authorities WHERE organization_id=$1 AND session_id=$2 FOR UPDATE`,
+    FROM runtime.session_authorities WHERE organization_id=$1 AND session_id=$2 FOR SHARE`,
   [input.context.organizationId,input.context.sessionId])).rows[0];
   if (authority === undefined || authority.deployment_id !== input.deploymentId || authority.status !== "active" ||
       Number(authority.authority_epoch) !== input.context.authorityEpoch || input.input.expectedAuthorityEpoch !== input.context.authorityEpoch) {
@@ -459,16 +500,23 @@ async function assertFloorAuthority(client: PoolClient, input: FloorOperationInp
 export async function requestFloor(input: FloorOperationInput): Promise<FloorLeaseV1> {
   const effect = await withOrganizationTransaction(input.pool, input.context.organizationId, async (client) => {
     await assertFloorAuthority(client, input);
-    const channel = await readChannel(client, input.context, input.channelId, true);
+    let channel = await readChannel(client, input.context, input.channelId);
     const active = await assignment(client, input.context);
     if (channel === undefined || active === undefined || channel.status !== "open" || channel.definition.mode !== "radio_ptt") {
       throw authorizationError("TARGET_NOT_FOUND", "The push-to-talk Voice Channel was not found.", input.correlationId);
     }
-    const release = await readDefinition(client, input.context.organizationId, channel.governing_release_id);
-    if (!stageAllows(channel.definition, await activeStageId(client,input.context)) ||
-        !selectorAllows(release,channel.definition.canTransmit,input.context,active)) {
+    const grant = await client.query<{ can_transmit: boolean }>(`SELECT can_transmit FROM comms.voice_grants
+      WHERE organization_id=$1 AND channel_id=$2 AND seat_assignment_id=$3 AND revoked_at IS NULL
+        AND valid_until>transaction_timestamp() AND access_revision=$4 AND authority_epoch=$5`,
+    [input.context.organizationId,input.channelId,active.id,input.context.accessRevision,input.context.authorityEpoch]);
+    if (grant.rows[0]?.can_transmit !== true) {
       throw authorizationError("PERMISSION_DENIED", "The Active Role Context cannot request this Floor.", input.correlationId);
     }
+    const lockedChannel = await readChannel(client, input.context, input.channelId, "update");
+    if (lockedChannel === undefined || lockedChannel.status !== "open" || lockedChannel.definition.mode !== "radio_ptt") {
+      throw authorizationError("TARGET_NOT_FOUND", "The push-to-talk Voice Channel was not found.", input.correlationId);
+    }
+    channel = lockedChannel;
     let queuedRetry = false;
     const previous = (await client.query<{ status: FloorLeaseV1["status"]; connection_id: string; seat_assignment_id: string;
       expires_at: Date | null; max_expires_at: Date | null; active: boolean }>(`SELECT request.status,request.connection_id,request.seat_assignment_id,
@@ -489,21 +537,23 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
         return { response: asLease(input.input.requestId,input.channelId,"granted",token,previous.expires_at,null), enable: undefined };
       }
     }
-    const expired = await client.query<{ request_id: string }>(`UPDATE comms.floor_leases SET active=false,released_at=transaction_timestamp(),version=version+1
-      WHERE organization_id=$1 AND channel_id=$2 AND active AND expires_at<=transaction_timestamp() RETURNING request_id`,
-    [input.context.organizationId,input.channelId]);
-    for (const row of expired.rows) {
-      await client.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE channel_id=$1 AND request_id=$2",
-        [input.channelId,row.request_id]);
-      await appendFloorEvent(client,input.context,input.channelId,row.request_id,"floor_lease.expired",{channelId:input.channelId,requestId:row.request_id},input.correlationId);
-    }
     const priority = channel.definition.priorityPolicy?.find(({sessionRoleId}) => sessionRoleId===active.session_role_id)?.priority ?? 0;
     const current = (await client.query<{ request_id: string; holder_seat_assignment_id: string; priority: number; participant_id: string }>(`SELECT lease.request_id,
       lease.holder_seat_assignment_id,request.priority,assignment.participant_id FROM comms.floor_leases lease
       JOIN comms.floor_requests request ON request.organization_id=lease.organization_id AND request.channel_id=lease.channel_id AND request.request_id=lease.request_id
       JOIN runtime.seat_assignments assignment ON assignment.organization_id=lease.organization_id AND assignment.id=lease.holder_seat_assignment_id
-      WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active FOR UPDATE`,
+      WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active AND lease.expires_at>transaction_timestamp() FOR UPDATE`,
     [input.context.organizationId,input.channelId])).rows[0];
+    if (current === undefined) {
+      const expired = await client.query<{ request_id: string }>(`UPDATE comms.floor_leases SET active=false,released_at=transaction_timestamp(),version=version+1
+        WHERE organization_id=$1 AND channel_id=$2 AND active AND expires_at<=transaction_timestamp() RETURNING request_id`,
+      [input.context.organizationId,input.channelId]);
+      for (const row of expired.rows) {
+        await client.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE channel_id=$1 AND request_id=$2",
+          [input.channelId,row.request_id]);
+        await appendFloorEvent(client,input.context,input.channelId,row.request_id,"floor_lease.expired",{channelId:input.channelId,requestId:row.request_id},input.correlationId);
+      }
+    }
     const preempt = current !== undefined && channel.definition.radio?.preemption === "authorized_emergency" && priority > current.priority;
     if (current !== undefined && !preempt && channel.definition.radio?.queuePolicy === undefined) {
       throw authorizationError("FLOOR_BUSY", "The Floor is already held.", input.correlationId);
@@ -515,20 +565,16 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
       [input.context.organizationId,input.channelId,input.input.requestId])).rows[0]?.position ?? 1);
       return { response: asLease(input.input.requestId,input.channelId,"queued",null,null,position), enable: undefined };
     }
+    if (current !== undefined && !preempt) {
+      const position = await enqueueFloorRequest(client,input,active,priority);
+      return { response: asLease(input.input.requestId,input.channelId,"queued",null,null,position), enable: undefined };
+    }
     if (queuedRetry) await client.query("UPDATE comms.floor_requests SET status='granted',updated_at=transaction_timestamp() WHERE channel_id=$1 AND request_id=$2",
       [input.channelId,input.input.requestId]);
     else await client.query(`INSERT INTO comms.floor_requests
       (id,organization_id,session_id,channel_id,request_id,device_id,connection_id,seat_assignment_id,priority,status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[randomUUID(),input.context.organizationId,input.context.sessionId,input.channelId,
-      input.input.requestId,input.deviceId,input.input.connectionId,active.id,priority,current===undefined||preempt?"granted":"queued"]);
-    if (current !== undefined && !preempt) {
-      const position = Number((await client.query<{ position: string }>(`SELECT count(*) AS position FROM comms.floor_requests
-        WHERE organization_id=$1 AND channel_id=$2 AND status='queued' AND (priority>$3 OR (priority=$3 AND requested_at<=transaction_timestamp()))`,
-      [input.context.organizationId,input.channelId,priority])).rows[0]?.position ?? 1);
-      await appendFloorEvent(client,input.context,input.channelId,input.input.requestId,"floor_lease.queued",
-        {channelId:input.channelId,requestId:input.input.requestId,queuePosition:position},input.correlationId);
-      return { response: asLease(input.input.requestId,input.channelId,"queued",null,null,position), enable: undefined };
-    }
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'granted')`,[randomUUID(),input.context.organizationId,input.context.sessionId,input.channelId,
+      input.input.requestId,input.deviceId,input.input.connectionId,active.id,priority]);
     if (preempt && current !== undefined) {
       const reason=typeof input.input.reason==="string"?input.input.reason.trim():"";
       if (reason.length===0) throw authorizationError("VALIDATION_FAILED","Authorized preemption requires a reason.",input.correlationId);
@@ -584,7 +630,7 @@ async function changeFloor(input: FloorOperationInput, release: boolean): Promis
   const result=await withOrganizationTransaction(input.pool,input.context.organizationId,async(client)=>{
     await assertFloorAuthority(client,input);
     const active=await assignment(client,input.context);
-    const channel=await readChannel(client,input.context,input.channelId,true);
+    const channel=await readChannel(client,input.context,input.channelId,"update");
     if(active===undefined||channel===undefined) throw authorizationError("TARGET_NOT_FOUND","The Floor Lease was not found.",input.correlationId);
     const row=(await client.query<{ token_digest:string;expires_at:Date;max_expires_at:Date;active:boolean }>(`SELECT token_digest,expires_at,max_expires_at,active
       FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3 AND holder_seat_assignment_id=$4 FOR UPDATE`,

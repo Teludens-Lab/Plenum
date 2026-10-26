@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { Pool } from "pg";
 
-const aliases = { app: "application", application: "application", voting: "voting", voice: "voice", extensions: "extensions" };
+const aliases = { app: "application", application: "application", soak: "application", voting: "voting", voice: "voice", extensions: "extensions" };
 const profile = aliases[process.argv[2]];
-if (profile === undefined) throw new Error("Profile must be app, voting, voice, or extensions");
+if (profile === undefined) throw new Error("Profile must be app, soak, voting, voice, or extensions");
 
 const adminUrl = new URL(process.env.PLENUM_LOAD_DATABASE_ADMIN_URL ?? "postgres://plenum_owner:local-only@127.0.0.1:5432/postgres");
 const database = `plenum_ps540_${profile}_${randomUUID().replaceAll("-", "").slice(0, 10)}`;
@@ -16,7 +16,8 @@ try {
   await admin.query(`CREATE DATABASE ${database}`);
   const child = spawn(process.execPath, ["tests/load/run-profile.mjs", profile], {
     cwd: process.cwd(), stdio: "inherit", windowsHide: true,
-    env: { ...process.env, DATABASE_URL: databaseUrl.toString(), PLENUM_LOAD_DATABASE_NAME: database }
+    env: { ...process.env, DATABASE_URL: databaseUrl.toString(), PLENUM_LOAD_DATABASE_NAME: database,
+      ...(process.argv[2] === "soak" ? { PLENUM_LOAD_SOAK: "1" } : {}) }
   });
   const exitCode = await new Promise((resolve, reject) => {
     child.once("error", reject);

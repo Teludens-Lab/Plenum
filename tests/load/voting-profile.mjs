@@ -13,7 +13,8 @@ export async function runVotingProfile(pool) {
   const started = performance.now();
   const bytesBefore = await databaseSize(pool);
   const workload = await seedReferenceWorkload(pool);
-  const stopSampler = startSaturationSampler(pool);
+  let phase = "open";
+  const stopSampler = startSaturationSampler(pool, () => phase);
   const polls = workload.sessions.map((session) => ({
     session,
     pollId: randomUUID(),
@@ -32,12 +33,13 @@ export async function runVotingProfile(pool) {
       AND assignment.id=member.seat_assignment_id
     WHERE member.poll_id=ANY($1::uuid[])`, [polls.map(({ pollId }) => pollId)])).rows;
   const actors = new Map(workload.allActors.map((actor) => [actor.assignmentId, actor]));
-  const ballots = members.map((member, index) => ({
-    actor: actors.get(member.assignment_id), pollId: member.poll_id, capability: member.ballot_capability,
-    optionId: index % 5 === 0 ? "no" : "yes"
-  }));
+  const ballotsByPoll = polls.map(({ pollId }) => members.filter((member) => member.poll_id === pollId)
+    .map((member, index) => ({ actor: actors.get(member.assignment_id), pollId, capability: member.ballot_capability,
+      optionId: index % 5 === 0 ? "no" : "yes" })));
+  const ballots = ballotsByPoll[0].flatMap((_, index) => ballotsByPoll.map((items) => items[index]));
   assert.equal(ballots.length, config.sessions * config.voting.ballotsPerSession);
   assert.equal(ballots.every(({ actor }) => actor !== undefined), true);
+  phase = "ballots";
   const cast = await runConcurrent(ballots, config.voting.concurrency, ({ actor, pollId, capability, optionId }) =>
     submitRuntimeCommand(pool, actorContext(actor), command(actor, "ballot.cast", pollId, 1,
       { pollDefinitionRevision: 1, ballotCapability: capability, optionIds: [optionId] }), randomUUID(), fixture.deploymentId));
@@ -51,6 +53,7 @@ export async function runVotingProfile(pool) {
 
   const certification = [];
   let late;
+  phase = "certification";
   for (const [pollIndex, { control, pollId }] of polls.entries()) {
     const close = await submitRuntimeCommand(pool, actorContext(control), command(control, "poll.close", pollId, 1, {}), randomUUID(), fixture.deploymentId);
     assert.equal(close.status, "accepted");

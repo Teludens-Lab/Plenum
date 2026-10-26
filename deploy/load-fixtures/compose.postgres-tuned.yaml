@@ -1,0 +1,3 @@
+services:
+  postgres:
+    command: ["postgres", "-c", "wal_buffers=16MB", "-c", "checkpoint_timeout=15min", "-c", "max_wal_size=4GB"]

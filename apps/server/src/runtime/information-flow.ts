@@ -93,6 +93,8 @@ interface MessageThreadRow {
   version: string;
 }
 
+const informationReleases = new Map<string, Promise<InformationRelease>>();
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -111,34 +113,47 @@ async function readInformationRelease(
   releaseId: string,
   correlationId: string
 ): Promise<InformationRelease> {
-  const result = await client.query<{ snapshot: unknown }>(
-    `SELECT revision.snapshot
-       FROM registry.releases release
-       JOIN studio.definition_revisions revision
-         ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
-      WHERE release.organization_id=$1 AND release.id=$2`,
-    [context.organizationId, releaseId]
-  );
-  const snapshot = result.rows[0]?.snapshot;
-  if (!isRecord(snapshot)) throw authorizationError("INCOMPATIBLE_RELEASE", "The Release has no information-flow definition.", correlationId);
-  const coreDesign = isRecord(snapshot.coreDesign) ? snapshot.coreDesign : snapshot;
-  const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
-  if (!Array.isArray(coreDesign.teams) || !Array.isArray(coreDesign.sessionRoles) || !Array.isArray(coreDesign.seats) ||
-      !Array.isArray(coreDesign.stages) || !Array.isArray(coreDesign.artifactTypes) ||
-      !Array.isArray(coreDesign.informationPolicies) || !isRecord(coreDesign.communications) ||
-      !Array.isArray(coreDesign.communications.messageChannels) || !Array.isArray(coreDesign.communications.routes)) {
-    throw authorizationError("INCOMPATIBLE_RELEASE", "The Release has no information-flow definition.", correlationId);
-  }
-  return {
-    coreDesign: coreDesign as unknown as InformationRelease["coreDesign"],
-    scenario: {
-      content: Array.isArray(scenario.content) ? scenario.content as InformationRelease["scenario"]["content"] : [],
-      injects: Array.isArray(scenario.injects) ? scenario.injects as RuntimeInjectDefinitionV1[] : [],
-      ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as NonNullable<InformationRelease["scenario"]["initialState"]> } : {}),
-      ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as NonNullable<InformationRelease["scenario"]["initialCapabilities"]> } : {}),
-      ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as NonNullable<InformationRelease["scenario"]["initialResources"]> } : {})
+  const cacheKey = `${context.organizationId}:${releaseId}`;
+  const cached = informationReleases.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const loaded = (async () => {
+    const result = await client.query<{ snapshot: unknown }>(
+      `SELECT (revision.snapshot - 'resources') #- '{coreDesign,resources}' AS snapshot
+         FROM registry.releases release
+         JOIN studio.definition_revisions revision
+           ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+        WHERE release.organization_id=$1 AND release.id=$2`,
+      [context.organizationId, releaseId]
+    );
+    const snapshot = result.rows[0]?.snapshot;
+    if (!isRecord(snapshot)) throw authorizationError("INCOMPATIBLE_RELEASE", "The Release has no information-flow definition.", correlationId);
+    const coreDesign = isRecord(snapshot.coreDesign) ? snapshot.coreDesign : snapshot;
+    const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
+    if (!Array.isArray(coreDesign.teams) || !Array.isArray(coreDesign.sessionRoles) || !Array.isArray(coreDesign.seats) ||
+        !Array.isArray(coreDesign.stages) || !Array.isArray(coreDesign.artifactTypes) ||
+        !Array.isArray(coreDesign.informationPolicies) || !isRecord(coreDesign.communications) ||
+        !Array.isArray(coreDesign.communications.messageChannels) || !Array.isArray(coreDesign.communications.routes)) {
+      throw authorizationError("INCOMPATIBLE_RELEASE", "The Release has no information-flow definition.", correlationId);
     }
-  };
+    return {
+      coreDesign: coreDesign as unknown as InformationRelease["coreDesign"],
+      scenario: {
+        content: Array.isArray(scenario.content) ? scenario.content as InformationRelease["scenario"]["content"] : [],
+        injects: Array.isArray(scenario.injects) ? scenario.injects as RuntimeInjectDefinitionV1[] : [],
+        ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as NonNullable<InformationRelease["scenario"]["initialState"]> } : {}),
+        ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as NonNullable<InformationRelease["scenario"]["initialCapabilities"]> } : {}),
+        ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as NonNullable<InformationRelease["scenario"]["initialResources"]> } : {})
+      }
+    };
+  })();
+  if (informationReleases.size >= 64) informationReleases.delete(informationReleases.keys().next().value as string);
+  informationReleases.set(cacheKey, loaded);
+  try {
+    return await loaded;
+  } catch (error) {
+    if (informationReleases.get(cacheKey) === loaded) informationReleases.delete(cacheKey);
+    throw error;
+  }
 }
 
 function actorFor(release: InformationRelease, context: SessionAccessContextV1): RuntimeActor | undefined {

@@ -760,7 +760,7 @@ test("AC-11/SYNC-08/SYNC-14 bootstrap derives offline authority and policy from 
   await owner.query("UPDATE runtime.seat_assignments SET valid_to=transaction_timestamp() WHERE id=$1", [controlAssignment]);
 });
 
-test("AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async () => {
+test("PS-545-T01 AC-10/AC-13 SYNC-05/06/07/12 DB-02/04 command outcomes stay atomic", async () => {
   const context = await withOrganizationTransaction(app, ids.orgA, (client) =>
     resolveSessionAccessContext(client, principal, {
       sessionId: ids.sessionA,
@@ -1681,7 +1681,7 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
   assert.equal(secret.errorCode, "CAPABILITY_UNAVAILABLE");
 });
 
-test("VOICE-01..05/09/11/13/14 enforce grants, consent, immediate withdrawal, Floor and revocation", async () => {
+test("PS-545-T02 VOICE-01..05/09/11/13/14 enforce grants, consent, immediate withdrawal, Floor and revocation", async () => {
   const revisionId = "25000000-0000-4000-8000-000000000001";
   const releaseId = "25000000-0000-4000-8000-000000000002";
   const channelId = "25000000-0000-4000-8000-000000000003";
@@ -1783,6 +1783,12 @@ test("VOICE-01..05/09/11/13/14 enforce grants, consent, immediate withdrawal, Fl
   ]);
   assert.equal(simultaneous.every(({status})=>status==="granted"||status==="queued"),true);
   assert.equal((await owner.query("SELECT count(*) FROM comms.floor_leases WHERE channel_id=$1 AND active",[channelId])).rows[0].count,"1");
+  await owner.query("UPDATE comms.voice_grants SET revoked_at=transaction_timestamp() WHERE channel_id=$1 AND participant_id=$2",
+    [channelId,high.participantId]);
+  await assert.rejects(
+    requestFloor(floor(high,"25000000-0000-4000-8000-000000000029","25000000-0000-4000-8000-00000000002a")),
+    error=>error?.envelope?.error?.code==="PERMISSION_DENIED"
+  );
   const privateChannelId="25000000-0000-4000-8000-000000000030";
   const privateCommand=(id,operation,version,payload={})=>({...make(context,id,operation,version,payload),aggregateId:privateChannelId});
   assert.equal((await submit(context,privateCommand("25000000-0000-4000-8000-000000000031","voice_channel.open",0,

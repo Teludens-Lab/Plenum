@@ -34,7 +34,11 @@ const environment = {
   KEYCLOAK_HOSTNAME: "identity.plenum.lan",
   KEYCLOAK_TLS_CERTIFICATE: "synthetic/identity-tls.crt",
   KEYCLOAK_TLS_PRIVATE_KEY: "synthetic/identity-tls.key",
-  LIVEKIT_KEYS_FILE: "synthetic/livekit-keys.yaml"
+  LIVEKIT_KEYS_FILE: "synthetic/livekit-keys.yaml",
+  PLENUM_LAB_BIND_IP: "192.0.2.10",
+  PLENUM_LAB_LIVEKIT_CONFIG_FILE: "C:/synthetic/livekit.yaml",
+  PLENUM_LAB_TLS_CERT_FILE: "C:/synthetic/media-tls.crt",
+  PLENUM_LAB_TLS_KEY_FILE: "C:/synthetic/media-tls.key"
 };
 
 function profile(...files) {
@@ -54,6 +58,9 @@ test("PS-530-T01 runs the identical application image in cloud, institutional, a
   assert.equal(airGapped.networks.plenum.internal, true);
   for (const service of [institutional.services.database, institutional.services.storage,
     institutional.services.identity, institutional.services.media]) assert.match(service.image, /@sha256:[0-9a-f]{64}$/u);
+  assert.deepEqual(institutional.services.database.command, [
+    "postgres", "-c", "wal_buffers=16MB", "-c", "checkpoint_timeout=15min", "-c", "max_wal_size=4GB"
+  ]);
 });
 
 test("EXT-03 EXT-04 EXT-05 block an external-required Plugin in the air-gapped profile without a local replacement", async () => {
@@ -80,5 +87,35 @@ test("VOTE-12 VOICE-06 application image starts with a denied public network and
 
 test("PS-530-T02 refuses a restore unless the target is explicitly marked disposable", async () => {
   await assert.rejects(restoreDeploymentBackup({}), /PLENUM_DISPOSABLE_RESTORE=1/u);
+});
+
+test("PS-545 representative media lab pins its proxy and forces the Windows client through TURN/TLS", async () => {
+  const lab = profile("deploy/media-lab/compose.yaml");
+  assert.match(lab.services.gateway.image, /^nginx:1\.29\.2-alpine@sha256:[0-9a-f]{64}$/u);
+  assert.match(lab.services.media.image, /^livekit\/livekit-server:v1\.13\.10@sha256:[0-9a-f]{64}$/u);
+  assert.equal(lab.services.gateway.read_only, true);
+  assert.deepEqual(lab.services.gateway.cap_drop, ["ALL"]);
+  assert.deepEqual(lab.services.media.command, ["--config", "/etc/livekit.yaml"]);
+  const published = Object.values(lab.services).flatMap((service) => service.ports ?? [])
+    .map(({ published: port, protocol }) => `${port}/${protocol}`).sort();
+  assert.deepEqual(published, ["443/tcp", ...Array.from({ length: 101 }, (_, index) => `${50_000 + index}/udp`),
+    "7881/tcp", "8443/tcp"].sort());
+  const firewall = await readFile("deploy/media-lab/force-turn-tls-linux.sh", "utf8");
+  assert.match(firewall, /--ctorigdst "\$host_ip" --ctorigdstport 443 -j ACCEPT/u);
+  assert.match(firewall, /--ctorigdst "\$host_ip" --ctorigdstport 8443 -j ACCEPT/u);
+  assert.match(firewall, /-p tcp --dport 7881 -j REJECT/u);
+  assert.match(firewall, /-p udp -j REJECT/u);
+  const setup = await readFile("deploy/media-lab/setup-linux-host.sh", "utf8");
+  assert.match(setup, /tls_port: 443/u);
+  assert.match(setup, /allow_restricted_peer_cidrs:\s*\n\s*- \$host_ip\/32/u);
+  assert.match(setup, /LIVEKIT_URL=https:\/\/media\.plenum\.lan:8443/u);
+});
+
+test("PS-545 acceptance soak reuses the reference database with the institutional PostgreSQL settings", () => {
+  const override = profile("references/plenum-runtime-slice/docker-compose.yml",
+    "deploy/load-fixtures/compose.postgres-tuned.yaml");
+  assert.deepEqual(override.services.postgres.command, [
+    "postgres", "-c", "wal_buffers=16MB", "-c", "checkpoint_timeout=15min", "-c", "max_wal_size=4GB"
+  ]);
 });
 

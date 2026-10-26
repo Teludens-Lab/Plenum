@@ -75,7 +75,8 @@ export async function runVoiceProfile(pool) {
   const bytesBefore = await databaseSize(pool);
   const workload = await seedReferenceWorkload(pool);
   const stopSampler = startSaturationSampler(pool);
-  const grants = workload.sessions.flatMap((session) => session.actors.map((actor) => ({ ...actor, channelId: session.radioChannelId })));
+  const grants = workload.sessions[0].actors.flatMap((_, index) =>
+    workload.sessions.map((session) => ({ ...session.actors[index], channelId: session.radioChannelId })));
   await pool.query(`INSERT INTO comms.voice_grants
     (id,organization_id,session_id,channel_id,seat_assignment_id,participant_id,can_listen,can_transmit,can_moderate,
      valid_until,policy_revision,access_revision,authority_epoch)
@@ -112,11 +113,18 @@ export async function runVoiceProfile(pool) {
     (SELECT count(*)::int FROM comms.voice_grants WHERE organization_id=$1) AS grants,
     (SELECT count(*)::int FROM comms.floor_requests WHERE organization_id=$1) AS requests,
     (SELECT count(*)::int FROM comms.floor_leases WHERE organization_id=$1 AND active) AS active_leases,
-    (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='media_provider.unavailable') AS provider_failures`,
+    (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='media_provider.unavailable') AS provider_failures,
+    (SELECT count(*)::int FROM (SELECT session_id,causation_id FROM evidence.events
+      WHERE organization_id=$1 AND event_type='floor_lease.queued' GROUP BY session_id,causation_id HAVING count(*)<>1) duplicates)
+      AS duplicate_queue_events,
+    (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='floor_lease.queued'
+      AND (body->>'queuePosition')::int<1) AS invalid_queue_positions`,
   [fixture.organizationId])).rows[0];
   assert.equal(integrity.grants, grants.length);
   assert.equal(integrity.active_leases, 0);
   assert.equal(integrity.provider_failures, 1);
+  assert.equal(integrity.duplicate_queue_events, 0);
+  assert.equal(integrity.invalid_queue_positions, 0);
   const databaseRecovery = await observeDatabaseRecovery(pool);
   const saturation = await stopSampler();
   const bytesAfter = await databaseSize(pool);

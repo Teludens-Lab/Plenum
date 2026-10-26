@@ -99,6 +99,34 @@ function commandDigest(command: CommandEnvelopeV1): string {
   return createHash("sha256").update(canonicalizeJson(value)).digest("hex");
 }
 
+async function lockAuthority(
+  client: PoolClient,
+  organizationId: string,
+  sessionId: string,
+  commandId: string
+): Promise<{ deploymentId: string; authorityEpoch: number; status: string } | undefined> {
+  const result = await client.query<{
+    deployment_id: string; authority_epoch: string; status: string;
+  }>(
+    `WITH authority AS MATERIALIZED (
+       SELECT deployment_id,authority_epoch,status
+         FROM runtime.session_authorities
+        WHERE organization_id=$1::uuid AND session_id=$2::uuid FOR SHARE
+     )
+     SELECT authority.deployment_id,authority.authority_epoch,authority.status,
+            pg_advisory_xact_lock(hashtext($2::text),hashtext($3::text))
+       FROM authority`,
+    [organizationId, sessionId, commandId]
+  );
+  const row = result.rows[0];
+  if (row === undefined) return undefined;
+  return {
+    deploymentId: row.deployment_id,
+    authorityEpoch: Number(row.authority_epoch),
+    status: row.status
+  };
+}
+
 async function previousReceipt(
   client: PoolClient,
   sessionId: string,
@@ -109,10 +137,10 @@ async function previousReceipt(
     evidence_sequence: string | null; rejection_code: CanonicalErrorCode | null; message: string | null;
     payload_sha256: string; actor_person_id: string;
   }>(
-    `SELECT command_id, status, result_version, evidence_sequence, rejection_code, message,
-            payload_sha256, actor_person_id
+    `SELECT command_id,status,result_version,evidence_sequence,rejection_code,message,
+            payload_sha256,actor_person_id
        FROM sync.command_receipts
-      WHERE session_id = $1 AND command_id = $2`,
+      WHERE session_id=$1 AND command_id=$2`,
     [sessionId, commandId]
   );
   const row = result.rows[0];
@@ -165,35 +193,36 @@ async function recordOutcome(
     errorCode,
     activeSessionRoleId: context.activeSessionRoleId ?? null
   };
-  const sequence = await allocateEvidenceSequence(client, context.organizationId, context.sessionId);
   const eventId = randomUUID();
-  await client.query(
-    `INSERT INTO evidence.events
-       (id, organization_id, session_id, sequence, event_type, event_version, command_id,
-        actor_person_id, actor_participant_id, governing_release_id, authority_epoch, body,
-        correlation_id, causation_id, aggregate_id, aggregate_version, occurred_at)
-     VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11::jsonb,$12,$6,$13,$14,transaction_timestamp())`,
-    [eventId, context.organizationId, context.sessionId, sequence, eventType, command.commandId,
-      context.principalId, context.participantId ?? null, accepted ? command.governingReleaseId : activeReleaseId, context.authorityEpoch,
-      JSON.stringify(eventPayload), correlationId, command.aggregateId, aggregateVersion]
+  const recorded = await client.query<{ sequence: string }>(
+    `WITH allocated AS (
+       UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
+        WHERE organization_id=$1 AND session_id=$2 RETURNING next_sequence-1 AS sequence
+     ), inserted_event AS (
+       INSERT INTO evidence.events
+         (id,organization_id,session_id,sequence,event_type,event_version,command_id,actor_person_id,
+          actor_participant_id,governing_release_id,authority_epoch,body,correlation_id,causation_id,
+          aggregate_id,aggregate_version,occurred_at)
+       SELECT $3,$1,$2,allocated.sequence,$4,1,$5,$6,$7,$8,$9,$10::jsonb,$11,$5,$12,$13,transaction_timestamp()
+         FROM allocated RETURNING sequence
+     ), inserted_receipt AS (
+       INSERT INTO sync.command_receipts
+         (id,organization_id,session_id,command_id,payload_sha256,device_id,actor_person_id,
+          actor_participant_id,active_session_role_id,authority_epoch,operation_type,aggregate_id,
+          status,result_version,evidence_sequence,rejection_code,resolved_at,correlation_id,message)
+       SELECT $14,$1,$2,$5,$15,$16,$6,$7,$17,$9,$18,$12,$19,$13,inserted_event.sequence,$20,
+              transaction_timestamp(),$11,$21 FROM inserted_event
+     ), inserted_outbox AS (
+       INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id)
+       SELECT $22,$1,$2,$3 FROM inserted_event
+     ) SELECT sequence FROM inserted_event`,
+    [context.organizationId, context.sessionId, eventId, eventType, command.commandId, context.principalId,
+      context.participantId ?? null, accepted ? command.governingReleaseId : activeReleaseId, context.authorityEpoch,
+      JSON.stringify(eventPayload), correlationId, command.aggregateId, aggregateVersion, randomUUID(), digest,
+      command.deviceId, context.activeSessionRoleId ?? null, command.operationType, decision.status, errorCode, message, randomUUID()]
   );
-  await client.query(
-    `INSERT INTO sync.command_receipts
-       (id, organization_id, session_id, command_id, payload_sha256, device_id, actor_person_id,
-        actor_participant_id, active_session_role_id, authority_epoch, operation_type, aggregate_id,
-        status, result_version, evidence_sequence, rejection_code, resolved_at, correlation_id, message)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-             transaction_timestamp(),$17,$18)`,
-    [randomUUID(), context.organizationId, context.sessionId, command.commandId, digest,
-      command.deviceId, context.principalId, context.participantId ?? null, context.activeSessionRoleId ?? null,
-      context.authorityEpoch, command.operationType, command.aggregateId, decision.status,
-      aggregateVersion, sequence, errorCode, correlationId, message]
-  );
-  await client.query(
-    `INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id)
-     VALUES ($1,$2,$3,$4)`,
-    [randomUUID(), context.organizationId, context.sessionId, eventId]
-  );
+  const sequence = Number(recorded.rows[0]?.sequence);
+  if (!Number.isSafeInteger(sequence)) throw new Error("Session evidence sequence is missing");
   if (accepted) {
     for (const followUp of decision.followUpEvents ?? []) {
       if (!isPastTenseEventType(followUp.eventType)) throw new Error(`Event type is not past-tense dot-case: ${followUp.eventType}`);
@@ -228,12 +257,7 @@ export async function processPrincipalSessionCommand(input: ProcessPrincipalComm
   }
   const digest = commandDigest(command);
   return withOrganizationTransaction(pool, context.organizationId, async (client) => {
-    const authority = await client.query<{ deployment_id: string; authority_epoch: string; status: string }>(
-      `SELECT deployment_id,authority_epoch,status FROM runtime.session_authorities
-        WHERE organization_id=$1 AND session_id=$2 FOR UPDATE`,
-      [context.organizationId, context.sessionId]
-    );
-    const authorityRow = authority.rows[0];
+    const authorityRow = await lockAuthority(client, context.organizationId, context.sessionId, command.commandId);
     if (authorityRow === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Session was not found.", correlationId);
     const prior = await previousReceipt(client, context.sessionId, command.commandId);
     if (prior !== undefined) {
@@ -243,7 +267,7 @@ export async function processPrincipalSessionCommand(input: ProcessPrincipalComm
       const { payloadSha256: _digest, actorPersonId: _actor, ...receipt } = prior;
       return receipt;
     }
-    if (authorityRow.deployment_id !== deploymentId || Number(authorityRow.authority_epoch) !== context.authorityEpoch || authorityRow.status !== "active") {
+    if (authorityRow.deploymentId !== deploymentId || authorityRow.authorityEpoch !== context.authorityEpoch || authorityRow.status !== "active") {
       throw authorizationError("AUTHORITY_UNAVAILABLE", "This Deployment is not the Session Authority.", correlationId);
     }
     const device = await client.query(
@@ -278,14 +302,8 @@ export async function processSessionCommand(input: ProcessCommandInput): Promise
   const digest = commandDigest(command);
 
   return withOrganizationTransaction(pool, context.organizationId, async (client) => {
-    const authority = await client.query<{ deployment_id: string; authority_epoch: string; status: string }>(
-      `SELECT deployment_id, authority_epoch, status FROM runtime.session_authorities
-        WHERE organization_id=$1 AND session_id=$2 FOR UPDATE`,
-      [context.organizationId, context.sessionId]
-    );
-    const authorityRow = authority.rows[0];
+    const authorityRow = await lockAuthority(client, context.organizationId, context.sessionId, command.commandId);
     if (authorityRow === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Session was not found.", correlationId);
-
     const prior = await previousReceipt(client, context.sessionId, command.commandId);
     if (prior !== undefined) {
       if (prior.payloadSha256 !== digest || prior.actorPersonId !== context.principalId) {
@@ -295,11 +313,14 @@ export async function processSessionCommand(input: ProcessCommandInput): Promise
       return receipt;
     }
     if (
-      authorityRow.deployment_id !== deploymentId ||
-      Number(authorityRow.authority_epoch) !== context.authorityEpoch || authorityRow.status !== "active"
+      authorityRow.deploymentId !== deploymentId ||
+      authorityRow.authorityEpoch !== context.authorityEpoch || authorityRow.status !== "active"
     ) throw authorizationError("AUTHORITY_UNAVAILABLE", "This Deployment is not the Session Authority.", correlationId);
 
-    const access = await client.query<{ participant_exists: boolean; active_role: boolean; active_release_id: string; status: string }>(
+    const access = await client.query<{
+      participant_exists: boolean; active_role: boolean; device_registered: boolean;
+      active_release_id: string; status: string;
+    }>(
       `SELECT EXISTS(
          SELECT 1 FROM runtime.participants participant
           WHERE participant.organization_id=$1 AND participant.session_id=$2
@@ -311,20 +332,22 @@ export async function processSessionCommand(input: ProcessCommandInput): Promise
             AND assignment.participant_id=$3 AND assignment.session_role_id=$4
             AND assignment.valid_to IS NULL
        ) AS active_role,
+       EXISTS(
+         SELECT 1 FROM sync.devices device
+          WHERE device.organization_id=$1 AND device.id=$6 AND device.person_id=$5
+            AND device.revoked_at IS NULL
+       ) AS device_registered,
        (SELECT release_id FROM runtime.release_activations
          WHERE organization_id=$1 AND session_id=$2 ORDER BY activation_sequence DESC LIMIT 1) AS active_release_id,
        (SELECT status FROM runtime.sessions WHERE organization_id=$1 AND id=$2) AS status`,
-      [context.organizationId, context.sessionId, context.participantId, context.activeSessionRoleId, context.principalId]
+      [context.organizationId, context.sessionId, context.participantId, context.activeSessionRoleId,
+        context.principalId, command.deviceId]
     );
     const accessRow = access.rows[0];
     if (accessRow === undefined || !accessRow.participant_exists || accessRow.status === null) {
       throw authorizationError("NOT_A_PARTICIPANT", "The Principal is not a Participant.", correlationId);
     }
-    const device = await client.query(
-      `SELECT 1 FROM sync.devices WHERE organization_id=$1 AND id=$2 AND person_id=$3 AND revoked_at IS NULL`,
-      [context.organizationId, command.deviceId, context.principalId]
-    );
-    if (device.rowCount !== 1) throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
+    if (!accessRow.device_registered) throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
 
     if (!accessRow.active_role || (command.activeSessionRoleId !== undefined && command.activeSessionRoleId !== context.activeSessionRoleId)) {
       return recordOutcome(client, input, digest, { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The Active Role Context is not authorized." }, accessRow.active_release_id);

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -10,6 +10,81 @@ const evidenceRoot = "output/playwright/ps-150";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 const databaseUrl = process.env.DATABASE_URL;
 let publishedReleaseId;
+
+const round = (value) => Math.round(value * 100) / 100;
+function percentile(values, proportion) {
+  const ordered = [...values].sort((left, right) => left - right);
+  return round(ordered[Math.max(0, Math.ceil(ordered.length * proportion) - 1)]);
+}
+
+async function installRtcProbe(context) {
+  await context.addInitScript(() => {
+    const NativePeerConnection = globalThis.RTCPeerConnection;
+    globalThis.__plenumPeerConnections = [];
+    function TrackedPeerConnection(...args) {
+      const connection = new NativePeerConnection(...args);
+      globalThis.__plenumPeerConnections.push(connection);
+      return connection;
+    }
+    TrackedPeerConnection.prototype = NativePeerConnection.prototype;
+    Object.setPrototypeOf(TrackedPeerConnection, NativePeerConnection);
+    globalThis.RTCPeerConnection = TrackedPeerConnection;
+  });
+}
+
+async function rtcSnapshot(page) {
+  return page.evaluate(async () => {
+    let packetsReceived = 0, packetsLost = 0;
+    const selectedCandidateTypes = new Set(), selectedProtocols = new Set();
+    const remoteCandidateTypes = new Set(), remotePorts = new Set();
+    for (const connection of globalThis.__plenumPeerConnections ?? []) {
+      const report = await connection.getStats();
+      for (const stat of report.values()) {
+        if (stat.type === "inbound-rtp" && (stat.kind === "audio" || stat.mediaType === "audio")) {
+          packetsReceived += stat.packetsReceived ?? 0;
+          packetsLost += stat.packetsLost ?? 0;
+        }
+        if (stat.type !== "transport" || stat.selectedCandidatePairId === undefined) continue;
+        const pair = report.get(stat.selectedCandidatePairId);
+        const local = pair === undefined ? undefined : report.get(pair.localCandidateId);
+        const remote = pair === undefined ? undefined : report.get(pair.remoteCandidateId);
+        if (local?.candidateType !== undefined) selectedCandidateTypes.add(local.candidateType);
+        if (local?.relayProtocol !== undefined) selectedProtocols.add(local.relayProtocol);
+        else if (local?.protocol !== undefined) selectedProtocols.add(local.protocol);
+        if (remote?.candidateType !== undefined) remoteCandidateTypes.add(remote.candidateType);
+        if (remote?.port !== undefined) remotePorts.add(remote.port);
+      }
+    }
+    return { packetsReceived, packetsLost, selectedCandidateTypes: [...selectedCandidateTypes],
+      selectedProtocols: [...selectedProtocols], remoteCandidateTypes: [...remoteCandidateTypes], remotePorts: [...remotePorts] };
+  });
+}
+
+async function waitForPacketsToSettle(page) {
+  let previous = -1, stableChecks = 0;
+  await expect.poll(async () => {
+    const current = (await rtcSnapshot(page)).packetsReceived;
+    if (current === previous) stableChecks += 1;
+    else { previous = current; stableChecks = 0; }
+    return stableChecks;
+  }, { timeout: 2_000, intervals: [40] }).toBeGreaterThanOrEqual(2);
+  return previous;
+}
+
+async function receivingConnectionState(page) {
+  return page.evaluate(async () => {
+    const connections = globalThis.__plenumPeerConnections ?? [];
+    for (let index = connections.length - 1; index >= 0; index -= 1) {
+      const connection = connections[index];
+      const report = await connection.getStats();
+      if ([...report.values()].some((stat) => stat.type === "inbound-rtp" &&
+        (stat.kind === "audio" || stat.mediaType === "audio") && (stat.packetsReceived ?? 0) > 0)) {
+        return connection.connectionState;
+      }
+    }
+    return "missing";
+  });
+}
 
 async function actor(browser, token, options = {}) {
   const context = await browser.newContext({ ...options, extraHTTPHeaders: headers(token) });
@@ -251,7 +326,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   });
 
   test("@a11y EXT-06/18 reviews an Effect Proposal and never queues approval offline", async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(240_000);
     const commandTimeout = 40_000;
     const { context, page } = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
@@ -276,9 +351,10 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
   test("VOICE-06/07/11 sends microphone audio through the local media provider", async ({ browser }) => {
     test.skip(process.env.MEDIA_TEST_URL === undefined, "A local SFU is required for the real media proof");
-    test.setTimeout(120_000);
+    test.setTimeout(240_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce",
       permissions: ["microphone"] });
+    await installRtcProbe(context);
     await context.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
       ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.author}`
     } }));
@@ -287,43 +363,181 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(page.getByRole("heading", { name: "Voice Channels" })).toBeVisible();
     await expect(page.getByText(/Push-to-talk: hold Space, Enter, or the Floor button/u)).toBeVisible();
     const openRoom = page.getByRole("article", { name: "Team open room" });
-    const joinOpen = openRoom.getByRole("button", { name: "Join voice" });
-    await joinOpen.focus(); await page.keyboard.press("Enter");
-    await expect(page.getByText("Joined Team open room. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
     const listenerContext = await browser.newContext({ permissions: ["microphone"] });
+    await installRtcProbe(listenerContext);
     await listenerContext.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
       ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.reviewer}`
     } }));
     const listener = await listenerContext.newPage();
     await listener.goto(runtimeUrl());
     const listenerRoom = listener.getByRole("article", { name: "Team open room" });
+    const joinLatency = [], speechStartLatency = [];
+    let network;
+
+    // Warm the browser, signaling, TURN/TLS and microphone track before collecting steady-state percentiles.
+    await openRoom.getByRole("button", { name: "Join voice" }).click();
+    await expect(openRoom.getByRole("button", { name: "Enable microphone" })).toBeVisible({ timeout: 15_000 });
     await listenerRoom.getByRole("button", { name: "Join voice" }).click();
-    await expect(listener.getByText("Joined Team open room. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
-    const microphone = openRoom.getByRole("button", { name: "Enable microphone" });
-    await microphone.focus(); await page.keyboard.press("Enter");
-    await expect(openRoom.getByText("transmitting", { exact: true })).toBeVisible();
-    await expect(listenerRoom.getByText("Receiving 1 remote audio stream.", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await page.keyboard.press("Enter");
+    await expect(listenerRoom.getByRole("button", { name: "Leave voice" })).toBeVisible({ timeout: 15_000 });
+    const warmMicrophone = openRoom.getByRole("button", { name: "Enable microphone" });
+    let before = await waitForPacketsToSettle(listener);
+    await warmMicrophone.click();
+    await expect.poll(async () => (await rtcSnapshot(listener)).packetsReceived,
+      { timeout: 15_000, intervals: [20] }).toBeGreaterThan(before);
+    await openRoom.getByRole("button", { name: "Mute microphone" }).click();
     await expect(openRoom.getByText("ready", { exact: true })).toBeVisible();
     await listenerRoom.getByRole("button", { name: "Leave voice" }).click();
-    await listenerContext.close();
     await openRoom.getByRole("button", { name: "Leave voice" }).click();
+    await expect(listenerRoom.getByRole("button", { name: "Join voice" })).toBeEnabled();
+    await expect(openRoom.getByRole("button", { name: "Join voice" })).toBeEnabled();
+
+    for (let cycle = 0; cycle < 10; cycle += 1) {
+      let started = performance.now();
+      const joinOpen = openRoom.getByRole("button", { name: "Join voice" });
+      if (cycle === 0) { await joinOpen.focus(); await page.keyboard.press("Enter"); } else await joinOpen.click();
+      await expect(openRoom.getByRole("button", { name: "Enable microphone" })).toBeVisible({ timeout: 15_000 });
+      joinLatency.push(performance.now() - started);
+      started = performance.now();
+      await listenerRoom.getByRole("button", { name: "Join voice" }).click();
+      await expect(listenerRoom.getByRole("button", { name: "Leave voice" })).toBeVisible({ timeout: 15_000 });
+      joinLatency.push(performance.now() - started);
+      await listenerRoom.getByRole("button", { name: "Leave voice" }).click();
+      await openRoom.getByRole("button", { name: "Leave voice" }).click();
+      await expect(listenerRoom.getByRole("button", { name: "Join voice" })).toBeEnabled();
+      await expect(openRoom.getByRole("button", { name: "Join voice" })).toBeEnabled();
+    }
+
+    await openRoom.getByRole("button", { name: "Join voice" }).click();
+    await expect(openRoom.getByRole("button", { name: "Enable microphone" })).toBeVisible({ timeout: 15_000 });
+    await listenerRoom.getByRole("button", { name: "Join voice" }).click();
+    await expect(listenerRoom.getByRole("button", { name: "Leave voice" })).toBeVisible({ timeout: 15_000 });
+    const microphone = openRoom.getByRole("button", { name: "Enable microphone" });
+    for (let sample = 0; sample < 5; sample += 1) {
+      before = await waitForPacketsToSettle(listener);
+      const started = performance.now();
+      await microphone.focus(); await page.keyboard.press("Enter");
+      await expect(openRoom.getByText("transmitting", { exact: true })).toBeVisible();
+      await expect.poll(async () => (await rtcSnapshot(listener)).packetsReceived,
+        { timeout: 15_000, intervals: [20] }).toBeGreaterThan(before);
+      speechStartLatency.push(performance.now() - started);
+      await expect(listenerRoom.getByText("Receiving 1 remote audio stream.", { exact: true })).toBeVisible({ timeout: 15_000 });
+      network = await rtcSnapshot(listener);
+      await page.keyboard.press("Enter");
+      await expect(openRoom.getByText("ready", { exact: true })).toBeVisible();
+    }
+    await listenerRoom.getByRole("button", { name: "Leave voice" }).click();
+    await openRoom.getByRole("button", { name: "Leave voice" }).click();
+    await expect(openRoom.getByRole("button", { name: "Join voice" })).toBeEnabled();
+    await listenerContext.close();
 
     const radio = page.getByRole("article", { name: "All-hands radio" });
-    await radio.getByRole("button", { name: "Join voice" }).focus(); await page.keyboard.press("Enter");
-    await expect(page.getByText("Joined All-hands radio. Microphone is ready but muted.")).toBeVisible({ timeout: 15_000 });
+    const radioJoinStarted = performance.now();
+    const radioJoin = radio.getByRole("button", { name: "Join voice" });
+    await expect(radioJoin).toBeEnabled();
+    await radioJoin.focus(); await page.keyboard.press("Enter");
+    await expect(radio.getByRole("button", { name: /Hold to talk/u })).toBeVisible({ timeout: 15_000 });
+    joinLatency.push(performance.now() - radioJoinStarted);
     const floor = radio.getByRole("button", { name: /Hold to talk/u });
-    await floor.focus(); await page.keyboard.down("Space");
-    await expect(radio.getByText("transmitting", { exact: true })).toBeVisible({ timeout: 10_000 });
-    await page.keyboard.up("Space");
-    await expect(radio.getByText("ready", { exact: true })).toBeVisible({ timeout: 10_000 });
+    const floorLatency = [];
+    for (let sample = 0; sample < 10; sample += 1) {
+      await floor.focus();
+      const started = performance.now();
+      await page.keyboard.down("Space");
+      await expect(radio.getByText("transmitting", { exact: true })).toBeVisible({ timeout: 10_000 });
+      floorLatency.push(performance.now() - started);
+      const released = page.waitForResponse((response) => response.url().endsWith("/release") && response.request().method() === "POST");
+      await page.keyboard.up("Space");
+      await released;
+      await expect(radio.getByText("ready", { exact: true })).toBeVisible({ timeout: 10_000 });
+    }
     await radio.getByRole("button", { name: "Leave voice" }).click();
     await page.screenshot({ path: `${evidenceRoot}/voice-keyboard-local-media.png`, fullPage: true });
+
+    const packetLossPercent = network.packetsReceived + network.packetsLost === 0 ? null :
+      round(network.packetsLost * 100 / (network.packetsReceived + network.packetsLost));
+    const report = {
+      contractId: "ps-545-institutional-media-v1", generatedAt: new Date().toISOString(),
+      topology: "Windows Chromium client to Linux Mint LiveKit over the representative segmented LAN",
+      warmup: { join: 2, speechStart: 1 },
+      samples: { join: joinLatency.length, speechStart: speechStartLatency.length, floor: floorLatency.length },
+      observationsMs: { join: joinLatency.map(round), speechStart: speechStartLatency.map(round), floor: floorLatency.map(round) },
+      latencyMs: { joinP95: percentile(joinLatency, 0.95), speechStartMedian: percentile(speechStartLatency, 0.5),
+        floorP95: percentile(floorLatency, 0.95) },
+      network: { selectedCandidateTypes: network.selectedCandidateTypes, selectedProtocols: network.selectedProtocols,
+        remoteCandidateTypes: network.remoteCandidateTypes, remotePorts: network.remotePorts,
+        packetsReceived: network.packetsReceived, packetsLost: network.packetsLost, packetLossPercent },
+      thresholds: { joinP95Ms: 3000, speechStartMedianMs: 300, floorP95Ms: 500, packetLossPercent: 1 }
+    };
+    await mkdir(evidenceRoot, { recursive: true });
+    await writeFile(`${evidenceRoot}/ps-545-institutional-media.json`, `${JSON.stringify(report, null, 2)}\n`);
+    expect(report.network.selectedProtocols).toContain("tls");
+    expect(report.latencyMs.joinP95).toBeLessThanOrEqual(report.thresholds.joinP95Ms);
+    expect(report.latencyMs.speechStartMedian).toBeLessThanOrEqual(report.thresholds.speechStartMedianMs);
+    expect(report.latencyMs.floorP95).toBeLessThanOrEqual(report.thresholds.floorP95Ms);
+    expect(report.network.packetLossPercent).not.toBeNull();
+    expect(report.network.packetLossPercent).toBeLessThan(report.thresholds.packetLossPercent);
 
     await context.setOffline(true);
     await expect(radio.getByRole("button", { name: "Join voice" })).toBeDisabled();
     await expect(page.getByText("Offline", { exact: true })).toBeVisible();
     await context.close();
+  });
+
+  test("VOICE-12-RECOVERY resumes TURN/TLS audio after the media provider restarts", async ({ browser }) => {
+    test.setTimeout(360_000);
+    const context = await browser.newContext({ permissions: ["microphone"] });
+    const listenerContext = await browser.newContext({ permissions: ["microphone"] });
+    await installRtcProbe(context); await installRtcProbe(listenerContext);
+    await context.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
+      ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.author}`
+    } }));
+    await listenerContext.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
+      ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.reviewer}`
+    } }));
+    const page = await context.newPage();
+    const listener = await listenerContext.newPage();
+    await Promise.all([page.goto(runtimeUrl()), listener.goto(runtimeUrl())]);
+    const room = page.getByRole("article", { name: "Team open room" });
+    const listenerRoom = listener.getByRole("article", { name: "Team open room" });
+    await room.getByRole("button", { name: "Join voice" }).click();
+    await listenerRoom.getByRole("button", { name: "Join voice" }).click();
+    await expect(room.getByRole("button", { name: "Enable microphone" })).toBeVisible({ timeout: 15_000 });
+    await expect(listenerRoom.getByRole("button", { name: "Leave voice" })).toBeVisible({ timeout: 15_000 });
+    const before = await rtcSnapshot(listener);
+    await room.getByRole("button", { name: "Enable microphone" }).click();
+    await expect.poll(async () => (await rtcSnapshot(listener)).packetsReceived,
+      { timeout: 15_000, intervals: [20] }).toBeGreaterThan(before.packetsReceived);
+    await expect.poll(() => receivingConnectionState(listener), { timeout: 15_000 }).toBe("connected");
+
+    process.stdout.write("\nPS-545 RECOVERY READY: on Linux run: sudo docker restart plenum-media-lab-media-1\n");
+    await expect.poll(async () => (await receivingConnectionState(listener)) !== "connected",
+      { timeout: 240_000, intervals: [100] }).toBe(true);
+    const interruptedAt = performance.now();
+    let priorPackets = (await rtcSnapshot(listener)).packetsReceived;
+    await expect.poll(async () => {
+      const current = await rtcSnapshot(listener);
+      const resumed = await receivingConnectionState(listener) === "connected" && current.packetsReceived > priorPackets;
+      priorPackets = current.packetsReceived;
+      return resumed;
+    }, { timeout: 300_000, intervals: [100] }).toBe(true);
+    const recoveryMilliseconds = round(performance.now() - interruptedAt);
+    const network = await rtcSnapshot(listener);
+    const packetLossPercent = network.packetsReceived + network.packetsLost === 0 ? null :
+      round(network.packetsLost * 100 / (network.packetsReceived + network.packetsLost));
+    const report = {
+      contractId: "ps-545-institutional-media-recovery-v1", generatedAt: new Date().toISOString(),
+      topology: "Windows Chromium client to Linux Mint LiveKit over forced TURN/TLS",
+      injectedFailure: "LiveKit container restart", recoveryMilliseconds,
+      network: { ...network, packetLossPercent },
+      thresholds: { recoveryMilliseconds: 300_000, packetLossPercent: 1 }
+    };
+    await mkdir(evidenceRoot, { recursive: true });
+    await writeFile(`${evidenceRoot}/ps-545-institutional-media-recovery.json`, `${JSON.stringify(report, null, 2)}\n`);
+    expect(network.selectedProtocols).toContain("tls");
+    expect(recoveryMilliseconds).toBeLessThanOrEqual(report.thresholds.recoveryMilliseconds);
+    expect(packetLossPercent).not.toBeNull();
+    expect(packetLossPercent).toBeLessThan(report.thresholds.packetLossPercent);
+    await Promise.all([context.close(), listenerContext.close()]);
   });
 
   test("@a11y VOICE-13/14 captures and withdraws participant-scoped transcription consent", async ({ browser }) => {

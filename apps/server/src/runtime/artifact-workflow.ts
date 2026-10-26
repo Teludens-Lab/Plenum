@@ -181,6 +181,18 @@ interface StageStateRow {
   version: string;
 }
 
+type ReleasedDefinition = {
+  definition: RuntimeDefinition;
+  releaseLabel: string;
+  initial: {
+    initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }>;
+    initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
+    initialResources?: Array<{ resourceId: string; scopeReference?: string; balance: number }>;
+  };
+};
+
+const releasedDefinitions = new Map<string, Promise<ReleasedDefinition>>();
+
 const operationEvents: Readonly<Record<string, string>> = {
   "artifact.create": "artifact.created",
   "artifact.edit": "artifact.edited",
@@ -262,33 +274,42 @@ async function readRelease(
   organizationId: string,
   releaseId: string,
   correlationId: string
-): Promise<{ definition: RuntimeDefinition; releaseLabel: string; initial: {
-  initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }>;
-  initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
-  initialResources?: Array<{ resourceId: string; scopeReference?: string; balance: number }>;
-} }> {
-  const result = await client.query<{ snapshot: unknown; release_label: string }>(
-    `SELECT revision.snapshot, release.release_label
-       FROM registry.releases release
-       JOIN studio.definition_revisions revision
-         ON revision.organization_id=release.organization_id
-        AND revision.id=release.definition_revision_id
-      WHERE release.organization_id=$1 AND release.id=$2`,
-    [organizationId, releaseId]
-  );
-  const row = result.rows[0];
-  if (row === undefined) throw authorizationError("NOT_FOUND", "The Release was not found.", correlationId);
-  const snapshot = row.snapshot as Record<string, unknown>;
-  const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
-  return {
-    definition: runtimeDefinition(row.snapshot, correlationId),
-    releaseLabel: row.release_label,
-    initial: {
-      ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }> } : {}),
-      ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }> } : {}),
-      ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as Array<{ resourceId: string; scopeReference?: string; balance: number }> } : {})
-    }
-  };
+): Promise<ReleasedDefinition> {
+  const cacheKey = `${organizationId}:${releaseId}`;
+  const cached = releasedDefinitions.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const loaded = (async () => {
+    const result = await client.query<{ snapshot: unknown; release_label: string }>(
+      `SELECT (revision.snapshot - 'resources') #- '{coreDesign,resources}' AS snapshot, release.release_label
+         FROM registry.releases release
+         JOIN studio.definition_revisions revision
+           ON revision.organization_id=release.organization_id
+          AND revision.id=release.definition_revision_id
+        WHERE release.organization_id=$1 AND release.id=$2`,
+      [organizationId, releaseId]
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw authorizationError("NOT_FOUND", "The Release was not found.", correlationId);
+    const snapshot = row.snapshot as Record<string, unknown>;
+    const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
+    return {
+      definition: runtimeDefinition(row.snapshot, correlationId),
+      releaseLabel: row.release_label,
+      initial: {
+        ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }> } : {}),
+        ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }> } : {}),
+        ...(Array.isArray(scenario.initialResources) ? { initialResources: scenario.initialResources as Array<{ resourceId: string; scopeReference?: string; balance: number }> } : {})
+      }
+    };
+  })();
+  if (releasedDefinitions.size >= 64) releasedDefinitions.delete(releasedDefinitions.keys().next().value as string);
+  releasedDefinitions.set(cacheKey, loaded);
+  try {
+    return await loaded;
+  } catch (error) {
+    if (releasedDefinitions.get(cacheKey) === loaded) releasedDefinitions.delete(cacheKey);
+    throw error;
+  }
 }
 
 function formFor(definition: RuntimeDefinition, type: ArtifactTypeDefinition): RuntimeFormDefinition {
@@ -619,27 +640,29 @@ async function recordArtifactRevision(
 ): Promise<void> {
   const revisionId = randomUUID();
   await client.query(
-    `INSERT INTO runtime.artifact_revisions
+    `WITH revision AS (
+       INSERT INTO runtime.artifact_revisions
        (id,organization_id,session_id,artifact_id,artifact_version,governing_release_id,state,payload,
         author_person_id,author_participant_id,author_display_name,author_organization_name,command_id)
-     SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,person.display_name,organization.name,$11
-       FROM identity.persons person JOIN identity.organizations organization ON organization.id=$2
-      WHERE person.id=$9`,
-    [revisionId, context.organizationId, context.sessionId, artifact.id, artifact.version, artifact.governingReleaseId,
-      artifact.state, JSON.stringify(artifact.payload), context.principalId, context.participantId, command.commandId]
-  );
-  await client.query(
-    `INSERT INTO runtime.artifact_revision_authors
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,person.display_name,organization.name,$11
+         FROM identity.persons person JOIN identity.organizations organization ON organization.id=$2
+        WHERE person.id=$9
+       RETURNING id
+     )
+     INSERT INTO runtime.artifact_revision_authors
        (id,organization_id,session_id,artifact_revision_id,person_id,participant_id,display_name,organization_name,
         is_command_actor,author_order)
-     SELECT gen_random_uuid(),$1,$2,$3,participant.person_id,participant.id,person.display_name,organization.name,
-       participant.id=$4,authors.ordinality-1
-       FROM unnest($5::uuid[]) WITH ORDINALITY AS authors(participant_id,ordinality)
-       JOIN runtime.participants participant ON participant.organization_id=$1 AND participant.session_id=$2
+     SELECT gen_random_uuid(),$2,$3,revision.id,participant.person_id,participant.id,person.display_name,organization.name,
+       participant.id=$10,authors.ordinality-1
+       FROM revision
+       CROSS JOIN unnest($12::uuid[]) WITH ORDINALITY AS authors(participant_id,ordinality)
+       JOIN runtime.participants participant ON participant.organization_id=$2 AND participant.session_id=$3
         AND participant.id=authors.participant_id
        JOIN identity.persons person ON person.id=participant.person_id
-       JOIN identity.organizations organization ON organization.id=$1`,
-    [context.organizationId, context.sessionId, revisionId, context.participantId, authorParticipantIds]
+       JOIN identity.organizations organization ON organization.id=$2`,
+    [revisionId, context.organizationId, context.sessionId, artifact.id, artifact.version, artifact.governingReleaseId,
+      artifact.state, JSON.stringify(artifact.payload), context.principalId, context.participantId, command.commandId,
+      authorParticipantIds]
   );
 }
 
@@ -674,8 +697,6 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     if (command.expectedAggregateVersion !== 0) {
       return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: "A new Artifact starts at version zero." };
     }
-    const exists = await client.query("SELECT 1 FROM runtime.artifact_instances WHERE organization_id=$1 AND id=$2", [context.organizationId, command.aggregateId]);
-    if (exists.rowCount !== 0) return { status: "rejected", errorCode: "TARGET_EXISTS", message: "The Artifact already exists." };
     const { definition, initial } = await readRelease(client, context.organizationId, activeReleaseId, command.commandId);
     const artifactType = typeFor(definition, command.payload.artifactTypeKey);
     if (artifactType === undefined) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "The Artifact Type is not in the Release." };
@@ -701,15 +722,17 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     if (!await acceptedProposalReferencesValid(client, context, definition, artifactType, actor.teamId, content)) {
       return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "An accepted proposal reference is invalid or unavailable to this Team." };
     }
-    await client.query(
+    const inserted = await client.query(
       `INSERT INTO runtime.artifact_instances
          (id,organization_id,session_id,governing_release_id,artifact_type_key,workflow_key,
           form_version,creator_participant_id,owner_team_id,state,payload,visible_role_ids,version)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,1)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,1)
+       ON CONFLICT (id) DO NOTHING RETURNING id`,
       [command.aggregateId, context.organizationId, context.sessionId, activeReleaseId,
         artifactType.key, workflow.key, formFor(definition, artifactType).formVersion,
         context.participantId, actor.teamId ?? null, transition.to, JSON.stringify(content), visibleRoles([], workflow, transition)]
     );
+    if (inserted.rowCount !== 1) return { status: "rejected", errorCode: "TARGET_EXISTS", message: "The Artifact already exists." };
     await recordArtifactRevision(client, context, command, { id: command.aggregateId, version: 1,
       governingReleaseId: activeReleaseId, state: transition.to, payload: content }, revisionAuthors);
     const automation = await applyAutomationEffects(input, definition, transition.actions, "workflow",

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, join, normalize } from "node:path";
+import { extname, isAbsolute, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -29,15 +29,42 @@ const fakeMediaAdapter = {
   },
   async setTransmit() {}, async removeParticipant() {}, async closeChannel() {}, async health() { return "available"; }
 };
-const mediaAdapter = process.env.MEDIA_TEST_URL === undefined ? fakeMediaAdapter : new LiveKitLocalMediaProviderAdapter({
-  apiUrl: process.env.MEDIA_TEST_URL,
-  websocketUrl: process.env.MEDIA_TEST_URL.replace(/^http/u, "ws"),
-  apiKey: "devkey",
-  apiSecret: "secret",
-  adapterDigest: `sha256:${"e".repeat(64)}`,
-  allowedHosts: ["127.0.0.1"],
-  allowInsecureLoopback: true
-});
+async function createMediaAdapter() {
+  const mediaUrl = process.env.MEDIA_TEST_URL;
+  if (mediaUrl === undefined) return fakeMediaAdapter;
+  const endpoint = new URL(mediaUrl);
+  const loopback = ["127.0.0.1", "localhost", "::1"].includes(endpoint.hostname);
+  let apiKey = "devkey", apiSecret = "secret";
+  if (!loopback) {
+    const operatorFile = process.env.MEDIA_TEST_OPERATOR_FILE;
+    if (operatorFile === undefined || !isAbsolute(operatorFile)) {
+      throw new Error("MEDIA_TEST_OPERATOR_FILE must be an absolute path for non-loopback media");
+    }
+    const values = {};
+    for (const rawLine of (await readFile(operatorFile, "utf8")).split(/\r?\n/u)) {
+      const line = rawLine.trim();
+      if (line.length === 0) continue;
+      const separator = line.indexOf("=");
+      const name = separator < 1 ? "" : line.slice(0, separator);
+      if (!["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"].includes(name) || values[name] !== undefined) {
+        throw new Error("The media operator file has an invalid or duplicate field");
+      }
+      values[name] = line.slice(separator + 1);
+    }
+    if (typeof values.LIVEKIT_URL !== "string" || typeof values.LIVEKIT_API_KEY !== "string" ||
+        typeof values.LIVEKIT_API_SECRET !== "string" || values.LIVEKIT_API_KEY.length === 0 ||
+        values.LIVEKIT_API_SECRET.length < 16 || new URL(values.LIVEKIT_URL).origin !== endpoint.origin) {
+      throw new Error("The media operator file is incomplete or does not match MEDIA_TEST_URL");
+    }
+    apiKey = values.LIVEKIT_API_KEY;
+    apiSecret = values.LIVEKIT_API_SECRET;
+  }
+  return new LiveKitLocalMediaProviderAdapter({
+    apiUrl: mediaUrl, websocketUrl: mediaUrl.replace(/^http/u, "ws"), apiKey, apiSecret,
+    adapterDigest: `sha256:${"e".repeat(64)}`, allowedHosts: [endpoint.hostname], allowInsecureLoopback: loopback
+  });
+}
+const mediaAdapter = await createMediaAdapter();
 const roles = { operator: ["operator", "admin"], designerA: ["designer"], designerB: ["designer", "research_analyst"], publisher: ["designer", "publisher", "reviewer"] };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],

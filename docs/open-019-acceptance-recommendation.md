@@ -2,7 +2,7 @@
 
 Status: **APPROVED by the Owner acting as Product Owner, Technical Lead, and Operations Owner on 2026-10-24; OPEN-019 resolved**. These numbers are the accepted release criteria, not a claim that the current build meets them.
 
-Measurement update, 2026-10-24: PS-540 completed one local 10 x 500 characterization run. Integrity held, but accepted-command p95 was 15.38 seconds and radio-floor p95 was 12.61 seconds, both above the recommendations. The required soak, three consecutive runs, institutional LAN/TURN media measures and named sign-offs remain outstanding; see `docs/performance/PS-540-reference-load.md`.
+Measurement update, 2026-10-26: PS-545 passes these targets on the owner-approved lower-capacity equivalent with a full 30/60-minute soak, three final application/voting/voice/Extension sets, and representative segmented-LAN TURN/TLS media evidence. The exact results and the final read-cache/soak timing caveat are recorded in `docs/performance/PS-545-optimization.md`. Production-institution operations and release approval remain separate gates.
 
 ## Named baseline
 

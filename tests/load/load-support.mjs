@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -39,13 +39,16 @@ export function latencyMetric(results) {
   };
 }
 
-export async function runConcurrent(items, concurrency, operation) {
+export async function runConcurrent(items, concurrency, operation, intervalMs = 0) {
   const results = new Array(items.length);
+  const scheduledAt = performance.now();
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
     for (;;) {
       const index = next++;
       if (index >= items.length) return;
+      const delay = scheduledAt + index * intervalMs - performance.now();
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       const started = performance.now();
       try {
         results[index] = { ok: true, milliseconds: performance.now() - started, value: await operation(items[index], index) };
@@ -219,34 +222,158 @@ export async function seedReferenceWorkload(pool) {
   }
 }
 
-export function startSaturationSampler(pool) {
+export function startSaturationSampler(pool, currentPhase = () => "profile") {
   const samples = [];
+  const waitObservations = new Map();
+  const databaseContainer = process.env.PLENUM_LOAD_DATABASE_CONTAINER ?? "plenum-runtime-slice-postgres-1";
+  const dockerCpuCount = Number(spawnSync("docker", ["info", "--format", "{{.NCPU}}"], { encoding: "utf8" }).stdout.trim()) || os.cpus().length;
+  let latestDatabaseResources;
+  let databaseResourceSamples = 0;
+  let dockerStatsProcess;
+  const sampleDatabaseResources = () => {
+    if (dockerStatsProcess !== undefined) return;
+    let output = "";
+    dockerStatsProcess = spawn("docker", ["stats", "--no-stream", "--format", "{{json .}}", databaseContainer], {
+      windowsHide: true, stdio: ["ignore", "pipe", "ignore"]
+    });
+    dockerStatsProcess.on("error", () => { dockerStatsProcess = undefined; });
+    dockerStatsProcess.stdout.on("data", (chunk) => { output += chunk.toString(); });
+    dockerStatsProcess.on("close", () => {
+      try {
+        const value = JSON.parse(output.trim());
+        const cpuPercent = Number.parseFloat(value.CPUPerc);
+        const memoryPercent = Number.parseFloat(value.MemPerc);
+        if (Number.isFinite(cpuPercent) && Number.isFinite(memoryPercent)) {
+          databaseResourceSamples += 1;
+          latestDatabaseResources = {
+            cpuPercentOfCapacity: round(cpuPercent / dockerCpuCount),
+            memoryPercent: round(memoryPercent)
+          };
+        }
+      } catch {}
+      dockerStatsProcess = undefined;
+    });
+  };
+  sampleDatabaseResources();
+  const databaseResourceTimer = setInterval(sampleDatabaseResources, 5000);
+  let previousCpu = process.cpuUsage();
+  let previousCpuAt = performance.now();
+  let lastRecordedAt = 0;
   let busy = false;
   const timer = setInterval(async () => {
     if (busy) return;
     busy = true;
     try {
       const db = (await pool.query(`SELECT count(*)::int AS connections,
-        count(*) FILTER (WHERE wait_event IS NOT NULL)::int AS waiting
+        count(*) FILTER (WHERE state='active' AND wait_event IS NOT NULL)::int AS waiting,
+        count(*) FILTER (WHERE state='idle in transaction')::int AS idle_in_transaction,
+        max(current_setting('max_connections')::int)::int AS max_connections,
+        COALESCE(jsonb_agg(jsonb_build_object('type',wait_event_type,'event',wait_event,'queryKind',CASE
+          WHEN query LIKE '%FROM voting.polls%' THEN 'voting.polls'
+          WHEN query LIKE '%session_sequences%' THEN 'evidence.session_sequences'
+          WHEN query LIKE '%session_authorities%' THEN 'runtime.session_authorities'
+          WHEN query LIKE '%voice_channels%' THEN 'comms.voice_channels'
+          WHEN query LIKE '%definition_revisions%' THEN 'studio.definition_revisions'
+          WHEN query LIKE '%artifact_instances%' THEN 'runtime.artifact_instances'
+          WHEN query LIKE '%command_receipts%' THEN 'sync.command_receipts'
+          WHEN query LIKE '%seat_assignments%' THEN 'runtime.seat_assignments'
+          ELSE 'other' END)) FILTER (WHERE state='active' AND wait_event IS NOT NULL AND pid<>pg_backend_pid()),'[]') AS waiters
         FROM pg_stat_activity WHERE datname=current_database()`)).rows[0];
-      samples.push({ atMs: Date.now(), rssMiB: round(process.memoryUsage().rss / 1024 ** 2),
-        connections: db.connections, waiting: db.waiting });
+      for (const waiter of db.waiters) {
+        const key = `${currentPhase()}:${waiter.type}:${waiter.event}:${waiter.queryKind}`;
+        waitObservations.set(key, (waitObservations.get(key) ?? 0) + 1);
+      }
+      const sampledAt = performance.now();
+      const cpu = process.cpuUsage(previousCpu);
+      const elapsedMs = sampledAt - previousCpuAt;
+      previousCpu = process.cpuUsage();
+      previousCpuAt = sampledAt;
+      if (sampledAt - lastRecordedAt >= 900) {
+        lastRecordedAt = sampledAt;
+        const rssMiB = round(process.memoryUsage().rss / 1024 ** 2);
+        samples.push({ atMs: Date.now(), phase: currentPhase(), rssMiB,
+          applicationCpuPercent: round(((cpu.user + cpu.system) / 1000) / elapsedMs / os.cpus().length * 100),
+          applicationMemoryPercent: round(rssMiB * 1024 ** 2 / os.totalmem() * 100),
+          databaseCpuPercent: latestDatabaseResources?.cpuPercentOfCapacity ?? null,
+          databaseMemoryPercent: latestDatabaseResources?.memoryPercent ?? null,
+          databaseConnectionsPercent: round(db.connections / Number(db.max_connections) * 100),
+          queueDepthPercent: round(db.waiting / pool.options.max * 100),
+          connections: db.connections, waiting: db.waiting, idleInTransaction: db.idle_in_transaction });
+      }
     } finally { busy = false; }
   }, 100);
   return async () => {
     clearInterval(timer);
+    clearInterval(databaseResourceTimer);
     while (busy) await new Promise((resolve) => setTimeout(resolve, 5));
+    if (dockerStatsProcess !== undefined) {
+      await Promise.race([
+        new Promise((resolve) => dockerStatsProcess.once("close", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 3000))
+      ]);
+      if (dockerStatsProcess?.exitCode === null) dockerStatsProcess.kill();
+    }
+    const longestOverThresholdSeconds = (property, threshold = 80) => {
+      let longest = 0;
+      let startedAt;
+      let previousAt;
+      for (const sample of samples) {
+        const value = sample[property];
+        if (typeof value === "number" && value >= threshold &&
+            (previousAt === undefined || sample.atMs - previousAt <= 2500)) {
+          startedAt ??= sample.atMs;
+          longest = Math.max(longest, (sample.atMs - startedAt) / 1000);
+        } else startedAt = undefined;
+        previousAt = sample.atMs;
+      }
+      return round(longest);
+    };
+    const over80 = {
+      applicationCpu: longestOverThresholdSeconds("applicationCpuPercent"),
+      applicationMemory: longestOverThresholdSeconds("applicationMemoryPercent"),
+      databaseCpu: longestOverThresholdSeconds("databaseCpuPercent"),
+      databaseMemory: longestOverThresholdSeconds("databaseMemoryPercent"),
+      databaseConnections: longestOverThresholdSeconds("databaseConnectionsPercent"),
+      queueDepth: longestOverThresholdSeconds("queueDepthPercent")
+    };
+    const firstSample = samples[0];
+    const lastSample = samples.at(-1);
     return {
       samples: samples.length,
       peakNodeRssMiB: Math.max(0, ...samples.map(({ rssMiB }) => rssMiB)),
+      peakApplicationCpuPercent: Math.max(0, ...samples.map(({ applicationCpuPercent }) => applicationCpuPercent)),
+      peakApplicationMemoryPercent: Math.max(0, ...samples.map(({ applicationMemoryPercent }) => applicationMemoryPercent)),
+      peakDatabaseCpuPercent: Math.max(0, ...samples.map(({ databaseCpuPercent }) => databaseCpuPercent ?? 0)),
+      peakDatabaseMemoryPercent: Math.max(0, ...samples.map(({ databaseMemoryPercent }) => databaseMemoryPercent ?? 0)),
       peakDatabaseConnections: Math.max(0, ...samples.map(({ connections }) => connections)),
-      peakWaitingConnections: Math.max(0, ...samples.map(({ waiting }) => waiting))
+      peakWaitingConnections: Math.max(0, ...samples.map(({ waiting }) => waiting)),
+      peakIdleInTransactionConnections: Math.max(0, ...samples.map(({ idleInTransaction }) => idleInTransaction)),
+      resourceMonitoring: {
+        application: "load-generator process hosting the application modules",
+        database: `Docker container ${databaseContainer}`,
+        sampleIntervalSeconds: 1,
+        databaseSampleIntervalSeconds: 5,
+        databaseSamples: databaseResourceSamples,
+        thresholdPercent: 80,
+        maximumAllowedConsecutiveSeconds: 300,
+        longestConsecutiveSecondsAtOrAboveThreshold: over80,
+        growth: {
+          applicationRssMiB: round((lastSample?.rssMiB ?? 0) - (firstSample?.rssMiB ?? 0)),
+          databaseMemoryPercentagePoints: round((lastSample?.databaseMemoryPercent ?? 0) - (firstSample?.databaseMemoryPercent ?? 0)),
+          waitingConnections: (lastSample?.waiting ?? 0) - (firstSample?.waiting ?? 0)
+        },
+        passed: databaseResourceSamples > 0 && Object.values(over80).every((seconds) => seconds <= 300)
+      },
+      timeSeries: samples,
+      waitObservations: [...waitObservations].map(([key, observations]) => ({ key, observations }))
+        .sort((left, right) => right.observations - left.observations || left.key.localeCompare(right.key))
     };
   };
 }
 
 export async function observeDatabaseRecovery(pool) {
   const victim = await pool.connect();
+  victim.on("error", () => {}); // Expected when the recovery probe terminates this backend.
   const terminator = new Pool({ connectionString: databaseUrl, max: 1 });
   let released = false;
   try {
@@ -275,13 +402,22 @@ export async function writeReport(report) {
   assert.equal(validate(report), true, JSON.stringify(validate.errors, null, 2));
   const directory = path.join(process.cwd(), "test-results", "load");
   await mkdir(directory, { recursive: true });
-  const target = path.join(directory, `ps-540-${report.profile}.json`);
+  const runId = process.env.PLENUM_LOAD_RUN_ID;
+  assert.equal(runId === undefined || /^[a-z0-9-]+$/u.test(runId), true, "PLENUM_LOAD_RUN_ID must use lower-case letters, digits, or hyphens");
+  const target = path.join(directory, `ps-545${runId === undefined ? "" : `-${runId}`}-${report.profile}.json`);
   await writeFile(target, `${JSON.stringify(report, null, 2)}\n`);
   return target;
 }
 
 export async function environment(pool) {
-  const database = (await pool.query("SELECT version() AS version,current_setting('max_connections') AS max_connections,current_setting('shared_buffers') AS shared_buffers")).rows[0];
+  const database = (await pool.query(`SELECT version() AS version,
+    current_setting('max_connections') AS max_connections,
+    current_setting('shared_buffers') AS shared_buffers,
+    current_setting('wal_buffers') AS wal_buffers,
+    current_setting('checkpoint_timeout') AS checkpoint_timeout,
+    current_setting('max_wal_size') AS max_wal_size,
+    current_setting('synchronous_commit') AS synchronous_commit,
+    current_setting('wal_sync_method') AS wal_sync_method`)).rows[0];
   const docker = spawnSync("docker", ["info", "--format", "{{.ServerVersion}}|{{.NCPU}}|{{.MemTotal}}"], { encoding: "utf8" });
   const [dockerVersion = "unavailable", dockerCpu = "0", dockerMemory = "0"] = docker.status === 0 ? docker.stdout.trim().split("|") : [];
   return {
@@ -292,8 +428,16 @@ export async function environment(pool) {
     logicalCpuCount: os.cpus().length,
     memoryGiB: round(os.totalmem() / 1024 ** 3),
     docker: { version: dockerVersion, cpuCount: Number(dockerCpu), memoryGiB: round(Number(dockerMemory) / 1024 ** 3) },
-    database: { version: database.version, maxConnections: Number(database.max_connections), sharedBuffers: database.shared_buffers },
-    network: "local Windows host to Docker Desktop PostgreSQL over loopback",
+    environmentName: process.env.PLENUM_LOAD_ENVIRONMENT_NAME ?? "local-disposable",
+    approvalReference: process.env.PLENUM_LOAD_APPROVAL_REFERENCE ?? "not-supplied-local-only",
+    storageClass: process.env.PLENUM_LOAD_STORAGE_CLASS ?? "Docker Desktop managed volume; class not reported",
+    applicationProcessCount: Number(process.env.PLENUM_LOAD_APPLICATION_PROCESSES ?? 1),
+    connectionPoolMax: pool.options.max,
+    database: { version: database.version, maxConnections: Number(database.max_connections),
+      sharedBuffers: database.shared_buffers, walBuffers: database.wal_buffers,
+      checkpointTimeout: database.checkpoint_timeout, maxWalSize: database.max_wal_size,
+      synchronousCommit: database.synchronous_commit, walSyncMethod: database.wal_sync_method },
+    network: process.env.PLENUM_LOAD_NETWORK_DESCRIPTION ?? "local Windows host to Docker Desktop PostgreSQL over loopback",
     databaseName: process.env.PLENUM_LOAD_DATABASE_NAME
   };
 }
@@ -301,7 +445,7 @@ export async function environment(pool) {
 export function acceptance() {
   return {
     status: "BLOCKED",
-    reason: "OPEN-019 targets are approved, but capacity acceptance still fails: command and Floor latency missed the targets, and the required soak, repetitions, and institutional media evidence are incomplete.",
+    reason: "One profile report cannot grant aggregate capacity acceptance; reconcile the full-duration soak, three consecutive application/voting/voice/Extension sets, and representative media evidence.",
     recommendedThresholds: config.recommendedThresholds
   };
 }

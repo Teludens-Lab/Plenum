@@ -5,7 +5,13 @@
   "participantsPerSession": 500,
   "application": {
     "concurrency": 50,
-    "commandsPerSession": 100
+    "commandsPerSession": 100,
+    "commandWindowSeconds": 10,
+    "reconnectWindowSeconds": 60
+  },
+  "soak": {
+    "warmupSeconds": 1800,
+    "steadyStateSeconds": 3600
   },
   "voting": {
     "concurrency": 50,

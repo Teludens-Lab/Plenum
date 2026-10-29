@@ -2,7 +2,7 @@
 
 ## Single-source rule
 
-`tasks.json` is the task source of truth; `task.schema.json` defines its shape; `scripts/render-promptbook.mjs` owns generated prompt files, traceability, and dependency graph. Do not hand-edit generated files. Corpus documents remain authoritative for product, terminology, contracts, decisions, and roadmap gates.
+`tasks.json` is the task source of truth; `task.schema.json` defines its shape; `scripts/render-promptbook.mjs` owns generated prompt files, traceability, and dependency graph. Do not hand-edit generated files. Corpus documents remain authoritative for product, terminology, contracts, decisions, and roadmap gates. `PRODUCT_COMPLETENESS_MATRIX.md` is the acceptance ledger for P07-P11, and `references/teludens-design-system-catalog/` is the binding visual/interaction/branding source for all Plenum UI, including Fractured Order.
 
 ## Regeneration workflow
 
@@ -14,6 +14,7 @@
 6. Run `node scripts/validate-promptbook.mjs` and resolve all failures.
 7. Review generated diffs for scope, requirement coverage, dependencies, commands, commit contracts, and status honesty.
 8. Record the regeneration date and source-version delta in the validation report or change log.
+9. For any user-facing task, verify that Teludens source references, official dark/light Plenum wordmarks, route/state/viewport evidence and the task's human user-test script remain present.
 
 ## Supersession policy
 

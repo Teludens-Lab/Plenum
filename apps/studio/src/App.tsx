@@ -36,6 +36,13 @@ function revealIssue(source: string): void {
   requestAnimationFrame(() => target?.querySelector<HTMLElement>("input, select, textarea, button")?.focus());
 }
 
+function BrandWordmark() {
+  return <a className="brand-wordmark" href="/" aria-label="Plenum home">
+    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725" />
+    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true" />
+  </a>;
+}
+
 export function App() {
   const projectId = projectIdFromPath();
   const client = useMemo(() => projectId === null ? null : new StudioCollaborationClient(projectId), [projectId]);
@@ -114,13 +121,21 @@ export function App() {
     }
   }
 
-  if (projectId === null || client === null) return <main className="state-page"><section className="card"><h1>Project not found</h1><p>Open Studio with a valid project address.</p></section></main>;
+  if (projectId === null || client === null) return <>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    <header className="app-header"><BrandWordmark /><span className="badge badge-state">Studio</span></header>
+    <main id="main-content" className="state-page" tabIndex={-1}><section className="card state-card teludens-state">
+      <p className="eyebrow">Studio</p><h1>No Project selected</h1>
+      <p>Open a saved Project link to continue editing, or return home to choose another Plenum workspace.</p>
+      <a className="btn-primary link-button" href="/">Return to Plenum home</a>
+    </section></main>
+  </>;
   const valid = state.validation?.valid === true;
   const materialization = client.materialization();
 
   return <>
     <a className="skip-link" href="#main-content">Skip to Draft editor</a>
-    <header className="app-header"><a className="brand" href="/studio/">PLENUM STUDIO</a><span className={`badge ${state.connected ? "badge-online" : "badge-offline"}`}>{state.connected ? "Connected" : "Offline"}</span></header>
+    <header className="app-header"><BrandWordmark /><span className={`badge ${state.connected ? "badge-online" : "badge-offline"}`}>{state.connected ? "Connected" : "Offline"}</span></header>
     <main id="main-content" className="studio-layout">
       <section className="hero"><p className="eyebrow">Collaborative Draft</p><h1>Core Design editor</h1><p>Build the first-proof Core Design and Scenario with visual controls. Edits merge live and must pass validation before Publication.</p></section>
       <div className="status-panel status-warning" role="status"><div><strong>Save state: {state.saveState.replaceAll("_", " ")}</strong><p>{state.unsynchronizedChanges} unsynchronized change{state.unsynchronizedChanges === 1 ? "" : "s"}</p></div><span>Generation {state.generation}</span></div>

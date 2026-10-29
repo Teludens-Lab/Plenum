@@ -1,0 +1,105 @@
+{
+  "contractId": "product-completeness-ledger-v1",
+  "version": "1.0.0",
+  "statusVocabulary": ["PLANNED", "IMPLEMENTED", "AUTOMATED_PASS", "HUMAN_PASS", "PASS", "FAIL", "BLOCKED", "NOT_RUN", "N/A"],
+  "sources": {
+    "requirements": "docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md",
+    "studio": "docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md",
+    "runtime": "docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md",
+    "productMatrix": "docs/promptbook/PRODUCT_COMPLETENESS_MATRIX.md"
+  },
+  "groups": [
+    {
+      "dimension": "prd-requirement",
+      "range": { "prefix": "REQ-", "start": 1, "end": 94, "width": 3 },
+      "owner": "Product completion sequence PS-700 through PS-850",
+      "evidenceTarget": "Requirement traceability plus linked automated and human acceptance evidence",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "prd-invariant",
+      "range": { "prefix": "INV-", "start": 1, "end": 28, "width": 3 },
+      "owner": "Platform architecture and release assurance",
+      "evidenceTarget": "Invariant contract, negative test, and release evidence index",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "studio-section",
+      "range": { "prefix": "STUDIO-", "start": 3, "end": 27, "width": 2 },
+      "owner": "Studio completion sequence PS-730 through PS-760",
+      "evidenceTarget": "Reachable Studio route, state matrix, browser evidence, and Designer task test",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "runtime-section",
+      "range": { "prefix": "RUNTIME-", "start": 2, "end": 23, "width": 2 },
+      "owner": "Runtime completion sequence PS-770 through PS-790",
+      "evidenceTarget": "Role-authorized Runtime route, state matrix, browser evidence, and persona task test",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "persona-journey",
+      "obligations": [
+        "simulation-designer", "studio-administrator", "reviewer-methodology-owner", "session-operator",
+        "control-staff", "participant", "subject-matter-adjudicator", "research-evaluation-analyst"
+      ],
+      "owner": "Persona acceptance sequence PS-710 through PS-850",
+      "evidenceTarget": "Clean-profile task script with authorization and recovery evidence",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "product-screen",
+      "obligations": [
+        "root-entry", "authentication", "organization-portal", "project-portal", "template-catalog", "release-catalog",
+        "session-catalog", "studio", "participant-runtime", "operator-console", "administration", "reporting-replay-archive"
+      ],
+      "owner": "Product completion sequence PS-700 through PS-800",
+      "evidenceTarget": "Public route inventory with desktop, narrow, 200-percent-text, keyboard, and accessibility evidence",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "api-boundary",
+      "obligations": [
+        "product-shell-v1", "identity", "organization-project-template", "publication-package", "session-lifecycle",
+        "studio-authoring", "runtime-command", "operator-control", "evidence-report-replay", "administration-policy"
+      ],
+      "owner": "Owning application module and completion task",
+      "evidenceTarget": "Versioned contract plus positive, invalid, unauthorized, cross-Organization, stale, and replay evidence",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "ui-state",
+      "obligations": ["loading", "empty", "pending", "success", "error", "unauthorized", "offline", "stale-conflict", "revoked", "disabled-read-only"],
+      "owner": "PS-700 foundation and each owning feature task",
+      "evidenceTarget": "Route-by-state browser and accessibility matrix",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "viewport",
+      "obligations": ["desktop", "narrow-width", "200-percent-text", "reduced-motion", "forced-colors"],
+      "owner": "UI quality sequence PS-700 through PS-820",
+      "evidenceTarget": "Screenshot, overflow assertion, and manual interaction record",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "CMD-PLATFORM-LINT", "CMD-PLATFORM-TYPECHECK", "CMD-PLATFORM-TEST", "CMD-PRODUCT-E2E",
+        "CMD-GAP-AUDIT", "CMD-PLATFORM-A11Y", "CMD-TELUDENS-AUDIT", "clean-install", "upgrade-forward-fix",
+        "backup-restore", "security-review", "observability", "human-acceptance", "production-owner-decision"
+      ],
+      "owner": "Release assurance sequence PS-800 through PS-850",
+      "evidenceTarget": "Timestamped command or approval artifact in the release evidence index",
+      "status": "PLANNED"
+    }
+  ],
+  "overrides": [
+    { "dimension": "api-boundary", "obligation": "product-shell-v1", "status": "IMPLEMENTED", "owner": "PS-700", "evidenceTarget": "tests/e2e/product/product-shell.spec.mjs" },
+    { "dimension": "product-screen", "obligation": "root-entry", "status": "IMPLEMENTED", "owner": "PS-700", "evidenceTarget": "output/playwright/ps-700" },
+    { "dimension": "prd-requirement", "obligation": "REQ-009", "status": "IMPLEMENTED", "owner": "PS-700 then PS-730 through PS-760", "evidenceTarget": "Teludens foundation evidence plus complete Studio authoring evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-046", "status": "IMPLEMENTED", "owner": "PS-700 then PS-710", "evidenceTarget": "Product shell authentication-state evidence plus complete identity-profile evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-064", "status": "IMPLEMENTED", "owner": "PS-700 then PS-800 through PS-820", "evidenceTarget": "PS-700 accessibility evidence plus complete route accessibility review" },
+    { "dimension": "prd-requirement", "obligation": "REQ-069", "status": "IMPLEMENTED", "owner": "PS-700 then PS-800", "evidenceTarget": "Teludens semantic conformance audit and all-route remediation evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-071", "status": "IMPLEMENTED", "owner": "PS-700 then PS-850", "evidenceTarget": "Completeness ledger validation and final release index" }
+  ]
+}

@@ -7,6 +7,7 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | `docs/corpus/README.md` | 2026-10-20 | Corpus contents table | Product Owner | Yes | Records the 2026-10-20 Product Owner approval update; drafts and named specialist gates remain |
 | `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` | 1.0.14 | Controlled | Product Owner | Yes | Sole decision authority; version 1 owner, retention, classification, restricted-media/ballot and first Plugin decisions are resolved |
 | `references/fractured-order.snapshot.json` and `references/fractured-order/` | `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` | Official immutable golden reference | Product Owner | Yes | Tree `771510b6180bd4826dc5688789d131f2109eeb62`; 1,111 files; 151,409,464 bytes; archive SHA-256 recorded in manifest |
+| `references/teludens-design-system-catalog/` | 1.3 catalog / 1.0 specifications | Binding Plenum UI, interaction and branding reference by Product Owner direction 2026-10-29 | Product Owner / Design owner | Yes | Applies to every platform surface including Fractured Order; exact dark/light Plenum wordmarks are platform branding. PS-700 must version the production token map and explicitly reconcile the catalog's rendered Graphite/Mineral Sage decision mapping with the specification's Electric Vermilion decision token before broad propagation. |
 | `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` | 1.0.1 | Controlled draft | Product Owner | Yes | Sole terminology authority; DEC-51 replacement name remains Assumed |
 | `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.3 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; not ratified |
 | `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-001/026 resolved; DEC-22 confirmation remains |
@@ -28,7 +29,7 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | `references/plenum-runtime-slice/migrations/001-004` | v0.2.0 | Implemented baseline | Technical Lead | Yes | Historical PASS on Pg 16; Pg 18 not verified here |
 | `references/plenum-runtime-slice/contracts/openapi.yaml` | 0.2.0 / OpenAPI 3.1 | Implemented slice contract | Technical Lead | Yes | Demo headers are local-only and must not migrate to production |
 | `references/plenum-runtime-slice/definitions/fractured-order-reference.json` | slice-1 | Implemented fixture | Technical Lead | Yes | Reference configuration, not methodology law |
-| `docs/promptbook/source/MASTER_PROMPTBOOK_GENERATOR_v1.3.md` | 1.3 | Promptbook instruction | User | Yes | Governs this generated artifact only; it is not a Plenum product authority |
+| `docs/promptbook/source/MASTER_PROMPTBOOK_GENERATOR_v1.3.md` | 1.4 content (legacy filename) | Promptbook instruction | User | Yes | Governs this generated artifact only; extended with P07-P11 and the Teludens direction; it is not a Plenum product authority |
 
 ## Missing inputs
 

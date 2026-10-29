@@ -1,0 +1,14 @@
+{
+  "contractId": "teludens-design-system-v1",
+  "version": "1.0.0",
+  "catalogVersion": "1.3",
+  "brandContractId": "plenum-brand-assets-v1",
+  "productionDecisionSignal": "mineralSage",
+  "supersededSpecificationSignal": "electricVermilion",
+  "resolution": "The rendered Teludens v1.3 Graphite/Mineral Sage catalog is the production authority. Electric Vermilion remains historical specification evidence and is not an application decision token.",
+  "themes": ["light", "dark"],
+  "densities": ["focus", "standard", "operations"],
+  "requiredStates": ["default", "hover", "focus-visible", "active", "disabled", "loading", "empty", "error", "unauthorized", "offline"],
+  "grammar": ["node", "branch", "path", "gate", "state"],
+  "source": "references/teludens-design-system-catalog/tokens.json"
+}

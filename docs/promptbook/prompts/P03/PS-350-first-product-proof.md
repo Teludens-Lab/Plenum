@@ -27,7 +27,7 @@ Observed source evidence:
 - docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md
 - references/plenum-runtime-slice/test/smoke.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-001`, `ADR-001`, `ADR-002`, `ADR-003`, `ADR-004`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-001`, `ADR-002`, `ADR-003`, `ADR-004`.
 
 ## Prerequisites
 
@@ -126,7 +126,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-E2E`, `CMD-PLATFORM-MEDIA`, `CMD-PARITY`, `CMD-PROMPTBOOK-VALIDATE`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 

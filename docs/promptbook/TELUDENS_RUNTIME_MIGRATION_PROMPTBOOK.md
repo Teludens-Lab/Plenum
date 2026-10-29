@@ -1,25 +1,26 @@
 # Plenum Teludens Runtime migration promptbook
 
-Updated: 2026-10-20.
+Updated: 2026-10-29.
 
 ## Purpose
 
-This promptbook moves Plenum's simulation-delivery interface toward the Teludens Interface System while preserving the recognizable operational character of the official Fractured Order reference. It supplements the canonical PS task graph; it does not replace `tasks.json`, generated PS prompts, the product corpus, the Decision Register, or release gates.
+This historical migration promptbook is superseded for execution by canonical tasks `PS-700` through `PS-840`. It remains useful implementation detail, but the generated PS graph, `PRODUCT_COMPLETENESS_MATRIX.md`, product corpus, Decision Register and release gates control sequencing and acceptance.
 
 The intended result is not a pixel-for-pixel recreation. Teludens owns materials, geometry, density, components, motion, and interaction behavior. Plenum retains the product-specific identity: institutional tone, role and team context, Move/Phase/time visibility, role-specific workspaces, briefing presentation, governed handoffs, and clear Session authority.
 
 ## Authority and non-negotiable boundaries
 
 1. Product behavior and authority come from the corpus and Decision Register. Visual references never override authorization, information policy, Session Authority, evidence, consent, privacy, or workflow rules.
-2. `references/fractured-order/` is the immutable golden behavioral and visual comparison source. Do not edit or import its hard-coded team pages into production.
-3. `references/teludens-design-system-catalog/` is supporting design-system evidence, not production source code and not authority over the corpus. Do not edit it as part of migration work.
-4. Resolve the current Teludens palette discrepancy before implementation: the rendered v1.3 catalog uses Graphite/Mineral Sage, while `docs/TELUDENS_DESIGN_LANGUAGE.md` names Electric Vermilion as the decision signal. Do not combine both by accident.
+2. `references/fractured-order/` is the immutable golden behavioral reference. Its simulation-specific styling and hard-coded team pages are not production UI authority.
+3. `references/teludens-design-system-catalog/` is the binding UI, interaction and platform-brand reference for all Plenum surfaces, including Fractured Order. Do not edit the catalog as part of product implementation; consume it through a versioned production design-system layer.
+4. PS-700 must explicitly reconcile and record the catalog's rendered Graphite/Mineral Sage decision mapping versus `docs/TELUDENS_DESIGN_LANGUAGE.md` / `docs/TELUDENS_TOKENS.json` Electric Vermilion mapping before broad propagation. Never combine them accidentally or scatter either as raw values.
 5. Keep one Runtime renderer and one authoritative projection path. Studio preview may reuse presentation components, but it must remain non-authoritative and incapable of Session mutation.
 6. Preserve server-side role, team, Stage, information-policy, Poll, Voice, Plugin, and Effect Proposal filtering. Styling must never reveal data hidden by policy.
 7. Use semantic tokens. Product-local team and institutional tokens may extend Teludens, but components must not scatter raw reference colors.
-8. Prefer continuous workspaces, aligned lists/tables, state rails, panels, and inspectors over card mosaics.
-9. Accessibility, reduced motion, constrained-height behavior, keyboard operation, zoom/reflow, and non-color state distinctions are release requirements, not later polish.
-10. Every task reports `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. Implementation completion is not production approval.
+8. Use only `assets/logos/Plenum. Wordmark Dark.png` and `assets/logos/Plenum. Wordmark Light.png` for platform wordmarks, with theme-appropriate contrast and no redraw, recolor, distortion or simulation-specific replacement.
+9. Prefer continuous workspaces, aligned lists/tables, state rails, panels, and inspectors over card mosaics.
+10. Accessibility, reduced motion, constrained-height behavior, keyboard operation, zoom/reflow, and non-color state distinctions are release requirements, not later polish.
+11. Every task reports `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`. Implementation completion is not production approval.
 
 ## Observed starting point
 

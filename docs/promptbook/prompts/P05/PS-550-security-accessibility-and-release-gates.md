@@ -7,7 +7,7 @@
 - Goal: Run the complete negative-control, accessibility, recovery, migration, and release evidence matrix.
 - User outcome: Owners receive an honest go/no-go package with every unresolved production gate visible.
 - Risk: **CRITICAL**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -25,7 +25,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. OPEN-001/009/024/027/028 and the OPEN-029 baseline are resolved; their implementation, institutional-operation and specialist evidence must remain labeled separately from policy approval.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -124,7 +124,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-E2E`, `CMD-PLATFORM-A11Y`, `CMD-SECURITY`, `CMD-BACKUP-RESTORE`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 
@@ -132,7 +132,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No fictional certification or performance claim
 - Production-gating OPEN items remain blockers
 
-The approval gate is: Formal release approval requires named owners and closure or explicit acceptance of every listed OPEN gate. A task may be implementation-complete without being release-approved.
+The approval gate is: The version 1 OPEN decisions are resolved; formal release approval still requires every blocking engineering/operational gate to pass and the named owner to sign the exact evidence package. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -153,21 +153,21 @@ Proposed body:
 
 ```text
 Why:
-- Separate engineering completion from release approval.
+- Separate engineering completion from release approval and close the remaining local controls.
 What:
-- Add security, accessibility, recovery, and maturity evidence.
+- Add security, accessibility, recovery and maturity evidence plus shared request limits and audited export retention.
 Verification:
 - Run all release commands and record exact outcomes.
 Compatibility / migrations:
-- Adds migration 025 for shared request windows, legal holds and guarded export-byte expiry; rehearse the full migration chain.
+- Adds migration 025 after rehearsing the full chain.
 Risks / follow-up:
 - Owner approval remains external.
-Refs: PS-550, REQ-051, OPEN-001
+Refs: PS-550, REQ-051, OPEN-001, OPEN-009
 ```
 
 Proposed PR description:
 
-Summary: assembles release assurance evidence. Risks: incomplete manual review. Migration: rehearsal only. Evidence: signed index. Rollback: evidence-only; failed gates remain failed.
+Summary: assembles release assurance evidence and closes local request-limit/retention gaps. Risks: incomplete manual review and irreversible expiry of payload bytes. Migration: additive 025, then forward-fix. Evidence: signed index and fresh-database controls. Rollback: stop the timer and forward-fix; restore approved backup for purged bytes.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

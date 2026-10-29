@@ -109,7 +109,7 @@ const server = createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
     const studio = pathname.startsWith("/studio/");
-    const relative = pathname.startsWith("/assets/") ? normalize(pathname.slice(1)) :
+    const relative = pathname.startsWith("/assets/") || pathname.startsWith("/branding/") ? normalize(pathname.slice(1)) :
       studio && pathname.startsWith("/studio/assets/") ? normalize(pathname.slice("/studio/".length)) : "index.html";
     if (relative.startsWith("..")) throw new Error("Unsafe static path");
     const file = await readFile(join(studio ? studioRoot : webRoot, relative));

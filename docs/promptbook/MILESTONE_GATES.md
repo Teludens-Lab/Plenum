@@ -24,6 +24,15 @@ Every phase exit requires:
 | P04 | S4 live activation and generalization | Release pinning/activation; adjudication; policy-negotiation and crisis-response designs without Runtime edits | Semantic OPEN items named in affected prompts must be resolved or accepted by owner |
 | P05 | S2, S5, S6, S7 and release-assurance package | Offline reconciliation; evidence verification; reports; migration/recovery; deployment; air-gap; accessibility; load and security results | Implement and evidence resolved OPEN-001/009/014/015/017/019/024/027/028 policy; PS-545 performance remediation is complete, while PS-550 production controls and approval remain |
 | P06 | Production Plugin catalog expansion | Per-Plugin contract, permission, isolation, offline bundle, license, lifecycle, and compatibility evidence | OPEN-011 approves the first candidate; resolved OPEN-022/029 controls and explicit digest-bound Artifact approval still apply per Plugin |
+| P07 | Teludens product entry and lifecycle | Shared semantic tokens/components, exact catalog wordmarks, root entry, auth recovery, Organization/Project/Template/Release/Session journeys and structural completeness audit | A five-minute test must start at `/`; no pasted identifier, hidden seed, legacy brand or simulation-specific shell |
+| P08 | Specification-complete Studio | Reachable workspaces for Studio sections 3-27, visual authoring, previews, collaboration, role walkthrough, deterministic rehearsal, review and publication | A non-programming Designer completes each task script without raw JSON/SQL or developer tooling |
+| P09 | Complete Runtime and operations | Participant, Operator, Admin, Publisher, Reviewer and Research workflows; recovery, reporting, replay, archive and Plugin lifecycle UI | Every persona has least-privilege task evidence; no core workflow is CLI-only |
+| P10 | Product/operations hardening | Full-route Teludens audit, route/state/viewport visual matrix, CI, security, observability, clean install/upgrade/restore and manual assistive-technology review | Any missing UI state, legacy logo, conformance exception or NOT RUN required control blocks exit |
+| P11 | Golden journey and release | Blank-install UI-only Fractured Order lifecycle, two contrasting UI-authored simulations, fail-closed completeness audit and exact-artifact evidence | Every applicable completeness row and S0-S2 defect is PASS; owner GO is explicit and deployment remains separate |
+
+## P07-P11 product-completeness gate
+
+`PRODUCT_COMPLETENESS_MATRIX.md` is mandatory evidence for the completion phases. The release-mode gap audit fails if a required capability lacks a public UI path, server-authoritative behavior, complete applicable states, Teludens conformance, official Plenum branding, automated evidence, task-based human evidence or accountable ownership. Fractured Order must run inside the same Teludens platform shell as every other simulation.
 
 ## Roadmap section 13 evidence categories
 

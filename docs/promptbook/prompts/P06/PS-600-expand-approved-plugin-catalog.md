@@ -26,7 +26,7 @@ Observed source evidence:
 
 - docs/corpus/02_Updated_Architecture/10_EXTENSION_FRAMEWORK_v1.1.md
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-011`, `OPEN-022`, `OPEN-029`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ Run every Node/npm command with Node 24 or newer. Record `node --version` at pre
 
 ## Inspect before editing
 
-- Candidate Plugin contract, license, security classification, and lifecycle
+- Approved org.ssg.analysis.session-indicators v1.0.0 contract and internal-use license
 - Approved registry and SDK
 - Profile compatibility
 
@@ -48,9 +48,9 @@ Read callers, tests, fixtures, configuration, exports, migrations, and public co
 
 Allowed behavior scope:
 
-- One approved Plugin at a time
+- org.ssg.analysis.session-indicators v1.0.0 only
 - Contract and fixture tests
-- Offline/local replacement where required
+- Offline local execution
 - Catalog metadata and runbook
 
 Expected paths are discovery targets, not permission to invent absent structure:
@@ -121,7 +121,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-AIRGAP`, `CMD-SECURITY`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 
@@ -129,7 +129,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - No core authority moves to Plugin
 - Deferred product features remain deferred
 
-The approval gate is: Each production Plugin requires its own owner and security approval under OPEN-011/029. A task may be implementation-complete without being release-approved.
+The approval gate is: OPEN-011 approves the first candidate and internal-use license; the built Artifact still requires digest-bound security, supply-chain and owner approval under OPEN-029. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 

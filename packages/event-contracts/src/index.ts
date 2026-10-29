@@ -63,6 +63,14 @@ export const VERIFICATION_EXPORT_CONTRACT_ID = "verification-export-v1";
 export const REPORT_DEFINITION_CONTRACT_ID = "report-definition-v1";
 export const RESEARCH_EXPORT_CONTRACT_ID = "research-export-v1";
 export const REPLAY_DIVERGENCE_CONTRACT_ID = "replay-divergence-v1";
+export const PRODUCT_SHELL_CONTRACT_ID = "product-shell-v1";
+
+export interface ProductShellContextV1 extends JsonObject {
+  contractId: typeof PRODUCT_SHELL_CONTRACT_ID;
+  principal: { id: string; displayName: string };
+  organization: { id: string; name: string; roles: string[] };
+  destinations: Array<"home" | "studio" | "runtime" | "operations">;
+}
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
   "artifact.create",

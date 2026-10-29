@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/docker-compose.yml
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-009`, `ADR-011`, `ADR-012`, `ADR-013`, `ADR-017`, `OPEN-020`, `OPEN-027`, `OPEN-029`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-009`, `ADR-011`, `ADR-012`, `ADR-013`, `ADR-017`.
 
 ## Prerequisites
 
@@ -131,7 +131,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in `COMMAND_REGISTRY.md`: `CMD-DEPLOYMENT-SMOKE`, `CMD-AIRGAP`, `CMD-BACKUP-RESTORE`, `CMD-EVIDENCE-VERIFY`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 

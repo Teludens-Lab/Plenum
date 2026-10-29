@@ -132,7 +132,10 @@ for (const task of tasks) {
   }
 }
 
-const samples = ['PS-100', 'PS-001', 'PS-310', 'PS-410', 'PS-500', 'PS-230', 'PS-240', 'PS-250', 'PS-530'];
+const samples = [
+  'PS-100', 'PS-001', 'PS-310', 'PS-410', 'PS-500', 'PS-230', 'PS-240', 'PS-250', 'PS-530',
+  'PS-700', 'PS-760', 'PS-780', 'PS-820', 'PS-830', 'PS-840'
+];
 const sampleRows = [];
 for (const id of samples) {
   const task = tasks.find((candidate) => candidate.id === id);
@@ -150,7 +153,7 @@ for (const id of samples) {
 }
 
 const ready = tasks.filter((task) => task.ready_to_execute).map((task) => task.id);
-const expectedReady = ['PS-545'];
+const expectedReady = ['PS-700'];
 if (ready.length !== expectedReady.length || ready.some((id, index) => id !== expectedReady[index])) {
   warnings.push(`Expected the recorded runnable tasks ${expectedReady.join(', ')}; found ${ready.join(', ') || 'none'}`);
 }

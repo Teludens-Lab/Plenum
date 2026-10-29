@@ -1,0 +1,10 @@
+{
+  "name": "@plenum/design-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./styles.css": "./src/tokens.css",
+    "./conformance.json": "./conformance.json"
+  }
+}

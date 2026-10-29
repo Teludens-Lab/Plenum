@@ -25,7 +25,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/src/server.mjs
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-009`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -124,7 +124,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-PLATFORM-E2E`, `CMD-REPORT-RECONCILE`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 
@@ -132,7 +132,7 @@ Run only commands whose registry status is **Verified**. For a **Proposed** comm
 - Secret Ballots remain excluded
 - Retention does not break evidence proofs
 
-The approval gate is: Production retention still requires OPEN-009; resolved OPEN-017/025 recovery and research-role policy must be implemented and evidenced. A task may be implementation-complete without being release-approved.
+The approval gate is: OPEN-009 is approved and export retention enforcement passes locally under PS-550; resolved OPEN-017/025 recovery, remaining storage classes and institution operations must be evidenced. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -160,7 +160,7 @@ Verification:
 Compatibility / migrations:
 - Adds 024 reporting records.
 Risks / follow-up:
-- Institutional policies remain open.
+- Approved retention policy still requires production enforcement evidence.
 Refs: PS-520, REQ-055, INV-016
 ```
 
@@ -172,4 +172,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: OPEN-009 resolves or the approved OPEN-017/025 policy changes; Report format changes; New research classification is approved.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: The approved OPEN-009/017/025 policy changes; Report format changes; New research classification is approved.

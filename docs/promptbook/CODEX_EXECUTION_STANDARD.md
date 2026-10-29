@@ -7,11 +7,13 @@ Roadmap section 16 applies first: anyone changing code reads the requirement row
 ## Invocation
 
 1. Select only a task whose prerequisites have PASS evidence and whose `ready_to_execute` state is current.
-2. Paste the generated prompt from `prompts/P00`..`P06` into Codex from the implementation repository root.
+2. Paste the generated prompt from `prompts/P00`..`P11` into Codex from the implementation repository root.
 3. Supply any required human inputs named under `depends_on_unratified`; do not silently promote Assumed/Proposed items.
 4. Ask for implementation, verification, and handoff. A commit remains optional and requires explicit workflow authorization.
 
-The first eligible prompts are PS-000 and PS-001. Prefer PS-000 next because it produces the parity inventory required by PS-200. PS-001 may run independently, but its preflight must stop before edits when Node 24+ or PostgreSQL 18 is unavailable.
+The current first eligible prompt is PS-700. P00-P05 are historical implemented/verified slices and PS-600 remains an optional post-release Plugin catalog expansion. PS-700 begins the product-completion sequence and must establish the Teludens design foundation, official Plenum branding, public entry smoke test and completeness ledger before downstream UI work.
+
+For every P07-P11 task, read `PRODUCT_COMPLETENESS_MATRIX.md` and the cited files under `references/teludens-design-system-catalog/`. A task is not user-complete because an API or deep-linked fixture works: its public UI path, applicable states, authorization, responsive/accessibility behavior and short task-based user test must pass. Fractured Order uses the shared Teludens Plenum shell and official catalog wordmarks; simulation-specific chrome or legacy branding is a failed gate.
 
 Every prompt must run all Node/npm commands with Node 24 or newer. At preflight, record `node --version`; if the default runtime is older, select a verified Node 24+ runtime before validation. Results produced on an older Node version are diagnostic only and cannot satisfy a task gate. If Node 24+ is unavailable, mark the affected commands BLOCKED and do not claim completion.
 

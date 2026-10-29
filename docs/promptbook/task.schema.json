@@ -23,7 +23,7 @@
       "properties": {
         "id": { "type": "string", "pattern": "^PS-[0-9]{3}$" },
         "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-        "phase": { "enum": ["P00", "P01", "P02", "P03", "P04", "P05", "P06"] },
+        "phase": { "enum": ["P00", "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11"] },
         "title": { "type": "string", "minLength": 5 },
         "category": { "type": "string", "minLength": 3 },
         "primary_owner": { "type": "string", "pattern": "^Epic [A-N]$" },

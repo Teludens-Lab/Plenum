@@ -1,12 +1,15 @@
 # Release readiness
 
-This is a maturity view, not a release declaration. Current status is derived from the corpus, implementation, task-specific verification records, and `PROJECT_STATE.md` as of 2026-10-26.
+This is a maturity view, not a release declaration. Current status is derived from the corpus, implementation, task-specific verification records, and `PROJECT_STATE.md` as of 2026-10-29.
 
 ## Maturity matrix
 
 | Capability | Design specified | Implementation started | Tested locally | Integrated | Security reviewed | Performance verified | Deployment verified | Release approved |
 |---|---|---|---|---|---|---|---|---|
 | Product and contracts | Yes; Proposed documents are Product Owner Approved | N/A | Promptbook validation PASS | N/A | Partial | No | No | No |
+| Complete user-facing platform | `PRODUCT_COMPLETENESS_MATRIX.md` and P07-P11 prompts now specify the complete path | No; planned from PS-700 | Promptbook structure PASS only; application evidence NOT RUN | No | No | No | No | No |
+| Teludens UI and Plenum branding | Catalog is binding; exact dark/light wordmarks identified | No; planned in PS-700 and audited in PS-800 | NOT RUN | No | No | No | No | No |
+| Blank-install Fractured Order golden journey | PS-830 acceptance contract complete | No | NOT RUN | No | No | No | No | No |
 | Reference authority slice | Yes | Yes | PS-001 PASS on Node 24/PostgreSQL 18 | Reference evidence only | Partial controls exercised | No | Disposable only | No |
 | Platform kernel / S1 | Yes | Yes | Unit, integration, browser and accessibility evidence PASS | Yes | PS-550 negative controls and dependency/secret scans PASS; formal review pending | Limited measurements only | Disposable only | No |
 | Fractured Order from Release | Yes | Yes | PS-200/210 checks and PS-350 AC-09 parity PASS | Yes | Formal review pending | One focused information-flow measurement | Disposable only | Phase 3 GO; later release gates pending |
@@ -31,6 +34,8 @@ This is a maturity view, not a release declaration. Current status is derived fr
 
 ## Release blockers
 
+- P07-P11 are not implemented. Product entry/lifecycle, specification-complete Studio, complete role/operator/admin delivery, full-route Teludens conformance, manual accessibility/operations evidence, the blank-install Fractured Order journey and cross-simulation UAT remain required.
+- `CMD-GAP-AUDIT -- --release`, `CMD-TELUDENS-AUDIT`, `CMD-CLEAN-INSTALL` and `CMD-GOLDEN-JOURNEY` are Proposed commands until their creating tasks pass.
 - OPEN-001 owner identities were resolved on 2026-10-26. OPEN-002 was resolved by Product Owner approval on 2026-10-20. OPEN-019 target ownership was resolved on 2026-10-24.
 - OPEN-009 data residency, retention and operational policy was resolved on 2026-10-26; the 90-day export enforcement and legal-hold path pass locally, while institution-owned operating evidence for all storage classes remains required.
 - OPEN-024/027/028 were resolved for the restricted version 1 scope: no additional classified deployment scheme, production recording/transcription or production secret ballots. OPEN-029 is resolved for the implementation baseline, but production key, revocation, recovery and operating procedures still need evidence.
@@ -41,4 +46,4 @@ This is a maturity view, not a release declaration. Current status is derived fr
 
 ## Honest claim boundary
 
-PS-550 engineering verification is complete. The production recommendation remains **NO-GO**: manual accessibility, formal security review, institution-owned trust/backup/retention operations evidence, and final authorized owner approval remain.
+PS-550 engineering verification is complete. The production recommendation remains **NO-GO**: P07-P11 product-completion evidence, full-route Teludens/branding conformance, manual accessibility, formal security review, institution-owned trust/backup/retention operations evidence, golden-journey/UAT evidence and final authorized owner approval remain.

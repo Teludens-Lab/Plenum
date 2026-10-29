@@ -25,6 +25,10 @@ const sourcePaths = [
   [/^Data Model\b/, `${corpus}/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md`],
   [/^Sync\b/, `${corpus}/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md`],
   [/^Reference slice\b/, `${referenceSlice}/README.md`],
+  [/^Teludens Design Language\b/, 'references/teludens-design-system-catalog/docs/TELUDENS_DESIGN_LANGUAGE.md'],
+  [/^Teludens Spatial Grammar\b/, 'references/teludens-design-system-catalog/docs/SPATIAL_GRAMMAR.md'],
+  [/^Teludens Experience Physics\b/, 'references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md'],
+  [/^Teludens Reference Slice\b/, 'references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md'],
   [/^(Decision Register|DEC-|ADR-|OPEN-)/, `${corpus}/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`],
   [/^VOTE-/, `${corpus}/02_Updated_Architecture/11_LIVE_POLLING_AND_VOTING_v1.1.md`],
   [/^VOICE-/, `${corpus}/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md`],
@@ -138,7 +142,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 Resolve these references in \`COMMAND_REGISTRY.md\`: ${task.validation_command_refs.map((id) => `\`${id}\``).join(', ')}.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 

@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
   createErrorEnvelope,
+  PRODUCT_SHELL_CONTRACT_ID,
   type CommandEnvelopeV1,
   type CommandReceiptV1,
   type ErrorEnvelopeV1,
@@ -16,7 +17,7 @@ import { COMPOSITION_DEFINITION_CONTRACT_ID } from "@plenum/simulation-schema";
 import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
-import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
 import { getAdjudications } from "../adjudication/service.js";
@@ -186,6 +187,34 @@ async function registerDevice(pool: Pool, principal: AuthenticatedPrincipal): Pr
   });
 }
 
+async function getProductShellContext(pool: Pool, principal: AuthenticatedPrincipal, correlationId: string) {
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ display_name: string; organization_name: string }>(
+      `SELECT person.display_name, organization.name AS organization_name
+         FROM identity.persons person
+         JOIN identity.organizations organization ON organization.id = $1
+         JOIN identity.memberships membership
+           ON membership.organization_id = organization.id
+          AND membership.person_id = person.id
+        WHERE organization.id = $1 AND person.id = $2
+        LIMIT 1`,
+      [principal.organizationId, principal.principalId]
+    );
+    const row = result.rows[0];
+    if (row === undefined) {
+      throw authorizationError("PERMISSION_DENIED", "Current Organization membership is required.", correlationId);
+    }
+    const destinations: Array<"home" | "studio" | "runtime" | "operations"> = ["home", "studio", "runtime"];
+    if (principal.organizationRoles.some((role) => role === "operator" || role === "admin")) destinations.push("operations");
+    return {
+      contractId: PRODUCT_SHELL_CONTRACT_ID,
+      principal: { id: principal.principalId, displayName: row.display_name },
+      organization: { id: principal.organizationId, name: row.organization_name, roles: principal.organizationRoles },
+      destinations
+    };
+  });
+}
+
 async function receiptFor(
   pool: Pool,
   principal: AuthenticatedPrincipal,
@@ -226,6 +255,15 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       if (!url.pathname.startsWith("/v1/")) return false;
       const principal = await options.authenticate(request, correlationId);
       let match: RegExpMatchArray | null;
+      if (request.method === "GET" && url.pathname === "/v1/product-context") {
+        send(response, 200, await getProductShellContext(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
+        await revokeAuthenticationSession(options.pool, principal, correlationId);
+        send(response, 200, { signedOut: true });
+        return true;
+      }
       if (request.method === "POST" && url.pathname === "/v1/devices") {
         send(response, 201, await registerDevice(options.pool, principal));
         return true;

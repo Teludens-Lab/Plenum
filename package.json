@@ -29,6 +29,7 @@
     "test:s3": "npm run build --silent && node --test apps/server/test/object-store.integration.test.mjs",
     "setup:e2e": "playwright install --with-deps chromium",
     "test:e2e": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs",
+    "test:e2e:product": "npm run build --silent && playwright test --config tests/e2e/product/playwright.config.mjs",
     "test:e2e:media": "npm run build --silent && playwright test --config tests/e2e/playwright.media.config.mjs",
     "test:e2e:media-recovery": "npm run build --silent && playwright test --config tests/e2e/playwright.media-recovery.config.mjs",
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
@@ -40,6 +41,8 @@
     "load:voice": "npm run build --silent && node scripts/run-load-profile.mjs voice",
     "load:extensions": "npm run build --silent && node scripts/run-load-profile.mjs extensions",
     "validate:promptbook": "node docs/promptbook/scripts/validate-promptbook.mjs",
+    "audit:product-completeness": "node scripts/audit-product-completeness.mjs",
+    "audit:teludens-ui": "node scripts/audit-teludens-ui.mjs",
     "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web && npm run build:web --workspace @plenum/studio",
     "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs"
   },

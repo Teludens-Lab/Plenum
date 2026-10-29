@@ -93,6 +93,23 @@ graph TD
   PS_540 --> PS_550
   PS_545 --> PS_550
   PS_550 --> PS_600
+  PS_550 --> PS_700
+  PS_700 --> PS_710
+  PS_710 --> PS_720
+  PS_720 --> PS_730
+  PS_730 --> PS_740
+  PS_740 --> PS_750
+  PS_750 --> PS_760
+  PS_760 --> PS_770
+  PS_770 --> PS_780
+  PS_780 --> PS_790
+  PS_760 --> PS_800
+  PS_790 --> PS_800
+  PS_800 --> PS_810
+  PS_810 --> PS_820
+  PS_820 --> PS_830
+  PS_830 --> PS_840
+  PS_840 --> PS_850
 ```
 
 | Task | Phase | Programmatic prerequisites | Unratified / open dependencies | Ready now |
@@ -126,6 +143,22 @@ graph TD
 | PS-520 | P05 | PS-410, PS-420, PS-510 | - | No |
 | PS-530 | P05 | PS-220, PS-250, PS-500, PS-510, PS-520 | ADR-009, ADR-011, ADR-012, ADR-013, ADR-017 | No |
 | PS-540 | P05 | PS-350, PS-500, PS-530 | - | No |
-| PS-545 | P05 | PS-540 | - | Yes |
+| PS-545 | P05 | PS-540 | - | No |
 | PS-550 | P05 | PS-510, PS-520, PS-530, PS-540, PS-545 | - | No |
 | PS-600 | P06 | PS-550 | - | No |
+| PS-700 | P07 | PS-550 | - | No |
+| PS-710 | P07 | PS-700 | - | No |
+| PS-720 | P07 | PS-710 | - | No |
+| PS-730 | P08 | PS-720 | OPEN-004 | No |
+| PS-740 | P08 | PS-730 | OPEN-010 | No |
+| PS-750 | P08 | PS-740 | - | No |
+| PS-760 | P08 | PS-750 | OPEN-013 | No |
+| PS-770 | P09 | PS-760 | - | No |
+| PS-780 | P09 | PS-770 | - | No |
+| PS-790 | P09 | PS-780 | - | No |
+| PS-800 | P10 | PS-760, PS-790 | - | No |
+| PS-810 | P10 | PS-800 | - | No |
+| PS-820 | P10 | PS-810 | - | No |
+| PS-830 | P11 | PS-820 | - | No |
+| PS-840 | P11 | PS-830 | - | No |
+| PS-850 | P11 | PS-840 | OPEN-016 | No |

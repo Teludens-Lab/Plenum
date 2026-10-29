@@ -18,7 +18,8 @@ import {
   type RuntimePollV1,
   type RuntimeProjectionV1,
   type RuntimeVoiceChannelV1,
-  type FloorLeaseV1
+  type FloorLeaseV1,
+  type ProductShellContextV1
 } from "@plenum/event-contracts";
 import type { OfflineCommandV1, OfflineOutboxV1, SyncBootstrapV1 } from "@plenum/event-contracts";
 import {
@@ -82,12 +83,31 @@ function ConnectionBadge({ state }: { state: ConnectionState }) {
   return <span className={`badge badge-${state}`} aria-label={`Connection status: ${label}`}>{label}</span>;
 }
 
+function BrandWordmark() {
+  return <a className="brand-wordmark" href="/" aria-label="Plenum home">
+    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725" />
+    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true" />
+  </a>;
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    localStorage.getItem("plenum.theme") === "dark" ? "dark" : "light");
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("plenum.theme", theme);
+  }, [theme]);
+  return <button className="btn-secondary theme-toggle" type="button"
+    aria-label={`Theme: ${theme}. Use ${theme === "light" ? "dark" : "light"} theme`}
+    onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}>Theme: {theme}</button>;
+}
+
 function Shell({ connection, children }: { connection: ConnectionState; children: ReactNode }) {
   return <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="app-header">
-      <a className="brand" href={window.location.pathname + window.location.search}>Plenum</a>
-      <ConnectionBadge state={connection} />
+      <BrandWordmark />
+      <div className="header-actions"><ThemeToggle /><ConnectionBadge state={connection} /></div>
     </header>
     {children}
   </>;
@@ -111,6 +131,108 @@ function StatePage({ connection, title, message, retry }: {
 const clearsOfflineData = (error: ApiError): boolean =>
   ["ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED", "PERMISSION_DENIED"]
     .includes(error.envelope.error.code);
+
+function ProductEntry() {
+  const [connection, setConnection] = useState<ConnectionState>("loading");
+  const [context, setContext] = useState<ProductShellContextV1 | null>(null);
+  const [unauthenticated, setUnauthenticated] = useState(false);
+  const [message, setMessage] = useState("Checking your secure Plenum session.");
+
+  const load = useCallback(async () => {
+    setConnection("loading");
+    setUnauthenticated(false);
+    setMessage("Checking your secure Plenum session.");
+    try {
+      const next = await api<ProductShellContextV1>("/v1/product-context");
+      setContext(next);
+      setConnection("online");
+      setMessage("Your account and Organization context are current.");
+    } catch (cause) {
+      setContext(null);
+      if (cause instanceof ApiError && cause.status === 401) {
+        setUnauthenticated(true);
+        setConnection("error");
+        setMessage("Sign in with your Organization identity to continue.");
+      } else if (!navigator.onLine || cause instanceof TypeError) {
+        setConnection("offline");
+        setMessage("Plenum cannot reach the secure service. Check your connection and try again.");
+      } else {
+        setConnection("error");
+        setMessage(cause instanceof Error ? cause.message : "Plenum could not load your account context.");
+      }
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const offline = () => { setConnection("offline"); setMessage("You are offline. Account context cannot be refreshed."); };
+    const online = () => void load();
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
+    return () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); };
+  }, [load]);
+
+  const signOut = async () => {
+    try {
+      await api<{ signedOut: true }>("/v1/auth/logout", { method: "POST", body: "{}" });
+      setContext(null);
+      setUnauthenticated(true);
+      setConnection("error");
+      setMessage("You have signed out of Plenum on this device.");
+    } catch (cause) {
+      setConnection("error");
+      setMessage(cause instanceof Error ? cause.message : "Plenum could not complete sign out.");
+    }
+  };
+
+  return <Shell connection={connection}>
+    <main id="main-content" className="product-shell" tabIndex={-1}>
+      <section className="product-intro teludens-path" aria-labelledby="product-title">
+        <p className="eyebrow">Simulation design and delivery</p>
+        <h1 id="product-title">Design with intent. Run with authority.</h1>
+        <p>Plenum carries a simulation from governed design through live delivery and evidence without losing its rules, roles, or release history.</p>
+      </section>
+      <p className="live-region shell-notice" role={connection === "error" ? "alert" : "status"} aria-live="polite">{message}</p>
+      {connection === "loading" ? <section className="card shell-state teludens-state" aria-busy="true">
+        <p className="eyebrow">Loading</p><h2>Opening your workspace</h2><p>Verifying identity and Organization access.</p>
+      </section> : null}
+      {unauthenticated ? <section className="card shell-state teludens-state" data-state="error">
+        <p className="eyebrow">Authentication required</p><h2>Continue to Plenum</h2>
+        <p>Your Organization identity provider controls access. Plenum never asks for your password directly.</p>
+        <div className="actions"><a className="btn-primary link-button" href="/auth/login?returnTo=%2F">Sign in</a><button className="btn-secondary" type="button" onClick={() => void load()}>Try again</button></div>
+      </section> : null}
+      {!unauthenticated && connection === "offline" ? <section className="card shell-state teludens-state" data-state="offline">
+        <p className="eyebrow">Offline</p><h2>Account context is unavailable</h2><p>No protected workspace data is shown while Plenum is disconnected.</p>
+        <button className="btn-secondary" type="button" onClick={() => void load()}>Retry connection</button>
+      </section> : null}
+      {!unauthenticated && connection === "error" ? <section className="card shell-state teludens-state" data-state="error">
+        <p className="eyebrow">Unable to open Plenum</p><h2>Account context did not load</h2><p>Retry safely. No Project or Session was changed.</p>
+        <button className="btn-secondary" type="button" onClick={() => void load()}>Retry</button>
+      </section> : null}
+      {context === null ? null : <div className="shell-grid" data-density="standard">
+        <nav className="card shell-navigation teludens-node" aria-labelledby="navigation-title">
+          <p className="eyebrow">Destinations</p><h2 id="navigation-title">Choose a workspace</h2>
+          <ul>
+            <li><a aria-current="page" href="/">Home<span>Account and Organization context</span></a></li>
+            <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li>
+            <li><a href="/#sessions">Sessions<span>Join from an invitation or Session link</span></a></li>
+            {context.destinations.includes("operations") ? <li><a href="/admin/">Operations<span>Prepare and monitor a Session</span></a></li> : null}
+          </ul>
+        </nav>
+        <section id="sessions" className="card workspace-empty teludens-gate" aria-labelledby="workspace-title">
+          <p className="eyebrow">Current workspace</p><h2 id="workspace-title">No Project or Session selected</h2>
+          <p>Use an invitation or a saved Plenum link to open existing work. Studio and Runtime always preserve their governed identifiers in the address.</p>
+          <div className="actions"><a className="btn-primary link-button" href="/studio/">Open Studio</a><a className="btn-secondary link-button" href="#account-title">View account</a></div>
+        </section>
+        <aside className="card account-context teludens-branch" aria-labelledby="account-title">
+          <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
+          <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Member"}</dd></div></dl>
+          <button className="btn-secondary" type="button" onClick={() => void signOut()}>Sign out</button>
+        </aside>
+      </div>}
+    </main>
+  </Shell>;
+}
 
 async function submitQueuedCommand(sessionId: string, command: CommandEnvelopeV1): Promise<CommandReceiptV1> {
   try {
@@ -1208,5 +1330,7 @@ function OperatorView() {
 
 export function App() {
   const operator = useMemo(() => window.location.pathname.startsWith("/admin/"), []);
+  const productEntry = useMemo(() => window.location.pathname === "/" && sessionId() === null, []);
+  if (productEntry) return <ProductEntry />;
   return operator ? <OperatorView /> : <RuntimeView />;
 }

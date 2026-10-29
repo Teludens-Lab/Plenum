@@ -1,25 +1,26 @@
-# Plenum Studio development promptbook v1.3
+# Plenum Studio development promptbook v1.4
 
 ## Executive summary
 
-This promptbook schedules the complete first release described by PRD v0.7.3 and Roadmap v1.3.2 as 31 dependency-ordered tasks across Phases 0-6. It generates implementation instructions only; it does not implement, deploy, ratify, or release the application.
+This promptbook now schedules 48 dependency-ordered tasks across P00-P11. P00-P06 built and verified the platform's principal technical slices; P07-P11 close the remaining product, workflow, user-interface, operational and acceptance gaps needed for a genuinely usable platform. It generates implementation instructions only; it does not claim that planned completion work is already implemented, deployed, ratified or released.
 
-The executable baseline is `references/plenum-runtime-slice/` v0.2.0; its upstream source revision was not recorded, so it remains observed spike evidence rather than a golden source. Separately, the Product Owner confirmed Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the official immutable golden reference; its verified export is under `references/fractured-order/`. Historical evidence from 2026-10-17 reports 12 unit, 31 HTTP smoke, and 7 database checks passing on PostgreSQL 16. During promptbook generation, the 12 unit tests and syntax checks passed on Node 22.16.0, but that runtime is below the slice's Node 24 floor. PostgreSQL 18, browser, accessibility, load, offline, air-gap, and restore checks were not run in this generation environment.
+The retained executable spike remains `references/plenum-runtime-slice/` v0.2.0 and is not a golden source. The Product Owner confirmed Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the immutable behavioral reference under `references/fractured-order/`. P00-P05 now have extensive Node 24/PostgreSQL 18/browser/accessibility/deployment evidence recorded in `PROJECT_STATE.md`, culminating in PS-550 engineering completion and a production NO-GO. That evidence proves technical slices, not the complete user-facing product; P07-P11 close that distinction explicitly.
 
 ## Finished-system definition
 
-The implementation target is Roadmap section 12: Fractured Order and a basic new simulation run from published Releases; Studio supports collaborative visual authoring; Runtime renders role-specific interfaces and enforces configured workflows and communications; evidence and reports are traceable; Polls include Certification and secret-ballot behavior; Voice Channels support all four modes and consent-based transcription; and the full Extension Framework installs, composes, runs, and approves Plugins in disconnected deployments. Release approval remains separate from implementation completion.
+The implementation target is a blank-install, UI-only lifecycle: a non-programming Designer can create or import and visually verify Fractured Order, publish a Release, staff and run a Session, complete all role workflows, adjudicate and recover, and produce traceable evidence, reports, replay and archive. The same platform must then author and run two materially different simulations without Runtime code changes. Every product surface uses the Teludens catalog under `references/teludens-design-system-catalog/`, including the complete Fractured Order experience, and uses its dark/light Plenum wordmarks as platform branding. Release approval remains separate from implementation completion.
 
 ## Deliverable map
 
 - `tasks.json` and `task.schema.json`: canonical machine-readable task set.
-- `prompts/P00` through `prompts/P06`: ready-to-paste Codex prompts.
+- `prompts/P00` through `prompts/P11`: ready-to-paste Codex prompts.
+- `PRODUCT_COMPLETENESS_MATRIX.md`: fail-closed zero-gap definition, Teludens UI/branding contract, coverage ledger and immediate user-test cadence.
 - `REQUIREMENTS_TRACEABILITY.md`: complete REQ-001..094 and INV-001..028 mapping.
 - `DEPENDENCY_GRAPH.md`: acyclic task graph and unratified labels.
 - `COMMAND_REGISTRY.md`: verified versus proposed commands.
 - `PROJECT_STATE.md`: current observed maturity and next task.
 - `RELEASE_GAP_PROMPTBOOK.md`: ready-to-use work packages for closing the remaining production approval gaps without replacing the PS task graph.
-- `TELUDENS_RUNTIME_MIGRATION_PROMPTBOOK.md`: supplemental, dependency-ordered prompts for preserving Fractured Order's operational identity while migrating Runtime and Studio preview presentation to Teludens.
+- `TELUDENS_RUNTIME_MIGRATION_PROMPTBOOK.md`: historical detailed migration guide; canonical P07-P11 tasks now control Teludens sequencing and acceptance.
 - `PROMPTBOOK_VALIDATION_REPORT.md`: structural, coverage, cycle, and sample-task QA.
 - Other matrices and gates provide architecture, deployment, compatibility, security, recovery, migration, change-control, and release context without replacing their authoritative corpus documents.
 
@@ -34,6 +35,11 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 | P04 | Advanced logic and Slice S4 (Release activation) | P03 proof | Active workflows remain pinned; compatible live change works; two contrasting simulations run without Runtime edits | OPEN-004/005/006/008/010/012/018/022/026 where semantics are required |
 | P05 | S2 offline, S5 evidence, S6 deployment, S7 load, reporting, and release assurance | P04 generalization | S2, S5, S6, S7 evidence and owner go/no-go package | Implement and evidence the resolved owner, retention, security, recovery, capacity and restricted-feature policies |
 | P06 | Approved production Plugin catalog expansion | First-release framework released | Each Plugin has independent contract, security, license, profile, and lifecycle approval | First OPEN-011 candidate approved; Artifact evidence and resolved OPEN-022/029 controls still apply |
+| P07 | Teludens product entry and lifecycle | PS-550 engineering baseline | Root entry, authentication, Organization/Project/Template/Release/Session flows and a completeness ledger are immediately user-testable | No internal-ID, fixture-only, legacy-brand or non-Teludens entry dependency |
+| P08 | Specification-complete Studio | P07 lifecycle shell | Every Studio section 3-27 is reachable, visually authorable, previewable, reviewable, rehearsable and publishable | Any raw JSON/SQL requirement, missing workspace or incomplete state blocks exit |
+| P09 | Complete Runtime and operations | Published Release from P08 | Participant, Operator, Admin, Reviewer, Publisher and Research roles complete their jobs in role-appropriate Teludens interfaces | Any CLI-only core operation, missing recovery or authorization gap blocks exit |
+| P10 | Product and operational hardening | P08/P09 workflows | All routes conform to Teludens; UI states, CI, observability, security, install, upgrade, recovery and manual accessibility pass | Missing visual/state evidence or external control remains a no-go |
+| P11 | Golden journey, UAT and release | P10 evidence | Blank-install Fractured Order journey, two-simulation generalization, no-gap audit and exact-artifact owner decision | Every applicable ledger row must be PASS; deployment remains separately authorized |
 
 ## Status by authority
 
@@ -45,11 +51,11 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 
 ## Coverage and exclusions
 
-- Vertical tasks: 31.
+- Vertical tasks: 48 (32 P00-P06 tasks plus 16 product-completion tasks in P07-P11).
 - Normative coverage: 94/94 REQs and 28/28 INVs.
 - Product exclusions preserved: AI-assisted authoring, ranked-choice voting, video, feedback loops, public Plugin marketplace, arbitrary custom code, mandatory Kubernetes, and unsupported production claims.
 - Dependency cycles: none, verified by the promptbook validator.
 
 ## Exact next runnable prompt
 
-Run [PS-000 - Pin and classify the Fractured Order reference](prompts/P00/PS-000-pin-and-audit-fractured-order.md) next; its owner-approved source pin is now satisfied and it produces the inventory required by PS-200. [PS-001 - Verify the v0.2 slice on Node 24 and PostgreSQL 18](prompts/P00/PS-001-verify-reference-slice-on-supported-stack.md) is independently runnable in parallel, but its preflight still needs Node 24+ and PostgreSQL 18.
+Run [PS-700 - Ship the Teludens design foundation, testable entry shell, and completeness ledger](prompts/P07/PS-700-ship-testable-entry-shell-and-completeness-ledger.md) next. It is the only recorded ready task and creates the shared Teludens UI foundation, official Plenum branding, root-entry smoke path, product E2E command and fail-closed completeness ledger used by all later completion tasks.

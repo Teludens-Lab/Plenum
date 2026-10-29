@@ -7,7 +7,7 @@
 - Goal: Remove the measured command and radio-Floor bottlenecks and pass the approved capacity profile without weakening authority or integrity.
 - User outcome: Participants receive timely command receipts and Floor decisions under the approved workload, with repeatable evidence rather than a waiver.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -127,9 +127,9 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 ## Validation commands
 
-Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-LOAD-APP`, `CMD-LOAD-VOTING`, `CMD-LOAD-VOICE`, `CMD-LOAD-EXTENSIONS`, `CMD-PROMPTBOOK-VALIDATE`.
+Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-LOAD-SOAK`, `CMD-LOAD-APP`, `CMD-LOAD-VOTING`, `CMD-LOAD-VOICE`, `CMD-LOAD-EXTENSIONS`, `CMD-PROMPTBOOK-VALIDATE`.
 
-Run only commands whose registry status is **Verified**. For a **Proposed** command, first complete the named creating task; do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
+Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
 ## Regression and quality gates
 

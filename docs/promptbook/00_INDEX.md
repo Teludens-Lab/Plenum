@@ -58,4 +58,4 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Exact next runnable prompt
 
-Run [PS-700 - Ship the Teludens design foundation, testable entry shell, and completeness ledger](prompts/P07/PS-700-ship-testable-entry-shell-and-completeness-ledger.md) next. It is the only recorded ready task and creates the shared Teludens UI foundation, official Plenum branding, root-entry smoke path, product E2E command and fail-closed completeness ledger used by all later completion tasks.
+Run [PS-710 - Complete Organization, Project, and Template workflows](prompts/P07/PS-710-complete-organization-project-template-workflows.md) next. It is the only recorded ready task. PS-700 is verified with automated evidence and a completed nine-step product-owner smoke; PS-710 now makes the first governed product lifecycle operable without fixture identifiers or direct SQL.

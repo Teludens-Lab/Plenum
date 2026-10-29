@@ -4495,7 +4495,7 @@
     ],
     "risk": "high",
     "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
-    "implementation_state": "implemented",
+    "implementation_state": "verified",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
@@ -4641,8 +4641,8 @@
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
     ],
     "depends_on_unratified": [],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "migration_ids": [
       "026_product_portal"
     ],

@@ -130,6 +130,7 @@
 .teludens-gate { border: 1px solid var(--boundary-strong); background: var(--material-surface-recessed); }
 .teludens-state { border-inline-start: 3px solid var(--signal-info); }
 .teludens-state[data-state="error"] { border-inline-start-color: var(--signal-error); }
+.teludens-state[data-state="unauthorized"] { border-inline-start-color: var(--signal-caution); }
 .teludens-state[data-state="offline"] { border-inline-start-color: var(--signal-caution); }
 .teludens-state[data-state="ready"] { border-inline-start-color: var(--signal-success); }
 

@@ -7,7 +7,7 @@
 - Goal: Make the first half of the product lifecycle operable from the UI without fixture IDs or direct SQL.
 - User outcome: Authorized users can manage their Organization context, create and find Projects, start from a blank design or Template, and resume recent work.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

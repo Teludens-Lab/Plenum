@@ -2,7 +2,9 @@
 
 ## Current status
 
-**BLOCKED:** Plenum does not yet have a persistent local, staging, or deployed URL. The automated test server used for PS-700 starts only during Playwright execution and shuts down afterward; it is not a user-accessible environment. Do not begin this smoke test until a stable URL and approved test identity are provided.
+**PASS:** The product owner completed all nine steps on 2026-10-29 in Google Chrome on Windows using the persistent loopback-only user-test environment at `http://127.0.0.1:4173/` and the approved synthetic Publisher identity.
+
+The local harness simulates identity-provider return without requesting a password in Plenum. It is not evidence of a live institutional identity-provider integration or a deployed environment.
 
 Preconditions after the environment is provisioned: a supported clean browser, the exact Plenum base URL, and one synthetic or approved institutional account. Do not use developer tools or paste a UUID.
 
@@ -17,3 +19,19 @@ Preconditions after the environment is provisioned: a supported clean browser, t
 9. Choose **Sign out**. Confirm the authenticated account context disappears and the sign-in state returns.
 
 Record PASS/FAIL per step, browser/OS, viewport, account type, date, tester, and any defect. Automated execution is evidence of behavior, not a substitute for independent human usability or assistive-technology acceptance.
+
+## Execution record
+
+Date: 2026-10-29. Environment: Windows, loopback local user-test server. Account: Synthetic Publisher. Tester: product owner. Browser: Google Chrome. Screenshots were supplied in the product-owner conversation; automated supporting evidence is under `output/playwright/ps-700/`.
+
+| Step | Result | Evidence / defect |
+|---|---|---|
+| 1 | PASS | Official Plenum wordmark and “Design with intent. Run with authority.” visible at `/`. |
+| 2 | PASS (local harness) | Sign-in returned the approved synthetic identity without a Plenum password form; live institutional IdP behavior remains outside this local proof. |
+| 3 | PASS | Synthetic Publisher, PS-150 synthetic organization and authorized Organization Roles were visible. |
+| 4 | PASS | Product owner confirmed the first Tab exposes “Skip to main content” at the top left and focus remains visible through continued keyboard traversal. |
+| 5 | PASS | Dark theme screenshot shows the correct legible Plenum wordmark. |
+| 6 | PASS | Studio displayed “No Project selected” and “Return to Plenum home.” |
+| 7 | PASS | Offline screenshot shows the Offline status, omitted account data and Retry connection; the subsequent Connected screenshot shows the Synthetic Publisher context restored. |
+| 8 | PASS | Product-owner narrow and 200-percent screenshots show readable reflow, intact actions and no page-wide horizontal overflow. |
+| 9 | PASS | Signed-out screenshot shows no account context and the corrected “Sign-in required” status. The prior false “Connection error” defect was fixed and regression-tested. |

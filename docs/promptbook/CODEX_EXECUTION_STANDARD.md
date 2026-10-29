@@ -11,7 +11,7 @@ Roadmap section 16 applies first: anyone changing code reads the requirement row
 3. Supply any required human inputs named under `depends_on_unratified`; do not silently promote Assumed/Proposed items.
 4. Ask for implementation, verification, and handoff. A commit remains optional and requires explicit workflow authorization.
 
-The current first eligible prompt is PS-700. P00-P05 are historical implemented/verified slices and PS-600 remains an optional post-release Plugin catalog expansion. PS-700 begins the product-completion sequence and must establish the Teludens design foundation, official Plenum branding, public entry smoke test and completeness ledger before downstream UI work.
+The current first eligible prompt is PS-710. P00-P05 and PS-700 are implemented/verified slices, and PS-600 remains an optional post-release Plugin catalog expansion. PS-710 begins the governed Organization, Project and Template workflow build on the verified Teludens foundation, official Plenum branding, public entry smoke path and completeness ledger established by PS-700.
 
 For every P07-P11 task, read `PRODUCT_COMPLETENESS_MATRIX.md` and the cited files under `references/teludens-design-system-catalog/`. A task is not user-complete because an API or deep-linked fixture works: its public UI path, applicable states, authorization, responsive/accessibility behavior and short task-based user test must pass. Fractured Order uses the shared Teludens Plenum shell and official catalog wordmarks; simulation-specific chrome or legacy branding is a failed gate.
 

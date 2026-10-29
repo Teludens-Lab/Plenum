@@ -147,7 +147,7 @@ graph TD
 | PS-550 | P05 | PS-510, PS-520, PS-530, PS-540, PS-545 | - | No |
 | PS-600 | P06 | PS-550 | - | No |
 | PS-700 | P07 | PS-550 | - | No |
-| PS-710 | P07 | PS-700 | - | No |
+| PS-710 | P07 | PS-700 | - | Yes |
 | PS-720 | P07 | PS-710 | - | No |
 | PS-730 | P08 | PS-720 | OPEN-004 | No |
 | PS-740 | P08 | PS-730 | OPEN-010 | No |

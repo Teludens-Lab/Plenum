@@ -29,8 +29,11 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
+  await expect(page.getByText("Connection error", { exact: true })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
   await context.close();
 });
 
@@ -73,6 +76,7 @@ test("PS-700-T02 clean, unauthorized, offline, narrow, and 200-percent-text stat
   const cleanPage = await clean.newPage();
   await cleanPage.goto("/");
   await expect(cleanPage.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await expect(cleanPage.getByLabel("Plenum status: Sign-in required")).toBeVisible();
   await expect(cleanPage.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/auth/login?returnTo=%2F");
   await expect(cleanPage.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await cleanPage.screenshot({ path: `${evidenceRoot}/root-unauthorized-narrow.png`, fullPage: true });

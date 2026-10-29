@@ -19,7 +19,7 @@ Date: 2026-10-29. Environment: Windows, Node 24.22.1, npm 11.19.1, disposable Po
 | `CMD-PLATFORM-LINT` | `npm run lint` | PASS | 63 sources, 37 contracts, acyclic workspaces |
 | `CMD-PLATFORM-TYPECHECK` | `npm run typecheck` | PASS | exit 0 |
 | `CMD-PLATFORM-TEST` | `npm test -- --run` | PASS | 104/104 |
-| `CMD-PRODUCT-E2E` | `npm run test:e2e:product` | PASS | 3/3 in 31.8s; `PS-700-T01`, `PS-700-T02`, deep-link regression; `output/playwright/ps-700/` |
+| `CMD-PRODUCT-E2E` | `npm run test:e2e:product` | PASS | 4/4; local synthetic sign-in/sign-out, `PS-700-T01`, `PS-700-T02`, deep-link regression; `output/playwright/ps-700/` |
 | `CMD-GAP-AUDIT` | `npm run audit:product-completeness` | PASS | 228 obligations; deliberate omission detected |
 | `CMD-PLATFORM-A11Y` | `npm run test:a11y` | PASS | 11/11 in 3.7m |
 | `CMD-TELUDENS-AUDIT` | `npm run audit:teludens-ui` | PASS | semantic map, density, grammar, motion, exact asset hashes |
@@ -32,6 +32,6 @@ All six images listed in `docs/design/VISUAL_QA.md` were inspected after the pas
 
 ## Status and residual gates
 
-PS-700 is implementation-complete with automated evidence. Independent human execution of `docs/acceptance/PS-700-user-smoke.md` is **BLOCKED** because no persistent local, staging, or deployed URL exists. The transient Playwright server is not a user-test environment. Change-level human acceptance and production approval are not claimed. Manual screen-reader/assistive-technology review remains part of later release assurance.
+PS-700 change-level acceptance is **PASS**. The product owner completed all nine smoke steps in Google Chrome on Windows against the persistent loopback-only user-test server and approved synthetic Publisher identity. Evidence includes branding, synthetic sign-in and authorized context, visible keyboard focus and skip navigation, theme-safe wordmark, Studio recovery, protected-data omission while offline, reconnect recovery, narrow and 200-percent reflow, and clean sign-out. The false “Connection error” status after successful sign-out was fixed by introducing the Teludens unauthorized state and is covered by the 4/4 product E2E run. Production approval is not claimed. Manual screen-reader/assistive-technology review remains part of later release assurance.
 
 Rollback is a bounded revert of the design-system package, brand assets, root UI route, additive read/logout endpoints, product tests and documentation. No data rollback or forward-fix is required.

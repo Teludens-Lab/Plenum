@@ -42,7 +42,7 @@ import { VoiceControls } from "./voice/VoiceControls.js";
 import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
 import { OfflineRuntimeStore } from "./offline/storage.js";
 
-type ConnectionState = "loading" | "online" | "offline" | "error";
+type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
 const DEVICE_STORAGE_KEY = "plenum.runtime.deviceId";
 const offlineStore = new OfflineRuntimeStore();
@@ -79,8 +79,12 @@ function sessionId(): string | null {
 }
 
 function ConnectionBadge({ state }: { state: ConnectionState }) {
-  const label = state === "online" ? "Connected" : state === "loading" ? "Connecting" : state === "offline" ? "Offline" : "Connection error";
-  return <span className={`badge badge-${state}`} aria-label={`Connection status: ${label}`}>{label}</span>;
+  const label = state === "online" ? "Connected"
+    : state === "loading" ? "Connecting"
+      : state === "offline" ? "Offline"
+        : state === "unauthorized" ? "Sign-in required"
+          : "Connection error";
+  return <span className={`badge badge-${state}`} aria-label={`Plenum status: ${label}`}>{label}</span>;
 }
 
 function BrandWordmark() {
@@ -151,7 +155,7 @@ function ProductEntry() {
       setContext(null);
       if (cause instanceof ApiError && cause.status === 401) {
         setUnauthenticated(true);
-        setConnection("error");
+        setConnection("unauthorized");
         setMessage("Sign in with your Organization identity to continue.");
       } else if (!navigator.onLine || cause instanceof TypeError) {
         setConnection("offline");
@@ -177,7 +181,7 @@ function ProductEntry() {
       await api<{ signedOut: true }>("/v1/auth/logout", { method: "POST", body: "{}" });
       setContext(null);
       setUnauthenticated(true);
-      setConnection("error");
+      setConnection("unauthorized");
       setMessage("You have signed out of Plenum on this device.");
     } catch (cause) {
       setConnection("error");
@@ -196,7 +200,7 @@ function ProductEntry() {
       {connection === "loading" ? <section className="card shell-state teludens-state" aria-busy="true">
         <p className="eyebrow">Loading</p><h2>Opening your workspace</h2><p>Verifying identity and Organization access.</p>
       </section> : null}
-      {unauthenticated ? <section className="card shell-state teludens-state" data-state="error">
+      {unauthenticated ? <section className="card shell-state teludens-state" data-state="unauthorized">
         <p className="eyebrow">Authentication required</p><h2>Continue to Plenum</h2>
         <p>Your Organization identity provider controls access. Plenum never asks for your password directly.</p>
         <div className="actions"><a className="btn-primary link-button" href="/auth/login?returnTo=%2F">Sign in</a><button className="btn-secondary" type="button" onClick={() => void load()}>Try again</button></div>

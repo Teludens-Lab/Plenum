@@ -1,0 +1,161 @@
+name: plenum-functional-free
+
+services:
+  database:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: plenum
+      POSTGRES_USER: plenum
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets: [postgres-password]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U plenum -d plenum]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: ${application_image}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export PGPASSWORD="$$(cat /run/secrets/postgres-password)"
+        psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
+          'CREATE TABLE IF NOT EXISTS public.plenum_schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())'
+        for migration in /app/references/plenum-runtime-slice/migrations/*.sql /app/apps/server/migrations/*.sql; do
+          name="$$(basename "$${migration}")"
+          applied="$$(psql --host database --username plenum --dbname plenum --tuples-only --no-align --command \
+            "SELECT 1 FROM public.plenum_schema_migrations WHERE name = '$${name}'")"
+          if [ "$${applied}" != "1" ]; then
+            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --file "$${migration}"
+            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
+              "INSERT INTO public.plenum_schema_migrations(name) VALUES ('$${name}')"
+          fi
+        done
+    secrets: [postgres-password]
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: no
+
+  identity:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export KC_BOOTSTRAP_ADMIN_PASSWORD="$$(cat /run/secrets/keycloak-admin-password)"
+        export KC_DB_PASSWORD="$$(cat /run/secrets/postgres-password)"
+        exec /opt/keycloak/bin/kc.sh start --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: plenum-admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://database:5432/plenum
+      KC_DB_USERNAME: plenum
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: https://${identity_hostname}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+    secrets: [postgres-password, keycloak-admin-password]
+    volumes: [/etc/plenum/realm-plenum.json:/opt/keycloak/data/import/realm-plenum.json:ro]
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  identity-bootstrap:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        until /opt/keycloak/bin/kcadm.sh config credentials --server http://identity:8080 --realm master \
+          --user plenum-admin --password "$$(cat /run/secrets/keycloak-admin-password)"; do sleep 3; done
+        /opt/keycloak/bin/kcadm.sh set-password --server http://identity:8080 --realm plenum \
+          --userid ${person_id} --new-password "$$(cat /run/secrets/test-user-password)"
+    secrets: [keycloak-admin-password, test-user-password]
+    depends_on:
+      identity:
+        condition: service_started
+    restart: no
+
+  data-bootstrap:
+    image: ${application_image}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export PGPASSWORD="$$(cat /run/secrets/postgres-password)"
+        psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 <<'SQL'
+        INSERT INTO identity.organizations(id, name) VALUES ('${organization_id}', 'Plenum Staging') ON CONFLICT (id) DO NOTHING;
+        INSERT INTO identity.persons(id, display_name) VALUES ('${person_id}', '${test_username}') ON CONFLICT (id) DO NOTHING;
+        INSERT INTO identity.memberships(organization_id, person_id, organization_role)
+          VALUES ('${organization_id}', '${person_id}', 'admin') ON CONFLICT DO NOTHING;
+        INSERT INTO identity.federated_identities(id, organization_id, person_id, issuer, subject, provider_type)
+          VALUES ('${person_id}', '${organization_id}', '${person_id}', '${oidc_issuer}', '${person_id}', 'oidc')
+          ON CONFLICT (organization_id, issuer, subject) DO NOTHING;
+        SQL
+    secrets: [postgres-password]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      identity-bootstrap:
+        condition: service_completed_successfully
+    restart: no
+
+  media:
+    image: livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a
+    command: [--config, /etc/livekit.yaml, --key-file, /run/secrets/livekit-keys.yaml]
+    secrets: [livekit-keys]
+    volumes: [/etc/plenum/livekit.yaml:/etc/livekit.yaml:ro]
+    ports:
+      - 7881:7881/tcp
+      - 50000-50100:50000-50100/udp
+    restart: unless-stopped
+
+  application:
+    image: ${application_image}
+    environment:
+%{ for key, value in environment ~}
+      ${key}: ${jsonencode(value)}
+%{ endfor ~}
+      PLENUM_SECRET_BUNDLE_FILE: /run/secrets/application.json
+    secrets:
+      - source: application
+        target: application.json
+    depends_on:
+      data-bootstrap:
+        condition: service_completed_successfully
+      identity:
+        condition: service_started
+      media:
+        condition: service_started
+    restart: unless-stopped
+
+  ingress:
+    image: caddy:2.11.1-alpine@sha256:3b2a0196e0687279c14c27adff9fc6b44acfa318dbb97eaebe385bdf99e5364c
+    ports:
+      - 80:80/tcp
+      - 443:443/tcp
+    volumes:
+      - /etc/plenum/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [application, identity, media]
+    restart: unless-stopped
+
+secrets:
+  application:
+    file: /etc/plenum/secrets/application.json
+  postgres-password:
+    file: /etc/plenum/secrets/postgres-password
+  keycloak-admin-password:
+    file: /etc/plenum/secrets/keycloak-admin-password
+  test-user-password:
+    file: /etc/plenum/secrets/test-user-password
+  livekit-keys:
+    file: /etc/plenum/secrets/livekit-keys.yaml
+
+volumes:
+  postgres-data: {}
+  caddy-data: {}
+  caddy-config: {}

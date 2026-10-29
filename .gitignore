@@ -6,6 +6,16 @@
 *.pem
 *.key
 
+# Terraform/OpenTofu local state, plans, caches, and uncommitted inputs
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.auto.tfvars
+deploy/oci/.plans/
+deploy/oci/.tools/
+deploy/oci/local/
+
 # Dependencies and virtual environments
 node_modules/
 .venv/

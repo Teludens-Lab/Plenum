@@ -16,6 +16,9 @@ import { fixture } from "./fixture.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
+const localUserTest = process.argv.includes("--local-user-test");
+const localUserTestCookie = "plenum_ps700_identity=publisher";
+const localOfflineCookie = "plenum_ps700_offline=1";
 const pool = createDatabasePool(databaseUrl);
 const fakeMediaAdapter = {
   id: "e2e-local-media",
@@ -78,9 +81,13 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
 const authenticate = async (request, correlationId) => {
   const authorization = request.headers.authorization;
-  const principal = typeof authorization === "string" && authorization.startsWith("Bearer ")
-    ? principals[authorization.slice(7)]
+  const cookieIdentity = localUserTest && request.headers.cookie?.split(";").map((value) => value.trim()).includes(localUserTestCookie)
+    ? fixture.tokens.publisher
     : undefined;
+  const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+    ? authorization.slice(7)
+    : cookieIdentity;
+  const principal = token === undefined ? undefined : principals[token];
   if (principal === undefined) throw authorizationError("UNAUTHENTICATED", "A valid test identity is required.", correlationId);
   return principal;
 };
@@ -99,6 +106,38 @@ const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.m
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
 
 const server = createServer(async (request, response) => {
+  const requestUrl = new URL(request.url ?? "/", "http://localhost");
+  if (localUserTest && request.method === "GET" && requestUrl.pathname === "/__test__/offline") {
+    response.writeHead(303, { location: "/", "set-cookie": `${localOfflineCookie}; Path=/; HttpOnly; SameSite=Strict` });
+    response.end();
+    return;
+  }
+  if (localUserTest && request.method === "GET" && requestUrl.pathname === "/__test__/online") {
+    response.writeHead(303, {
+      location: "/",
+      "set-cookie": "plenum_ps700_offline=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+    });
+    response.end();
+    return;
+  }
+  const localOffline = localUserTest && request.headers.cookie?.split(";").map((value) => value.trim()).includes(localOfflineCookie);
+  if (localOffline && requestUrl.pathname.startsWith("/v1/")) {
+    request.socket.destroy();
+    return;
+  }
+  if (localUserTest && request.method === "GET" && requestUrl.pathname === "/auth/login") {
+    const requestedReturn = requestUrl.searchParams.get("returnTo");
+    const returnTo = requestedReturn?.startsWith("/") && !requestedReturn.startsWith("//") ? requestedReturn : "/";
+    response.writeHead(303, {
+      location: returnTo,
+      "set-cookie": `${localUserTestCookie}; Path=/; HttpOnly; SameSite=Strict`
+    });
+    response.end();
+    return;
+  }
+  if (localUserTest && request.method === "POST" && requestUrl.pathname === "/v1/auth/logout") {
+    response.setHeader("set-cookie", "plenum_ps700_identity=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+  }
   if (request.method === "POST" && request.url === "/__test__/shutdown") {
     response.writeHead(204);
     response.end();
@@ -124,7 +163,9 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
   if (!handled) socket.destroy();
 }));
 
-server.listen(4173, "127.0.0.1", () => console.log("PS-150 browser fixture listening on http://127.0.0.1:4173"));
+server.listen(4173, "127.0.0.1", () => console.log(
+  `${localUserTest ? "PS-700 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
+));
 
 let closing = false;
 async function close() {

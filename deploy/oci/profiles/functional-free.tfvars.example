@@ -1,0 +1,36 @@
+deployment_profile = "functional-free"
+region             = "us-ashburn-1"
+tenancy_ocid       = "ocid1.tenancy.oc1..REPLACE"
+compartment_ocid   = "ocid1.compartment.oc1..REPLACE"
+
+# Replace this with the published manifest-list digest, not an architecture-specific digest or tag.
+application_image   = "ghcr.io/teludens-lab/plenum@sha256:REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+application_release = "plenum-0.1.0"
+application_platforms = ["linux/amd64", "linux/arm64"]
+
+# OCID only. The OCI Vault secret value is {"username":"GITHUB_USER","password":"READ_PACKAGES_PAT"}.
+image_pull_secret_ocid = "ocid1.vaultsecret.oc1.iad.REPLACE"
+
+application_hostname = "staging.plenum.example"
+identity_hostname    = "identity.staging.plenum.example"
+media_hostname       = "media.staging.plenum.example"
+admin_cidr           = "203.0.113.10/32"
+ssh_authorized_key   = "ssh-ed25519 REPLACE_WITH_PUBLIC_KEY_ONLY"
+
+application_contract = {
+  deployment_id             = "plenum-staging"
+  retention_actor_person_id = "00000000-0000-4000-8000-000000000001"
+  oidc_provider_key         = "plenum-staging"
+  oidc_organization_id      = "00000000-0000-4000-8000-000000000002"
+  oidc_client_id            = "plenum"
+  s3_region                 = "us-ashburn-1"
+  media_adapter_digest      = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+}
+
+# These defaults are deliberate hard ceilings for this tenancy's free staging profile.
+free_shape           = "VM.Standard.A1.Flex"
+free_availability_domain_index = 0
+free_ocpus           = 2
+free_memory_gbs      = 12
+free_boot_volume_gbs = 50
+allow_billable_resources = false

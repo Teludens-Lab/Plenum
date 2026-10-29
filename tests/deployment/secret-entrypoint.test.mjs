@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { parseSecretBundle, readSecretBundle, SECRET_KEYS } from "../../deploy/compose/secret-entrypoint.mjs";
+
+const valid = Object.fromEntries(SECRET_KEYS.map((key) => [key, `${key.toLowerCase()}-test-value`]));
+
+test("secret bundle accepts only the complete allowlisted contract", () => {
+  assert.deepEqual(parseSecretBundle(JSON.stringify(valid)), valid);
+  assert.throws(() => parseSecretBundle(JSON.stringify({ ...valid, EXTRA: "no" })), /Unknown Plenum secret keys/u);
+  const incomplete = { ...valid };
+  delete incomplete.DATABASE_URL;
+  assert.throws(() => parseSecretBundle(JSON.stringify(incomplete)), /Missing Plenum secret keys: DATABASE_URL/u);
+});
+
+test("file secret source is loaded without exposing a second source", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "plenum-secret-test-"));
+  const path = join(directory, "bundle.json");
+  await writeFile(path, JSON.stringify(valid), { mode: 0o600 });
+  assert.deepEqual(await readSecretBundle({ PLENUM_SECRET_BUNDLE_FILE: path }), valid);
+  await assert.rejects(
+    readSecretBundle({ PLENUM_SECRET_BUNDLE_FILE: path, PLENUM_SECRET_BUNDLE_OCID: "ocid1.vaultsecret.test" }),
+    /one Plenum secret-bundle source/u
+  );
+});

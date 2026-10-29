@@ -16,5 +16,5 @@ RUN rm -rf node_modules/@plenum && mkdir -p node_modules/@plenum \
 USER 65532:65532
 ENV NODE_ENV=production
 ENTRYPOINT ["node"]
-CMD ["deploy/compose/profile-service.mjs"]
+CMD ["deploy/compose/secret-entrypoint.mjs"]
 

@@ -15,6 +15,25 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
 
 test.beforeAll(async () => mkdir(evidenceRoot, { recursive: true }));
 
+test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/");
+  await page.getByRole("link", { name: "Sign in" }).click();
+  await expect(page).toHaveURL("http://127.0.0.1:4173/");
+  await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
+  await page.goto("/__test__/offline");
+  await expect(page.getByRole("heading", { name: "Account context is unavailable" })).toBeVisible();
+  await expect(page.getByText("PS-150 synthetic organization")).toHaveCount(0);
+  await page.goto("/__test__/online");
+  await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await context.close();
+});
+
 test("PS-700-T01 authenticated root is useful, branded, responsive, and accessible @a11y", async ({ browser }) => {
   const { context, page } = await actor(browser, fixture.tokens.operator);
   await page.goto("/");

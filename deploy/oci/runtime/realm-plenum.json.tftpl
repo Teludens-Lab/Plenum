@@ -1,0 +1,31 @@
+{
+  "realm": "plenum",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "defaultSignatureAlgorithm": "RS256",
+  "users": [
+    {
+      "id": "${test_user_id}",
+      "username": "${test_username}",
+      "enabled": true,
+      "emailVerified": true
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "${oidc_client_id}",
+      "name": "Plenum",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://${application_hostname}/auth/callback"],
+      "webOrigins": ["https://${application_hostname}"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    }
+  ]
+}

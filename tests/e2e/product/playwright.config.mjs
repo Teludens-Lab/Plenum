@@ -18,7 +18,7 @@ export default defineConfig({
     trace: "retain-on-failure"
   },
   webServer: {
-    command: "node ../runtime-server.mjs",
+    command: "node ../runtime-server.mjs --local-user-test",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
     timeout: 30_000

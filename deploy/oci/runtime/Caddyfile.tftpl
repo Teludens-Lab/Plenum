@@ -1,0 +1,24 @@
+{
+  admin off
+  servers {
+    protocols h1 h2
+  }
+}
+
+${application_hostname} {
+  encode zstd gzip
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  reverse_proxy application:8080
+}
+
+${identity_hostname} {
+  encode zstd gzip
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  reverse_proxy identity:8080
+}
+
+${media_hostname} {
+  encode zstd gzip
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  reverse_proxy media:7880
+}

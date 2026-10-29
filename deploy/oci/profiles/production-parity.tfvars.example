@@ -1,0 +1,37 @@
+deployment_profile = "production-parity"
+region             = "us-ashburn-1"
+tenancy_ocid       = "ocid1.tenancy.oc1..REPLACE"
+compartment_ocid   = "ocid1.compartment.oc1..REPLACE"
+
+# This must be the same manifest-list digest validated in functional-free.
+application_image     = "ghcr.io/teludens-lab/plenum@sha256:REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+application_release   = "plenum-0.1.0"
+application_platforms = ["linux/amd64", "linux/arm64"]
+
+# Shared with functional-free; only this OCI Vault secret OCID enters Terraform.
+image_pull_secret_ocid = "ocid1.vaultsecret.oc1.iad.REPLACE"
+
+application_hostname = "staging.plenum.example"
+identity_hostname    = "identity.staging.plenum.example"
+media_hostname       = "media.staging.plenum.example"
+oidc_issuer          = "https://identity.example/realms/plenum"
+media_url            = "wss://media.example"
+
+application_contract = {
+  deployment_id             = "plenum-staging"
+  retention_actor_person_id = "00000000-0000-4000-8000-000000000001"
+  oidc_provider_key         = "plenum-staging"
+  oidc_organization_id      = "00000000-0000-4000-8000-000000000002"
+  oidc_client_id            = "plenum"
+  s3_region                 = "us-ashburn-1"
+  media_adapter_digest      = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+}
+
+# OCIDs are identifiers only. Secret values remain inside OCI Vault.
+runtime_secret_ocid             = "ocid1.vaultsecret.oc1.iad.REPLACE"
+database_password_secret_ocid   = "ocid1.vaultsecret.oc1.iad.REPLACE"
+database_password_secret_version = 1
+https_certificate_ocid          = "ocid1.certificate.oc1.iad.REPLACE"
+
+# Stop-and-review gate: this profile is not Always Free.
+allow_billable_resources = false

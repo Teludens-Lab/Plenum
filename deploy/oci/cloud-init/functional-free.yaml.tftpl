@@ -1,0 +1,71 @@
+#cloud-config
+package_update: true
+packages:
+  - docker-engine
+  - docker-compose-plugin
+
+write_files:
+  - path: /etc/plenum/compose.yaml
+    owner: root:root
+    permissions: "0644"
+    content: |
+${indent(6, compose_content)}
+  - path: /etc/plenum/Caddyfile
+    owner: root:root
+    permissions: "0644"
+    content: |
+${indent(6, caddy_content)}
+  - path: /etc/plenum/realm-plenum.json
+    owner: root:root
+    permissions: "0644"
+    content: |
+${indent(6, realm_content)}
+  - path: /etc/plenum/livekit.yaml
+    owner: root:root
+    permissions: "0644"
+    content: |
+${indent(6, livekit_content)}
+  - path: /usr/local/sbin/plenum-private-image-pull
+    owner: root:root
+    permissions: "0750"
+    content: |
+${indent(6, private_image_pull)}
+  - path: /etc/systemd/system/plenum.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Plenum functional-free staging
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+      ConditionPathExists=/etc/plenum/secrets/application.json
+      ConditionPathExists=/etc/plenum/secrets/postgres-password
+      ConditionPathExists=/etc/plenum/secrets/keycloak-admin-password
+      ConditionPathExists=/etc/plenum/secrets/test-user-password
+      ConditionPathExists=/etc/plenum/secrets/livekit-keys.yaml
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/etc/plenum
+      RuntimeDirectory=plenum
+      RuntimeDirectoryMode=0700
+      Environment=DOCKER_CONFIG=/run/plenum/docker
+      ExecStartPre=/usr/local/sbin/plenum-private-image-pull ${image_pull_secret_ocid} ${application_image}
+      ExecStart=/usr/bin/docker compose --file /etc/plenum/compose.yaml up --detach --remove-orphans
+      ExecStop=/usr/bin/docker compose --file /etc/plenum/compose.yaml down
+      TimeoutStartSec=0
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [mkdir, -p, /etc/plenum/secrets]
+  - [chmod, "0700", /etc/plenum/secrets]
+  - [dnf, -y, install, oraclelinux-developer-release-el9]
+  - [dnf, -y, install, python39-oci-cli]
+  - [systemctl, enable, --now, docker]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, plenum.service]
+  - [sh, -c, "echo 'Plenum is staged but intentionally stopped until /etc/plenum/secrets is populated.' > /etc/plenum/DEPLOYMENT_STATUS"]

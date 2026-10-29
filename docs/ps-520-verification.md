@@ -47,4 +47,4 @@ No browser UI changed. No production system, KMS/HSM, custodian, backup, or inst
 
 PS-520 is `verified` at change level. Its report/research/replay behavior, logical archive reimport into a second clean database, and exact aggregate browser gate all pass. **PS-530 is the next planned implementation task.**
 
-In simple terms, the current PS-520 risk is that the code can generate and protect traceable reports locally, but the institution has not yet chosen how long production records live or proven the final deployment/restore setup. `OPEN-009` requires a human policy decision and is not automatically resolved by a later prompt; PS-530 implements deployment/recovery and PS-550 must verify the policy and production controls before release.
+In simple terms, OPEN-009 now defines how long production records live and where they stay, but the repository has not yet implemented and proved the complete deletion/anonymization, legal-hold and audit process. PS-530 implements deployment/recovery and PS-550 must verify the approved retention policy and production controls before release.

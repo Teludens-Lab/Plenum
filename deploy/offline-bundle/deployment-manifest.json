@@ -12,7 +12,7 @@
   ],
   "profiles": ["cloud", "institutional", "air_gapped"],
   "contracts": ["deployment-manifest-v1", "backup-manifest-v1", "verification-export-v1"],
-  "migrations": { "first": "001", "last": "024", "strategy": "forward-fix" },
+  "migrations": { "first": "001", "last": "025", "strategy": "forward-fix" },
   "runtimeDependencies": { "publicNetworkRequired": false, "trustMaterialIncluded": false }
 }
 

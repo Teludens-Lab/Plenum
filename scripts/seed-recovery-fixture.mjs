@@ -14,7 +14,8 @@ const migrations = [
   ...["005_identity_oidc_context", "006_command_kernel", "007_release_packages", "008_projection_cursors", "009_runtime_capabilities",
     "010_information_messages_injects", "011_extension_registry", "012_extension_runs_approvals", "013_voting_core", "014_comms_voice_core",
     "015_collaboration_runtime", "016_voice_consent_assets", "017_session_access", "018_identity_roles_and_governance", "019_world_state_automation",
-    "020_adjudication_records", "021_live_release_activation", "022_offline_devices", "023_evidence_checkpoints", "024_reporting_research"]
+    "020_adjudication_records", "021_live_release_activation", "022_offline_devices", "023_evidence_checkpoints", "024_reporting_research",
+    "025_security_retention_enforcement"]
     .map((name) => `apps/server/migrations/${name}.sql`)
 ];
 const ids = {

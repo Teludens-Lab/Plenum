@@ -104,6 +104,10 @@ import {
   recordResearchConsent,
   recordAnalysis,
   createRetentionPolicy,
+  placeLegalHold,
+  releaseLegalHold,
+  runRetentionEnforcement,
+  consumeDeploymentRateLimit,
   recordCorrection,
   replaySession,
   exportOrganizationArchive,
@@ -246,7 +250,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/021_live_release_activation.sql",
     "apps/server/migrations/022_offline_devices.sql",
     "apps/server/migrations/023_evidence_checkpoints.sql",
-    "apps/server/migrations/024_reporting_research.sql"
+    "apps/server/migrations/024_reporting_research.sql",
+    "apps/server/migrations/025_security_retention_enforcement.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -427,6 +432,20 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
     withOrganizationTransaction(app, ids.orgA, (client) => client.query("SELECT * FROM evidence.audit_records")),
     /permission denied/
   );
+});
+
+test("PS-550-T01 shares atomic request limits across concurrent application connections", async () => {
+  const deploymentId = randomUUID();
+  const rule = { category: "authentication", limit: 10, scope: `ip:${randomUUID()}` };
+  const now = new Date("2026-10-26T12:00:30.000Z");
+  const firstWindow = await Promise.all(Array.from({ length: 10 }, () =>
+    consumeDeploymentRateLimit(app, deploymentId, rule, now)));
+  assert.equal(firstWindow.every(({ allowed }) => allowed), true);
+  const denied = await consumeDeploymentRateLimit(app, deploymentId, rule, now);
+  assert.deepEqual({ allowed: denied.allowed, remaining: denied.remaining, retryAfterSeconds: denied.retryAfterSeconds },
+    { allowed: false, remaining: 0, retryAfterSeconds: 30 });
+  assert.equal((await consumeDeploymentRateLimit(app, deploymentId, rule,
+    new Date("2026-10-26T12:01:00.000Z"))).allowed, true);
 });
 
 test("AC-03 creates a tenant-scoped Session from a published Release atomically", async () => {
@@ -1881,6 +1900,15 @@ test("PS-300 SYNC-01 SYNC-02 AC-01 concurrent offline edits converge byte-for-by
   assert.equal(reconnectedA.getMap("draft").toJSON().scenario.name, "Joint planning exercise");
   assert.equal(reconnectedA.getMap("draft").toJSON().scenario.description, "Merged while both Designers were offline.");
   assert.equal(merged.validation.valid, true);
+  const synchronizedStorage = await owner.query(
+    `SELECT document.materialized_document IS NULL AS snapshot_authoritative,draft.document->'scenario'->>'description' AS description
+       FROM studio.collaborative_documents document JOIN studio.drafts draft
+         ON draft.organization_id=document.organization_id AND draft.project_id=document.project_id
+      WHERE document.organization_id=$1 AND document.project_id=$2`, [ids.orgA, ids.projectA]
+  );
+  assert.deepEqual(synchronizedStorage.rows[0], {
+    snapshot_authoritative: true, description: "Merged while both Designers were offline."
+  });
 
   const workflows = reconnectedA.getMap("draft").get("coreDesign").get("workflows");
   assert.ok(workflows instanceof Y.Array);
@@ -2095,8 +2123,9 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   }, randomUUID());
   assert.equal(JSON.parse(Buffer.from(afterWithdrawal.bytes).toString("utf8")).observations.some(({ elementId }) => elementId === participantEventId), false);
 
+  const firstStandardKey = randomUUID();
   const firstStandard = await generateSessionReport(app, principalD, ids.sessionA, {
-    idempotencyKey: randomUUID(), reportKind: "after_action", format: "json"
+    idempotencyKey: firstStandardKey, reportKind: "after_action", format: "json"
   }, randomUUID());
   await owner.query(`INSERT INTO reporting.measurement_definitions
     (id,organization_id,measurement_key,version,research_question,definition,created_by)
@@ -2132,6 +2161,38 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   await assert.rejects(owner.query("UPDATE reporting.corrections SET reason='overwrite' WHERE id=$1", [correction.correctionId]), /append-only/iu);
   assert.equal(policy.version, 1);
 
+  await assert.rejects(placeLegalHold(app, principalE, {
+    scopeType: "export", scopeReference: firstStandard.artifactId, reason: "Unauthorized hold"
+  }, randomUUID()), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  const hold = await placeLegalHold(app, principalD, {
+    scopeType: "export", scopeReference: firstStandard.artifactId, reason: "Synthetic litigation hold"
+  }, randomUUID());
+  const retentionTime = new Date(Date.now() + 91 * 86_400_000);
+  await assert.rejects(runRetentionEnforcement(app, ids.orgA, ids.personE, randomUUID(), retentionTime),
+    /service actor must be a current Organization Admin/u);
+  const held = await runRetentionEnforcement(app, ids.orgA, ids.personD, randomUUID(), retentionTime);
+  assert.equal(held.heldArtifacts >= 1, true);
+  assert.equal((await owner.query("SELECT bytes IS NOT NULL AS retained FROM reporting.export_artifacts WHERE id=$1",
+    [firstStandard.artifactId])).rows[0].retained, true);
+  await releaseLegalHold(app, principalD, hold.holdId, "Synthetic matter closed", randomUUID());
+  await assert.rejects(releaseLegalHold(app, principalD, hold.holdId, "Duplicate release", randomUUID()),
+    (error) => error.envelope?.error?.code === "INVALID_TRANSITION");
+  const enforced = await runRetentionEnforcement(app, ids.orgA, ids.personD, randomUUID(), retentionTime);
+  assert.equal(enforced.purgedArtifacts >= 1, true);
+  const expired = await owner.query(
+    "SELECT bytes IS NULL AS purged,purged_by,sha256 FROM reporting.export_artifacts WHERE id=$1", [firstStandard.artifactId]
+  );
+  assert.deepEqual([expired.rows[0].purged, expired.rows[0].purged_by, expired.rows[0].sha256.length],
+    [true, ids.personD, 64]);
+  await assert.rejects(generateSessionReport(app, principalD, ids.sessionA, {
+    idempotencyKey: firstStandardKey, reportKind: "after_action", format: "json"
+  }, randomUUID()), (error) => error.envelope?.error?.code === "NOT_FOUND");
+  const retentionAudit = await owner.query(
+    "SELECT action FROM evidence.audit_records WHERE organization_id=$1 AND action LIKE 'retention.%' ORDER BY recorded_at,id",
+    [ids.orgA]
+  );
+  assert.ok(retentionAudit.rows.some(({ action }) => action === "retention.enforcement_completed"));
+
   const matchedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) { return structuredClone(input); } }, randomUUID());
   assert.deepEqual([matchedReplay.matched, matchedReplay.divergences.length], [true, 0]);
   const divergedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) {
@@ -2160,7 +2221,8 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
       checkpointSignatures: "evidence.checkpoint_signatures", anchorReceipts: "evidence.anchor_receipts",
       reportDefinitions: "reporting.report_definitions", measurementDefinitions: "reporting.measurement_definitions",
       researchConsents: "reporting.research_consents", analyticalRecords: "reporting.analytical_records",
-      retentionPolicies: "reporting.retention_policies", corrections: "reporting.corrections",
+      retentionPolicies: "reporting.retention_policies", legalHoldEvents: "reporting.legal_hold_events",
+      corrections: "reporting.corrections",
       exportJobs: "reporting.export_jobs", exportArtifacts: "reporting.export_artifacts"
     };
     for (const [key, table] of Object.entries(restoredTables)) {

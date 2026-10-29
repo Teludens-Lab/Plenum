@@ -5,11 +5,11 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | Path | Version | Corpus status | Owner | Verified read | Contradictions / notes |
 |---|---:|---|---|---|---|
 | `docs/corpus/README.md` | 2026-10-20 | Corpus contents table | Product Owner | Yes | Records the 2026-10-20 Product Owner approval update; drafts and named specialist gates remain |
-| `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` | 1.0.11 | Controlled | Product Owner | Yes | Sole decision authority; OPEN-002/003/014/015/017 resolved |
+| `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` | 1.0.14 | Controlled | Product Owner | Yes | Sole decision authority; version 1 owner, retention, classification, restricted-media/ballot and first Plugin decisions are resolved |
 | `references/fractured-order.snapshot.json` and `references/fractured-order/` | `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` | Official immutable golden reference | Product Owner | Yes | Tree `771510b6180bd4826dc5688789d131f2109eeb62`; 1,111 files; 151,409,464 bytes; archive SHA-256 recorded in manifest |
 | `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` | 1.0.1 | Controlled draft | Product Owner | Yes | Sole terminology authority; DEC-51 replacement name remains Assumed |
 | `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.3 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; not ratified |
-| `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-026 resolved; formal ratification remains OPEN-001/DEC-22 |
+| `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-001/026 resolved; DEC-22 confirmation remains |
 | `docs/corpus/02_Updated_Architecture/02_PLATFORM_ARCHITECTURE_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns topology and stack; its ADRs are Confirmed or Product Owner Approved, with named specialist sign-offs still required where recorded |
 | `docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review | Technical + Methodology Leads | Yes | Owns portable design types; compatibility follows resolved OPEN-012 |
 | `docs/corpus/02_Updated_Architecture/09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` | 1.3.2 | Draft for review | Technical Lead | Yes | Owns event and error catalogs; OPEN-015 resolved |
@@ -17,8 +17,8 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 | `docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns Runtime behavior |
 | `docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md` | 1.3.2 | Draft for review | Security Owner | Yes | Owns data, security, reporting, accessibility and recovery; OPEN-014/015/017 resolved, implementation evidence pending |
 | `docs/corpus/02_Updated_Architecture/10_EXTENSION_FRAMEWORK_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | First-release scope; trust OPEN-029 and named specialist sign-off remain |
-| `docs/corpus/02_Updated_Architecture/11_LIVE_POLLING_AND_VOTING_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | First-release scope; secret-ballot production OPEN-028 and named specialist sign-off remain |
-| `docs/corpus/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | First-release scope; consent operations OPEN-027 and named specialist sign-off remain |
+| `docs/corpus/02_Updated_Architecture/11_LIVE_POLLING_AND_VOTING_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | OPEN-028 resolved for version 1 by disabling production secret ballots |
+| `docs/corpus/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | OPEN-027 resolved for version 1 by disabling production recording/transcription |
 | `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md` | 1.1.3 | Approved | Technical Lead | Yes | OPEN-002/014/015/017 resolved; implementation status is recorded per entity and named specialist sign-off remains |
 | `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md` | 1.1.2 | Approved | Technical Lead | Yes | OPEN-002/014/015/017 resolved; fixed feature offline rules are preserved and named specialist sign-off remains |
 | `docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md` | 1.3.2 | Draft for review | Product Owner + Technical Lead | Yes | Owns sequencing and evidence, not product meaning |
@@ -32,9 +32,8 @@ Authority and status remain owned by the source documents. "Read" means inspecte
 
 ## Missing inputs
 
-- Named approvers for OPEN-001.
 - Confirmations listed in Decision Register section 3.
-- Institution-owned operational values for OPEN-009, 014, 015, 017, 019, 024, 027, 028, 029.
+- Passing implementation and institutional operating evidence for the resolved OPEN-009, 014, 015, 017, 019, 024, 027, 028 and 029 policies.
 - A supported Node 24+ runtime and running PostgreSQL 18 environment for PS-001.
 
 No archived file was used as current authority. `QA_STANDARDS.md`, `UNIVERSAL_DESIGN_STANDARDS.md`, and other DEC-23-retired corpus references were not used as Plenum product sources; their relevant functions are taken from Roadmap sections 8, 13, 16, PRD REQ-064, and document 06 as directed.

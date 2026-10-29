@@ -1,0 +1,93 @@
+{
+  "contractId": "release-evidence-v1",
+  "generatedAt": "2026-10-26T08:37:41.790Z",
+  "taskId": "PS-550",
+  "baselineRevision": "1d71f656981c929d2d1a155954214ea3b23a2dcb",
+  "candidateState": "baseline-plus-reviewed-working-tree",
+  "buildImageDigest": "sha256:e8ecd336256aa8821750ff8651dfdae014352580524920fe720236904c47eec5",
+  "environment": {
+    "cwd": "C:\\Users\\ssnguna\\Local Sites\\Plenum",
+    "node": "v24.22.1",
+    "npm": "11.19.1",
+    "dockerServer": "28.5.1",
+    "database": "PostgreSQL 18 disposable databases",
+    "browser": "Playwright 1.64.1 Chromium"
+  },
+  "commands": [
+    {
+      "id": "CMD-PLATFORM-LINT",
+      "command": "npm run lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 11703,
+      "result": "63 sources and 37 versioned contracts"
+    },
+    {
+      "id": "CMD-PLATFORM-TYPECHECK",
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 17638,
+      "result": "No TypeScript diagnostics"
+    },
+    {
+      "id": "CMD-PLATFORM-TEST",
+      "command": "npm test",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 10589,
+      "result": "104 passed"
+    },
+    {
+      "id": "CMD-PLATFORM-E2E",
+      "command": "npm run test:e2e",
+      "status": "PASS",
+      "exitCode": 0,
+      "duration": "15.4m (Playwright rounded summary)",
+      "result": "21 passed; 2 explicit operator-coordinated media skips"
+    },
+    {
+      "id": "CMD-PLATFORM-A11Y",
+      "command": "npm run test:a11y",
+      "status": "PASS",
+      "exitCode": 0,
+      "duration": "8.8m (Playwright rounded summary)",
+      "result": "11 passed"
+    },
+    {
+      "id": "CMD-SECURITY",
+      "command": "npm run test:security",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationSource": "test-results/security/ps-550-security.json",
+      "artifact": "test-results/security/ps-550-security.json"
+    },
+    {
+      "id": "CMD-BACKUP-RESTORE",
+      "command": "npm run test:backup-restore",
+      "status": "PASS",
+      "exitCode": 0,
+      "duration": "42.7s (runner wall clock)",
+      "artifact": "test-results/recovery/ps-530-restore.json",
+      "result": "3-second RPO; 12-second RTO; one signed Session and one Release object verified"
+    }
+  ],
+  "requiredEvidence": {
+    "VOTE-09": "PASS",
+    "VOTE-15": "PASS",
+    "VOICE-10": "PASS",
+    "VOICE-11": "PASS",
+    "VOICE-13": "PASS",
+    "PS-550-T01": "PASS",
+    "AC-07": "PASS",
+    "AC-11": "PASS"
+  },
+  "releaseRecommendation": "NO-GO",
+  "blockingControls": [
+    "manual assistive-technology review",
+    "formal SAST/DAST and Security Owner review",
+    "production encryption, key, secret and monitoring operations",
+    "institution-owned recovery and REQ-069 readiness",
+    "authorized owner approval"
+  ]
+}

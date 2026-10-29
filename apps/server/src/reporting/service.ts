@@ -21,6 +21,9 @@ import { createStoredZip, createTextPdf, csvCell, encodeJson, escapeHtml, sha256
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const allowedFormats = new Set(["json", "jsonl", "csv", "html", "pdf", "zip"]);
 const excludedClasses = ["direct_identity", "secret_ballot_choices", "protected_voice_assets", "reconstructed_transcript"];
+const exportRetentionDays = 90;
+// shortcut: one daily batch covers 10,000 exports; move to queued batches if an Organization can exceed that daily volume.
+const retentionBatchSize = 10_000;
 
 export type ReportFormat = "json" | "jsonl" | "csv" | "html" | "pdf" | "zip";
 
@@ -199,6 +202,180 @@ export async function createRetentionPolicy(
   });
 }
 
+export interface LegalHoldInput {
+  scopeType: "organization" | "export";
+  scopeReference: string;
+  reason: string;
+}
+
+export async function placeLegalHold(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  input: LegalHoldInput,
+  correlationId: string
+): Promise<{ holdId: string; recordedAt: string }> {
+  const scopeReference = input.scopeReference.trim();
+  if (scopeReference.length === 0 || input.scopeReference.length > 200 ||
+      (input.scopeType === "organization" && !["*", principal.organizationId].includes(scopeReference)) ||
+      (input.scopeType === "export" && scopeReference !== "*" && !uuid.test(scopeReference)) ||
+      input.reason.trim().length === 0 || input.reason.length > 4_000) {
+    throw authorizationError("VALIDATION_FAILED", "The legal hold scope and reason are required.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+    const holdId = randomUUID();
+    const result = await client.query<{ recorded_at: Date }>(
+      `INSERT INTO reporting.legal_hold_events
+        (id,organization_id,hold_id,action,scope_type,scope_reference,reason,recorded_by)
+       VALUES ($1,$2,$3,'placed',$4,$5,$6,$7) RETURNING recorded_at`,
+      [randomUUID(), principal.organizationId, holdId, input.scopeType, scopeReference, input.reason.trim(), principal.principalId]
+    );
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'retention.legal_hold_placed',$4,$5::jsonb)`,
+      [randomUUID(), principal.organizationId, principal.principalId, `legal_hold:${holdId}`,
+        JSON.stringify({ correlationId, scopeType: input.scopeType, scopeReference })]
+    );
+    return { holdId, recordedAt: result.rows[0]!.recorded_at.toISOString() };
+  });
+}
+
+export async function releaseLegalHold(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  holdId: string,
+  reason: string,
+  correlationId: string
+): Promise<{ holdId: string; recordedAt: string }> {
+  if (!uuid.test(holdId) || reason.trim().length === 0 || reason.length > 4_000) {
+    throw authorizationError("VALIDATION_FAILED", "The legal hold and release reason are required.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`legal-hold:${principal.organizationId}:${holdId}`]);
+    const current = await client.query<{ scope_type: LegalHoldInput["scopeType"]; scope_reference: string; released: boolean }>(
+      `SELECT placed.scope_type,placed.scope_reference,EXISTS (
+         SELECT 1 FROM reporting.legal_hold_events released
+          WHERE released.organization_id=placed.organization_id AND released.hold_id=placed.hold_id AND released.action='released'
+       ) AS released
+         FROM reporting.legal_hold_events placed
+        WHERE placed.organization_id=$1 AND placed.hold_id=$2 AND placed.action='placed'`,
+      [principal.organizationId, holdId]
+    );
+    if (current.rows[0] === undefined) throw authorizationError("NOT_FOUND", "The legal hold was not found.", correlationId);
+    if (current.rows[0].released) {
+      throw authorizationError("INVALID_TRANSITION", "The legal hold is already released.", correlationId);
+    }
+    const result = await client.query<{ recorded_at: Date }>(
+      `INSERT INTO reporting.legal_hold_events
+        (id,organization_id,hold_id,action,scope_type,scope_reference,reason,recorded_by)
+       VALUES ($1,$2,$3,'released',$4,$5,$6,$7) RETURNING recorded_at`,
+      [randomUUID(), principal.organizationId, holdId, current.rows[0].scope_type, current.rows[0].scope_reference,
+        reason.trim(), principal.principalId]
+    );
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'retention.legal_hold_released',$4,$5::jsonb)`,
+      [randomUUID(), principal.organizationId, principal.principalId, `legal_hold:${holdId}`, JSON.stringify({ correlationId })]
+    );
+    return { holdId, recordedAt: result.rows[0]!.recorded_at.toISOString() };
+  });
+}
+
+export interface RetentionEnforcementResult {
+  purgedArtifacts: number;
+  heldArtifacts: number;
+  hasMore: boolean;
+  cutoff: string;
+}
+
+export async function runRetentionEnforcement(
+  pool: Pool,
+  organizationId: string,
+  actorPersonId: string,
+  correlationId: string,
+  now = new Date()
+): Promise<RetentionEnforcementResult> {
+  if (!uuid.test(organizationId) || !uuid.test(actorPersonId) || correlationId.trim().length === 0 || !Number.isFinite(now.getTime())) {
+    throw new Error("Retention enforcement requires an Organization, service actor, correlation ID, and valid time");
+  }
+  return withOrganizationTransaction(pool, organizationId, async (client) => {
+    const actor = await client.query(
+      `SELECT 1 FROM identity.memberships WHERE organization_id=$1 AND person_id=$2
+        AND organization_role='admin' LIMIT 1`, [organizationId, actorPersonId]
+    );
+    if (actor.rowCount !== 1) throw new Error("Retention service actor must be a current Organization Admin");
+
+    const cutoff = new Date(now.getTime() - exportRetentionDays * 86_400_000);
+    const purged = await client.query<{ id: string }>(
+      `WITH active_holds AS (
+         SELECT placed.hold_id,placed.scope_type,placed.scope_reference
+           FROM reporting.legal_hold_events placed
+          WHERE placed.organization_id=$1 AND placed.action='placed' AND NOT EXISTS (
+            SELECT 1 FROM reporting.legal_hold_events released
+             WHERE released.organization_id=placed.organization_id AND released.hold_id=placed.hold_id AND released.action='released'
+          )
+       ), eligible AS (
+         SELECT artifact.id
+           FROM reporting.export_artifacts artifact
+           JOIN reporting.export_jobs job
+             ON job.organization_id=artifact.organization_id AND job.id=artifact.job_id
+          WHERE artifact.organization_id=$1 AND artifact.bytes IS NOT NULL AND artifact.created_at<$2
+            AND NOT EXISTS (
+              SELECT 1 FROM active_holds hold_event WHERE
+                (hold_event.scope_type='organization' OR
+                 (hold_event.scope_type='export' AND hold_event.scope_reference IN
+                   ('*',artifact.id::text,job.id::text)))
+            )
+          ORDER BY artifact.created_at,artifact.id LIMIT $3
+       )
+       UPDATE reporting.export_artifacts artifact
+          SET bytes=NULL,purged_at=$4,purged_by=$5
+         FROM eligible WHERE artifact.organization_id=$1 AND artifact.id=eligible.id
+       RETURNING artifact.id`,
+      [organizationId, cutoff, retentionBatchSize, now, actorPersonId]
+    );
+    const status = await client.query<{ held: number; eligible: number }>(
+      `WITH active_holds AS (
+         SELECT placed.hold_id,placed.scope_type,placed.scope_reference
+           FROM reporting.legal_hold_events placed
+          WHERE placed.organization_id=$1 AND placed.action='placed' AND NOT EXISTS (
+            SELECT 1 FROM reporting.legal_hold_events released
+             WHERE released.organization_id=placed.organization_id AND released.hold_id=placed.hold_id AND released.action='released'
+          )
+       )
+       SELECT
+         count(*) FILTER (WHERE EXISTS (
+           SELECT 1 FROM active_holds hold_event WHERE
+             (hold_event.scope_type='organization' OR
+              (hold_event.scope_type='export' AND hold_event.scope_reference IN ('*',artifact.id::text,job.id::text)))
+         ))::integer AS held,
+         count(*) FILTER (WHERE NOT EXISTS (
+           SELECT 1 FROM active_holds hold_event WHERE
+             (hold_event.scope_type='organization' OR
+              (hold_event.scope_type='export' AND hold_event.scope_reference IN ('*',artifact.id::text,job.id::text)))
+         ))::integer AS eligible
+         FROM reporting.export_artifacts artifact
+         JOIN reporting.export_jobs job ON job.organization_id=artifact.organization_id AND job.id=artifact.job_id
+        WHERE artifact.organization_id=$1 AND artifact.bytes IS NOT NULL AND artifact.created_at<$2`,
+      [organizationId, cutoff]
+    );
+    const result = {
+      purgedArtifacts: purged.rowCount ?? 0,
+      heldArtifacts: status.rows[0]?.held ?? 0,
+      hasMore: (status.rows[0]?.eligible ?? 0) > 0,
+      cutoff: cutoff.toISOString()
+    };
+    await client.query(
+      `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
+       VALUES ($1,$2,$3,'retention.enforcement_completed',$4,$5::jsonb)`,
+      [randomUUID(), organizationId, actorPersonId, `organization:${organizationId}`,
+        JSON.stringify({ correlationId, policyKey: "OPEN-009-export-90-days", ...result })]
+    );
+    return result;
+  });
+}
+
 export async function recordCorrection(
   pool: Pool,
   principal: AuthenticatedPrincipal,
@@ -325,7 +502,7 @@ export async function generateSessionReport(
     else await requireAnyRole(client, principal, ["admin", "operator"], correlationId);
     const requestSha = sha256(canonicalizeJson({ sessionId, ...request } as unknown as JsonObject));
     const existing = await client.query<{
-      job_id: string; request_sha256: string; artifact_id: string; filename: string; content_type: string; bytes: Buffer; manifest: JsonObject;
+      job_id: string; request_sha256: string; artifact_id: string; filename: string; content_type: string; bytes: Buffer | null; manifest: JsonObject;
     }>(
       `SELECT job.id AS job_id,job.request_sha256,artifact.id AS artifact_id,artifact.filename,artifact.content_type,artifact.bytes,artifact.manifest
          FROM reporting.export_jobs job JOIN reporting.export_artifacts artifact ON artifact.organization_id=job.organization_id AND artifact.job_id=job.id
@@ -334,6 +511,7 @@ export async function generateSessionReport(
     if (existing.rows[0] !== undefined) {
       if (existing.rows[0].request_sha256 !== requestSha) throw authorizationError("IDEMPOTENCY_COLLISION", "The export key was reused with different inputs.", correlationId);
       const row = existing.rows[0];
+      if (row.bytes === null) throw authorizationError("NOT_FOUND", "The export artifact expired under the retention policy.", correlationId);
       return { artifactId: row.artifact_id, jobId: row.job_id, contentType: row.content_type, filename: row.filename,
         bytes: row.bytes, manifest: row.manifest, replayed: true };
     }
@@ -496,6 +674,7 @@ export async function exportOrganizationArchive(
       researchConsents: await query("SELECT to_jsonb(consent) AS value FROM reporting.research_consents consent WHERE organization_id=$1 ORDER BY recorded_at,id"),
       analyticalRecords: await query("SELECT to_jsonb(record) AS value FROM reporting.analytical_records record WHERE organization_id=$1 ORDER BY recorded_at,id"),
       retentionPolicies: await query("SELECT to_jsonb(policy) AS value FROM reporting.retention_policies policy WHERE organization_id=$1 ORDER BY policy_key,version"),
+      legalHoldEvents: await query("SELECT to_jsonb(hold_event) AS value FROM reporting.legal_hold_events hold_event WHERE organization_id=$1 ORDER BY recorded_at,id"),
       corrections: await query("SELECT to_jsonb(correction) AS value FROM reporting.corrections correction WHERE organization_id=$1 ORDER BY corrected_at,id"),
       exportJobs: await query("SELECT to_jsonb(job) AS value FROM reporting.export_jobs job WHERE organization_id=$1 ORDER BY completed_at,id"),
       exportArtifacts: await query("SELECT to_jsonb(artifact) AS value FROM reporting.export_artifacts artifact WHERE organization_id=$1 ORDER BY created_at,id")
@@ -529,6 +708,7 @@ const logicalRestoreTables = [
   ["researchConsents", "reporting.research_consents"],
   ["analyticalRecords", "reporting.analytical_records"],
   ["retentionPolicies", "reporting.retention_policies"],
+  ["legalHoldEvents", "reporting.legal_hold_events"],
   ["corrections", "reporting.corrections"],
   ["exportJobs", "reporting.export_jobs"],
   ["exportArtifacts", "reporting.export_artifacts"]
@@ -540,6 +720,10 @@ function archiveRows(archive: OrganizationArchive, key: string, correlationId: s
     throw authorizationError("VALIDATION_FAILED", `The Organization archive dataset ${key} is invalid.`, correlationId);
   }
   return value as JsonObject[];
+}
+
+function optionalArchiveRows(archive: OrganizationArchive, key: string, correlationId: string): JsonObject[] {
+  return archive.data[key] === undefined ? [] : archiveRows(archive, key, correlationId);
 }
 
 export async function importOrganizationArchive(
@@ -561,7 +745,8 @@ export async function importOrganizationArchive(
   }
   const persons = archiveRows(archive, "persons", correlationId);
   const memberships = archiveRows(archive, "memberships", correlationId);
-  const datasets = logicalRestoreTables.map(([key, table]) => ({ key, table, rows: archiveRows(archive, key, correlationId) }));
+  const datasets = logicalRestoreTables.map(([key, table]) => ({ key, table,
+    rows: key === "legalHoldEvents" ? optionalArchiveRows(archive, key, correlationId) : archiveRows(archive, key, correlationId) }));
   const foreignDataset = memberships.some((row) => row.organization_id !== principal.organizationId) ? "memberships" :
     datasets.find(({ rows }) => rows.some((row) => row.organization_id !== principal.organizationId))?.key;
   if (foreignDataset !== undefined) {

@@ -16,6 +16,7 @@ const environment = {
   OIDC_CLIENT_ID: "plenum-web", OIDC_REDIRECT_URI: "https://plenum.plenum.lan/auth/callback",
   MEDIA_URL: "wss://media.plenum.lan", MEDIA_API_KEY: "synthetic", MEDIA_API_SECRET: "synthetic-media-secret",
   MEDIA_ADAPTER_DIGEST: `sha256:${"e".repeat(64)}`, PLENUM_DEPLOYMENT_ID: "53000000-0000-4000-8000-000000000007",
+  PLENUM_RETENTION_ACTOR_PERSON_ID: "53000000-0000-4000-8000-000000000002",
   FLOOR_TOKEN_SECRET: "synthetic-floor-token-secret"
 };
 const launchArguments = ["run", "--detach", "--pull=never", "--name", containerName, "--network=none", "--read-only",
@@ -27,7 +28,12 @@ if (launched.status !== 0) throw new Error(`Application entrypoint failed to lau
 try {
   let ready;
   for (let attempt = 0; attempt < 20 && ready?.status !== 0; attempt += 1) {
-    ready = spawnSync("docker", ["exec", containerName, "node", "-e", "fetch('http://127.0.0.1:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]);
+    ready = spawnSync("docker", ["exec", containerName, "node", "-e", `fetch('http://127.0.0.1:8080/').then(r=>{
+      const expected={"content-security-policy":"default-src 'self'","permissions-policy":"microphone=(self)",
+        "referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000",
+        "x-content-type-options":"nosniff","x-frame-options":"DENY"};
+      process.exit(r.ok&&Object.entries(expected).every(([name,value])=>r.headers.get(name)?.includes(value))?0:1);
+    }).catch(()=>process.exit(1))`]);
     if (ready.status !== 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
   }
   if (ready?.status !== 0) throw new Error("Application entrypoint did not serve the packaged UI");

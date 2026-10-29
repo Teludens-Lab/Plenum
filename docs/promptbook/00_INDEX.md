@@ -30,10 +30,10 @@ The implementation target is Roadmap section 12: Fractured Order and a basic new
 | P00 | Source and reference baseline; no numbered slice | Corpus available | Golden reference classified; slice verified on supported stack | Reference classification; ADR-009 for ratified Pg 18 baseline |
 | P01 | Platform kernel and Slice S1 (single-session authority) | PS-001 PASS | Shared contracts, trusted context, command/evidence kernel, Runtime deltas, accessible S1 UI | ADR-001/003/008/010/015 confirmation; accessibility evidence |
 | P02 | Configuration-driven Runtime plus extension, voting, and voice cores | P01 evidence | Fractured Order runs from Release; EXT-01..11, VOTE-01..10, VOICE-01..05 pass | AC-09 parity evidence; ADR-016..018; production trust/privacy gates remain closed |
-| P03 | Collaborative Studio, Slice S3, and complete first proof | P02 core behavior | Visual authoring, concurrent convergence, Poll/Voice/Plugin editors, access/readiness, AC-01..13 | OPEN-027/028/029 for production use; OPEN-001 for formal phase approval |
+| P03 | Collaborative Studio, Slice S3, and complete first proof | P02 core behavior | Visual authoring, concurrent convergence, Poll/Voice/Plugin editors, access/readiness, AC-01..13 | Resolved OPEN-027/028/029 controls require implementation evidence; recording, transcription and secret ballots stay disabled |
 | P04 | Advanced logic and Slice S4 (Release activation) | P03 proof | Active workflows remain pinned; compatible live change works; two contrasting simulations run without Runtime edits | OPEN-004/005/006/008/010/012/018/022/026 where semantics are required |
-| P05 | S2 offline, S5 evidence, S6 deployment, S7 load, reporting, and release assurance | P04 generalization | S2, S5, S6, S7 evidence and owner go/no-go package | OPEN-001, 009, 014, 017, 019, 024, 027, 028, 029 |
-| P06 | Approved production Plugin catalog expansion | First-release framework released | Each Plugin has independent contract, security, license, profile, and lifecycle approval | OPEN-011/022/029 per Plugin |
+| P05 | S2 offline, S5 evidence, S6 deployment, S7 load, reporting, and release assurance | P04 generalization | S2, S5, S6, S7 evidence and owner go/no-go package | Implement and evidence the resolved owner, retention, security, recovery, capacity and restricted-feature policies |
+| P06 | Approved production Plugin catalog expansion | First-release framework released | Each Plugin has independent contract, security, license, profile, and lifecycle approval | First OPEN-011 candidate approved; Artifact evidence and resolved OPEN-022/029 controls still apply |
 
 ## Status by authority
 

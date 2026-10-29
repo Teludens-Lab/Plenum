@@ -269,6 +269,7 @@ paths:
       responses:
         "200": { description: Immutable generated artifact; a retry returns the original artifact. }
         "403": { description: Current role, Research Access Grant, or consent scope is insufficient. }
+        "404": { description: The original generated artifact expired under the approved retention policy. }
         "409": { description: Idempotency key collision. }
   /v1/sessions/{sessionId}/replay:
     post:
@@ -285,6 +286,49 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ReplayDivergenceV1" }
         "409": { description: Replay adapter is not configured. }
+  /v1/retention/legal-holds:
+    post:
+      operationId: placeLegalHold
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [scopeType, scopeReference, reason]
+              properties:
+                scopeType: { type: string, enum: [organization, export] }
+                scopeReference: { type: string, minLength: 1, maxLength: 200 }
+                reason: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        "201": { description: Append-only legal hold placement and Audit Record created atomically. }
+        "403": { description: Current Admin authority is absent or revoked. }
+        "422": { description: Legal hold scope or reason is invalid. }
+  /v1/retention/legal-holds/{holdId}/release:
+    post:
+      operationId: releaseLegalHold
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: holdId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        "201": { description: Append-only legal hold release and Audit Record created atomically. }
+        "403": { description: Current Admin authority is absent or revoked. }
+        "404": { description: Legal hold is not found in the current Organization. }
+        "409": { description: Legal hold was already released. }
   /v1/plugins/submissions:
     post:
       operationId: submitPluginArtifact

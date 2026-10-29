@@ -41,5 +41,5 @@ PS-530 adds no migration. The recovery drill applies and restores the complete e
 
 PS-530 is implementation-complete and locally verified, but it does not approve production release. In simple terms, the software can package and restore itself correctly in a synthetic isolated environment; it has not proved that a real institution keeps the database, backup site, signing key, and independent anchor under genuinely separate control.
 
-PS-540 addresses measured load, saturation, and failure recovery. PS-550 addresses final security/accessibility release evidence and must verify the real institutional TLS, firewall, KMS/HSM signer, independent custodian, backup location, and recovery staff procedure. `OPEN-009` retention, `OPEN-027` recording/transcription consent, and `OPEN-028` secret-ballot custody remain human policy/release decisions; no future coding prompt automatically resolves them.
+PS-540 addresses measured load, saturation, and failure recovery. PS-550 addresses final security/accessibility release evidence and must verify the real institutional TLS, firewall, KMS/HSM signer, independent custodian, backup location, recovery staff procedure and enforcement of resolved OPEN-009 retention. Resolved OPEN-027/028 keep production recording, transcription and secret ballots disabled for version 1.
 

@@ -52,7 +52,7 @@ import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "..
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
-import { generateSessionReport, recordResearchConsent, type ReportFormat } from "../reporting/service.js";
+import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLegalHold, type ReportFormat } from "../reporting/service.js";
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 
@@ -109,6 +109,7 @@ function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
   if (["NOT_FOUND", "TARGET_NOT_FOUND"].includes(code)) return 404;
   if (["STALE_AGGREGATE_VERSION", "INCOMPATIBLE_RELEASE", "IDEMPOTENCY_COLLISION", "INVALID_TRANSITION", "TARGET_EXISTS", "ALREADY_VOTED", "DEADLINE_EXPIRED", "CAPABILITY_UNAVAILABLE", "FLOOR_BUSY", "FLOOR_TOKEN_EXPIRED"].includes(code)) return 409;
   if (["AUTHORITY_UNAVAILABLE", "MEDIA_UNAVAILABLE"].includes(code)) return 503;
+  if (code === "RATE_LIMITED") return 429;
   if (code === "TOO_LARGE") return 413;
   if (["INVALID_ID", "INVALID_JSON"].includes(code)) return 400;
   if (["INVALID_COMMAND", "VALIDATION_FAILED", "REFERENCE_INVALID"].includes(code)) return 422;
@@ -372,6 +373,28 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           ...purpose
         }, correlationId);
         sendArtifact(response, artifact);
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/retention/legal-holds") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["scopeType", "scopeReference", "reason"].includes(field)) ||
+            !["organization", "export"].includes(String(body.scopeType)) ||
+            typeof body.scopeReference !== "string" || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The legal hold request is invalid.", correlationId);
+        }
+        send(response, 201, await placeLegalHold(options.pool, principal, {
+          scopeType: body.scopeType as "organization" | "export",
+          scopeReference: body.scopeReference,
+          reason: body.reason
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/retention\/legal-holds\/([^/]+)\/release$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "reason") || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The legal hold release reason is required.", correlationId);
+        }
+        send(response, 201, await releaseLegalHold(options.pool, principal, pathId(match[1], correlationId), body.reason, correlationId));
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/replay$/u))) {

@@ -23,6 +23,7 @@ const environment = {
   MEDIA_API_SECRET: "synthetic-media-secret",
   MEDIA_ADAPTER_DIGEST: `sha256:${"e".repeat(64)}`,
   PLENUM_DEPLOYMENT_ID: "53000000-0000-4000-8000-000000000007",
+  PLENUM_RETENTION_ACTOR_PERSON_ID: "53000000-0000-4000-8000-000000000002",
   FLOOR_TOKEN_SECRET: "synthetic-floor-token-secret",
   POSTGRES_USER: "plenum_owner",
   POSTGRES_PASSWORD_FILE: "synthetic/postgres-password",

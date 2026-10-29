@@ -24,6 +24,7 @@ export * from "./registry/publication.js";
 export * from "./research/evidence.js";
 export * from "./evidence/checkpoints.js";
 export * from "./reporting/service.js";
+export * from "./security/rate-limit.js";
 export * from "./replay/service.js";
 export * from "./extensions/registry.js";
 export * from "./extensions/runtime.js";

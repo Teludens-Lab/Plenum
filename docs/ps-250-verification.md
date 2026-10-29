@@ -55,6 +55,6 @@ Migration 014 is additive and was rehearsed from migrations 001 through 014 on c
 ## Release limits
 
 - ADR-013 and ADR-017 were Approved by Product Owner direction on 2026-10-20; named Operations Owner, Security Owner and Technical Lead sign-offs remain. LiveKit is a candidate adapter, not a permanent product dependency.
-- OPEN-027 remains unresolved. Recording and transcription are disabled; PS-320 owns their editor/consent work.
+- OPEN-027 was subsequently resolved for version 1 by keeping production recording and transcription disabled. PS-320's editor/consent controls remain defense-in-depth and do not enable the feature.
 - The repository proves two-client loopback media and a no-public-egress deployment configuration. Institutional firewall-flow, certificate, local TURN, representative LAN-segment and provider-restart evidence remain deployment verification work, not claims made by this local test.
 - Formal Security Owner/Operations Owner review, production recovery validation, media load/capacity and manual assistive-technology review are pending.

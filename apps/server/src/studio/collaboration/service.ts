@@ -333,22 +333,18 @@ export async function applyStudioUpdate(
     );
     await client.query(
       `UPDATE studio.collaborative_documents
-          SET snapshot=$1,snapshot_sha256=$2,state_vector=$3,materialized_document=$4::jsonb,
+          SET snapshot=$1,snapshot_sha256=$2,state_vector=$3,materialized_document=NULL,
               update_count=update_count+1,updated_at=transaction_timestamp()
-        WHERE organization_id=$5 AND id=$6`,
-      [snapshot, sha256(snapshot), stateVector, JSON.stringify(nextMaterialization), principal.organizationId, row.id]
-    );
-    const updated = await client.query<DocumentRow>(
-      `SELECT id,generation,snapshot,state_vector,materialized_document,update_count
-         FROM studio.collaborative_documents WHERE organization_id=$1 AND id=$2`,
-      [principal.organizationId, row.id]
+        WHERE organization_id=$4 AND id=$5`,
+      [snapshot, sha256(snapshot), stateVector, principal.organizationId, row.id]
     );
     await client.query(
       `UPDATE studio.drafts SET document=$1::jsonb,version=version+1,updated_by=$2,updated_at=transaction_timestamp()
         WHERE organization_id=$3 AND project_id=$4`,
       [JSON.stringify(nextMaterialization), principal.principalId, principal.organizationId, input.projectId]
     );
-    return stateFrom(input.projectId, projectTitle, updated.rows[0] ?? row);
+    return stateFrom(input.projectId, projectTitle, { ...row, snapshot: Buffer.from(snapshot), state_vector: Buffer.from(stateVector),
+      materialized_document: null, update_count: String(Number(row.update_count) + 1) });
   });
 }
 

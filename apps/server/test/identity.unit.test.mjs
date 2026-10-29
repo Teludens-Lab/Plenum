@@ -4,6 +4,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 import {
   AuthorizationError,
+  classifyDeploymentRequest,
   createOidcAuthorizationRequest,
   exchangeOidcAuthorizationCode,
   loadIdentityDeploymentConfiguration,
@@ -13,6 +14,24 @@ import {
 const issuer = "https://issuer.example";
 const audience = "plenum";
 const organizationId = "10000000-0000-4000-8000-000000000001";
+
+function request(url, headers = {}, remoteAddress = "192.0.2.10") {
+  return { url, headers, socket: { remoteAddress } };
+}
+
+test("PS-550-T01 applies the approved route-specific request limits without trusting forwarded addresses by default", () => {
+  assert.deepEqual(classifyDeploymentRequest(request("/healthz")), null);
+  assert.deepEqual(classifyDeploymentRequest(request("/auth/login", { "x-forwarded-for": "198.51.100.7" })),
+    { category: "authentication", limit: 10, scope: "ip:192.0.2.10" });
+  assert.deepEqual(classifyDeploymentRequest(request("/auth/login", { "x-forwarded-for": "198.51.100.7" }), true),
+    { category: "authentication", limit: 10, scope: "ip:198.51.100.7" });
+  assert.deepEqual(classifyDeploymentRequest(request("/v1/sessions/session-a/commands", { authorization: "Bearer token-a" })),
+    { category: "session_command", limit: 120, scope: "session:session-a" });
+  assert.deepEqual(classifyDeploymentRequest(request("/v1/uploads", { cookie: "plenum_session=token-a" })),
+    { category: "upload", limit: 5, scope: "session-token:token-a" });
+  assert.deepEqual(classifyDeploymentRequest(request("/v1/projects/project-a/draft", { cookie: "plenum_session=token-a" })),
+    { category: "general", limit: 300, scope: "session-token:token-a" });
+});
 
 async function fixture() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");

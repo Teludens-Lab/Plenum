@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
-  authorizationError, beginOidcLogin, completeOidcLogin, createDatabasePool, createRuntimeHttpHandler,
-  createStudioCollaborationGateway, S3ObjectStore
+  authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
+  createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 
@@ -21,6 +21,9 @@ const databaseUrl = required("DATABASE_URL");
 const s3Endpoint = required("S3_ENDPOINT");
 const oidcIssuer = required("OIDC_ISSUER").replace(/\/$/u, "");
 const mediaUrl = required("MEDIA_URL");
+const deploymentId = required("PLENUM_DEPLOYMENT_ID");
+const retentionActorPersonId = required("PLENUM_RETENTION_ACTOR_PERSON_ID");
+const trustedProxy = process.env.PLENUM_TRUST_PROXY === "1";
 if (profile === "air_gapped" && [s3Endpoint, oidcIssuer, mediaUrl].some((value) => {
   const host = new URL(value).hostname;
   return !host.endsWith(".plenum.lan") && !["storage", "identity", "media"].includes(host);
@@ -65,20 +68,50 @@ const authenticate = async (request, correlationId) => {
     organizationRoles: row.organization_roles, authenticationStrength: row.authentication_strength, expiresAt: row.expires_at };
 };
 const mediaAdapter = media;
-const api = createRuntimeHttpHandler({ pool, deploymentId: required("PLENUM_DEPLOYMENT_ID"), authenticate,
+const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
   objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET") });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
+const securityHeaders = {
+  "content-security-policy": "default-src 'self'; connect-src 'self' wss:; img-src 'self' data:; style-src 'self'; script-src 'self'",
+  "permissions-policy": "camera=(), geolocation=(), microphone=(self)",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY"
+};
+const serviceStartedAt = Date.now();
+let retentionLastSucceededAt;
 
 const server = createServer(async (request, response) => {
+  for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
   try {
     const url = new URL(request.url ?? "/", "https://plenum.invalid");
+    const rateLimitRule = classifyDeploymentRequest(request, trustedProxy);
+    if (rateLimitRule !== null) {
+      const decision = await consumeDeploymentRateLimit(pool, deploymentId, rateLimitRule);
+      response.setHeader("x-ratelimit-limit", String(rateLimitRule.limit));
+      response.setHeader("x-ratelimit-remaining", String(decision.remaining));
+      if (!decision.allowed) {
+        const correlationId = randomUUID();
+        response.writeHead(429, { "content-type": "application/json", "cache-control": "no-store",
+          "retry-after": String(decision.retryAfterSeconds) });
+        response.end(`${JSON.stringify(authorizationError("RATE_LIMITED", "Request rate limit exceeded.", correlationId).envelope)}\n`);
+        console.warn(JSON.stringify({ event: "security.rate_limit_exceeded", correlationId,
+          deploymentId, category: rateLimitRule.category }));
+        return;
+      }
+    }
     if (request.method === "GET" && url.pathname === "/healthz") {
       await pool.query("SELECT 1");
       await s3.send(new ListObjectsV2Command({ Bucket: s3Bucket, MaxKeys: 1 }));
       if (await media.health() !== "available") throw new Error("Media unavailable");
+      if (Date.now() - serviceStartedAt > 60_000 &&
+          (retentionLastSucceededAt === undefined || Date.now() - retentionLastSucceededAt > 26 * 60 * 60_000)) {
+        throw new Error("Retention enforcement unavailable");
+      }
       response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       response.end(`${JSON.stringify({ status: "ready", profile })}\n`); return;
     }
@@ -99,21 +132,47 @@ const server = createServer(async (request, response) => {
       studio && url.pathname.startsWith("/studio/assets/") ? normalize(url.pathname.slice("/studio/".length)) : "index.html";
     if (relative.startsWith("..")) throw new Error("Unsafe static path");
     const file = await readFile(join(studio ? studioRoot : webRoot, relative));
-    response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream",
-      "content-security-policy": "default-src 'self'; connect-src 'self' wss:; img-src 'self' data:; style-src 'self'; script-src 'self'" });
+    response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream" });
     response.end(file);
   } catch {
     response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
     response.end('{"error":"service_unavailable"}\n');
   }
 });
-server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade(request, socket, head).then((handled) => {
-  if (!handled) socket.destroy();
-}));
+server.on("upgrade", (request, socket, head) => void (async () => {
+  const rule = classifyDeploymentRequest(request, trustedProxy);
+  if (rule !== null && !(await consumeDeploymentRateLimit(pool, deploymentId, rule)).allowed) {
+    socket.write("HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  if (!await collaboration.handleUpgrade(request, socket, head)) socket.destroy();
+})().catch(() => socket.destroy()));
 server.listen(Number(process.env.PORT ?? 8080), "0.0.0.0");
+let retentionRunning = false;
+async function enforceRetention() {
+  if (retentionRunning) return;
+  retentionRunning = true;
+  const correlationId = randomUUID();
+  try {
+    const result = await runRetentionEnforcement(pool, oidc.organizationId, retentionActorPersonId, correlationId);
+    retentionLastSucceededAt = Date.now();
+    console.info(JSON.stringify({ event: "retention.enforcement_completed", correlationId, ...result }));
+  } catch (error) {
+    console.error(JSON.stringify({ event: "retention.enforcement_failed", correlationId,
+      message: error instanceof Error ? error.message : "unknown error" }));
+  } finally {
+    retentionRunning = false;
+  }
+}
+const retentionStart = setTimeout(() => void enforceRetention(), 30_000);
+const retentionInterval = setInterval(() => void enforceRetention(), 24 * 60 * 60_000);
+retentionStart.unref();
+retentionInterval.unref();
 let closing = false;
 async function close() {
   if (closing) return; closing = true;
+  clearTimeout(retentionStart); clearInterval(retentionInterval);
   await collaboration.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await pool.end();
 }
 process.on("SIGTERM", () => void close());

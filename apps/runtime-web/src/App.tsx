@@ -41,6 +41,7 @@ import {
 import { VoiceControls } from "./voice/VoiceControls.js";
 import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
 import { OfflineRuntimeStore } from "./offline/storage.js";
+import { ProjectPortal } from "./product/ProjectPortal.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -223,11 +224,7 @@ function ProductEntry() {
             {context.destinations.includes("operations") ? <li><a href="/admin/">Operations<span>Prepare and monitor a Session</span></a></li> : null}
           </ul>
         </nav>
-        <section id="sessions" className="card workspace-empty teludens-gate" aria-labelledby="workspace-title">
-          <p className="eyebrow">Current workspace</p><h2 id="workspace-title">No Project or Session selected</h2>
-          <p>Use an invitation or a saved Plenum link to open existing work. Studio and Runtime always preserve their governed identifiers in the address.</p>
-          <div className="actions"><a className="btn-primary link-button" href="/studio/">Open Studio</a><a className="btn-secondary link-button" href="#account-title">View account</a></div>
-        </section>
+        <ProjectPortal />
         <aside className="card account-context teludens-branch" aria-labelledby="account-title">
           <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
           <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Member"}</dd></div></dl>

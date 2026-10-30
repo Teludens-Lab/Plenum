@@ -1,0 +1,44 @@
+- generic [ref=f1e1]:
+  - link "Skip to main content" [ref=f1e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e3]:
+    - link "Plenum home" [ref=f1e4] [cursor=pointer]:
+      - /url: /
+      - img "Plenum" [ref=f1e5]
+    - generic [ref=f1e6]: Local user test
+  - main [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - heading "Choose a synthetic persona" [level=1] [ref=f1e9]
+      - paragraph [ref=f1e10]: This loopback-only chooser changes test identity without passwords, developer tools, or authorization headers.
+      - generic [ref=f1e11]:
+        - group "Test role" [ref=f1e12]:
+          - generic [ref=f1e14] [cursor=pointer]:
+            - radio "Designer Create, find, archive, reopen, and resume Projects." [checked] [active] [ref=f1e15]
+            - generic [ref=f1e16]:
+              - strong [ref=f1e17]: Designer
+              - generic [ref=f1e18]: Create, find, archive, reopen, and resume Projects.
+          - generic [ref=f1e19] [cursor=pointer]:
+            - radio "Admin Inspect Organization members and their Organization Roles." [ref=f1e20]
+            - generic [ref=f1e21]:
+              - strong [ref=f1e22]: Admin
+              - generic [ref=f1e23]: Inspect Organization members and their Organization Roles.
+          - generic [ref=f1e24] [cursor=pointer]:
+            - radio "Reviewer Open assigned Project review work without mutation controls." [ref=f1e25]
+            - generic [ref=f1e26]:
+              - strong [ref=f1e27]: Reviewer
+              - generic [ref=f1e28]: Open assigned Project review work without mutation controls.
+          - generic [ref=f1e29] [cursor=pointer]:
+            - radio "Operator only Verify that Project and Template data is denied." [ref=f1e30]
+            - generic [ref=f1e31]:
+              - strong [ref=f1e32]: Operator only
+              - generic [ref=f1e33]: Verify that Project and Template data is denied.
+          - generic [ref=f1e34] [cursor=pointer]:
+            - radio "Publisher Retain the PS-700 synthetic sign-in and publication test path." [ref=f1e35]
+            - generic [ref=f1e36]:
+              - strong [ref=f1e37]: Publisher
+              - generic [ref=f1e38]: Retain the PS-700 synthetic sign-in and publication test path.
+        - generic [ref=f1e39]:
+          - button "Continue as selected persona" [ref=f1e40] [cursor=pointer]
+          - link "Cancel" [ref=f1e41] [cursor=pointer]:
+            - /url: /
+      - paragraph [ref=f1e42]: Synthetic data only. This chooser does not exist in a production deployment.

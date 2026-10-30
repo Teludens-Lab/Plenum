@@ -56,6 +56,7 @@ import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearc
 import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLegalHold, type ReportFormat } from "../reporting/service.js";
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
+import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, reopenProject } from "../studio/portal.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -168,6 +169,39 @@ function pathId(value: string | undefined, correlationId: string): string {
   return value.toLowerCase();
 }
 
+function listInput(url: URL): { query?: string; status?: "active" | "archived" | "all"; limit?: number; cursor?: string } {
+  const query = url.searchParams.get("query");
+  const status = url.searchParams.get("status");
+  const limit = url.searchParams.get("limit");
+  const cursor = url.searchParams.get("cursor");
+  return {
+    ...(query === null ? {} : { query }),
+    ...(status === null ? {} : { status: status as "active" | "archived" | "all" }),
+    ...(limit === null ? {} : { limit: Number(limit) }),
+    ...(cursor === null ? {} : { cursor })
+  };
+}
+
+function createProjectInput(body: JsonObject, correlationId: string) {
+  if (Object.keys(body).some((field) => !["requestId", "title", "templateId", "includeScenario"].includes(field)) ||
+      typeof body.requestId !== "string" || typeof body.title !== "string" ||
+      (body.templateId !== undefined && typeof body.templateId !== "string") ||
+      (body.includeScenario !== undefined && typeof body.includeScenario !== "boolean")) {
+    throw authorizationError("VALIDATION_FAILED", "Project creation fields are invalid.", correlationId);
+  }
+  return { requestId: body.requestId, title: body.title,
+    ...(typeof body.templateId === "string" ? { templateId: body.templateId } : {}),
+    ...(typeof body.includeScenario === "boolean" ? { includeScenario: body.includeScenario } : {}) };
+}
+
+function projectLifecycleInput(body: JsonObject, correlationId: string) {
+  if (Object.keys(body).some((field) => !["requestId", "expectedVersion"].includes(field)) ||
+      typeof body.requestId !== "string" || typeof body.expectedVersion !== "number") {
+    throw authorizationError("VALIDATION_FAILED", "Project lifecycle fields are invalid.", correlationId);
+  }
+  return { requestId: body.requestId, expectedVersion: body.expectedVersion };
+}
+
 function deviceHeader(request: IncomingMessage, correlationId: string): string {
   const value = request.headers["x-device-id"];
   if (typeof value !== "string" || !uuid.test(value)) {
@@ -266,6 +300,30 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && url.pathname === "/v1/devices") {
         send(response, 201, await registerDevice(options.pool, principal));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/projects") {
+        send(response, 200, await listProjectPortal(options.pool, principal, listInput(url), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/templates") {
+        const input = listInput(url);
+        send(response, 200, await listSimulationTemplates(options.pool, principal,
+          { ...(input.query === undefined ? {} : { query: input.query }), ...(input.limit === undefined ? {} : { limit: input.limit }),
+            ...(input.cursor === undefined ? {} : { cursor: input.cursor }) }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/projects") {
+        send(response, 201, await createProject(options.pool, principal,
+          createProjectInput(await readBody(request, correlationId), correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/(archive|reopen)$/u))) {
+        const projectId = pathId(match[1], correlationId);
+        const input = projectLifecycleInput(await readBody(request, correlationId), correlationId);
+        send(response, 200, match[2] === "archive"
+          ? await archiveProject(options.pool, principal, projectId, input, correlationId)
+          : await reopenProject(options.pool, principal, projectId, input, correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/draft$/u))) {

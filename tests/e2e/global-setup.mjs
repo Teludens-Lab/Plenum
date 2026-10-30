@@ -32,7 +32,8 @@ const migrations = [
   "apps/server/migrations/022_offline_devices.sql",
   "apps/server/migrations/023_evidence_checkpoints.sql",
   "apps/server/migrations/024_reporting_research.sql",
-  "apps/server/migrations/025_security_retention_enforcement.sql"
+  "apps/server/migrations/025_security_retention_enforcement.sql",
+  "apps/server/migrations/026_product_portal.sql"
 ];
 
 export default async function globalSetup() {
@@ -68,7 +69,8 @@ export default async function globalSetup() {
       `INSERT INTO identity.persons(id,display_name) VALUES
        ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
        ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer'),
-       ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher'),($11,'Synthetic Blue notetaker')`,
+       ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher'),($11,'Synthetic Blue notetaker'),
+       ($12,'Synthetic portal operator')`,
       people
     );
     await owner.query(
@@ -81,12 +83,33 @@ export default async function globalSetup() {
       [fixture.organizationId, fixture.people.designerA, fixture.people.designerB, fixture.people.publisher]
     );
     await owner.query(
+      "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator')",
+      [fixture.organizationId, fixture.people.portalOperator]
+    );
+    await owner.query(
+      "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'reviewer')",
+      [fixture.organizationId, fixture.people.finalReviewer]
+    );
+    await owner.query(
       "INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'PS-150 S1 proof',$3)",
       [fixture.projectId, fixture.organizationId, fixture.people.operator]
     );
     await owner.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
       [fixture.organizationId, fixture.projectId, JSON.stringify(definition), fixture.people.designerA]
+    );
+    await owner.query(
+      `INSERT INTO studio.project_collaborators(organization_id,project_id,person_id,project_role,added_by) VALUES
+       ($1,$2,$3,'owner',$3),($1,$2,$4,'designer',$4),($1,$2,$5,'reviewer',$4),($1,$2,$6,'reviewer',$4)`,
+      [fixture.organizationId, fixture.projectId, fixture.people.operator, fixture.people.designerA,
+        fixture.people.publisher, fixture.people.finalReviewer]
+    );
+    await owner.query(
+      `INSERT INTO studio.simulation_templates
+       (id,organization_id,title,summary,source_project_id,core_design,scenario,published_by)
+       VALUES ($1,$2,'Fractured Order Core Design','Synthetic reusable Core Design for PS-710 user testing.',$3,$4::jsonb,$5::jsonb,$6)`,
+      [fixture.templateId, fixture.organizationId, fixture.projectId, JSON.stringify(definition.coreDesign),
+        JSON.stringify(definition.scenario), fixture.people.publisher]
     );
     await owner.query(
       `INSERT INTO studio.definition_revisions

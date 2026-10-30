@@ -9,3 +9,12 @@
 7. Sign out through `POST /v1/auth/logout`, then replace the authenticated shell with the sign-in state.
 
 The skip link is the first focusable control. Focus remains visible. Deep links with a Session query or a Studio Project path bypass the entry shell and preserve their established behavior.
+
+## PS-710 Project and Template interactions
+
+1. Load bounded Projects and Simulation Templates from the authenticated Organization; never accept a client Organization identifier.
+2. Apply search and lifecycle status explicitly. Empty results explain whether to create, clear search, or change status.
+3. A blank create or Template create enters a pending state, preserves input on failure, and opens the server-returned Studio Draft URL only after confirmation.
+4. Selecting or changing a Template always clears optional Scenario inclusion. Core Design is copied by default.
+5. Archive requires inline confirmation. Reopen is visible only for archived Projects. Both send the displayed version; stale responses reload current state and announce recovery.
+6. Reviewer controls remain read-only. Operator-only access renders an unauthorized state and no Project, Template, or member data.

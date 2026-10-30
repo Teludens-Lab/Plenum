@@ -56,8 +56,8 @@ Each task must leave the application runnable and include a 5–20 minute user-t
 |---|---|---|---|---|
 | Teludens foundation and brand | Shared tokens, primitives, density, motion, shell and exact catalog dark/light Plenum wordmarks | `PS-700`, `PS-800` | Teludens audit, route screenshots, visual review | AUTOMATED PASS — PS-700 foundation; full-route PS-800 remains |
 | Entry and identity | Root entry, sign-in/out, callback, expired/unavailable/denied states, Organization context | `PS-700` | Product E2E + keyboard/screen-reader smoke | PASS — automated evidence and nine-step product-owner smoke complete |
-| Organization and Project lifecycle | Switch, search, create, archive/reopen, ownership and collaboration | `PS-710` | Persona user test + authorization integration | PLANNED |
-| Templates | Browse, preview, copy semantics, optional Scenario inclusion | `PS-710` | Template-copy browser and contract evidence | PLANNED |
+| Organization and Project lifecycle | Switch, search, create, archive/reopen, ownership and collaboration | `PS-710` | Persona user test + authorization integration | PASS — automated evidence and independent ten-minute user test completed 2026-10-29 |
+| Templates | Browse, preview, copy semantics, optional Scenario inclusion | `PS-710` | Template-copy browser and contract evidence | PASS — Core Design/default Scenario evidence and independent user test completed 2026-10-29 |
 | Releases and Packages | Review, publish, immutable catalog, export/import, provenance and compatibility | `PS-720`, `PS-760` | Publication/package E2E and digest evidence | PLANNED |
 | Sessions | Create from Release, configure, readiness, lifecycle, catalogs and safe deep links | `PS-720`, `PS-780` | Operator lifecycle E2E | PLANNED |
 | Studio overview/methodology | Orientation, terminology, dependency and provenance controls | `PS-730` | Studio workspace inventory + user test | PLANNED |

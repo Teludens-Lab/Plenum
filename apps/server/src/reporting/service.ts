@@ -653,6 +653,9 @@ export async function exportOrganizationArchive(
         WHERE membership.organization_id=$1 GROUP BY person.id ORDER BY person.id`),
       memberships: await query("SELECT to_jsonb(membership) AS value FROM identity.memberships membership WHERE organization_id=$1 ORDER BY person_id,organization_role"),
       projects: await query("SELECT to_jsonb(project) AS value FROM studio.simulation_projects project WHERE organization_id=$1 ORDER BY id"),
+      simulationTemplates: await query("SELECT to_jsonb(template) AS value FROM studio.simulation_templates template WHERE organization_id=$1 ORDER BY published_at,id"),
+      projectCollaborators: await query("SELECT to_jsonb(collaborator) AS value FROM studio.project_collaborators collaborator WHERE organization_id=$1 ORDER BY project_id,person_id,project_role"),
+      projectMutationReceipts: await query("SELECT to_jsonb(receipt) AS value FROM studio.project_mutation_receipts receipt WHERE organization_id=$1 ORDER BY recorded_at,request_id"),
       collaborativeDocuments: await query("SELECT to_jsonb(document) AS value FROM studio.collaborative_documents document WHERE organization_id=$1 ORDER BY id"),
       publicationFreezes: await query("SELECT to_jsonb(publication_freeze) AS value FROM studio.publication_freezes publication_freeze WHERE organization_id=$1 ORDER BY frozen_at,id"),
       revisions: await query("SELECT to_jsonb(revision) AS value FROM studio.definition_revisions revision WHERE organization_id=$1 ORDER BY created_at,id"),
@@ -687,6 +690,9 @@ export async function exportOrganizationArchive(
 
 const logicalRestoreTables = [
   ["projects", "studio.simulation_projects"],
+  ["simulationTemplates", "studio.simulation_templates"],
+  ["projectCollaborators", "studio.project_collaborators"],
+  ["projectMutationReceipts", "studio.project_mutation_receipts"],
   ["collaborativeDocuments", "studio.collaborative_documents"],
   ["publicationFreezes", "studio.publication_freezes"],
   ["revisions", "studio.definition_revisions"],
@@ -745,8 +751,9 @@ export async function importOrganizationArchive(
   }
   const persons = archiveRows(archive, "persons", correlationId);
   const memberships = archiveRows(archive, "memberships", correlationId);
+  const optionalDatasets = new Set(["simulationTemplates", "projectCollaborators", "projectMutationReceipts", "legalHoldEvents"]);
   const datasets = logicalRestoreTables.map(([key, table]) => ({ key, table,
-    rows: key === "legalHoldEvents" ? optionalArchiveRows(archive, key, correlationId) : archiveRows(archive, key, correlationId) }));
+    rows: optionalDatasets.has(key) ? optionalArchiveRows(archive, key, correlationId) : archiveRows(archive, key, correlationId) }));
   const foreignDataset = memberships.some((row) => row.organization_id !== principal.organizationId) ? "memberships" :
     datasets.find(({ rows }) => rows.some((row) => row.organization_id !== principal.organizationId))?.key;
   if (foreignDataset !== undefined) {
@@ -789,11 +796,44 @@ export async function importOrganizationArchive(
     let restoredRows = (restoredPersons.rowCount ?? 0) + (restoredMemberships.rowCount ?? 0);
     for (const { table, rows } of datasets) {
       if (rows.length === 0) continue;
-      const restored = await client.query(
-        `INSERT INTO ${table} SELECT * FROM jsonb_populate_recordset(NULL::${table},$1::jsonb)`,
-        [JSON.stringify(rows)]
-      );
+      const restored = table === "studio.simulation_projects"
+        ? await client.query(
+          `INSERT INTO studio.simulation_projects
+             (id,organization_id,title,created_by,created_at,lifecycle_status,version,updated_at,archived_at,archived_by,source_template_id)
+           SELECT id,organization_id,title,created_by,created_at,
+                  coalesce(lifecycle_status,'active'),coalesce(version,1),coalesce(updated_at,created_at),
+                  archived_at,archived_by,NULL
+             FROM jsonb_populate_recordset(NULL::studio.simulation_projects,$1::jsonb)`,
+          [JSON.stringify(rows)]
+        )
+        : await client.query(
+          `INSERT INTO ${table} SELECT * FROM jsonb_populate_recordset(NULL::${table},$1::jsonb)`,
+          [JSON.stringify(rows)]
+        );
       restoredRows += restored.rowCount ?? 0;
+    }
+    const projectRows = datasets.find(({ table }) => table === "studio.simulation_projects")?.rows ?? [];
+    const templateRows = datasets.find(({ table }) => table === "studio.simulation_templates")?.rows ?? [];
+    if (templateRows.length > 0 && projectRows.some((row) => row.source_template_id !== null && row.source_template_id !== undefined)) {
+      await client.query(
+        `UPDATE studio.simulation_projects project
+            SET source_template_id=source.source_template_id
+           FROM jsonb_populate_recordset(NULL::studio.simulation_projects,$1::jsonb) source
+          WHERE project.organization_id=$2 AND project.id=source.id AND source.source_template_id IS NOT NULL`,
+        [JSON.stringify(projectRows), principal.organizationId]
+      );
+    }
+    const collaboratorRows = datasets.find(({ table }) => table === "studio.project_collaborators")?.rows ?? [];
+    if (collaboratorRows.length === 0 && projectRows.length > 0) {
+      const owners = await client.query(
+        `INSERT INTO studio.project_collaborators
+           (organization_id,project_id,person_id,project_role,added_by,added_at)
+         SELECT organization_id,id,created_by,'owner',created_by,created_at
+           FROM studio.simulation_projects WHERE organization_id=$1
+         ON CONFLICT DO NOTHING`,
+        [principal.organizationId]
+      );
+      restoredRows += owners.rowCount ?? 0;
     }
     const importId = randomUUID();
     await client.query(

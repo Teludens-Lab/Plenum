@@ -1,0 +1,24 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e4]:
+    - link "Plenum home" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - img "Plenum" [ref=e6]
+    - generic [ref=e7]:
+      - 'button "Theme: light. Use dark theme" [ref=e8] [cursor=pointer]': "Theme: light"
+      - 'generic "Plenum status: Sign-in required" [ref=e9]': Sign-in required
+  - main [ref=e10]:
+    - region [ref=e11]:
+      - paragraph [ref=e12]: Simulation design and delivery
+      - heading "Design with intent. Run with authority." [level=1] [ref=e13]
+      - paragraph [ref=e14]: Plenum carries a simulation from governed design through live delivery and evidence without losing its rules, roles, or release history.
+    - status [ref=e15]: Sign in with your Organization identity to continue.
+    - generic [ref=e16]:
+      - paragraph [ref=e17]: Authentication required
+      - heading "Continue to Plenum" [level=2] [ref=e18]
+      - paragraph [ref=e19]: Your Organization identity provider controls access. Plenum never asks for your password directly.
+      - generic [ref=e20]:
+        - link "Sign in" [ref=e21] [cursor=pointer]:
+          - /url: /auth/login?returnTo=%2F
+        - button "Try again" [ref=e22] [cursor=pointer]

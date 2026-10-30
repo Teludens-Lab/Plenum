@@ -1,0 +1,126 @@
+- generic [ref=f1e2]:
+  - link "Skip to main content" [ref=f1e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e4]:
+    - link "Plenum home" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+      - img "Plenum" [ref=f1e6]
+    - generic [ref=f1e7]:
+      - 'button "Theme: light. Use dark theme" [ref=f1e8] [cursor=pointer]': "Theme: light"
+      - 'generic "Plenum status: Connected" [ref=f1e9]': Connected
+  - main [ref=f1e10]:
+    - region [ref=f1e11]:
+      - paragraph [ref=f1e12]: Simulation design and delivery
+      - heading "Design with intent. Run with authority." [level=1] [ref=f1e13]
+      - paragraph [ref=f1e14]: Plenum carries a simulation from governed design through live delivery and evidence without losing its rules, roles, or release history.
+    - status [ref=f1e15]: Your account and Organization context are current.
+    - generic [ref=f1e16]:
+      - navigation [ref=f1e17]:
+        - paragraph [ref=f1e18]: Destinations
+        - heading "Choose a workspace" [level=2] [ref=f1e19]
+        - list [ref=f1e20]:
+          - listitem [ref=f1e21]:
+            - link "Home Account and Organization context" [ref=f1e22] [cursor=pointer]:
+              - /url: /
+              - text: Home
+              - generic [ref=f1e23]: Account and Organization context
+          - listitem [ref=f1e24]:
+            - link "Studio Open or create a governed Project" [ref=f1e25] [cursor=pointer]:
+              - /url: /studio/
+              - text: Studio
+              - generic [ref=f1e26]: Open or create a governed Project
+          - listitem [ref=f1e27]:
+            - link "Sessions Join from an invitation or Session link" [ref=f1e28] [cursor=pointer]:
+              - /url: /#sessions
+              - text: Sessions
+              - generic [ref=f1e29]: Join from an invitation or Session link
+      - region [ref=f1e30]:
+        - generic [ref=f1e31]:
+          - generic [ref=f1e32]:
+            - paragraph [ref=f1e33]: Current workspace
+            - heading "Projects" [level=2] [ref=f1e34]
+          - generic [ref=f1e35]:
+            - generic [ref=f1e36]: Organization
+            - combobox "Organization" [disabled] [ref=f1e37]:
+              - option "PS-150 synthetic organization" [selected]
+            - paragraph [ref=f1e38]: Sign out to change to another authenticated Organization context.
+        - status [ref=f1e39]: Project work is current.
+        - form "Find Projects" [ref=f1e40]:
+          - generic [ref=f1e41]:
+            - generic [ref=f1e42]: Search Projects
+            - searchbox "Search Projects" [ref=f1e43]
+          - generic [ref=f1e44]:
+            - generic [ref=f1e45]: Status
+            - combobox "Status" [ref=f1e46]:
+              - option "Active" [selected]
+              - option "Archived"
+              - option "All"
+          - button "Apply" [ref=f1e47] [cursor=pointer]
+        - generic [ref=f1e48]:
+          - paragraph [ref=f1e49]: Start work
+          - heading "Create a Project" [level=3] [ref=f1e50]
+          - group "Starting point" [ref=f1e51]:
+            - generic [ref=f1e53] [cursor=pointer]:
+              - radio "Blank Core Design" [checked] [ref=f1e54]
+              - text: Blank Core Design
+            - generic [ref=f1e55] [cursor=pointer]:
+              - radio "Simulation Template" [ref=f1e56]
+              - text: Simulation Template
+          - generic [ref=f1e57]:
+            - generic [ref=f1e58]: Project name
+            - textbox "Project name" [ref=f1e59]
+          - button "Create and open Draft" [ref=f1e60] [cursor=pointer]
+        - region [ref=f1e61]:
+          - generic [ref=f1e62]:
+            - paragraph [ref=f1e63]: Recent work
+            - heading "Active Projects" [level=3] [ref=f1e64]
+          - list [ref=f1e65]:
+            - listitem [ref=f1e89]:
+              - generic [ref=f1e90]:
+                - generic [ref=f1e91]:
+                  - heading "PS-150 S1 proof" [level=4] [ref=f1e92]
+                  - generic [ref=f1e93]: active
+                - generic [ref=f1e94]:
+                  - generic [ref=f1e95]:
+                    - term [ref=f1e96]: Owner
+                    - definition [ref=f1e97]: Synthetic operator
+                  - generic [ref=f1e98]:
+                    - term [ref=f1e99]: Last activity
+                    - definition [ref=f1e100]:
+                      - time [ref=f1e101]: Oct 29, 2026, 8:55 PM
+                  - generic [ref=f1e102]:
+                    - term [ref=f1e103]: Release status
+                    - definition [ref=f1e104]: 2 published Releases
+                  - generic [ref=f1e105]:
+                    - term [ref=f1e106]: Starting point
+                    - definition [ref=f1e107]: Blank Core Design
+                - paragraph [ref=f1e108]: "Collaborators: Synthetic Designer A (designer); Synthetic Publisher (reviewer); Synthetic final reviewer (reviewer); Synthetic operator (owner)"
+              - generic [ref=f1e109]:
+                - link "Open Draft" [ref=f1e110] [cursor=pointer]:
+                  - /url: /studio/projects/12000000-0000-4000-8000-000000000001
+                - button "Archive" [ref=f1e111] [cursor=pointer]
+        - region [ref=f1e112]:
+          - generic [ref=f1e113]:
+            - paragraph [ref=f1e114]: Organization library
+            - heading "Simulation Templates" [level=3] [ref=f1e115]
+          - list [ref=f1e116]:
+            - listitem [ref=f1e117]:
+              - generic [ref=f1e118]:
+                - heading "Fractured Order Core Design" [level=4] [ref=f1e119]
+                - paragraph [ref=f1e120]: Synthetic reusable Core Design for PS-710 user testing.
+                - paragraph [ref=f1e121]: Published Oct 29, 2026, 8:55 PM. Optional Scenario content is available.
+              - button "Use Template" [ref=f1e122] [cursor=pointer]
+      - complementary [ref=f1e123]:
+        - paragraph [ref=f1e124]: Trusted context
+        - heading "Account" [level=2] [ref=f1e125]
+        - generic [ref=f1e126]:
+          - generic [ref=f1e127]:
+            - term [ref=f1e128]: Signed in as
+            - definition [ref=f1e129]: Synthetic Designer A
+          - generic [ref=f1e130]:
+            - term [ref=f1e131]: Organization
+            - definition [ref=f1e132]: PS-150 synthetic organization
+          - generic [ref=f1e133]:
+            - term [ref=f1e134]: Organization Roles
+            - definition [ref=f1e135]: designer
+        - button "Sign out" [ref=f1e136] [cursor=pointer]

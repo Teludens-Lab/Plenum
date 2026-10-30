@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   globalSetup: "../global-setup.mjs",
   globalTeardown: "../global-teardown.mjs",
-  outputDir: "../../../output/playwright/ps-700/results",
+  outputDir: "../../../output/playwright/ps-710/results",
   reporter: [["line"]],
   use: {
     baseURL: "http://127.0.0.1:4173",

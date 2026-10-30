@@ -6,6 +6,7 @@ import { expect, test } from "@playwright/test";
 import { fixture, runtimeUrl } from "../fixture.mjs";
 
 const evidenceRoot = "output/playwright/ps-700";
+const portalEvidenceRoot = "output/playwright/ps-710";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -13,20 +14,26 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
   return { context, page: await context.newPage() };
 }
 
-test.beforeAll(async () => mkdir(evidenceRoot, { recursive: true }));
+test.beforeAll(async () => {
+  await mkdir(evidenceRoot, { recursive: true });
+  await mkdir(portalEvidenceRoot, { recursive: true });
+});
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/");
   await page.getByRole("link", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Choose a synthetic persona" })).toBeVisible();
+  await page.getByLabel(/Publisher/u).check();
+  await page.getByRole("button", { name: "Continue as selected persona" }).click();
   await expect(page).toHaveURL("http://127.0.0.1:4173/");
-  await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
   await page.goto("/__test__/offline");
   await expect(page.getByRole("heading", { name: "Account context is unavailable" })).toBeVisible();
   await expect(page.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await page.goto("/__test__/online");
-  await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
   await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
@@ -34,17 +41,62 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   await page.reload();
   await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
   await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
+  await page.getByRole("link", { name: "Sign in" }).click();
+  await page.getByLabel(/Publisher/u).check();
+  await page.getByRole("button", { name: "Continue as selected persona" }).click();
+  await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
   await context.close();
 });
+
+test("PS-710 local user-test persona chooser is accessible without authorization headers @a11y", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/__test__/personas");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${portalEvidenceRoot}/persona-chooser.png`, fullPage: true });
+  await context.close();
+});
+
+const localUserTestPersonas = [
+  { label: /^Designer\b/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
+  { label: /^Admin\b/u, displayName: "Synthetic operator", heading: "Organization members and roles" },
+  { label: /^Reviewer\b/u, displayName: "Synthetic final reviewer", heading: "Review access", project: "PS-150 S1 proof" },
+  { label: /^Operator only\b/u, displayName: "Synthetic portal operator", heading: "Project access unavailable" }
+];
+
+for (const persona of localUserTestPersonas) {
+  test(`PS-710 local user-test ${persona.displayName} works without authorization headers`, async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto("/__test__/personas");
+    await expect(page.getByRole("heading", { name: "Choose a synthetic persona" })).toBeVisible();
+    await page.getByRole("radio", { name: persona.label }).check();
+    await page.getByRole("button", { name: "Continue as selected persona" }).click();
+    await expect(page).toHaveURL("http://127.0.0.1:4173/");
+    await expect(page.getByRole("complementary").getByText(persona.displayName)).toBeVisible();
+    await expect(page.getByRole("heading", { name: persona.heading })).toBeVisible();
+    if (persona.project !== undefined) await expect(page.getByText(persona.project)).toBeVisible();
+    if (persona.displayName === "Synthetic Designer A") {
+      await page.getByLabel("Project name").fill("PS-710 cookie-only Designer Draft");
+      await page.getByRole("button", { name: "Create and open Draft" }).click();
+      await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
+      await expect(page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+      await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+    }
+    await context.close();
+  });
+}
 
 test("PS-700-T01 authenticated root is useful, branded, responsive, and accessible @a11y", async ({ browser }) => {
   const { context, page } = await actor(browser, fixture.tokens.operator);
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Design with intent. Run with authority." })).toBeVisible();
   await expect(page.getByRole("img", { name: "Plenum" })).toBeVisible();
-  await expect(page.getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
   await expect(page.getByRole("navigation").getByRole("link", { name: /^Studio/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Operations/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Organization members and roles" })).toBeVisible();
   const shell = await context.request.get("/v1/product-context");
   expect(shell.status()).toBe(200);
   const body = await shell.json();
@@ -111,4 +163,96 @@ test("existing Studio and Runtime deep links remain valid", async ({ browser }) 
   await page.goto(runtimeUrl(fixture.tokens.designerA));
   await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Design with intent. Run with authority.");
   await context.close();
+});
+
+test("PS-710-T01 Designer creates, archives, reopens, and resumes a blank Project using visible controls @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  const projectName = "PS-710 visible blank Project";
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
+  await page.getByLabel("Project name").fill(projectName);
+  await page.getByRole("button", { name: "Create and open Draft" }).click();
+  await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
+  await expect(page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+
+  await page.goto("/");
+  const activeProject = page.locator(".project-row").filter({ hasText: projectName });
+  await expect(activeProject).toBeVisible();
+  const stalePage = await context.newPage();
+  await stalePage.goto("/");
+  const staleProject = stalePage.locator(".project-row").filter({ hasText: projectName });
+  await expect(staleProject).toBeVisible();
+  await activeProject.getByRole("button", { name: "Archive" }).click();
+  await expect(activeProject.getByText("Existing published Releases remain immutable and available.")).toBeVisible();
+  await activeProject.getByRole("button", { name: "Confirm archive" }).click();
+  await expect(activeProject).toHaveCount(0);
+
+  await staleProject.getByRole("button", { name: "Archive" }).click();
+  await staleProject.getByRole("button", { name: "Confirm archive" }).click();
+  const staleArchiveNotice = stalePage.getByText("Project state changed in another tab. This view was refreshed.");
+  await expect(staleArchiveNotice).toBeVisible();
+  await expect(staleArchiveNotice).toBeFocused();
+  await expect(staleProject).toHaveCount(0);
+
+  await page.getByLabel("Status", { exact: true }).selectOption("archived");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await stalePage.getByLabel("Status", { exact: true }).selectOption("archived");
+  await stalePage.getByRole("button", { name: "Apply" }).click();
+  const archivedProject = page.locator(".project-row").filter({ hasText: projectName });
+  const staleArchivedProject = stalePage.locator(".project-row").filter({ hasText: projectName });
+  await expect(archivedProject).toBeVisible();
+  await expect(staleArchivedProject).toBeVisible();
+  await archivedProject.getByRole("button", { name: "Reopen" }).click();
+  await expect(archivedProject).toHaveCount(0);
+  await staleArchivedProject.getByRole("button", { name: "Reopen" }).click();
+  const staleReopenNotice = stalePage.getByText("Project state changed in another tab. This view was refreshed.");
+  await expect(staleReopenNotice).toBeVisible();
+  await expect(staleReopenNotice).toBeFocused();
+  await expect(staleArchivedProject).toHaveCount(0);
+  await page.getByLabel("Status", { exact: true }).selectOption("active");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page.locator(".project-row").filter({ hasText: projectName })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${portalEvidenceRoot}/designer-project-lifecycle.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-710-T02 Template defaults, Admin and Reviewer views, and Operator denial are enforced", async ({ browser }) => {
+  const designer = await actor(browser, fixture.tokens.designerB);
+  const projectName = "PS-710 Template Core Design copy";
+  await designer.page.goto("/");
+  const template = designer.page.locator(".template-row").filter({ hasText: "Fractured Order Core Design" });
+  await expect(template).toBeVisible();
+  await template.getByRole("button", { name: "Use Template" }).click();
+  await designer.page.getByLabel("Project name").fill(projectName);
+  await expect(designer.page.getByLabel("Copy optional Scenario content")).not.toBeChecked();
+  await designer.page.getByRole("button", { name: "Create and open Draft" }).click();
+  await expect(designer.page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
+  const projectId = new URL(designer.page.url()).pathname.split("/").at(-1);
+  const draftResponse = await designer.context.request.get(`/v1/projects/${projectId}/draft`);
+  expect(draftResponse.status()).toBe(200);
+  const draft = await draftResponse.json();
+  expect(draft.materialization.coreDesign.teams.length).toBeGreaterThan(0);
+  expect(draft.materialization.scenario.name).toBe("Untitled Scenario");
+  expect(draft.materialization.scenario.content).toBeUndefined();
+  await designer.page.screenshot({ path: `${portalEvidenceRoot}/template-copy-default.png`, fullPage: true });
+  await designer.context.close();
+
+  const reviewer = await actor(browser, fixture.tokens.finalReviewer);
+  await reviewer.page.goto("/");
+  await expect(reviewer.page.getByRole("heading", { name: "Review access" })).toBeVisible();
+  await expect(reviewer.page.getByRole("heading", { name: "Create a Project" })).toHaveCount(0);
+  await expect(reviewer.page.getByRole("button", { name: "Archive" })).toHaveCount(0);
+  expect((await reviewer.context.request.get("/v1/projects?limit=10")).status()).toBe(200);
+  expect((await reviewer.context.request.post("/v1/projects", { data: { requestId: crypto.randomUUID(), title: "Denied" } })).status()).toBe(403);
+  await reviewer.context.close();
+
+  const operator = await actor(browser, fixture.tokens.portalOperator);
+  await operator.page.goto("/");
+  await expect(operator.page.getByRole("heading", { name: "Project access unavailable" })).toBeVisible();
+  const denied = await operator.context.request.get("/v1/projects");
+  expect(denied.status()).toBe(403);
+  expect(JSON.stringify(await denied.json())).not.toContain(fixture.projectId);
+  await operator.page.screenshot({ path: `${portalEvidenceRoot}/operator-denied.png`, fullPage: true });
+  await operator.context.close();
 });

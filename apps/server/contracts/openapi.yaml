@@ -3,6 +3,78 @@ info:
   title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/projects:
+    get:
+      operationId: listProjectPortal
+      x-contract-id: project-portal-v1
+      x-authorized-organization-roles: [admin, designer, publisher, reviewer]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: query, name: query, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: status, schema: { type: string, enum: [active, archived, all], default: active } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        "200": { description: Organization-scoped Project page and least-privilege member view, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectPortalV1" } } } }
+        "403": { description: Current Organization Membership lacks a portal role or was revoked. }
+    post:
+      operationId: createProject
+      x-contract-id: project-portal-v1
+      x-authorized-organization-roles: [admin, designer]
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, title]
+              properties:
+                requestId: { type: string, format: uuid }
+                title: { type: string, minLength: 1, maxLength: 200 }
+                templateId: { type: string, format: uuid }
+                includeScenario: { type: boolean, default: false }
+      responses:
+        "201": { description: Project and Draft created atomically; replay returns the original result, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectMutationV1" } } } }
+        "403": { description: Designer or Admin authority is absent or revoked. }
+        "409": { description: Request ID was reused with different input. }
+        "422": { description: Project or Template input is invalid. }
+  /v1/templates:
+    get:
+      operationId: listSimulationTemplates
+      x-contract-id: template-library-v1
+      x-authorized-organization-roles: [admin, designer, publisher, reviewer]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: query, name: query, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        "200": { description: Organization-scoped Simulation Template page, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateLibraryV1" } } } }
+        "403": { description: Current Organization Membership lacks a portal role or was revoked. }
+  /v1/projects/{projectId}/archive:
+    post:
+      operationId: archiveProject
+      x-contract-id: project-portal-v1
+      x-authorized-organization-roles: [admin, designer]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectLifecycleRequestV1" } } } }
+      responses:
+        "200": { description: Project archived without changing Releases, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectMutationV1" } } } }
+        "409": { description: Stale version, invalid transition, or idempotency collision. }
+  /v1/projects/{projectId}/reopen:
+    post:
+      operationId: reopenProject
+      x-contract-id: project-portal-v1
+      x-authorized-organization-roles: [admin, designer]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: projectId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectLifecycleRequestV1" } } } }
+      responses:
+        "200": { description: Archived Project reopened, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectMutationV1" } } } }
+        "409": { description: Stale version, invalid transition, or idempotency collision. }
   /v1/projects/{projectId}/collaboration:
     get:
       operationId: connectStudioCollaboration
@@ -1319,6 +1391,43 @@ paths:
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
   schemas:
+    ProjectLifecycleRequestV1:
+      type: object
+      additionalProperties: false
+      required: [requestId, expectedVersion]
+      properties:
+        requestId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+    ProjectMutationV1:
+      type: object
+      additionalProperties: false
+      required: [projectId, lifecycleStatus, version, editorUrl, replayed]
+      properties:
+        projectId: { type: string, format: uuid }
+        lifecycleStatus: { type: string, enum: [active, archived] }
+        version: { type: integer, minimum: 1 }
+        editorUrl: { type: string }
+        replayed: { type: boolean }
+    ProjectPortalV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, organization, availableOrganizations, permissions, projects, nextCursor]
+      properties:
+        contractId: { const: project-portal-v1 }
+        organization: { type: object }
+        availableOrganizations: { type: array, minItems: 1, maxItems: 1, items: { type: object } }
+        permissions: { type: object }
+        projects: { type: array, maxItems: 50, items: { type: object } }
+        nextCursor: { type: [string, "null"] }
+        members: { type: array, items: { type: object } }
+    TemplateLibraryV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, templates, nextCursor]
+      properties:
+        contractId: { const: template-library-v1 }
+        templates: { type: array, maxItems: 50, items: { type: object } }
+        nextCursor: { type: [string, "null"] }
     StudioValidationReportV1:
       type: object
       additionalProperties: false

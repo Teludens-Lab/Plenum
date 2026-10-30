@@ -11,3 +11,11 @@ The existing Runtime web deployable owns `/`, so the entry shell is an additive 
 ## DD-700-03 — minimal trusted context
 
 `product-shell-v1` returns the authenticated Principal display name, Organization name and roles, and authorized destination kinds. It never returns Projects, Sessions, Seats, or protected simulation content. The server derives tenant context from the authenticated Principal and RLS-scoped transaction.
+
+## DD-710-01 — portal remains in the Runtime web shell
+
+The Project and Template portal extends the PS-700 root workspace in Runtime web and calls server-owned `project-portal-v1` and `template-library-v1` boundaries. Studio remains the editor reached through server-returned Project URLs. This adds no deployable or parallel navigation model and preserves DD-700-02.
+
+## DD-710-02 — trusted Organization switching
+
+The Organization control exposes only the current authenticated Organization. Switching requires sign-out and a new trusted identity-provider context; it is not implemented as a client-supplied tenant parameter. This satisfies the switcher outcome without disclosing cross-Organization metadata or weakening RLS.

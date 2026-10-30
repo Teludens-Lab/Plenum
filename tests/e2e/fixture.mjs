@@ -1,6 +1,7 @@
 export const fixture = {
   organizationId: "11000000-0000-4000-8000-000000000001",
   projectId: "12000000-0000-4000-8000-000000000001",
+  templateId: "12000000-0000-4000-8000-000000000002",
   revisionId: "13000000-0000-4000-8000-000000000001",
   releaseId: "14000000-0000-4000-8000-000000000001",
   activationRevisionId: "13000000-0000-4000-8000-000000000002",
@@ -18,7 +19,8 @@ export const fixture = {
     designerA: "21000000-0000-4000-8000-000000000008",
     designerB: "21000000-0000-4000-8000-000000000009",
     publisher: "21000000-0000-4000-8000-00000000000a",
-    blueNotetaker: "21000000-0000-4000-8000-00000000000b"
+    blueNotetaker: "21000000-0000-4000-8000-00000000000b",
+    portalOperator: "21000000-0000-4000-8000-00000000000c"
   },
   participants: {
     author: "31000000-0000-4000-8000-000000000001",
@@ -55,7 +57,8 @@ export const fixture = {
     designerA: "51000000-0000-4000-8000-000000000008",
     designerB: "51000000-0000-4000-8000-000000000009",
     publisher: "51000000-0000-4000-8000-00000000000a",
-    blueNotetaker: "51000000-0000-4000-8000-00000000000b"
+    blueNotetaker: "51000000-0000-4000-8000-00000000000b",
+    portalOperator: "51000000-0000-4000-8000-00000000000c"
   },
   tokens: {
     author: "ps150-author",
@@ -68,7 +71,8 @@ export const fixture = {
     designerA: "ps300-designer-a",
     designerB: "ps300-designer-b",
     publisher: "ps300-publisher",
-    blueNotetaker: "ps350-blue-notetaker"
+    blueNotetaker: "ps350-blue-notetaker",
+    portalOperator: "ps710-operator-only"
   },
   proposalArtifactId: "61000000-0000-4000-8000-000000000001",
   pollId: "62000000-0000-4000-8000-000000000001",

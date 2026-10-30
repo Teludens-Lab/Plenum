@@ -37,6 +37,8 @@ import {
   SYNC_SNAPSHOT_CONTRACT_ID,
   SYNC_BOOTSTRAP_CONTRACT_ID,
   OFFLINE_OUTBOX_CONTRACT_ID,
+  PROJECT_PORTAL_CONTRACT_ID,
+  TEMPLATE_LIBRARY_CONTRACT_ID,
   commandEnvelopeV1Schema,
   artifactCommandV1Schema,
   stageCommandV1Schema,
@@ -70,6 +72,8 @@ import {
   syncSnapshotV1Schema,
   syncBootstrapV1Schema,
   offlineOutboxV1Schema,
+  projectPortalV1Schema,
+  templateLibraryV1Schema,
   isCommandOperationType,
   isPastTenseEventType
 } from "../packages/event-contracts/dist/index.js";
@@ -165,6 +169,8 @@ assert.equal(syncDeltasV1Schema.$id, SYNC_DELTAS_CONTRACT_ID);
 assert.equal(syncSnapshotV1Schema.$id, SYNC_SNAPSHOT_CONTRACT_ID);
 assert.equal(syncBootstrapV1Schema.$id, SYNC_BOOTSTRAP_CONTRACT_ID);
 assert.equal(offlineOutboxV1Schema.$id, OFFLINE_OUTBOX_CONTRACT_ID);
+assert.equal(projectPortalV1Schema.$id, PROJECT_PORTAL_CONTRACT_ID);
+assert.equal(templateLibraryV1Schema.$id, TEMPLATE_LIBRARY_CONTRACT_ID);
 assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 assert.equal(pluginBindingV1Schema.$id, PLUGIN_BINDING_CONTRACT_ID);
 assert.equal(compositionDefinitionV1Schema.$id, COMPOSITION_DEFINITION_CONTRACT_ID);
@@ -181,6 +187,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   studioCrdtV1Schema, studioPublishV1Schema,
   rolePreviewV1Schema, compatibilityReportV1Schema, releaseActivationV1Schema, checkpointV1Schema, verificationExportV1Schema,
   reportDefinitionV1Schema, researchExportV1Schema, replayDivergenceV1Schema,
+  projectPortalV1Schema, templateLibraryV1Schema,
   pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);

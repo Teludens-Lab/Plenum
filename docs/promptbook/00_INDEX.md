@@ -58,4 +58,4 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Exact next runnable prompt
 
-Run [PS-710 - Complete Organization, Project, and Template workflows](prompts/P07/PS-710-complete-organization-project-template-workflows.md) next. It is the only recorded ready task. PS-700 is verified with automated evidence and a completed nine-step product-owner smoke; PS-710 now makes the first governed product lifecycle operable without fixture identifiers or direct SQL.
+Run [PS-720 - Complete Release, Session, and administration navigation](prompts/P07/PS-720-complete-release-session-administration-navigation.md) next. It is the only recorded ready task. PS-700 and PS-710 are verified with automated and product-owner evidence; PS-720 connects immutable Releases to visible Session creation and administration workflows.

@@ -17,7 +17,10 @@ import { fixture } from "./fixture.mjs";
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
 const localUserTest = process.argv.includes("--local-user-test");
-const localUserTestCookie = "plenum_ps700_identity=publisher";
+const seedUserTest = process.argv.includes("--seed-user-test");
+if (seedUserTest && !localUserTest) throw new Error("--seed-user-test requires --local-user-test");
+if (seedUserTest) await (await import("./global-setup.mjs")).default();
+const localUserTestCookieName = "plenum_ps700_identity";
 const localOfflineCookie = "plenum_ps700_offline=1";
 const pool = createDatabasePool(databaseUrl);
 const fakeMediaAdapter = {
@@ -68,7 +71,15 @@ async function createMediaAdapter() {
   });
 }
 const mediaAdapter = await createMediaAdapter();
-const roles = { operator: ["operator", "admin"], designerA: ["designer"], designerB: ["designer", "research_analyst"], publisher: ["designer", "publisher", "reviewer"] };
+const roles = { operator: ["operator", "admin"], designerA: ["designer"], designerB: ["designer", "research_analyst"],
+  publisher: ["designer", "publisher", "reviewer"], finalReviewer: ["reviewer"], portalOperator: ["operator"] };
+const localPersonas = {
+  designerA: { label: "Designer", description: "Create, find, archive, reopen, and resume Projects." },
+  operator: { label: "Admin", description: "Inspect Organization members and their Organization Roles." },
+  finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
+  portalOperator: { label: "Operator only", description: "Verify that Project and Template data is denied." },
+  publisher: { label: "Publisher", description: "Retain the PS-700 synthetic sign-in and publication test path." }
+};
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
   principalId: fixture.people[key],
@@ -79,11 +90,16 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 }]));
 
 const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
+function cookieValue(request, name) {
+  const prefix = `${name}=`;
+  const value = request.headers.cookie?.split(";").map((entry) => entry.trim()).find((entry) => entry.startsWith(prefix));
+  try { return value === undefined ? undefined : decodeURIComponent(value.slice(prefix.length)); } catch { return undefined; }
+}
+
 const authenticate = async (request, correlationId) => {
   const authorization = request.headers.authorization;
-  const cookieIdentity = localUserTest && request.headers.cookie?.split(";").map((value) => value.trim()).includes(localUserTestCookie)
-    ? fixture.tokens.publisher
-    : undefined;
+  const persona = localUserTest ? cookieValue(request, localUserTestCookieName) : undefined;
+  const cookieIdentity = persona !== undefined && Object.hasOwn(localPersonas, persona) ? fixture.tokens[persona] : undefined;
   const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
     ? authorization.slice(7)
     : cookieIdentity;
@@ -104,9 +120,60 @@ const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
+const webIndex = await readFile(join(webRoot, "index.html"), "utf8");
+const stylesheet = webIndex.match(/href="([^"]+\.css)"/u)?.[1];
+if (stylesheet === undefined) throw new Error("Runtime web stylesheet was not found");
+
+function safeReturnTo(value) {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
+function personaPage(returnTo, error = "") {
+  const choices = Object.entries(localPersonas).map(([value, persona]) => `<label class="choice">
+    <input type="radio" name="persona" value="${value}" required>
+    <span class="persona-choice-copy"><strong>${persona.label}</strong><span>${persona.description}</span></span>
+  </label>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="color-scheme" content="light dark"><title>Choose a synthetic persona · Plenum</title><link rel="stylesheet" href="${stylesheet}"></head>
+    <body><a class="skip-link" href="#main-content">Skip to main content</a><header class="app-header">
+      <a class="brand-wordmark" href="/" aria-label="Plenum home"><img class="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725"><img class="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true"></a>
+      <span class="badge badge-state">Local user test</span></header><main id="main-content" class="state-page" tabindex="-1">
+      <section class="card state-card"><h1>Choose a synthetic persona</h1><p>This loopback-only chooser changes test identity without passwords, developer tools, or authorization headers.</p>
+      ${error === "" ? "" : `<p class="field-error" role="alert">${error}</p>`}
+      <form class="persona-form" method="post" action="/__test__/identity?returnTo=${encodeURIComponent(returnTo)}"><fieldset><legend>Test role</legend>${choices}</fieldset>
+      <div class="actions"><button class="btn-primary" type="submit">Continue as selected persona</button><a class="btn-secondary link-button" href="/">Cancel</a></div></form>
+      <p class="hint">Synthetic data only. This chooser does not exist in a production deployment.</p></section></main></body></html>`;
+}
+
+async function formBody(request) {
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+    if (body.length > 1024) throw new Error("User-test form is too large");
+  }
+  return new URLSearchParams(body);
+}
 
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? "/", "http://localhost");
+  if (localUserTest && request.method === "GET" && ["/auth/login", "/__test__/personas"].includes(requestUrl.pathname)) {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end(personaPage(safeReturnTo(requestUrl.searchParams.get("returnTo"))));
+    return;
+  }
+  if (localUserTest && request.method === "POST" && requestUrl.pathname === "/__test__/identity") {
+    const returnTo = safeReturnTo(requestUrl.searchParams.get("returnTo"));
+    const persona = (await formBody(request)).get("persona");
+    if (persona === null || !Object.hasOwn(localPersonas, persona)) {
+      response.writeHead(422, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      response.end(personaPage(returnTo, "Choose one of the available synthetic personas."));
+      return;
+    }
+    response.writeHead(303, { location: returnTo,
+      "set-cookie": `${localUserTestCookieName}=${encodeURIComponent(persona)}; Path=/; HttpOnly; SameSite=Strict` });
+    response.end();
+    return;
+  }
   if (localUserTest && request.method === "GET" && requestUrl.pathname === "/__test__/offline") {
     response.writeHead(303, { location: "/", "set-cookie": `${localOfflineCookie}; Path=/; HttpOnly; SameSite=Strict` });
     response.end();
@@ -125,18 +192,14 @@ const server = createServer(async (request, response) => {
     request.socket.destroy();
     return;
   }
-  if (localUserTest && request.method === "GET" && requestUrl.pathname === "/auth/login") {
-    const requestedReturn = requestUrl.searchParams.get("returnTo");
-    const returnTo = requestedReturn?.startsWith("/") && !requestedReturn.startsWith("//") ? requestedReturn : "/";
-    response.writeHead(303, {
-      location: returnTo,
-      "set-cookie": `${localUserTestCookie}; Path=/; HttpOnly; SameSite=Strict`
-    });
-    response.end();
-    return;
-  }
   if (localUserTest && request.method === "POST" && requestUrl.pathname === "/v1/auth/logout") {
-    response.setHeader("set-cookie", "plenum_ps700_identity=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+      "set-cookie": `${localUserTestCookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
+    });
+    response.end(JSON.stringify({ signedOut: true }));
+    return;
   }
   if (request.method === "POST" && request.url === "/__test__/shutdown") {
     response.writeHead(204);
@@ -164,7 +227,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 }));
 
 server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-700 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
+  `${localUserTest ? "PS-710 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
 ));
 
 let closing = false;

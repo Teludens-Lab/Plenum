@@ -111,7 +111,12 @@ import {
   recordCorrection,
   replaySession,
   exportOrganizationArchive,
-  importOrganizationArchive
+  importOrganizationArchive,
+  listProjectPortal,
+  listSimulationTemplates,
+  createProject,
+  archiveProject,
+  reopenProject
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -251,7 +256,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/022_offline_devices.sql",
     "apps/server/migrations/023_evidence_checkpoints.sql",
     "apps/server/migrations/024_reporting_research.sql",
-    "apps/server/migrations/025_security_retention_enforcement.sql"
+    "apps/server/migrations/025_security_retention_enforcement.sql",
+    "apps/server/migrations/026_product_portal.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -432,6 +438,106 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
     withOrganizationTransaction(app, ids.orgA, (client) => client.query("SELECT * FROM evidence.audit_records")),
     /permission denied/
   );
+});
+
+test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, versioned, and least-privilege", async () => {
+  const templateId = "31000000-0000-4000-8000-000000000001";
+  await owner.query(
+    `INSERT INTO studio.simulation_templates
+       (id,organization_id,title,summary,source_project_id,core_design,scenario,published_by)
+     VALUES ($1,$2,'Reusable Core Design','Synthetic PS-710 template',$3,$4::jsonb,$5::jsonb,$6)`,
+    [templateId, ids.orgA, ids.projectA, JSON.stringify(releaseMaterialization.coreDesign),
+      JSON.stringify({ ...releaseMaterialization.scenario, content: [{ id: "scenario-secret" }] }), ids.personD]
+  );
+
+  const designerView = await listProjectPortal(app, principalE, { status: "all", limit: 10 }, randomUUID());
+  assert.equal(designerView.contractId, "project-portal-v1");
+  assert.equal(designerView.projects.some(({ id }) => id === ids.projectA), true);
+  assert.equal(designerView.projects.some(({ id }) => id === ids.projectB), false);
+  assert.equal(designerView.members, undefined);
+  const adminView = await listProjectPortal(app, principalD, { status: "all", limit: 10 }, randomUUID());
+  assert.equal(adminView.permissions.canViewMembers, true);
+  assert.ok(adminView.members?.some(({ id }) => id === ids.personF));
+  await owner.query(`INSERT INTO studio.project_collaborators
+    (organization_id,project_id,person_id,project_role,added_by) VALUES ($1,$2,$3,'reviewer',$4)`,
+  [ids.orgA, ids.projectA, ids.personF, ids.personD]);
+  const reviewerView = await listProjectPortal(app, principalF, { status: "all" }, randomUUID());
+  assert.equal(reviewerView.permissions.canCreateProject, false);
+  assert.deepEqual(reviewerView.projects.map(({ id }) => id), [ids.projectA]);
+  assert.deepEqual((await listSimulationTemplates(app, principalF, {}, randomUUID())).templates, []);
+  await assert.rejects(() => listProjectPortal(app, principal, {}, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+
+  const library = await listSimulationTemplates(app, principalE, { limit: 10 }, randomUUID());
+  assert.equal(library.contractId, "template-library-v1");
+  assert.equal(library.templates[0]?.id, templateId);
+  const requestId = randomUUID();
+  const concurrent = await Promise.all([createProject(app, principalE, {
+    requestId, title: "Template copy without Scenario", templateId
+  }, randomUUID()), createProject(app, principalE, {
+    requestId, title: "Template copy without Scenario", templateId
+  }, randomUUID())]);
+  const created = concurrent.find(({ replayed }) => !replayed);
+  assert.ok(created);
+  assert.equal(new Set(concurrent.map(({ projectId }) => projectId)).size, 1);
+  assert.deepEqual(concurrent.map(({ replayed }) => replayed).sort(), [false, true]);
+  const replay = await createProject(app, principalE, {
+    requestId, title: "Template copy without Scenario", templateId
+  }, randomUUID());
+  assert.equal(replay.projectId, created.projectId);
+  assert.equal(replay.replayed, true);
+  await assert.rejects(() => createProject(app, principalE, {
+    requestId, title: "Idempotency collision", templateId
+  }, randomUUID()), (error) => error.envelope?.error.code === "IDEMPOTENCY_COLLISION");
+  const copied = (await owner.query("SELECT document FROM studio.drafts WHERE project_id=$1", [created.projectId])).rows[0].document;
+  assert.deepEqual(copied.scenario, { id: copied.scenario.id, name: "Untitled Scenario", description: "", deliveryModes: [], tags: [] });
+  assert.deepEqual(copied.coreDesign, releaseMaterialization.coreDesign);
+  const explicitScenario = await createProject(app, principalE, {
+    requestId: randomUUID(), title: "Template copy with Scenario", templateId, includeScenario: true
+  }, randomUUID());
+  const explicitDocument = (await owner.query("SELECT document FROM studio.drafts WHERE project_id=$1", [explicitScenario.projectId])).rows[0].document;
+  assert.deepEqual(explicitDocument.scenario.content, [{ id: "scenario-secret" }]);
+  const interruptedTitle = "Missing Template remains atomic";
+  await assert.rejects(() => createProject(app, principalE, {
+    requestId: randomUUID(), title: interruptedTitle, templateId: randomUUID()
+  }, randomUUID()), (error) => error.envelope?.error.code === "TARGET_NOT_FOUND");
+  assert.equal(Number((await owner.query("SELECT count(*) FROM studio.simulation_projects WHERE title=$1", [interruptedTitle])).rows[0].count), 0);
+
+  const releaseCount = Number((await owner.query("SELECT count(*) FROM registry.releases WHERE project_id=$1", [ids.projectA])).rows[0].count);
+  const archiveRequestId = randomUUID();
+  const archived = await archiveProject(app, principalE, created.projectId,
+    { requestId: archiveRequestId, expectedVersion: 1 }, randomUUID());
+  assert.equal(archived.lifecycleStatus, "archived");
+  const archiveReplay = await archiveProject(app, principalE, created.projectId,
+    { requestId: archiveRequestId, expectedVersion: 1 }, randomUUID());
+  assert.equal(archiveReplay.replayed, true);
+  await assert.rejects(() => reopenProject(app, principalE, created.projectId,
+    { requestId: randomUUID(), expectedVersion: 1 }, randomUUID()),
+  (error) => error.envelope?.error.code === "STALE_AGGREGATE_VERSION");
+  const reopened = await reopenProject(app, principalE, created.projectId,
+    { requestId: randomUUID(), expectedVersion: 2 }, randomUUID());
+  assert.equal(reopened.lifecycleStatus, "active");
+  assert.equal(Number((await owner.query("SELECT count(*) FROM registry.releases WHERE project_id=$1", [ids.projectA])).rows[0].count), releaseCount);
+  await assert.rejects(() => archiveProject(app, principalD, ids.projectB,
+    { requestId: randomUUID(), expectedVersion: 1 }, randomUUID()),
+  (error) => error.envelope?.error.code === "TARGET_NOT_FOUND");
+
+  await owner.query("DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='designer'", [ids.orgA, ids.personE]);
+  try {
+    await assert.rejects(() => archiveProject(app, principalE, created.projectId,
+      { requestId: randomUUID(), expectedVersion: 3 }, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  } finally {
+    await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'designer')", [ids.orgA, ids.personE]);
+  }
+
+  await owner.query("DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='reviewer'", [ids.orgA, ids.personF]);
+  try {
+    await assert.rejects(() => listProjectPortal(app, principalF, {}, randomUUID()),
+      (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  } finally {
+    await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'reviewer')", [ids.orgA, ids.personF]);
+  }
 });
 
 test("PS-550-T01 shares atomic request limits across concurrent application connections", async () => {
@@ -2212,7 +2318,9 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
     assert.equal(imported.replayed, false);
     assert.ok(imported.restoredRows > 0);
     const restoredTables = {
-      projects: "studio.simulation_projects", collaborativeDocuments: "studio.collaborative_documents",
+      projects: "studio.simulation_projects", simulationTemplates: "studio.simulation_templates",
+      projectCollaborators: "studio.project_collaborators", projectMutationReceipts: "studio.project_mutation_receipts",
+      collaborativeDocuments: "studio.collaborative_documents",
       publicationFreezes: "studio.publication_freezes", revisions: "studio.definition_revisions",
       releases: "registry.releases", sessions: "runtime.sessions", sessionAuthorities: "runtime.session_authorities",
       activationReviews: "runtime.release_activation_reviews", activations: "runtime.release_activations",

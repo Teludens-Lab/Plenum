@@ -64,12 +64,66 @@ export const REPORT_DEFINITION_CONTRACT_ID = "report-definition-v1";
 export const RESEARCH_EXPORT_CONTRACT_ID = "research-export-v1";
 export const REPLAY_DIVERGENCE_CONTRACT_ID = "replay-divergence-v1";
 export const PRODUCT_SHELL_CONTRACT_ID = "product-shell-v1";
+export const PROJECT_PORTAL_CONTRACT_ID = "project-portal-v1";
+export const TEMPLATE_LIBRARY_CONTRACT_ID = "template-library-v1";
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;
   principal: { id: string; displayName: string };
   organization: { id: string; name: string; roles: string[] };
   destinations: Array<"home" | "studio" | "runtime" | "operations">;
+}
+
+export interface OrganizationMemberV1 extends JsonObject {
+  id: string;
+  displayName: string;
+  roles: string[];
+}
+
+export interface ProjectSummaryV1 extends JsonObject {
+  id: string;
+  title: string;
+  lifecycleStatus: "active" | "archived";
+  version: number;
+  owner: { id: string; displayName: string };
+  collaborators: OrganizationMemberV1[];
+  sourceTemplate: { id: string; title: string } | null;
+  releaseCount: number;
+  createdAt: string;
+  updatedAt: string;
+  editorUrl: string;
+}
+
+export interface ProjectPortalV1 extends JsonObject {
+  contractId: typeof PROJECT_PORTAL_CONTRACT_ID;
+  organization: { id: string; name: string };
+  availableOrganizations: Array<{ id: string; name: string; current: boolean }>;
+  permissions: { canCreateProject: boolean; canManageProjects: boolean; canViewMembers: boolean };
+  projects: ProjectSummaryV1[];
+  nextCursor: string | null;
+  members?: OrganizationMemberV1[];
+}
+
+export interface ProjectMutationV1 extends JsonObject {
+  projectId: string;
+  lifecycleStatus: "active" | "archived";
+  version: number;
+  editorUrl: string;
+  replayed: boolean;
+}
+
+export interface SimulationTemplateSummaryV1 extends JsonObject {
+  id: string;
+  title: string;
+  summary: string;
+  includesOptionalScenario: boolean;
+  publishedAt: string;
+}
+
+export interface TemplateLibraryV1 extends JsonObject {
+  contractId: typeof TEMPLATE_LIBRARY_CONTRACT_ID;
+  templates: SimulationTemplateSummaryV1[];
+  nextCursor: string | null;
 }
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
@@ -1312,6 +1366,98 @@ export const errorEnvelopeV1Schema = {
     }
   }
 } as const satisfies ContractSchema<ErrorEnvelopeV1>;
+
+const organizationMemberV1Schema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "displayName", "roles"],
+  properties: {
+    id: uuidProperty,
+    displayName: { type: "string", minLength: 1 },
+    roles: { type: "array", items: { type: "string", minLength: 1 } }
+  }
+} as const;
+
+const projectSummaryV1Schema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "title", "lifecycleStatus", "version", "owner", "collaborators", "sourceTemplate",
+    "releaseCount", "createdAt", "updatedAt", "editorUrl"],
+  properties: {
+    id: uuidProperty,
+    title: { type: "string", minLength: 1, maxLength: 200 },
+    lifecycleStatus: { type: "string", enum: ["active", "archived"] },
+    version: { type: "integer", minimum: 1 },
+    owner: {
+      type: "object", additionalProperties: false, required: ["id", "displayName"],
+      properties: { id: uuidProperty, displayName: { type: "string", minLength: 1 } }
+    },
+    collaborators: { type: "array", items: organizationMemberV1Schema },
+    sourceTemplate: {
+      oneOf: [
+        { type: "null" },
+        { type: "object", additionalProperties: false, required: ["id", "title"],
+          properties: { id: uuidProperty, title: { type: "string", minLength: 1 } } }
+      ]
+    },
+    releaseCount: { type: "integer", minimum: 0 },
+    createdAt: utcInstantProperty,
+    updatedAt: utcInstantProperty,
+    editorUrl: { type: "string", pattern: "^/studio/projects/[0-9a-f-]{36}$" }
+  }
+} as const;
+
+export const projectPortalV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: PROJECT_PORTAL_CONTRACT_ID,
+  title: "Project portal v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["contractId", "organization", "availableOrganizations", "permissions", "projects", "nextCursor"],
+  properties: {
+    contractId: { const: PROJECT_PORTAL_CONTRACT_ID },
+    organization: {
+      type: "object", additionalProperties: false, required: ["id", "name"],
+      properties: { id: uuidProperty, name: { type: "string", minLength: 1 } }
+    },
+    availableOrganizations: {
+      type: "array", minItems: 1, maxItems: 1,
+      items: { type: "object", additionalProperties: false, required: ["id", "name", "current"],
+        properties: { id: uuidProperty, name: { type: "string", minLength: 1 }, current: { const: true } } }
+    },
+    permissions: {
+      type: "object", additionalProperties: false,
+      required: ["canCreateProject", "canManageProjects", "canViewMembers"],
+      properties: { canCreateProject: { type: "boolean" }, canManageProjects: { type: "boolean" }, canViewMembers: { type: "boolean" } }
+    },
+    projects: { type: "array", items: projectSummaryV1Schema },
+    nextCursor: { type: ["string", "null"] },
+    members: { type: "array", items: organizationMemberV1Schema }
+  }
+} as const satisfies ContractSchema<ProjectPortalV1>;
+
+export const templateLibraryV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: TEMPLATE_LIBRARY_CONTRACT_ID,
+  title: "Template library v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["contractId", "templates", "nextCursor"],
+  properties: {
+    contractId: { const: TEMPLATE_LIBRARY_CONTRACT_ID },
+    templates: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        required: ["id", "title", "summary", "includesOptionalScenario", "publishedAt"],
+        properties: { id: uuidProperty, title: { type: "string", minLength: 1, maxLength: 200 },
+          summary: { type: "string", maxLength: 1000 }, includesOptionalScenario: { type: "boolean" },
+          publishedAt: utcInstantProperty }
+      }
+    },
+    nextCursor: { type: ["string", "null"] }
+  }
+} as const satisfies ContractSchema<TemplateLibraryV1>;
 
 export const commandReceiptV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

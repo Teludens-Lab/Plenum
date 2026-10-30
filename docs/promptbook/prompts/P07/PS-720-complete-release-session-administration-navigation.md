@@ -7,7 +7,7 @@
 - Goal: Connect published Releases to visible Session creation and administration workflows.
 - User outcome: Publishers and Operators can find Releases, create Sessions, configure them, and navigate to staffing, Runtime, reports, replay, and archive views.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

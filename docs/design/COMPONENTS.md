@@ -13,3 +13,14 @@ All components consume `packages/design-system/src/tokens.css`; reusable raw col
 | Button/link action | default, hover, focus-visible, active, disabled | inherited | semantic element, 44px minimum in focus density, visible focus |
 
 Operations density is reserved for later expert monitoring screens; the entry shell never defaults to it.
+
+## PS-710 additions
+
+| Component | States | Density | Accessibility contract |
+|---|---|---|---|
+| Organization context | current, unavailable | standard | labeled server-owned select; sign-out instruction when another authenticated context is required |
+| Project filter | active, archived, all, empty | standard | labeled search/status controls and explicit Apply action |
+| Project creator | blank, Template, pending, validation, error | standard | fieldset/legend starting point; name retained after failure; Scenario checkbox disabled when unavailable and unchecked on every Template change |
+| Project card | active, archived, archive-confirmation, stale | standard | textual state, owner/collaborator/Release metadata, semantic actions, inline named confirmation group |
+| Template card | available, Core-Design-only, optional-Scenario | standard | descriptive copy semantics and visible Use Template action |
+| Portal state | loading, empty, error, unauthorized, read-only | focus | status/alert semantics, actionable recovery, protected data omitted |

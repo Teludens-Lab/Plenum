@@ -100,6 +100,20 @@
     { "dimension": "prd-requirement", "obligation": "REQ-046", "status": "IMPLEMENTED", "owner": "PS-700 then PS-710", "evidenceTarget": "Product shell authentication-state evidence plus complete identity-profile evidence" },
     { "dimension": "prd-requirement", "obligation": "REQ-064", "status": "IMPLEMENTED", "owner": "PS-700 then PS-800 through PS-820", "evidenceTarget": "PS-700 accessibility evidence plus complete route accessibility review" },
     { "dimension": "prd-requirement", "obligation": "REQ-069", "status": "IMPLEMENTED", "owner": "PS-700 then PS-800", "evidenceTarget": "Teludens semantic conformance audit and all-route remediation evidence" },
-    { "dimension": "prd-requirement", "obligation": "REQ-071", "status": "IMPLEMENTED", "owner": "PS-700 then PS-850", "evidenceTarget": "Completeness ledger validation and final release index" }
+    { "dimension": "prd-requirement", "obligation": "REQ-071", "status": "IMPLEMENTED", "owner": "PS-700 then PS-850", "evidenceTarget": "Completeness ledger validation and final release index" },
+    { "dimension": "api-boundary", "obligation": "organization-project-template", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "project-portal-v1 and template-library-v1; apps/server/test/identity.integration.test.mjs" },
+    { "dimension": "product-screen", "obligation": "organization-portal", "status": "PASS", "owner": "PS-710", "evidenceTarget": "output/playwright/ps-710/designer-project-lifecycle.png; docs/acceptance/PS-710-user-test.md" },
+    { "dimension": "product-screen", "obligation": "project-portal", "status": "PASS", "owner": "PS-710", "evidenceTarget": "PS-710-T01; docs/acceptance/PS-710-user-test.md" },
+    { "dimension": "product-screen", "obligation": "template-catalog", "status": "PASS", "owner": "PS-710", "evidenceTarget": "PS-710-T02; output/playwright/ps-710/template-copy-default.png; docs/acceptance/PS-710-user-test.md" },
+    { "dimension": "persona-journey", "obligation": "simulation-designer", "status": "AUTOMATED_PASS", "owner": "PS-710 then PS-730 through PS-760", "evidenceTarget": "PS-710-T01/T02 and human PS-710 user test PASS for the Organization/Project/Template slice; remaining Studio journey evidence follows in PS-730 through PS-760" },
+    { "dimension": "persona-journey", "obligation": "studio-administrator", "status": "AUTOMATED_PASS", "owner": "PS-710 then PS-790", "evidenceTarget": "PS-710 Admin member/role browser, integration, and human user-test evidence for this slice; complete administration evidence follows in PS-790" },
+    { "dimension": "persona-journey", "obligation": "reviewer-methodology-owner", "status": "AUTOMATED_PASS", "owner": "PS-710 then PS-760", "evidenceTarget": "PS-710 Reviewer read-only, revocation, and human user-test evidence for this slice; complete review journey evidence follows in PS-760" },
+    { "dimension": "prd-requirement", "obligation": "REQ-017", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-310-T02 and PS-710-T02 Template copy evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-045", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-710 server-owned Organization and cross-Organization denial evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-047", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-710 least-privilege persona and revocation evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-048", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-710 Organization member/role Admin view evidence" },
+    { "dimension": "prd-requirement", "obligation": "REQ-052", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-710 recent Project ownership/collaborator/status evidence" },
+    { "dimension": "prd-invariant", "obligation": "INV-001", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-710 Organization-scoped RLS and cross-tenant negative tests" },
+    { "dimension": "prd-invariant", "obligation": "INV-007", "status": "AUTOMATED_PASS", "owner": "PS-710", "evidenceTarget": "PS-310-T02 and PS-710-T02 explicit Scenario inclusion tests" }
   ]
 }

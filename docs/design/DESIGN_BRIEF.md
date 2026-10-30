@@ -18,3 +18,7 @@ Use Teludens v1.3 Institutional Instrumentalism: Graphite continuous materials, 
 ## Constraints
 
 WCAG 2.2 AA, 320 CSS-pixel minimum width, 200-percent text reflow, reduced motion, forced colors, server-authorized context, no Project or Session disclosure, and no UUID required at entry.
+
+## PS-710 extension — governed work entry
+
+The authenticated workspace Gate becomes an Organization-scoped Project portal. Designers must create, find, archive, reopen, and resume Projects without internal identifiers. Admins additionally inspect Organization members and roles; Reviewers receive a read-only status view; Operator-only users receive an explicit denial with no Project disclosure. Simulation Templates remain an Organization library, and the optional Scenario choice is visibly off by default.

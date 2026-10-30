@@ -58,6 +58,7 @@ a { color: var(--color-text-link); }
 .account-context dl { display: grid; gap: var(--space-3); margin-block: var(--space-5); }
 .account-context dl div { padding-block-end: var(--space-3); border-block-end: 1px solid var(--color-border-default); }
 .account-context dd { font-weight: var(--weight-medium); }
+.product-workspaces { min-width: 0; display: grid; gap: var(--section-gap); }
 .portal-workspace { min-width: 0; display: grid; gap: var(--space-5); }
 .portal-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.8fr); gap: var(--space-5); align-items: start; }
 .portal-toolbar h2, .portal-workspace h3, .portal-workspace h4 { margin: var(--space-1) 0 var(--space-3); }
@@ -79,6 +80,15 @@ a { color: var(--color-text-link); }
 .organization-members li { display: flex; justify-content: space-between; gap: var(--space-4); padding-block: var(--space-2); border-block-end: 1px solid var(--color-border-default); }
 .organization-members li span:last-child { color: var(--color-text-secondary); text-align: end; }
 .link-button { display: inline-flex; min-height: var(--control-height); align-items: center; justify-content: center; text-decoration: none; }
+.release-list, .session-list, .lifecycle-links { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.lifecycle-row, .session-create { display: grid; gap: var(--space-4); min-width: 0; }
+.lifecycle-detail nav { margin-bottom: var(--space-4); }
+.digest-value { overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--text-sm); }
+.package-import, .session-create { border-inline-start: 3px solid var(--signal-info); }
+.session-create { margin-top: var(--space-3); padding: var(--space-4); background: var(--material-surface-recessed); }
+.lifecycle-links { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+.lifecycle-links a, .session-operation-navigation a { display: flex; min-height: var(--control-height); align-items: center; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); text-decoration: none; }
+.session-operation-navigation { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-6); }
 .runtime-layout, .state-page { width: min(75rem, 100%); margin-inline: auto; padding: var(--space-8) var(--space-5) var(--space-12); }
 .state-page { min-height: calc(100vh - 4rem); display: grid; place-items: center; }
 .state-card { width: min(34rem, 100%); }

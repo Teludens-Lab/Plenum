@@ -21,6 +21,7 @@ export * from "./adjudication/service.js";
 export * from "./sync/runtime-sync.js";
 export * from "./registry/object-store.js";
 export * from "./registry/publication.js";
+export * from "./registry/lifecycle-portal.js";
 export * from "./research/evidence.js";
 export * from "./evidence/checkpoints.js";
 export * from "./reporting/service.js";

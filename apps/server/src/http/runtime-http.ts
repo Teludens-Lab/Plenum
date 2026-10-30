@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
@@ -57,8 +57,17 @@ import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLe
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, reopenProject } from "../studio/portal.js";
+import {
+  createConfiguredSession,
+  getReleaseCatalogItem,
+  getSessionCatalogItem,
+  listReleaseCatalog,
+  listSessionCatalog
+} from "../registry/lifecycle-portal.js";
+import { exportReleasePackage, importReleasePackage } from "../registry/publication.js";
 
 const MAX_BODY_BYTES = 1_000_000;
+const MAX_PACKAGE_BYTES = 32_000_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export interface RuntimeHttpOptions {
@@ -160,6 +169,22 @@ async function readBody(request: IncomingMessage, correlationId: string): Promis
   } catch {
     throw authorizationError("INVALID_JSON", "The request body must be a JSON object.", correlationId);
   }
+}
+
+async function readPackageBytes(request: IncomingMessage, correlationId: string): Promise<Uint8Array> {
+  if (request.headers["content-type"]?.split(";", 1)[0] !== "application/vnd.plenum.release+json") {
+    throw authorizationError("VALIDATION_FAILED", "A Plenum Release Package content type is required.", correlationId);
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > MAX_PACKAGE_BYTES) throw authorizationError("TOO_LARGE", "The Release Package exceeds 32 MB.", correlationId);
+    chunks.push(bytes);
+  }
+  if (size === 0) throw authorizationError("VALIDATION_FAILED", "The Release Package is empty.", correlationId);
+  return Buffer.concat(chunks);
 }
 
 function pathId(value: string | undefined, correlationId: string): string {
@@ -300,6 +325,44 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && url.pathname === "/v1/devices") {
         send(response, 201, await registerDevice(options.pool, principal));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/releases") {
+        send(response, 200, await listReleaseCatalog(options.pool, principal, listInput(url), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/releases/import") {
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Release Package storage is not configured.", correlationId);
+        const bytes = await readPackageBytes(request, correlationId);
+        const packageDigest = createHash("sha256").update(bytes).digest("hex");
+        send(response, 201, await importReleasePackage(options.pool, options.objectStore, principal, bytes, packageDigest, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/releases\/([^/]+)\/package$/u))) {
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Release Package storage is not configured.", correlationId);
+        const releaseId = pathId(match[1], correlationId);
+        sendArtifact(response, { contentType: "application/vnd.plenum.release+json",
+          filename: `plenum-release-${releaseId}.json`,
+          bytes: await exportReleasePackage(options.pool, options.objectStore, principal, releaseId, correlationId) });
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/releases\/([^/]+)\/sessions$/u))) {
+        const releaseId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        send(response, 201, await createConfiguredSession(options.pool, principal, releaseId, command,
+          correlationId, options.deploymentId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/releases\/([^/]+)$/u))) {
+        send(response, 200, await getReleaseCatalogItem(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/sessions") {
+        send(response, 200, await listSessionCatalog(options.pool, principal, listInput(url), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)$/u))) {
+        send(response, 200, await getSessionCatalogItem(options.pool, principal, pathId(match[1], correlationId), correlationId));
         return true;
       }
       if (request.method === "GET" && url.pathname === "/v1/projects") {

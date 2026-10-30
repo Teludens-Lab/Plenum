@@ -9,9 +9,11 @@ import {
   createStudioCollaborationGateway,
   createDatabasePool,
   createRuntimeHttpHandler,
-  LocalObjectStore
+  LocalObjectStore,
+  withOrganizationTransaction
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
+import { compileRelease } from "../../packages/release-compiler/dist/index.js";
 import { fixture } from "./fixture.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -77,8 +79,8 @@ const localPersonas = {
   designerA: { label: "Designer", description: "Create, find, archive, reopen, and resume Projects." },
   operator: { label: "Admin", description: "Inspect Organization members and their Organization Roles." },
   finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
-  portalOperator: { label: "Operator only", description: "Verify that Project and Template data is denied." },
-  publisher: { label: "Publisher", description: "Retain the PS-700 synthetic sign-in and publication test path." }
+  portalOperator: { label: "Operator only", description: "Find Releases, create configured Sessions, and verify Project data remains denied." },
+  publisher: { label: "Publisher", description: "Find immutable Releases and verify Package export and import." }
 };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
@@ -90,6 +92,41 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 }]));
 
 const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
+const objectStore = new LocalObjectStore(objectRoot);
+let packagesSeeded = false;
+let packageSeedPromise;
+async function ensureFixturePackages() {
+  if (packagesSeeded) return;
+  if (packageSeedPromise !== undefined) return packageSeedPromise;
+  packageSeedPromise = (async () => {
+    let packageRows;
+    try {
+      packageRows = await withOrganizationTransaction(pool, fixture.organizationId, (client) => client.query(`SELECT release.id AS release_id,release.project_id,release.definition_revision_id,
+      release.release_label,release.blob_key,release.package_sha256,revision.snapshot,manifest.manifest
+      FROM registry.releases release
+      JOIN studio.definition_revisions revision ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+      JOIN registry.package_manifests manifest ON manifest.organization_id=release.organization_id AND manifest.release_id=release.id
+      WHERE release.organization_id=$1`, [fixture.organizationId]));
+    } catch (error) {
+      const schemaIsNotReady = error?.code === "42P01" ||
+        (error?.code === "22023" && error?.message === 'role "plenum_app" does not exist');
+      if (schemaIsNotReady) return;
+      throw error;
+    }
+    for (const row of packageRows.rows) {
+      const manifest = row.manifest;
+      const compiled = compileRelease({ releaseId: row.release_id, projectId: row.project_id,
+        definitionRevisionId: row.definition_revision_id, releaseLabel: row.release_label,
+        semanticVersion: manifest.semanticVersion, methodologyVersion: manifest.methodologyVersion,
+        materialization: row.snapshot, publishedBy: manifest.publishedBy, approvedBy: manifest.approvedBy,
+        publishedAt: manifest.publishedAt, releaseNotes: manifest.releaseNotes, validationReportId: manifest.validationReportId });
+      if (compiled.packageDigest !== row.package_sha256) throw new Error(`Fixture Package digest mismatch for ${row.release_id}`);
+      await objectStore.putImmutable(row.blob_key, compiled.bytes, compiled.packageDigest);
+    }
+    packagesSeeded = packageRows.rowCount > 0;
+  })().finally(() => { packageSeedPromise = undefined; });
+  return packageSeedPromise;
+}
 function cookieValue(request, name) {
   const prefix = `${name}=`;
   const value = request.headers.cookie?.split(";").map((entry) => entry.trim()).find((entry) => entry.startsWith(prefix));
@@ -111,7 +148,7 @@ const api = createRuntimeHttpHandler({
   pool,
   deploymentId: fixture.deploymentId,
   mediaAdapter,
-  objectStore: new LocalObjectStore(objectRoot),
+  objectStore,
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
   authenticate
 });
@@ -134,7 +171,7 @@ function personaPage(returnTo, error = "") {
     <span class="persona-choice-copy"><strong>${persona.label}</strong><span>${persona.description}</span></span>
   </label>`).join("");
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <meta name="color-scheme" content="light dark"><title>Choose a synthetic persona · Plenum</title><link rel="stylesheet" href="${stylesheet}"></head>
+    <meta name="color-scheme" content="light dark"><title>Choose a synthetic persona / Plenum</title><link rel="stylesheet" href="${stylesheet}"></head>
     <body><a class="skip-link" href="#main-content">Skip to main content</a><header class="app-header">
       <a class="brand-wordmark" href="/" aria-label="Plenum home"><img class="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725"><img class="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true"></a>
       <span class="badge badge-state">Local user test</span></header><main id="main-content" class="state-page" tabindex="-1">
@@ -155,6 +192,7 @@ async function formBody(request) {
 }
 
 const server = createServer(async (request, response) => {
+  await ensureFixturePackages();
   const requestUrl = new URL(request.url ?? "/", "http://localhost");
   if (localUserTest && request.method === "GET" && ["/auth/login", "/__test__/personas"].includes(requestUrl.pathname)) {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -227,7 +265,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 }));
 
 server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
+  `${localUserTest ? "PS-710/PS-720 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
 ));
 
 let closing = false;

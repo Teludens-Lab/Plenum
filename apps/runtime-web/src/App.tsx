@@ -42,6 +42,7 @@ import { VoiceControls } from "./voice/VoiceControls.js";
 import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
 import { OfflineRuntimeStore } from "./offline/storage.js";
 import { ProjectPortal } from "./product/ProjectPortal.js";
+import { LifecyclePortal } from "./product/LifecyclePortal.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -76,7 +77,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function sessionId(): string | null {
-  return new URLSearchParams(window.location.search).get("sessionId");
+  const stablePath = window.location.pathname.match(/^\/(?:admin\/)?sessions\/([0-9a-f-]{36})(?:\/|$)/iu)?.[1];
+  return stablePath ?? new URLSearchParams(window.location.search).get("sessionId");
 }
 
 function ConnectionBadge({ state }: { state: ConnectionState }) {
@@ -220,11 +222,14 @@ function ProductEntry() {
           <ul>
             <li><a aria-current="page" href="/">Home<span>Account and Organization context</span></a></li>
             <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li>
-            <li><a href="/#sessions">Sessions<span>Join from an invitation or Session link</span></a></li>
-            {context.destinations.includes("operations") ? <li><a href="/admin/">Operations<span>Prepare and monitor a Session</span></a></li> : null}
+            <li><a href="/#session-catalog">Sessions<span>Find governed Sessions and stable links</span></a></li>
+            {context.destinations.includes("operations") ? <li><a href="/#session-catalog">Operations<span>Prepare and monitor a Session</span></a></li> : null}
           </ul>
         </nav>
-        <ProjectPortal />
+        <div className="product-workspaces">
+          <ProjectPortal />
+          <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} />
+        </div>
         <aside className="card account-context teludens-branch" aria-labelledby="account-title">
           <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
           <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Member"}</dd></div></dl>
@@ -1166,6 +1171,7 @@ function OperatorView() {
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operationNotice, setOperationNotice] = useState("");
   const load = useCallback(async () => {
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
     setConnection("loading");
@@ -1215,9 +1221,77 @@ function OperatorView() {
     } catch (cause) { setNotice(cause instanceof Error ? cause.message : "The delivery retry failed."); }
     finally { setPending(false); }
   };
+  const operationView = window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
+  const generateReport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (id === null || pending) return;
+    const data = new FormData(event.currentTarget);
+    setPending(true); setOperationNotice("Generating the authorized report.");
+    try {
+      const response = await fetch(`/v1/sessions/${id}/reports`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), reportKind: String(data.get("reportKind")),
+          format: String(data.get("format")) }) });
+      if (!response.ok) {
+        const body = await response.json() as ErrorEnvelopeV1;
+        throw new Error(body.error.message);
+      }
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const download = document.createElement("a");
+      download.href = blobUrl; download.download = `plenum-session-${id}-report.${String(data.get("format"))}`; download.click();
+      URL.revokeObjectURL(blobUrl);
+      setOperationNotice("Report generated and downloaded.");
+    } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "The report could not be generated."); }
+    finally { setPending(false); }
+  };
+  const runReplay = async () => {
+    if (id === null || pending) return;
+    setPending(true); setOperationNotice("Replaying authoritative Session evidence.");
+    try {
+      const result = await api<{ matched: boolean; comparedEvents: number }>(`/v1/sessions/${id}/replay`, { method: "POST", body: "{}" });
+      setOperationNotice(result.matched ? `Replay matched across ${result.comparedEvents} Evidence Events.` : "Replay completed with divergences.");
+    } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "Replay is unavailable."); }
+    finally { setPending(false); }
+  };
   return <Shell connection={connection}>
     <main id="main-content" className="runtime-layout" tabIndex={-1}>
       <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p>{projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
+      <nav className="card session-operation-navigation" aria-label="Session operations">
+        <a href={`/admin/sessions/${projection.sessionId}#staffing-title`}>Staffing</a>
+        <a href={`/sessions/${projection.sessionId}/runtime`}>Runtime</a>
+        <a href={`/admin/sessions/${projection.sessionId}/reports`}>Reports</a>
+        <a href={`/admin/sessions/${projection.sessionId}/replay`}>Replay</a>
+        <a href={`/admin/sessions/${projection.sessionId}/archive`}>Archive</a>
+        <a href={`/sessions/${projection.sessionId}`}>Session detail</a>
+      </nav>
+      {operationView === null ? null : <p className="live-region" role="status" aria-live="polite">{operationNotice}</p>}
+      {operationView === "reports" ? <section className="card operation-panel" aria-labelledby="reports-title">
+        <p className="eyebrow">Evidence export</p><h2 id="reports-title">Generate a Session report</h2>
+        <form onSubmit={(event) => void generateReport(event)}>
+          <div className="field"><label htmlFor="report-kind">Report</label><select id="report-kind" name="reportKind" defaultValue="after_action">
+            <option value="after_action">After action</option><option value="session_archive">Session archive</option>
+            <option value="control">Control</option><option value="team">Team</option>
+          </select></div>
+          <div className="field"><label htmlFor="report-format">Format</label><select id="report-format" name="format" defaultValue="json">
+            <option value="json">JSON</option><option value="csv">CSV</option><option value="html">HTML</option><option value="pdf">PDF</option><option value="zip">ZIP</option>
+          </select></div>
+          <button className="btn-primary" type="submit" disabled={pending}>Generate and download</button>
+        </form>
+      </section> : null}
+      {operationView === "replay" ? <section className="card operation-panel" aria-labelledby="replay-title">
+        <p className="eyebrow">Deterministic verification</p><h2 id="replay-title">Replay Session evidence</h2>
+        <p>Replay compares authoritative Evidence against the configured deterministic adapter without changing Session state.</p>
+        <button className="btn-primary" type="button" disabled={pending} onClick={() => void runReplay()}>Run replay</button>
+      </section> : null}
+      {operationView === "archive" ? <section className="card operation-panel" aria-labelledby="archive-title">
+        <p className="eyebrow">Retention lifecycle</p><h2 id="archive-title">Archive Session</h2>
+        <p>Archiving preserves immutable Release and Evidence history while removing this Session from active operations.</p>
+        <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+          void send(`/v1/sessions/${projection.sessionId}/archive`, "session.archive", { reason: String(data.get("reason")) }, projection.sessionId, 0); }}>
+          <div className="field"><label htmlFor="archive-reason">Archive reason</label><input id="archive-reason" name="reason" required minLength={3} maxLength={500} /></div>
+          <label className="choice"><input name="confirmed" type="checkbox" required /> I understand this removes the Session from active operations.</label>
+          <button className="btn-primary" type="submit" disabled={pending || projection.sessionStatus === "archived"}>{projection.sessionStatus === "archived" ? "Session archived" : "Confirm archive"}</button>
+        </form>
+      </section> : null}
       <section className="metric-grid" aria-label="Session summary">
         <div className="card metric"><span>Participants</span><strong>{projection.participantCount}</strong></div>
         <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount}</strong></div>
@@ -1331,7 +1405,11 @@ function OperatorView() {
 
 export function App() {
   const operator = useMemo(() => window.location.pathname.startsWith("/admin/"), []);
-  const productEntry = useMemo(() => window.location.pathname === "/" && sessionId() === null, []);
+  const productEntry = useMemo(() => {
+    const pathname = window.location.pathname;
+    return pathname === "/" || /^\/(?:releases|sessions)\/[0-9a-f-]{36}$/iu.test(pathname) ||
+      /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(pathname);
+  }, []);
   if (productEntry) return <ProductEntry />;
   return operator ? <OperatorView /> : <RuntimeView />;
 }

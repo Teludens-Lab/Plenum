@@ -342,10 +342,10 @@ export async function exportReleasePackage(
   releaseId: string,
   correlationId: string
 ): Promise<Uint8Array> {
-  if (principal.organizationRoles.length === 0) throw authorizationError("PERMISSION_DENIED", "Organization membership is required.", correlationId);
+  requirePublisher(principal, correlationId);
   const release = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     const membership = await client.query(
-      "SELECT 1 FROM identity.memberships WHERE organization_id=$1 AND person_id=$2",
+      "SELECT 1 FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='publisher'",
       [principal.organizationId, principal.principalId]
     );
     if (membership.rowCount === 0) throw authorizationError("ACCESS_REVOKED", "Organization access is no longer active.", correlationId);

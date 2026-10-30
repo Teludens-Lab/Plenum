@@ -58,4 +58,4 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Exact next runnable prompt
 
-Run [PS-720 - Complete Release, Session, and administration navigation](prompts/P07/PS-720-complete-release-session-administration-navigation.md) next. It is the only recorded ready task. PS-700 and PS-710 are verified with automated and product-owner evidence; PS-720 connects immutable Releases to visible Session creation and administration workflows.
+Run [PS-730 - Complete foundational Studio workspaces](prompts/P08/PS-730-complete-foundational-studio-workspaces.md) next. PS-700, PS-710, and PS-720 are verified with automated and product-owner evidence. Keep `OPEN-004` explicitly unratified while implementing only approved methodology behavior.

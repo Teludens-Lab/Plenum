@@ -24,3 +24,12 @@ Operations density is reserved for later expert monitoring screens; the entry sh
 | Project card | active, archived, archive-confirmation, stale | standard | textual state, owner/collaborator/Release metadata, semantic actions, inline named confirmation group |
 | Template card | available, Core-Design-only, optional-Scenario | standard | descriptive copy semantics and visible Use Template action |
 | Portal state | loading, empty, error, unauthorized, read-only | focus | status/alert semantics, actionable recovery, protected data omitted |
+
+## PS-720 additions
+
+| Component | States | Density | Accessibility contract |
+|---|---|---|---|
+| Release catalog card | immutable, selected, import/export pending/error | standard | visible provenance/digest; semantic stable-link and Package actions; mutation controls omitted |
+| Session creator/card | blank, pending, configured, error, duplicate-retry | standard | labeled name/schedule fields; one pending action; server-confirmed stable destination |
+| Lifecycle detail | loading, ready, denied, recovery error | focus | breadcrumb navigation, definition-list metadata, live status, protected data omitted on denial |
+| Administration navigation | available, current, unauthorized omission | standard | descriptive stable links; `aria-current` follows the selected destination |

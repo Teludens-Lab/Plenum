@@ -58,8 +58,8 @@ Each task must leave the application runnable and include a 5–20 minute user-t
 | Entry and identity | Root entry, sign-in/out, callback, expired/unavailable/denied states, Organization context | `PS-700` | Product E2E + keyboard/screen-reader smoke | PASS — automated evidence and nine-step product-owner smoke complete |
 | Organization and Project lifecycle | Switch, search, create, archive/reopen, ownership and collaboration | `PS-710` | Persona user test + authorization integration | PASS — automated evidence and independent ten-minute user test completed 2026-10-29 |
 | Templates | Browse, preview, copy semantics, optional Scenario inclusion | `PS-710` | Template-copy browser and contract evidence | PASS — Core Design/default Scenario evidence and independent user test completed 2026-10-29 |
-| Releases and Packages | Review, publish, immutable catalog, export/import, provenance and compatibility | `PS-720`, `PS-760` | Publication/package E2E and digest evidence | PLANNED |
-| Sessions | Create from Release, configure, readiness, lifecycle, catalogs and safe deep links | `PS-720`, `PS-780` | Operator lifecycle E2E | PLANNED |
+| Releases and Packages | Review, publish, immutable catalog, export/import, provenance and compatibility | `PS-720`, `PS-760` | Publication/package E2E and digest evidence | HUMAN PASS — PS-720 catalog/package slice; PS-760 authoring completion remains |
+| Sessions | Create from Release, configure, readiness, lifecycle, catalogs and safe deep links | `PS-720`, `PS-780` | Operator lifecycle E2E | HUMAN PASS — PS-720 configured-creation/catalog slice; PS-780 live operations remain |
 | Studio overview/methodology | Orientation, terminology, dependency and provenance controls | `PS-730` | Studio workspace inventory + user test | PLANNED |
 | Teams, roles and Seats | Identity, objectives, resources, relationships, capabilities, Seat planning and previews | `PS-730`, `PS-760` | Role/Seat authoring and projection parity | PLANNED |
 | Stages and activities | Groups, timers, activities, transitions, gates, conditional and bounded parallel flow | `PS-730` | Authoring/rehearsal/state-machine evidence | PLANNED |
@@ -77,7 +77,7 @@ Each task must leave the application runnable and include a 5–20 minute user-t
 | Participant Runtime | Briefing, objectives, content, modules, configured navigation and role switching | `PS-770` | Role-by-role product E2E | PLANNED |
 | Offline and reconciliation | Local/synchronized/submitted/rejected distinctions, reconnect and conflict recovery | `PS-770` | Offline E2E with duplicate/stale cases | PLANNED |
 | Operator control floor | Lifecycle, timers, Stage gates, Injects, queues, interventions and recovery | `PS-780` | Full live-session rehearsal | PLANNED |
-| Administration | Members, roles, grants, deployment posture, policy and protected operations | `PS-720`, `PS-790` | Least-privilege persona matrix | PLANNED |
+| Administration | Members, roles, grants, deployment posture, policy and protected operations | `PS-720`, `PS-790` | Least-privilege persona matrix | HUMAN PASS — PS-720 stable navigation and least-privilege slice; PS-790 operations remain |
 | Evidence, reports and replay | Trace, export, multi-page reports, captured/reconstructed replay and divergence | `PS-790` | Reconciliation + evidence verification | PLANNED |
 | Archive, retention and legal hold | Archive, correction, hold, purge policy, portable export/import | `PS-790` | Retention/hold/reimport evidence | PLANNED |
 | Complete UI state inventory | Loading, empty, error, pending, stale, conflict, offline, revoked, disabled, success | `PS-700`–`PS-800` | Route × state × viewport matrix | PLANNED |

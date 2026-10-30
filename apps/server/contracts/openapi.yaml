@@ -564,6 +564,81 @@ paths:
         "200": { description: Typed graph compiled and fixture routing previewed without Session state change. }
         "403": { description: Studio authority is absent or revoked. }
         "422": { description: Graph, fixture, type, unit, classification, cycle, or approval validation failed. }
+  /v1/releases:
+    get:
+      operationId: listReleaseCatalog
+      x-contract-id: release-catalog-v1
+      x-authorized-organization-roles: [admin, publisher, operator]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: query, name: query, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        "200": { description: Tenant-scoped immutable Release catalog., content: { application/json: { schema: { $ref: "#/components/schemas/ReleaseCatalogV1" } } } }
+        "403": { description: Current Membership has no Release catalog authority. }
+  /v1/releases/import:
+    post:
+      operationId: importCatalogReleasePackage
+      x-contract-ids: [release-catalog-v1, package-import-v1]
+      x-authorized-organization-role: publisher
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/vnd.plenum.release+json:
+            schema: { type: string, format: binary, maxLength: 32000000 }
+      responses:
+        "201": { description: Package bytes verified and imported or matched idempotently. }
+        "400": { description: Package bytes, digest, schema, or compatibility are invalid. }
+        "403": { description: Publisher authority is absent or revoked. }
+  /v1/releases/{releaseId}:
+    get:
+      operationId: getReleaseCatalogItem
+      x-contract-id: release-catalog-v1
+      x-authorized-organization-roles: [admin, publisher, operator]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: releaseId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Immutable Release detail., content: { application/json: { schema: { $ref: "#/components/schemas/ReleaseSummaryV1" } } } }
+        "404": { description: Release is absent from the authenticated Organization. }
+  /v1/releases/{releaseId}/sessions:
+    post:
+      operationId: createConfiguredSessionFromRelease
+      x-contract-id: session-catalog-v1
+      x-command-operation: session.create
+      x-authorized-organization-role: operator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: releaseId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "201": { description: Session creation, configuration, Receipt, Evidence and outbox committed atomically., content: { application/json: { schema: { $ref: "#/components/schemas/CreatedConfiguredSessionV1" } } } }
+        "403": { description: Current Membership has no Operator authority. }
+        "409": { description: Command is a collision or the Session identity already exists. }
+  /v1/sessions:
+    get:
+      operationId: listSessionCatalog
+      x-contract-id: session-catalog-v1
+      x-authorized-organization-roles: [admin, operator]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: query, name: query, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: status, schema: { type: string, enum: [all, created, configured, ready, open, active, paused, completed, locked, archived], default: all } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        "200": { description: Tenant-scoped Session catalog., content: { application/json: { schema: { $ref: "#/components/schemas/SessionCatalogV1" } } } }
+        "403": { description: Current Membership has no Session catalog authority. }
+  /v1/sessions/{sessionId}:
+    get:
+      operationId: getSessionCatalogItem
+      x-contract-id: session-catalog-v1
+      x-authorized-organization-roles: [admin, operator]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Session status, provenance, blockers and stable destinations., content: { application/json: { schema: { $ref: "#/components/schemas/SessionSummaryV1" } } } }
+        "404": { description: Session is absent from the authenticated Organization. }
   /v1/projects/{projectId}/releases:
     post:
       operationId: publishRelease
@@ -1391,6 +1466,90 @@ paths:
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
 components:
   schemas:
+    ReleaseSummaryV1:
+      type: object
+      additionalProperties: false
+      required: [id, project, label, releaseNumber, packageSchemaVersion, compilerVersion, packageDigest, publishedBy, publishedAt, approvalCount, sessionCount, immutable, detailUrl, packageUrl]
+      properties:
+        id: { type: string, format: uuid }
+        project: { type: object, additionalProperties: false, required: [id, title], properties: { id: { type: string, format: uuid }, title: { type: string } } }
+        label: { type: string }
+        releaseNumber: { type: integer, minimum: 1 }
+        packageSchemaVersion: { type: string }
+        compilerVersion: { type: string }
+        packageDigest: { type: string, pattern: "^[0-9a-f]{64}$" }
+        publishedBy: { type: object, additionalProperties: false, required: [id, displayName], properties: { id: { type: string, format: uuid }, displayName: { type: string } } }
+        publishedAt: { type: string, format: date-time }
+        approvalCount: { type: integer, minimum: 0 }
+        sessionCount: { type: integer, minimum: 0 }
+        immutable: { const: true }
+        detailUrl: { type: string }
+        packageUrl: { type: string }
+    ReleaseCatalogV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, permissions, releases, nextCursor]
+      properties:
+        contractId: { const: release-catalog-v1 }
+        permissions:
+          type: object
+          additionalProperties: false
+          required: [canExportPackage, canImportPackage, canCreateSession]
+          properties:
+            canExportPackage: { type: boolean }
+            canImportPackage: { type: boolean }
+            canCreateSession: { type: boolean }
+        releases: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ReleaseSummaryV1" } }
+        nextCursor: { type: [string, "null"] }
+    SessionSummaryV1:
+      type: object
+      additionalProperties: false
+      required: [id, title, project, governingRelease, status, version, scheduledStartAt, createdAt, updatedAt, participantCount, readiness, nextActions, urls]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        project: { type: object }
+        governingRelease: { type: object }
+        status: { type: string, enum: [created, configured, ready, open, active, paused, completed, locked, archived] }
+        version: { type: integer, minimum: 1 }
+        scheduledStartAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        participantCount: { type: integer, minimum: 0 }
+        readiness: { type: object }
+        nextActions: { type: array, items: { type: string } }
+        urls: { type: object }
+    SessionCatalogV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, permissions, sessions, nextCursor]
+      properties:
+        contractId: { const: session-catalog-v1 }
+        permissions:
+          type: object
+          additionalProperties: false
+          required: [canCreateSession, canOperateSessions]
+          properties:
+            canCreateSession: { type: boolean }
+            canOperateSessions: { type: boolean }
+        sessions: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/SessionSummaryV1" } }
+        nextCursor: { type: [string, "null"] }
+    CreatedConfiguredSessionV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, sessionId, title, status, version, governingReleaseId, scheduledStartAt, replayed, evidenceSequence, detailUrl, staffingUrl]
+      properties:
+        contractId: { const: session-catalog-v1 }
+        sessionId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        status: { const: configured }
+        version: { const: 2 }
+        governingReleaseId: { type: string, format: uuid }
+        scheduledStartAt: { type: [string, "null"], format: date-time }
+        replayed: { type: boolean }
+        evidenceSequence: { type: integer, minimum: 1 }
+        detailUrl: { type: string }
+        staffingUrl: { type: string }
     ProjectLifecycleRequestV1:
       type: object
       additionalProperties: false

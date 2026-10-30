@@ -112,6 +112,11 @@ import {
   replaySession,
   exportOrganizationArchive,
   importOrganizationArchive,
+  listReleaseCatalog,
+  getReleaseCatalogItem,
+  listSessionCatalog,
+  getSessionCatalogItem,
+  createConfiguredSession,
   listProjectPortal,
   listSimulationTemplates,
   createProject,
@@ -257,7 +262,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/023_evidence_checkpoints.sql",
     "apps/server/migrations/024_reporting_research.sql",
     "apps/server/migrations/025_security_retention_enforcement.sql",
-    "apps/server/migrations/026_product_portal.sql"
+    "apps/server/migrations/026_product_portal.sql",
+    "apps/server/migrations/027_release_session_catalog.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -538,6 +544,92 @@ test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, v
   } finally {
     await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'reviewer')", [ids.orgA, ids.personF]);
   }
+});
+
+test("PS-720-T01/T02 AC-03 catalogs immutable Releases and creates one configured Session exactly once", async () => {
+  const projectId = "30000000-0000-4000-8000-000000000720";
+  const revisionId = "40000000-0000-4000-8000-000000000720";
+  const releaseId = "50000000-0000-4000-8000-000000000720";
+  const sessionId = "60000000-0000-4000-8000-000000000720";
+  const commandId = "f0000000-0000-4000-8000-000000000720";
+  const snapshot = {
+    coreDesign: {
+      accessPolicy: { readiness: [
+        { key: "staffing", label: "Required Seats are staffed", blocking: true },
+        { key: "operator_check", label: "Operator review is complete", blocking: true }
+      ] },
+      seats: [{ id: "control", sessionRoleIds: ["role-control"], minOccupancy: 1,
+        maxOccupancy: 1, required: true, joinMode: "assigned" }]
+    },
+    scenario: { id: "scenario-720", name: "Lifecycle fixture", description: "Synthetic", deliveryModes: [], tags: [] }
+  };
+  await owner.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'PS-720 Lifecycle',$3)",
+    [projectId, ids.orgA, ids.personA]);
+  await owner.query(`INSERT INTO studio.definition_revisions
+    (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
+    VALUES ($1,$2,$3,$4::jsonb,repeat('7',64),'v1',$5)`,
+  [revisionId, ids.orgA, projectId, JSON.stringify(snapshot), ids.personA]);
+  await owner.query(`INSERT INTO registry.releases
+    (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,
+     compiler_version,package_sha256,blob_key,published_by)
+    VALUES ($1,$2,$3,$4,1,'PS-720 immutable Release','release-package-v1','compiler-v1',repeat('7',64),'ps-720/release.json',$5)`,
+  [releaseId, ids.orgA, projectId, revisionId, ids.personD]);
+
+  const publisherCatalog = await listReleaseCatalog(app, principalD, { query: "PS-720", limit: 10 }, randomUUID());
+  assert.equal(publisherCatalog.contractId, "release-catalog-v1");
+  assert.deepEqual(publisherCatalog.permissions, { canExportPackage: true, canImportPackage: true, canCreateSession: false });
+  assert.deepEqual(publisherCatalog.releases.map(({ id }) => id), [releaseId]);
+  assert.equal((await getReleaseCatalogItem(app, principalD, releaseId, randomUUID())).immutable, true);
+  const operatorCatalog = await listReleaseCatalog(app, principal, { query: "PS-720" }, randomUUID());
+  assert.equal(operatorCatalog.permissions.canCreateSession, true);
+  assert.equal(operatorCatalog.permissions.canExportPackage, false);
+  await assert.rejects(() => listReleaseCatalog(app, principalF, {}, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  await assert.rejects(() => listReleaseCatalog(app, { ...principal, organizationId: ids.orgB }, {}, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+
+  const command = {
+    commandId, deviceId: ids.deviceA, operationType: "session.create", aggregateId: sessionId,
+    expectedAggregateVersion: 0, governingReleaseId: releaseId,
+    payload: { title: "PS-720 configured Session", scheduledStartAt: "2030-02-03T14:30:00.000Z" }
+  };
+  const duplicate = await Promise.all([
+    createConfiguredSession(app, principal, releaseId, command, randomUUID(), ids.deploymentA),
+    createConfiguredSession(app, principal, releaseId, command, randomUUID(), ids.deploymentA)
+  ]);
+  assert.deepEqual(duplicate.map(({ replayed }) => replayed).sort(), [false, true]);
+  assert.equal(new Set(duplicate.map(({ sessionId: id }) => id)).size, 1);
+  const replay = await createConfiguredSession(app, principal, releaseId, command, randomUUID(), ids.deploymentA);
+  assert.equal(replay.replayed, true);
+  await assert.rejects(() => createConfiguredSession(app, principal, releaseId, {
+    ...command, payload: { ...command.payload, title: "Collision" }
+  }, randomUUID(), ids.deploymentA), (error) => error.envelope?.error.code === "IDEMPOTENCY_COLLISION");
+
+  const sessions = await listSessionCatalog(app, principal, { query: "PS-720", status: "configured" }, randomUUID());
+  assert.equal(sessions.contractId, "session-catalog-v1");
+  assert.deepEqual(sessions.sessions.map(({ id }) => id), [sessionId]);
+  const detail = await getSessionCatalogItem(app, principal, sessionId, randomUUID());
+  assert.equal(detail.governingRelease.id, releaseId);
+  assert.equal(detail.status, "configured");
+  assert.equal(detail.urls.detail, `/sessions/${sessionId}`);
+  const adminSessions = await listSessionCatalog(app, principalD, { query: "PS-720" }, randomUUID());
+  assert.deepEqual(adminSessions.permissions, { canCreateSession: false, canOperateSessions: false });
+  assert.deepEqual(adminSessions.sessions.map(({ id }) => id), [sessionId]);
+  await assert.rejects(() => listSessionCatalog(app, principalF, {}, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  await assert.rejects(() => getSessionCatalogItem(app, { ...principal, organizationId: ids.orgB }, sessionId, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+
+  const persisted = await owner.query(`SELECT
+    (SELECT count(*)::int FROM runtime.sessions WHERE id=$1) AS sessions,
+    (SELECT count(*)::int FROM sync.command_receipts WHERE session_id=$1 AND command_id=$2) AS receipts,
+    (SELECT count(*)::int FROM evidence.events WHERE session_id=$1) AS events,
+    (SELECT count(*)::int FROM sync.session_delta_outbox WHERE session_id=$1) AS outbox,
+    (SELECT count(*)::int FROM evidence.audit_records WHERE target_ref=$3) AS audits,
+    (SELECT package_sha256 FROM registry.releases WHERE id=$4) AS release_digest`,
+  [sessionId, commandId, `session:${sessionId}`, releaseId]);
+  assert.deepEqual(persisted.rows[0], { sessions: 1, receipts: 1, events: 2, outbox: 2, audits: 1,
+    release_digest: "7".repeat(64) });
 });
 
 test("PS-550-T01 shares atomic request limits across concurrent application connections", async () => {

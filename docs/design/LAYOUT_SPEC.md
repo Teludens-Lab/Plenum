@@ -9,3 +9,7 @@ The wordmark preserves its 2170:725 aspect ratio between 7.5rem and 10.5rem. The
 ## PS-710 Project portal
 
 The existing shell keeps document-scroll ownership. Inside the central workspace, use one vertical Path: current Organization, search/status Gate, create branch, recent Project cards, Simulation Template cards, and the Admin-only member branch. Project metadata uses a responsive two-column definition grid; at narrow width all toolbar, filter, metadata, and action regions collapse to one column without nested scrolling.
+
+## PS-720 lifecycle portal
+
+Release and Session filters, catalogs, selected details, creation form, and administration navigation remain in the shell's single document scroll. Catalog rows use a flexible content/action split that collapses to one column below 48rem. Digests wrap without forcing horizontal overflow; detail metadata follows the existing responsive definition grid.

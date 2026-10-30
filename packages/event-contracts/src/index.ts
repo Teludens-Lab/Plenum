@@ -66,6 +66,8 @@ export const REPLAY_DIVERGENCE_CONTRACT_ID = "replay-divergence-v1";
 export const PRODUCT_SHELL_CONTRACT_ID = "product-shell-v1";
 export const PROJECT_PORTAL_CONTRACT_ID = "project-portal-v1";
 export const TEMPLATE_LIBRARY_CONTRACT_ID = "template-library-v1";
+export const RELEASE_CATALOG_CONTRACT_ID = "release-catalog-v1";
+export const SESSION_CATALOG_CONTRACT_ID = "session-catalog-v1";
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;
@@ -124,6 +126,70 @@ export interface TemplateLibraryV1 extends JsonObject {
   contractId: typeof TEMPLATE_LIBRARY_CONTRACT_ID;
   templates: SimulationTemplateSummaryV1[];
   nextCursor: string | null;
+}
+
+export interface ReleaseSummaryV1 extends JsonObject {
+  id: string;
+  project: { id: string; title: string };
+  label: string;
+  releaseNumber: number;
+  packageSchemaVersion: string;
+  compilerVersion: string;
+  packageDigest: string;
+  publishedBy: { id: string; displayName: string };
+  publishedAt: string;
+  approvalCount: number;
+  sessionCount: number;
+  immutable: true;
+  detailUrl: string;
+  packageUrl: string;
+}
+
+export interface ReleaseCatalogV1 extends JsonObject {
+  contractId: typeof RELEASE_CATALOG_CONTRACT_ID;
+  permissions: { canExportPackage: boolean; canImportPackage: boolean; canCreateSession: boolean };
+  releases: ReleaseSummaryV1[];
+  nextCursor: string | null;
+}
+
+export type SessionLifecycleStatusV1 = "created" | "configured" | "ready" | "open" | "active" |
+  "paused" | "completed" | "locked" | "archived";
+
+export interface SessionSummaryV1 extends JsonObject {
+  id: string;
+  title: string;
+  project: { id: string; title: string };
+  governingRelease: { id: string; label: string };
+  status: SessionLifecycleStatusV1;
+  version: number;
+  scheduledStartAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  participantCount: number;
+  readiness: { complete: number; total: number; blockingIncomplete: number };
+  nextActions: string[];
+  urls: { detail: string; staffing: string; runtime: string; reports: string; replay: string; archive: string };
+}
+
+export interface SessionCatalogV1 extends JsonObject {
+  contractId: typeof SESSION_CATALOG_CONTRACT_ID;
+  permissions: { canCreateSession: boolean; canOperateSessions: boolean };
+  sessions: SessionSummaryV1[];
+  nextCursor: string | null;
+}
+
+export interface CreatedConfiguredSessionV1 extends JsonObject {
+  contractId: typeof SESSION_CATALOG_CONTRACT_ID;
+  sessionId: string;
+  title: string;
+  status: "configured";
+  version: number;
+  governingReleaseId: string;
+  scheduledStartAt: string | null;
+  replayed: boolean;
+  evidenceSequence: number;
+  detailUrl: string;
+  staffingUrl: string;
 }
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
@@ -1458,6 +1524,97 @@ export const templateLibraryV1Schema = {
     nextCursor: { type: ["string", "null"] }
   }
 } as const satisfies ContractSchema<TemplateLibraryV1>;
+
+const releaseSummaryV1Schema = {
+  type: "object", additionalProperties: false,
+  required: ["id", "project", "label", "releaseNumber", "packageSchemaVersion", "compilerVersion",
+    "packageDigest", "publishedBy", "publishedAt", "approvalCount", "sessionCount", "immutable", "detailUrl", "packageUrl"],
+  properties: {
+    id: uuidProperty,
+    project: { type: "object", additionalProperties: false, required: ["id", "title"], properties: {
+      id: uuidProperty, title: { type: "string", minLength: 1, maxLength: 200 }
+    } },
+    label: { type: "string", minLength: 1, maxLength: 200 }, releaseNumber: { type: "integer", minimum: 1 },
+    packageSchemaVersion: { type: "string", minLength: 1 }, compilerVersion: { type: "string", minLength: 1 },
+    packageDigest: { type: "string", pattern: "^[0-9a-f]{64}$" },
+    publishedBy: { type: "object", additionalProperties: false, required: ["id", "displayName"], properties: {
+      id: uuidProperty, displayName: { type: "string", minLength: 1 }
+    } },
+    publishedAt: utcInstantProperty, approvalCount: { type: "integer", minimum: 0 },
+    sessionCount: { type: "integer", minimum: 0 }, immutable: { const: true },
+    detailUrl: { type: "string", pattern: "^/releases/[0-9a-f-]{36}$" },
+    packageUrl: { type: "string", pattern: "^/v1/releases/[0-9a-f-]{36}/package$" }
+  }
+} as const;
+
+export const releaseCatalogV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: RELEASE_CATALOG_CONTRACT_ID,
+  title: "Release catalog v1", type: "object", additionalProperties: false,
+  required: ["contractId", "permissions", "releases", "nextCursor"],
+  properties: {
+    contractId: { const: RELEASE_CATALOG_CONTRACT_ID },
+    permissions: { type: "object", additionalProperties: false,
+      required: ["canExportPackage", "canImportPackage", "canCreateSession"], properties: {
+        canExportPackage: { type: "boolean" }, canImportPackage: { type: "boolean" }, canCreateSession: { type: "boolean" }
+      } },
+    releases: { type: "array", items: releaseSummaryV1Schema }, nextCursor: { type: ["string", "null"] }
+  }
+} as const satisfies ContractSchema<ReleaseCatalogV1>;
+
+const sessionStatusV1Schema = { type: "string", enum: ["created", "configured", "ready", "open", "active", "paused", "completed", "locked", "archived"] } as const;
+const sessionSummaryV1Schema = {
+  type: "object", additionalProperties: false,
+  required: ["id", "title", "project", "governingRelease", "status", "version", "scheduledStartAt", "createdAt",
+    "updatedAt", "participantCount", "readiness", "nextActions", "urls"],
+  properties: {
+    id: uuidProperty, title: { type: "string", minLength: 1, maxLength: 200 },
+    project: { type: "object", additionalProperties: false, required: ["id", "title"], properties: {
+      id: uuidProperty, title: { type: "string", minLength: 1, maxLength: 200 }
+    } },
+    governingRelease: { type: "object", additionalProperties: false, required: ["id", "label"], properties: {
+      id: uuidProperty, label: { type: "string", minLength: 1, maxLength: 200 }
+    } },
+    status: sessionStatusV1Schema, version: { type: "integer", minimum: 1 },
+    scheduledStartAt: { type: ["string", "null"], format: "date-time" }, createdAt: utcInstantProperty, updatedAt: utcInstantProperty,
+    participantCount: { type: "integer", minimum: 0 },
+    readiness: { type: "object", additionalProperties: false, required: ["complete", "total", "blockingIncomplete"], properties: {
+      complete: { type: "integer", minimum: 0 }, total: { type: "integer", minimum: 0 }, blockingIncomplete: { type: "integer", minimum: 0 }
+    } },
+    nextActions: { type: "array", items: { type: "string", minLength: 1 } },
+    urls: { type: "object", additionalProperties: false,
+      required: ["detail", "staffing", "runtime", "reports", "replay", "archive"], properties: {
+        detail: { type: "string" }, staffing: { type: "string" }, runtime: { type: "string" },
+        reports: { type: "string" }, replay: { type: "string" }, archive: { type: "string" }
+      } }
+  }
+} as const;
+
+export const sessionCatalogV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: SESSION_CATALOG_CONTRACT_ID,
+  title: "Session catalog v1", type: "object", additionalProperties: false,
+  required: ["contractId", "permissions", "sessions", "nextCursor"],
+  properties: {
+    contractId: { const: SESSION_CATALOG_CONTRACT_ID },
+    permissions: { type: "object", additionalProperties: false, required: ["canCreateSession", "canOperateSessions"], properties: {
+      canCreateSession: { type: "boolean" }, canOperateSessions: { type: "boolean" }
+    } },
+    sessions: { type: "array", items: sessionSummaryV1Schema }, nextCursor: { type: ["string", "null"] }
+  }
+} as const satisfies ContractSchema<SessionCatalogV1>;
+
+export const createdConfiguredSessionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: "session-catalog-created-v1",
+  title: "Created configured Session v1", type: "object", additionalProperties: false,
+  required: ["contractId", "sessionId", "title", "status", "version", "governingReleaseId", "scheduledStartAt",
+    "replayed", "evidenceSequence", "detailUrl", "staffingUrl"],
+  properties: {
+    contractId: { const: SESSION_CATALOG_CONTRACT_ID }, sessionId: uuidProperty,
+    title: { type: "string", minLength: 1, maxLength: 200 }, status: { const: "configured" },
+    version: { type: "integer", minimum: 2 }, governingReleaseId: uuidProperty,
+    scheduledStartAt: { type: ["string", "null"], format: "date-time" }, replayed: { type: "boolean" },
+    evidenceSequence: { type: "integer", minimum: 1 }, detailUrl: { type: "string" }, staffingUrl: { type: "string" }
+  }
+} as const satisfies ContractSchema<CreatedConfiguredSessionV1>;
 
 export const commandReceiptV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",

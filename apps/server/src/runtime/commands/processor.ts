@@ -84,7 +84,7 @@ export function validateCommandEnvelope(command: CommandEnvelopeV1, correlationI
   }
 }
 
-function commandDigest(command: CommandEnvelopeV1): string {
+export function commandEnvelopeDigest(command: CommandEnvelopeV1): string {
   const value: JsonObject = {
     commandId: command.commandId.toLowerCase(),
     deviceId: command.deviceId.toLowerCase(),
@@ -255,7 +255,7 @@ export async function processPrincipalSessionCommand(input: ProcessPrincipalComm
   if (command.deviceId !== context.deviceId) {
     throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
   }
-  const digest = commandDigest(command);
+  const digest = commandEnvelopeDigest(command);
   return withOrganizationTransaction(pool, context.organizationId, async (client) => {
     const authorityRow = await lockAuthority(client, context.organizationId, context.sessionId, command.commandId);
     if (authorityRow === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Session was not found.", correlationId);
@@ -299,7 +299,7 @@ export async function processSessionCommand(input: ProcessCommandInput): Promise
   if (context.deviceId === undefined || command.deviceId !== context.deviceId) {
     throw authorizationError("DEVICE_NOT_REGISTERED", "The Device is not registered.", correlationId);
   }
-  const digest = commandDigest(command);
+  const digest = commandEnvelopeDigest(command);
 
   return withOrganizationTransaction(pool, context.organizationId, async (client) => {
     const authorityRow = await lockAuthority(client, context.organizationId, context.sessionId, command.commandId);

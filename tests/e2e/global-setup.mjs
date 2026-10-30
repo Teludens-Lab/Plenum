@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import { Pool } from "pg";
+import { compileRelease } from "@plenum/release-compiler";
 
 import { fixture } from "./fixture.mjs";
 
@@ -33,7 +34,8 @@ const migrations = [
   "apps/server/migrations/023_evidence_checkpoints.sql",
   "apps/server/migrations/024_reporting_research.sql",
   "apps/server/migrations/025_security_retention_enforcement.sql",
-  "apps/server/migrations/026_product_portal.sql"
+  "apps/server/migrations/026_product_portal.sql",
+  "apps/server/migrations/027_release_session_catalog.sql"
 ];
 
 export default async function globalSetup() {
@@ -60,8 +62,21 @@ export default async function globalSetup() {
     const consentChannel = releaseDefinition.coreDesign.communications.voiceChannels.find(({ id }) => id === "team-open-room");
     consentChannel.transcriptionPolicy = "with_consent";
     consentChannel.retentionPolicyId = "voice-short";
+    const fixtureMediaAdapter = releaseDefinition.coreDesign.platformAdapters.find(({ id }) => id === "local-media-v1");
+    for (const capability of fixtureMediaAdapter.voiceCapabilities) capability.transcription = true;
     const activationDefinition = structuredClone(releaseDefinition);
     activationDefinition.coreDesign.workflows[0].name = `${activationDefinition.coreDesign.workflows[0].name} (revised)`;
+    const fixturePublishedAt = "2026-01-15T12:00:00.000Z";
+    const compiledRelease = compileRelease({ releaseId: fixture.releaseId, projectId: fixture.projectId,
+      definitionRevisionId: fixture.revisionId, releaseLabel: "S1 proof 1.0.0", semanticVersion: "1.0.0",
+      methodologyVersion: "1.3.1", materialization: releaseDefinition, publishedBy: fixture.people.operator,
+      approvedBy: [fixture.people.publisher], publishedAt: fixturePublishedAt, releaseNotes: "Synthetic PS-720 fixture.",
+      validationReportId: "18000000-0000-4000-8000-000000000001" });
+    const compiledActivation = compileRelease({ releaseId: fixture.activationReleaseId, projectId: fixture.projectId,
+      definitionRevisionId: fixture.activationRevisionId, releaseLabel: "S1 proof 1.1.0", semanticVersion: "1.1.0",
+      methodologyVersion: "1.3.1", materialization: activationDefinition, publishedBy: fixture.people.operator,
+      approvedBy: [fixture.people.publisher], publishedAt: fixturePublishedAt, releaseNotes: "Synthetic activation fixture.",
+      validationReportId: "18000000-0000-4000-8000-000000000002" });
     const people = Object.values(fixture.people);
     await owner.query("BEGIN");
     await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-150 synthetic organization')", [fixture.organizationId]);
@@ -114,32 +129,47 @@ export default async function globalSetup() {
     await owner.query(
       `INSERT INTO studio.definition_revisions
        (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
-       VALUES ($1,$2,$3,$4::jsonb,repeat('a',64),'1.3.1',$5)`,
-      [fixture.revisionId, fixture.organizationId, fixture.projectId, JSON.stringify(releaseDefinition), fixture.people.operator]
+       VALUES ($1,$2,$3,$4::jsonb,$5,'1.3.1',$6)`,
+      [fixture.revisionId, fixture.organizationId, fixture.projectId, JSON.stringify(releaseDefinition),
+        compiledRelease.contentDigest, fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO registry.releases
        (id,organization_id,project_id,definition_revision_id,release_number,release_label,
-        package_schema_version,compiler_version,package_sha256,blob_key,published_by)
-       VALUES ($1,$2,$3,$4,1,'S1 proof 1.0.0','1.0.0','0.1.0',repeat('b',64),'fixture://ps-150',$5)`,
-      [fixture.releaseId, fixture.organizationId, fixture.projectId, fixture.revisionId, fixture.people.operator]
+        package_schema_version,compiler_version,package_sha256,blob_key,published_by,published_at)
+       VALUES ($1,$2,$3,$4,1,'S1 proof 1.0.0','1.0.0','0.1.0',$5,'fixtures/ps-150-release.json',$6,$7)`,
+      [fixture.releaseId, fixture.organizationId, fixture.projectId, fixture.revisionId,
+        compiledRelease.packageDigest, fixture.people.operator, fixturePublishedAt]
     );
     await owner.query(
       `INSERT INTO studio.definition_revisions
        (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
-       VALUES ($1,$2,$3,$4::jsonb,repeat('c',64),'1.3.1',$5)`,
-      [fixture.activationRevisionId, fixture.organizationId, fixture.projectId, JSON.stringify(activationDefinition), fixture.people.operator]
+       VALUES ($1,$2,$3,$4::jsonb,$5,'1.3.1',$6)`,
+      [fixture.activationRevisionId, fixture.organizationId, fixture.projectId, JSON.stringify(activationDefinition),
+        compiledActivation.contentDigest, fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO registry.releases
        (id,organization_id,project_id,definition_revision_id,release_number,release_label,
-        package_schema_version,compiler_version,package_sha256,blob_key,published_by)
-       VALUES ($1,$2,$3,$4,2,'S1 proof 1.1.0','1.0.0','0.1.0',repeat('d',64),'fixture://ps-420',$5)`,
-      [fixture.activationReleaseId, fixture.organizationId, fixture.projectId, fixture.activationRevisionId, fixture.people.operator]
+        package_schema_version,compiler_version,package_sha256,blob_key,published_by,published_at)
+       VALUES ($1,$2,$3,$4,2,'S1 proof 1.1.0','1.0.0','0.1.0',$5,'fixtures/ps-420-release.json',$6,$7)`,
+      [fixture.activationReleaseId, fixture.organizationId, fixture.projectId, fixture.activationRevisionId,
+        compiledActivation.packageDigest, fixture.people.operator, fixturePublishedAt]
     );
+    for (const [releaseId, compiled] of [[fixture.releaseId, compiledRelease], [fixture.activationReleaseId, compiledActivation]]) {
+      await owner.query(`INSERT INTO registry.release_approvals
+        (id,organization_id,release_id,approver_person_id,decision,notes,decided_at)
+        VALUES (gen_random_uuid(),$1,$2,$3,'approved','Synthetic fixture approval',$4)`,
+      [fixture.organizationId, releaseId, fixture.people.publisher, fixturePublishedAt]);
+      await owner.query(`INSERT INTO registry.package_manifests
+        (id,organization_id,release_id,contract_id,manifest,manifest_sha256,package_sha256,publication_status,publication_controls)
+        VALUES (gen_random_uuid(),$1,$2,'package-import-v1',$3::jsonb,$4,$5,'published',$6::jsonb)`,
+      [fixture.organizationId, releaseId, JSON.stringify(compiled.release.manifest), compiled.manifestDigest,
+        compiled.packageDigest, JSON.stringify({ approvedBy: [fixture.people.publisher], approvalNotes: "Synthetic fixture approval" })]);
+    }
     await owner.query(
-      `INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by)
-       VALUES ($1,$2,$3,$4,'active',$5)`,
+      `INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by,title)
+       VALUES ($1,$2,$3,$4,'active',$5,'PS-150 S1 proof Session')`,
       [fixture.sessionId, fixture.organizationId, fixture.projectId, fixture.releaseId, fixture.people.operator]
     );
     await owner.query(

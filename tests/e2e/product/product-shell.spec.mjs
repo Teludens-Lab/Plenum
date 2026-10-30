@@ -7,6 +7,7 @@ import { fixture, runtimeUrl } from "../fixture.mjs";
 
 const evidenceRoot = "output/playwright/ps-700";
 const portalEvidenceRoot = "output/playwright/ps-710";
+const lifecycleEvidenceRoot = "output/playwright/ps-720";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -17,6 +18,7 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
 test.beforeAll(async () => {
   await mkdir(evidenceRoot, { recursive: true });
   await mkdir(portalEvidenceRoot, { recursive: true });
+  await mkdir(lifecycleEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -255,4 +257,88 @@ test("PS-710-T02 Template defaults, Admin and Reviewer views, and Operator denia
   expect(JSON.stringify(await denied.json())).not.toContain(fixture.projectId);
   await operator.page.screenshot({ path: `${portalEvidenceRoot}/operator-denied.png`, fullPage: true });
   await operator.context.close();
+});
+
+test("PS-720-T01 Publisher finds, exports, verifies, and revisits an immutable Release @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.publisher);
+  await page.goto("/");
+  const catalog = page.locator("#release-catalog");
+  await expect(catalog.getByRole("heading", { name: "Simulation Releases" })).toBeVisible();
+  const release = catalog.locator(".lifecycle-row").filter({ hasText: "S1 proof 1.0.0" });
+  await expect(release.getByText("immutable", { exact: true })).toBeVisible();
+  await expect(release.getByText("1 Approval. 1 Session.", { exact: false })).toBeVisible();
+  await expect(release.getByText(/Package digest [0-9a-f]{64}/u)).toBeVisible();
+  await expect(release.getByRole("button", { name: "Create Session" })).toHaveCount(0);
+
+  const downloadPromise = page.waitForEvent("download");
+  await release.getByRole("link", { name: "Export Package" }).click();
+  const download = await downloadPromise;
+  const packagePath = await download.path();
+  expect(packagePath).not.toBeNull();
+  await page.getByLabel("Import a verified Release Package").setInputFiles(packagePath);
+  await page.getByRole("button", { name: "Verify and import" }).click();
+  await expect(page.getByText("This immutable Release Package was already present.")).toBeVisible();
+
+  await release.getByRole("link", { name: "S1 proof 1.0.0" }).click();
+  await expect(page).toHaveURL(new RegExp(`/releases/${fixture.releaseId}$`, "u"));
+  await expect(page.locator("#release-detail-title")).toHaveText("S1 proof 1.0.0");
+  await expect(page.getByText(/^[0-9a-f]{64}$/u)).toBeVisible();
+  await expect(page.locator(".lifecycle-detail dl div").filter({ hasText: "Approvals" }).locator("dd")).toHaveText("1");
+  await page.reload();
+  await expect(page.locator("#release-detail-title")).toHaveText("S1 proof 1.0.0");
+  await page.goBack();
+  await expect(catalog.getByRole("heading", { name: "Simulation Releases" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${lifecycleEvidenceRoot}/publisher-release-catalog.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-720-T02 Operator creates one configured Session and uses stable lifecycle navigation @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.portalOperator);
+  const sessionName = "PS-720 visible configured Session";
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Project access unavailable" })).toBeVisible();
+  const release = page.locator("#release-catalog .lifecycle-row").filter({ hasText: "S1 proof 1.0.0" });
+  await release.getByRole("button", { name: "Create Session" }).click();
+  await release.getByLabel("Session name").fill(sessionName);
+  await release.getByRole("button", { name: "Create configured Session" }).click();
+  await expect(page).toHaveURL(/\/sessions\/[0-9a-f-]{36}$/u);
+  const detailUrl = page.url();
+  const sessionId = new URL(detailUrl).pathname.split("/").at(-1);
+  await expect(page.locator("#session-detail-title")).toHaveText(sessionName);
+  await expect(page.getByText("configured", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Readiness 0/11; 11 blocking checks incomplete.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Staffing and readiness" })).toHaveAttribute("href", `/admin/sessions/${sessionId}#staffing-title`);
+  await expect(page.getByRole("link", { name: "Runtime", exact: true })).toHaveAttribute("href", `/sessions/${sessionId}/runtime`);
+  await expect(page.getByRole("link", { name: "Reports" })).toHaveAttribute("href", `/admin/sessions/${sessionId}/reports`);
+  await expect(page.getByRole("link", { name: "Replay" })).toHaveAttribute("href", `/admin/sessions/${sessionId}/replay`);
+  await expect(page.getByRole("link", { name: "Archive" })).toHaveAttribute("href", `/admin/sessions/${sessionId}/archive`);
+  await page.reload();
+  await expect(page.locator("#session-detail-title")).toHaveText(sessionName);
+  await page.goBack();
+  await expect(page.locator("#session-catalog .lifecycle-row").filter({ hasText: sessionName })).toBeVisible();
+  await page.goto(`/admin/sessions/${sessionId}/reports`);
+  await expect(page.getByRole("heading", { name: "Generate a Session report" })).toBeVisible();
+  await page.getByRole("link", { name: "Session detail" }).click();
+  await expect(page).toHaveURL(detailUrl);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${lifecycleEvidenceRoot}/operator-session-detail.png`, fullPage: true });
+  await context.close();
+
+  const reviewer = await actor(browser, fixture.tokens.finalReviewer);
+  await reviewer.page.goto("/");
+  await expect(reviewer.page.getByRole("heading", { name: "Release and Session access unavailable" })).toBeVisible();
+  await expect(reviewer.page.getByText(sessionName)).toHaveCount(0);
+  const denied = await reviewer.context.request.get("/v1/releases");
+  expect(denied.status()).toBe(403);
+  expect(JSON.stringify(await denied.json())).not.toContain(fixture.releaseId);
+  await reviewer.context.close();
+
+  const admin = await actor(browser, fixture.tokens.operator);
+  await admin.page.goto("/admin/members");
+  await expect(admin.page.getByRole("heading", { name: "Members and Organization Roles" })).toBeVisible();
+  await expect(admin.page.getByRole("link", { name: "Plugins" })).toHaveAttribute("href", "/admin/plugins");
+  await expect(admin.page.getByRole("link", { name: "Deployment" })).toHaveAttribute("href", "/admin/deployment");
+  await expect(admin.page.getByRole("link", { name: "Data policy" })).toHaveAttribute("href", "/admin/data-policy");
+  await admin.context.close();
 });

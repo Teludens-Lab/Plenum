@@ -4789,7 +4789,7 @@
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": true,
-    "ready_to_execute": true,
+    "ready_to_execute": false,
     "migration_ids": [
       "027_release_session_catalog"
     ],
@@ -4797,10 +4797,14 @@
       "release-catalog-v1",
       "session-catalog-v1"
     ],
-    "evidence": [],
+    "evidence": [
+      "docs/ps-720-verification.md",
+      "docs/acceptance/PS-720-user-test.md",
+      "output/playwright/ps-720/"
+    ],
     "risk": "high",
     "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
-    "implementation_state": "planned",
+    "implementation_state": "verified",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
@@ -4934,8 +4938,8 @@
     "depends_on_unratified": [
       "OPEN-004"
     ],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "migration_ids": [],
     "api_contract_ids": [
       "studio-foundation-editor-v1"

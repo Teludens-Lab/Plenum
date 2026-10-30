@@ -18,3 +18,12 @@ The skip link is the first focusable control. Focus remains visible. Deep links 
 4. Selecting or changing a Template always clears optional Scenario inclusion. Core Design is copied by default.
 5. Archive requires inline confirmation. Reopen is visible only for archived Projects. Both send the displayed version; stale responses reload current state and announce recovery.
 6. Reviewer controls remain read-only. Operator-only access renders an unauthorized state and no Project, Template, or member data.
+
+## PS-720 Release, Session, and administration interactions
+
+1. Load Release and Session catalogs independently so a Publisher can retain authorized Release access when Session access is denied.
+2. Export/import only real immutable Package bytes; an identical verified import reports the existing Release without duplication or digest change.
+3. Create a configured Session from a visible Release label. Generate internal identifiers in the client, retain the exact Command for safe retry, disable while pending, and navigate only to the server-returned stable URL.
+4. Refresh and Back preserve the selected Release or Session through path-based URLs. All downstream Session links retain the same Session scope without copied identifiers.
+5. Unauthorized personas receive an explicit denial with no catalog rows, identifiers, metadata, or controls. Administration destinations appear only for Admin.
+6. Loading, status, validation, import, creation, and recovery messages use the shared status/alert region and move focus to the result when action is required.

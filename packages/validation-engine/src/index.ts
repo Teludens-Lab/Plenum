@@ -31,14 +31,14 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function sourceFor(message: string): { path: string; elementId: string | null } {
-  const match = message.match(/^(Workflow|Stage|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Team Cell|Scenario content|Readiness check|Model Composition) ([^ ]+)/u);
+  const match = message.match(/^(Workflow|Stage Group|Stage|Activity|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Session Role|Team|Team Cell|Scenario content|Readiness check|Model Composition) ([^ ]+)/u);
   if (match === null) return { path: "coreDesign", elementId: null };
   const collections: Record<string, string> = {
-    "Workflow": "workflows", "Stage": "stages", "Form": "forms", "Artifact Type": "artifactTypes",
-    "Information Policy": "informationPolicies", "Interface Profile": "interfaceProfiles",
+    "Workflow": "workflows", "Stage Group": "stageGroups", "Stage": "stages", "Activity": "activities", "Form": "forms", "Artifact Type": "artifactTypes",
+    "Information Policy": "informationPolicies", "Interface Profile": "interfaces",
     "Communication Route": "communications.routes", "Message Channel": "communications.messageChannels",
     "Voice Channel": "communications.voiceChannels", "Poll": "polls", "Inject": "scenario.injects",
-    "Report": "reports", "Seat": "seats", "Team Cell": "teams", "Scenario content": "scenario.content",
+    "Report": "reports", "Seat": "seats", "Session Role": "sessionRoles", "Team": "teams", "Team Cell": "teams", "Scenario content": "scenario.content",
     "Readiness check": "readinessChecks", "Model Composition": "compositions"
   };
   const label = match[1] ?? "";

@@ -17,14 +17,14 @@ function sourceId(path: string): string {
   if (path.startsWith("scenario.description")) return "scenario-description";
   const [collection, elementId] = path.split(".");
   const sections: Record<string, string> = {
-    teams: "teams", sessionRoles: "roles", seats: "seats", stages: "stages", stageGroups: "stages",
+    teams: "teams", sessionRoles: "roles", seats: "seats", activities: "activities", stages: "stages", stageGroups: "stages",
     forms: "forms", artifactTypes: "forms", workflows: "workflows", informationPolicies: "policies",
     interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
     decisionTraceability: "research", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
     stateVariables: "advanced-logic", capabilities: "advanced-logic", resourceDefinitions: "advanced-logic",
-    coreDesign: "overview", draft: "overview", scenario: "overview"
+    objectives: "overview", identity: "overview", terminology: "overview", coreDesign: "overview", draft: "overview", scenario: "overview"
   };
-  if (elementId !== undefined && ["teams", "sessionRoles", "seats", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces", "pluginBindings", "compositions"].includes(collection ?? "")) {
+  if (elementId !== undefined && ["objectives", "teams", "sessionRoles", "seats", "activities", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces", "pluginBindings", "compositions"].includes(collection ?? "")) {
     return `${collection}-${elementId}`;
   }
   return sections[collection ?? ""] ?? "overview";

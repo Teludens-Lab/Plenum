@@ -7,7 +7,7 @@
 - Goal: Close all visual-authoring gaps for Overview, Methodology, Teams, Roles, Seats, Stages, and Activities.
 - User outcome: A non-programming Designer can model simulation identity, participants, structure, time, objectives, relationships, resources, and activities through guided controls.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

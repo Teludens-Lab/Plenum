@@ -145,3 +145,35 @@ test("PS-400-T01 validates bounded parallel branches with an explicit join", asy
   assert.equal(report.valid, false);
   assert.ok(report.issues.some(({ message }) => /bounded automatic logic/u.test(message)));
 });
+
+test("PS-730-T01 foundational Activities, nested Stage Groups, and role restrictions validate as one Runtime model", async () => {
+  const draft = structuredClone(await fixture());
+  const role = draft.coreDesign.sessionRoles[0];
+  const artifact = draft.coreDesign.artifactTypes[0];
+  const stage = draft.coreDesign.stages[0];
+  draft.coreDesign.activities = [{
+    id: "activity-foundation", name: "Foundation activity", description: "A guided activity",
+    instructions: "Complete the governed work.", sessionRoleIds: [role.id], artifactTypeIds: [artifact.id], required: true
+  }];
+  stage.allowedActivityIds = ["activity-foundation"];
+  role.allowedStageIds = [stage.id];
+  draft.coreDesign.stageGroups.push(
+    { id: "group-parent", name: "Parent", stageType: "phase", order: 0 },
+    { id: "group-child", name: "Child", stageType: "round", order: 0, parentGroupId: "group-parent" }
+  );
+  stage.stageGroupId = "group-child";
+  assert.equal(validateStudioDraft(draft).valid, true);
+
+  draft.coreDesign.activities[0].sessionRoleIds = ["missing-role"];
+  const report = validateStudioDraft(draft);
+  assert.equal(report.valid, false);
+  assert.ok(report.issues.some(({ path, message }) => path === "activities.activity-foundation" && /missing-role/u.test(message)));
+});
+
+test("PS-730 validation links identify the exact Team with a missing Objective", async () => {
+  const draft = structuredClone(await fixture());
+  draft.coreDesign.teams[0].objectiveIds = ["missing-objective"];
+  const report = validateStudioDraft(draft);
+  assert.equal(report.valid, false);
+  assert.ok(report.issues.some(({ path, message }) => path === `teams.${draft.coreDesign.teams[0].id}` && /missing-objective/u.test(message)));
+});

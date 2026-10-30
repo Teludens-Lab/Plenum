@@ -58,4 +58,4 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Exact next runnable prompt
 
-Run [PS-730 - Complete foundational Studio workspaces](prompts/P08/PS-730-complete-foundational-studio-workspaces.md) next. PS-700, PS-710, and PS-720 are verified with automated and product-owner evidence. Keep `OPEN-004` explicitly unratified while implementing only approved methodology behavior.
+Run [PS-740 - Complete Artifact, workflow, communications, Inject, and content authoring](prompts/P08/PS-740-complete-artifact-workflow-communications-content-authoring.md) next. PS-700 through PS-730 are verified with automated and product-owner evidence. Keep `OPEN-010` explicitly unratified while implementing only approved field and content behavior.

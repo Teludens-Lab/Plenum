@@ -8,6 +8,7 @@ import { fixture, runtimeUrl } from "../fixture.mjs";
 const evidenceRoot = "output/playwright/ps-700";
 const portalEvidenceRoot = "output/playwright/ps-710";
 const lifecycleEvidenceRoot = "output/playwright/ps-720";
+const studioEvidenceRoot = "output/playwright/ps-730";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -19,6 +20,7 @@ test.beforeAll(async () => {
   await mkdir(evidenceRoot, { recursive: true });
   await mkdir(portalEvidenceRoot, { recursive: true });
   await mkdir(lifecycleEvidenceRoot, { recursive: true });
+  await mkdir(studioEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -61,7 +63,8 @@ test("PS-710 local user-test persona chooser is accessible without authorization
 });
 
 const localUserTestPersonas = [
-  { label: /^Designer\b/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
+  { label: /^Designer$/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
+  { label: /^Designer B\b/u, displayName: "Synthetic Designer B", heading: "Create a Project" },
   { label: /^Admin\b/u, displayName: "Synthetic operator", heading: "Organization members and roles" },
   { label: /^Reviewer\b/u, displayName: "Synthetic final reviewer", heading: "Review access", project: "PS-150 S1 proof" },
   { label: /^Operator only\b/u, displayName: "Synthetic portal operator", heading: "Project access unavailable" }
@@ -341,4 +344,65 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
   await expect(admin.page.getByRole("link", { name: "Deployment" })).toHaveAttribute("href", "/admin/deployment");
   await expect(admin.page.getByRole("link", { name: "Data policy" })).toHaveAttribute("href", "/admin/data-policy");
   await admin.context.close();
+});
+
+test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime projection, and links validation to the exact control @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const first = await actor(browser, fixture.tokens.designerA);
+  const second = await actor(browser, fixture.tokens.designerB);
+  const studioUrl = `/studio/projects/${fixture.projectId}`;
+  await first.page.goto(studioUrl);
+  await expect(first.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+  await expect(first.page.getByText("Connected", { exact: true })).toBeVisible();
+  await first.page.locator(".visual-editor").waitFor();
+  await second.page.goto(studioUrl);
+  await expect(second.page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+  await expect(second.page.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(first.page.locator(".visual-editor")).toHaveAttribute("data-contract-id", "studio-foundation-editor-v1");
+
+  const convergedName = "PS-730 converged Scenario";
+  await first.page.getByLabel("Scenario name").fill(convergedName);
+  await expect(second.page.getByLabel("Scenario name")).toHaveValue(convergedName);
+
+  await first.page.getByRole("button", { name: "Add learning objective" }).click();
+  await expect(second.page.locator("#overview").getByText("New objective", { exact: true })).toBeVisible();
+  await first.page.getByRole("button", { name: "Add Activity" }).click();
+  await expect(second.page.locator("#activities").getByText("New Activity", { exact: true })).toBeVisible();
+  const firstStage = first.page.locator("#stages .timeline details").first();
+  await firstStage.locator("summary").click();
+  await firstStage.getByRole("checkbox", { name: "New Activity" }).check();
+  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible();
+  await expect.poll(async () => {
+    const response = await first.context.request.get(`/v1/projects/${fixture.projectId}/draft`);
+    const draft = await response.json();
+    const activity = draft.materialization.coreDesign.activities?.find(({ name }) => name === "New Activity");
+    return activity !== undefined && draft.materialization.coreDesign.stages[0].allowedActivityIds.includes(activity.id);
+  }).toBe(true);
+
+  const previewResponse = second.page.waitForResponse((response) => response.url().endsWith(`/v1/projects/${fixture.projectId}/role-preview`) && response.request().method() === "POST");
+  await second.page.getByRole("button", { name: "Preview interface" }).click();
+  const preview = await (await previewResponse).json();
+  expect(preview.contractId).toBe("role-preview-v1");
+  await expect(second.page.locator(".role-preview")).toHaveAttribute("aria-label", new RegExp(`${preview.sessionRoleLabel} interface preview`, "u"));
+  await expect(second.page.locator(".role-preview .preview-heading")).toContainText(preview.stageLabel);
+
+  const groups = first.page.locator("#stages .editor-list.compact-list details");
+  const firstGroup = groups.nth(0);
+  const secondGroup = groups.nth(1);
+  await firstGroup.locator("summary").click();
+  await secondGroup.locator("summary").click();
+  await firstGroup.getByLabel("Parent Stage Group").selectOption({ index: 1 });
+  await secondGroup.getByLabel("Parent Stage Group").selectOption({ index: 1 });
+  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible();
+  const issue = first.page.locator(".issue-list a").filter({ hasText: /^stageGroups\./u }).first();
+  await expect(issue).toBeVisible();
+  await issue.click();
+  await expect(firstGroup.getByLabel("Group name")).toBeFocused();
+  await first.page.getByRole("button", { name: "Undo last change" }).click();
+  await expect(first.page.locator(".issue-list a").filter({ hasText: /^stageGroups\./u })).toHaveCount(0);
+
+  expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
+  await first.page.screenshot({ path: `${studioEvidenceRoot}/foundational-studio.png`, fullPage: true });
+  await first.context.close();
+  await second.context.close();
 });

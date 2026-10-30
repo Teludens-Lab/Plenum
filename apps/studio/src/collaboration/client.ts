@@ -46,6 +46,9 @@ function toYValue(value: unknown): unknown {
 
 export class StudioCollaborationClient {
   readonly document = new Y.Doc();
+  private readonly undoManager = new Y.UndoManager(this.document.getMap("draft"), {
+    trackedOrigins: new Set(["visual-editor"])
+  });
   private readonly pending = new Map<string, PendingUpdate>();
   private readonly listeners = new Set<(state: StudioClientState) => void>();
   private socket: WebSocket | null = null;
@@ -129,46 +132,61 @@ export class StudioCollaborationClient {
   }
 
   setAtPath(path: readonly (string | number)[], value: unknown): void {
-    const parent = this.resolve(path.slice(0, -1), true);
-    const key = path.at(-1);
-    if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
-    parent.set(key, toYValue(value));
+    this.transact(() => {
+      const parent = this.resolve(path.slice(0, -1), true);
+      const key = path.at(-1);
+      if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
+      parent.set(key, toYValue(value));
+    });
   }
 
   deleteAtPath(path: readonly (string | number)[]): void {
-    const parent = this.resolve(path.slice(0, -1));
-    const key = path.at(-1);
-    if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
-    parent.delete(key);
+    this.transact(() => {
+      const parent = this.resolve(path.slice(0, -1));
+      const key = path.at(-1);
+      if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio field path is invalid");
+      parent.delete(key);
+    });
   }
 
   appendAtPath(path: readonly (string | number)[], value: unknown): void {
-    let target = this.resolve(path);
-    if (target === undefined) {
-      const parent = this.resolve(path.slice(0, -1), true);
-      const key = path.at(-1);
-      if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio collection path is invalid");
-      target = new Y.Array<unknown>();
-      parent.set(key, target);
-    }
-    if (!(target instanceof Y.Array)) throw new Error("Studio collection path is invalid");
-    target.push([toYValue(value)]);
+    this.transact(() => {
+      let target = this.resolve(path);
+      if (target === undefined) {
+        const parent = this.resolve(path.slice(0, -1), true);
+        const key = path.at(-1);
+        if (!(parent instanceof Y.Map) || typeof key !== "string") throw new Error("Studio collection path is invalid");
+        target = new Y.Array<unknown>();
+        parent.set(key, target);
+      }
+      if (!(target instanceof Y.Array)) throw new Error("Studio collection path is invalid");
+      target.push([toYValue(value)]);
+    });
   }
 
   removeAtPath(path: readonly (string | number)[], index: number): void {
-    const target = this.resolve(path);
-    if (!(target instanceof Y.Array) || index < 0 || index >= target.length) throw new Error("Studio collection item is invalid");
-    target.delete(index, 1);
+    this.transact(() => {
+      const target = this.resolve(path);
+      if (!(target instanceof Y.Array) || index < 0 || index >= target.length) throw new Error("Studio collection item is invalid");
+      target.delete(index, 1);
+    });
   }
 
   moveAtPath(path: readonly (string | number)[], index: number, direction: -1 | 1): void {
-    const target = this.resolve(path);
-    const destination = index + direction;
-    if (!(target instanceof Y.Array) || destination < 0 || destination >= target.length) return;
-    const value = target.get(index);
-    const json = value instanceof Y.AbstractType ? value.toJSON() : value;
-    target.delete(index, 1);
-    target.insert(destination, [toYValue(json)]);
+    this.transact(() => {
+      const target = this.resolve(path);
+      const destination = index + direction;
+      if (!(target instanceof Y.Array) || destination < 0 || destination >= target.length) return;
+      const value = target.get(index);
+      const json = value instanceof Y.AbstractType ? value.toJSON() : value;
+      target.delete(index, 1);
+      target.insert(destination, [toYValue(json)]);
+    });
+  }
+
+  undo(): void {
+    this.undoManager.stopCapturing();
+    this.undoManager.undo();
   }
 
   setScenarioField(field: "name" | "description", value: string): void {

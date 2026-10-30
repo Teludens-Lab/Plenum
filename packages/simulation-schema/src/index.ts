@@ -502,6 +502,7 @@ export interface RuntimeArtifactCoverageRequirementV1 {
 export interface RuntimeStageDefinitionV1 {
   id: string;
   name: string;
+  instructions?: string;
   stageType: string;
   stageGroupId?: string;
   order?: number;
@@ -521,6 +522,16 @@ export interface RuntimeStageDefinitionV1 {
     allowSkip: boolean; allowReturnToPrevious: boolean; requireReason: boolean;
   };
   completionRequirements?: RuntimeArtifactCoverageRequirementV1[];
+}
+
+export interface ActivityDefinitionV1 {
+  id: string;
+  name: string;
+  description?: string;
+  instructions?: string;
+  sessionRoleIds: string[];
+  artifactTypeIds: string[];
+  required: boolean;
 }
 
 export interface RuntimeInterfaceProfileV1 {
@@ -584,6 +595,24 @@ export interface ObjectiveDefinitionV1 {
   successMeasures?: string[];
 }
 
+export interface TeamDefinitionV1 {
+  id: string;
+  name: string;
+  shortCode?: string;
+  color?: string;
+  icon?: string;
+  briefing?: string;
+  objectiveIds: string[];
+  resourceDefinitionIds?: string[];
+  relationships?: Array<{
+    id: string;
+    targetTeamId: string;
+    kind: "allied" | "neutral" | "opposed" | "custom";
+    description?: string;
+  }>;
+  enabled: boolean;
+}
+
 export interface AdjudicationModelDefinitionV1 {
   id: string;
   name: string;
@@ -602,15 +631,17 @@ export interface RuntimeCoreDesignV1 {
   methodologyConcepts?: MethodologyConceptV1[];
   /** Release-wide objectives; role and Team guidance belongs in governed content. */
   objectives?: ObjectiveDefinitionV1[];
-  teams: Array<{ id: string; name: string; objectiveIds: string[]; enabled: boolean }>;
+  teams: TeamDefinitionV1[];
   teamCells?: RuntimeTeamCellDefinitionV1[];
   sessionRoles: Array<{
     id: string; name: string; description?: string; responsibilities?: string[]; capabilities: Array<{ capability: string }>;
-    interfaceProfileIds: string[]; allowedTeamIds?: string[]; isControlRole: boolean; enabled: boolean;
+    interfaceProfileIds: string[]; allowedTeamIds?: string[]; allowedStageIds?: string[]; informationClearance?: string;
+    isControlRole: boolean; enabled: boolean;
   }>;
   seats: Array<{ id: string; name: string; sessionRoleIds: string[]; teamId?: string; minOccupancy: number; maxOccupancy: number | null; required: boolean; joinMode: string }>;
   stageGroups: Array<{ id: string; name: string; stageType: string; order: number; parentGroupId?: string }>;
   stages: RuntimeStageDefinitionV1[];
+  activities?: ActivityDefinitionV1[];
   artifactTypes: RuntimeArtifactTypeDefinitionV1[];
   forms: RuntimeFormDefinitionV1[];
   workflows: RuntimeWorkflowDefinitionV1[];
@@ -632,7 +663,16 @@ export interface RuntimeCoreDesignV1 {
   platformAdapters?: PlatformAdapterV1[];
   terminology?: { labels: Record<string, { singular: string; plural: string }>; customLabels: Record<string, string> };
   accessPolicy?: RuntimeAccessPolicyV1;
-  identity?: { title: string; subtitle?: string; developer: string; developerLogoResourceId?: string };
+  identity?: {
+    title: string;
+    subtitle?: string;
+    developer: string;
+    summary?: string;
+    purpose?: string;
+    audience?: string;
+    estimatedDurationMinutes?: number;
+    developerLogoResourceId?: string;
+  };
   presentation?: Record<string, unknown>;
   resources?: Array<{ id: string; name: string; type: string; mediaType: string; usage: string[]; altText?: string; dataUri?: string; sourcePath?: string; contentDigest: string }>;
   researchQuestions?: ResearchQuestionV1[];
@@ -1150,6 +1190,8 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   const roles = uniqueIds(runtime.sessionRoles, "Session Role");
   const teams = uniqueIds(runtime.teams, "Team");
   const stages = uniqueIds(runtime.stages, "Stage");
+  const objectives = uniqueIds(runtime.objectives ?? [], "Objective");
+  const activities = uniqueIds(runtime.activities ?? [], "Activity");
   const forms = uniqueIds(runtime.forms, "Form");
   const workflows = uniqueIds(runtime.workflows, "Workflow");
   const policies = uniqueIds(runtime.informationPolicies, "Information Policy");
@@ -1264,6 +1306,23 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   for (const role of runtime.sessionRoles) {
     role.interfaceProfileIds.forEach((id) => reference(interfaces, id, `Session Role ${role.id}`));
     role.allowedTeamIds?.forEach((id) => reference(teams, id, `Session Role ${role.id}`));
+    role.allowedStageIds?.forEach((id) => reference(stages, id, `Session Role ${role.id}`));
+    if (role.capabilities.some(({ capability }) => capability.trim().length === 0)) {
+      throw new Error(`Session Role ${role.id} has an empty capability`);
+    }
+  }
+  for (const team of runtime.teams) {
+    team.objectiveIds.forEach((id) => reference(objectives, id, `Team ${team.id}`));
+    team.resourceDefinitionIds?.forEach((id) => reference(worldResources, id, `Team ${team.id}`));
+    team.relationships?.forEach((relationship) => {
+      reference(teams, relationship.targetTeamId, `Team ${team.id} relationship`);
+      if (relationship.targetTeamId === team.id) throw new Error(`Team ${team.id} cannot relate to itself`);
+    });
+  }
+  for (const activity of runtime.activities ?? []) {
+    if (activity.name.trim().length === 0) throw new Error(`Activity ${activity.id} has no name`);
+    activity.sessionRoleIds.forEach((id) => reference(roles, id, `Activity ${activity.id}`));
+    activity.artifactTypeIds.forEach((id) => reference(artifactTypes, id, `Activity ${activity.id}`));
   }
   for (const cell of runtime.teamCells ?? []) {
     reference(teams, cell.teamId, `Team Cell ${cell.id}`);
@@ -1312,6 +1371,10 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   }
   if (runtime.identity?.developerLogoResourceId !== undefined) {
     reference(resources, runtime.identity.developerLogoResourceId, "Release identity developer logo");
+  }
+  if (runtime.identity?.estimatedDurationMinutes !== undefined &&
+      (!Number.isSafeInteger(runtime.identity.estimatedDurationMinutes) || runtime.identity.estimatedDurationMinutes < 0)) {
+    throw new Error("Release identity has an invalid estimated duration");
   }
   for (const seat of runtime.seats) {
     seat.sessionRoleIds.forEach((id) => reference(roles, id, `Seat ${seat.id}`));
@@ -1418,6 +1481,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   }));
   for (const stage of runtime.stages) {
     if (stage.stageGroupId !== undefined) reference(stageGroups, stage.stageGroupId, `Stage ${stage.id}`);
+    stage.allowedActivityIds.forEach((id) => reference(activities, id, `Stage ${stage.id}`));
     stage.transitions.forEach((transition) => reference(stages, transition.targetStageId, `Stage ${stage.id}`));
     if (stage.entryGate !== undefined) assertGateDefinition(stage.entryGate, facts, `Stage ${stage.id} entry Gate`);
     if (stage.completionGate !== undefined) assertGateDefinition(stage.completionGate, facts, `Stage ${stage.id} completion Gate`);

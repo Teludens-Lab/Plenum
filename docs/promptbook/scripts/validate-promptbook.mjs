@@ -153,7 +153,7 @@ for (const id of samples) {
 }
 
 const ready = tasks.filter((task) => task.ready_to_execute).map((task) => task.id);
-const expectedReady = ['PS-730'];
+const expectedReady = ['PS-740'];
 if (ready.length !== expectedReady.length || ready.some((id, index) => id !== expectedReady[index])) {
   warnings.push(`Expected the recorded runnable tasks ${expectedReady.join(', ')}; found ${ready.join(', ') || 'none'}`);
 }

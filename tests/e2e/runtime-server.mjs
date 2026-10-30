@@ -77,6 +77,7 @@ const roles = { operator: ["operator", "admin"], designerA: ["designer"], design
   publisher: ["designer", "publisher", "reviewer"], finalReviewer: ["reviewer"], portalOperator: ["operator"] };
 const localPersonas = {
   designerA: { label: "Designer", description: "Create, find, archive, reopen, and resume Projects." },
+  designerB: { label: "Designer B", description: "Collaborate on the same Project from a separate browser profile." },
   operator: { label: "Admin", description: "Inspect Organization members and their Organization Roles." },
   finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
   portalOperator: { label: "Operator only", description: "Find Releases, create configured Sessions, and verify Project data remains denied." },
@@ -265,7 +266,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 }));
 
 server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710/PS-720 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
+  `${localUserTest ? "PS-710/PS-720/PS-730 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
 ));
 
 let closing = false;

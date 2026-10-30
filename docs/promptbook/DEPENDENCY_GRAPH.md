@@ -149,8 +149,8 @@ graph TD
 | PS-700 | P07 | PS-550 | - | No |
 | PS-710 | P07 | PS-700 | - | No |
 | PS-720 | P07 | PS-710 | - | No |
-| PS-730 | P08 | PS-720 | OPEN-004 | Yes |
-| PS-740 | P08 | PS-730 | OPEN-010 | No |
+| PS-730 | P08 | PS-720 | OPEN-004 | No |
+| PS-740 | P08 | PS-730 | OPEN-010 | Yes |
 | PS-750 | P08 | PS-740 | - | No |
 | PS-760 | P08 | PS-750 | OPEN-013 | No |
 | PS-770 | P09 | PS-760 | - | No |

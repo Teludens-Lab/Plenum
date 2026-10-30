@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CORE_DESIGN_EDITOR_CONTRACT_ID, type RolePreviewV1 } from "@plenum/event-contracts";
+import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type RolePreviewV1 } from "@plenum/event-contracts";
 import type {
   CoreDesignV1,
   RuntimeStageDefinitionV1,
@@ -22,7 +22,7 @@ export type Option = { value: string; label: string };
 
 const SECTIONS = [
   ["overview", "Overview & Scenario"], ["methodology", "Methodology"], ["teams", "Teams"],
-  ["roles", "Session Roles"], ["seats", "Seats"], ["stages", "Stages"],
+  ["roles", "Session Roles"], ["seats", "Seats"], ["activities", "Activities"], ["stages", "Stages"],
   ["forms", "Forms & Artifacts"], ["workflows", "Workflows"], ["policies", "Information Policy"],
   ["advanced-logic", "Advanced logic & world state"],
   ["polls", "Polls"], ["voice", "Voice Channels"], ["plugins", "Plugin catalog & bindings"],
@@ -30,12 +30,14 @@ const SECTIONS = [
   ["access", "Access"], ["preview", "Role preview"]
 ] as const;
 
-export function TextField({ id, label, value, path, client, multiline = false, type = "text", transform }: {
+export function TextField({ id, label, value, path, client, multiline = false, type = "text", transform, emptyDeletes = false }: {
   id: string; label: string; value: string | number; path: Path; client: StudioCollaborationClient;
-  multiline?: boolean; type?: "text" | "number"; transform?: (value: string) => unknown;
+  multiline?: boolean; type?: "text" | "number"; transform?: (value: string) => unknown; emptyDeletes?: boolean;
 }) {
-  const props = { id, value, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    client.setAtPath(path, transform === undefined ? type === "number" ? Number(event.target.value) : event.target.value : transform(event.target.value)) };
+  const props = { id, value, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (emptyDeletes && event.target.value === "") client.deleteAtPath(path);
+    else client.setAtPath(path, transform === undefined ? type === "number" ? Number(event.target.value) : event.target.value : transform(event.target.value));
+  } };
   return <div className="field"><label htmlFor={id}>{label}</label>
     {multiline ? <textarea {...props} rows={4} /> : <input {...props} type={type} />}</div>;
 }
@@ -65,12 +67,13 @@ export function MultiCheck({ legend, values, options, path, client }: {
     }} />{option.label}</label>)}</fieldset>;
 }
 
-export function ItemActions({ path, index, count, client, label }: {
-  path: Path; index: number; count: number; client: StudioCollaborationClient; label: string;
+export function ItemActions({ path, index, count, client, label, duplicate }: {
+  path: Path; index: number; count: number; client: StudioCollaborationClient; label: string; duplicate?: () => void;
 }) {
   return <div className="item-actions">
     <button className="btn-secondary compact" type="button" disabled={index === 0} aria-label={`Move ${label} earlier`} onClick={() => client.moveAtPath(path, index, -1)}>↑</button>
     <button className="btn-secondary compact" type="button" disabled={index === count - 1} aria-label={`Move ${label} later`} onClick={() => client.moveAtPath(path, index, 1)}>↓</button>
+    {duplicate === undefined ? null : <button className="btn-secondary compact" type="button" onClick={duplicate}>Duplicate</button>}
     <button className="btn-danger compact" type="button" onClick={() => { if (confirm(`Remove ${label}? References will remain visible as validation errors.`)) client.removeAtPath(path, index); }}>Remove</button>
   </div>;
 }
@@ -86,14 +89,42 @@ export function AddButton({ label, onClick, disabled = false }: { label: string;
 
 function TeamEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const teams = coreArray(core, "teams");
-  return <Workspace id="teams" title="Teams" intro="Create the participant groups used by Seats, content, and policies.">
-    <div className="editor-list">{teams.map((team, index) => <details className="editor-item" id={`team-${team.id}`} key={team.id}>
-      <summary><span>{team.name || "Untitled Team"}</span><span className="item-id">{team.id}</span></summary><div className="item-body">
+  const objectives = coreArray(core, "objectives");
+  const resources = coreArray(core, "resourceDefinitions");
+  const duplicateTeam = (team: (typeof teams)[number]) => client.appendAtPath(["coreDesign", "teams"], {
+    ...structuredClone(team), id: identifier(), name: `${team.name} copy`,
+    relationships: (team.relationships ?? []).map((relationship) => ({ ...relationship, id: identifier() }))
+  });
+  return <Workspace id="teams" title="Teams" intro="Author Team identity, briefing, objectives, resources, relationships, and availability.">
+    <div className="editor-list">{teams.map((team, index) => <details className="editor-item" id={`teams-${team.id}`} key={team.id}>
+      <summary><span>{team.name || "Untitled Team"}</span><span className="badge badge-muted">{team.shortCode || `${team.objectiveIds.length} objectives`}</span></summary><div className="item-body grid-fields">
         <TextField id={`team-name-${team.id}`} label="Team name" value={team.name} path={["coreDesign", "teams", index, "name"]} client={client} />
+        <TextField id={`team-code-${team.id}`} label="Short code" value={team.shortCode ?? ""} path={["coreDesign", "teams", index, "shortCode"]} client={client} />
+        <TextField id={`team-color-${team.id}`} label="Color token or description" value={team.color ?? ""} path={["coreDesign", "teams", index, "color"]} client={client} />
+        <TextField id={`team-icon-${team.id}`} label="Icon name" value={team.icon ?? ""} path={["coreDesign", "teams", index, "icon"]} client={client} />
+        <TextField id={`team-briefing-${team.id}`} label="Team briefing" value={team.briefing ?? ""} path={["coreDesign", "teams", index, "briefing"]} client={client} multiline />
+        <MultiCheck legend="Objectives" values={team.objectiveIds} options={objectives.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "teams", index, "objectiveIds"]} client={client} />
+        <MultiCheck legend="Resources" values={team.resourceDefinitionIds ?? []} options={resources.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "teams", index, "resourceDefinitionIds"]} client={client} />
+        <fieldset className="nested-editor"><legend>Relationships</legend>{(team.relationships ?? []).map((relationship, relationshipIndex) => <div className="field-row" key={relationship.id}>
+          <SelectField id={`team-relationship-target-${relationship.id}`} label="Related Team" value={relationship.targetTeamId}
+            options={teams.filter(({ id }) => id !== team.id).map(({ id, name }) => ({ value: id, label: name }))}
+            path={["coreDesign", "teams", index, "relationships", relationshipIndex, "targetTeamId"]} client={client} />
+          <SelectField id={`team-relationship-kind-${relationship.id}`} label="Relationship" value={relationship.kind}
+            options={["allied", "neutral", "opposed", "custom"].map((value) => ({ value, label: value }))}
+            path={["coreDesign", "teams", index, "relationships", relationshipIndex, "kind"]} client={client} />
+          <TextField id={`team-relationship-description-${relationship.id}`} label="Description" value={relationship.description ?? ""}
+            path={["coreDesign", "teams", index, "relationships", relationshipIndex, "description"]} client={client} />
+          <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "teams", index, "relationships"], relationshipIndex)}>Remove relationship</button>
+        </div>)}
+          <AddButton label="Add relationship" disabled={teams.length < 2} onClick={() => {
+            const target = teams.find(({ id }) => id !== team.id);
+            if (target !== undefined) client.appendAtPath(["coreDesign", "teams", index, "relationships"], { id: identifier(), targetTeamId: target.id, kind: "neutral" });
+          }} />
+        </fieldset>
         <CheckField id={`team-enabled-${team.id}`} label="Enabled" checked={team.enabled} path={["coreDesign", "teams", index, "enabled"]} client={client} />
-        <ItemActions path={["coreDesign", "teams"]} index={index} count={teams.length} client={client} label={team.name || "Team"} />
+        <ItemActions path={["coreDesign", "teams"]} index={index} count={teams.length} client={client} label={team.name || "Team"} duplicate={() => duplicateTeam(team)} />
       </div></details>)}</div>
-    <AddButton label="Add Team" onClick={() => client.appendAtPath(["coreDesign", "teams"], { id: identifier(), name: "New Team", objectiveIds: [], enabled: true })} />
+    <AddButton label="Add Team" onClick={() => client.appendAtPath(["coreDesign", "teams"], { id: identifier(), name: "New Team", shortCode: "TEAM", objectiveIds: [], relationships: [], enabled: true })} />
   </Workspace>;
 }
 
@@ -101,15 +132,20 @@ function RoleEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
   const roles = coreArray(core, "sessionRoles");
   const teams = coreArray(core, "teams");
   const interfaces = coreArray(core, "interfaces");
-  return <Workspace id="roles" title="Session Roles" intro="Assign capabilities, eligible Teams, and Interface Profiles. Organization Roles are configured elsewhere.">
+  const stages = coreArray(core, "stages");
+  return <Workspace id="roles" title="Session Roles" intro="Assign responsibilities, capabilities, clearance, eligible Teams, Stages, and Interface Profiles. Organization Roles are configured elsewhere.">
     <div className="editor-list">{roles.map((role, index) => <details className="editor-item" id={`sessionRoles-${role.id}`} key={role.id}>
       <summary><span>{role.name || "Untitled Session Role"}</span><span className="item-id">{role.id}</span></summary><div className="item-body">
         <TextField id={`role-name-${role.id}`} label="Session Role name" value={role.name} path={["coreDesign", "sessionRoles", index, "name"]} client={client} />
         <TextField id={`role-description-${role.id}`} label="Description" value={role.description ?? ""} path={["coreDesign", "sessionRoles", index, "description"]} client={client} multiline />
+        <TextField id={`role-responsibilities-${role.id}`} label="Responsibilities (comma separated)" value={(role.responsibilities ?? []).join(", ")} path={["coreDesign", "sessionRoles", index, "responsibilities"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
+        <TextField id={`role-capabilities-${role.id}`} label="Capabilities (comma separated)" value={role.capabilities.map(({ capability }) => capability).join(", ")} path={["coreDesign", "sessionRoles", index, "capabilities"]} client={client} transform={(value) => value.split(",").map((capability) => capability.trim()).filter(Boolean).map((capability) => ({ capability }))} />
+        <TextField id={`role-clearance-${role.id}`} label="Information clearance" value={role.informationClearance ?? ""} path={["coreDesign", "sessionRoles", index, "informationClearance"]} client={client} />
         <MultiCheck legend="Eligible Teams" values={role.allowedTeamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "allowedTeamIds"]} client={client} />
+        <MultiCheck legend="Available Stages (none means all)" values={role.allowedStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "allowedStageIds"]} client={client} />
         <MultiCheck legend="Interface Profiles" values={role.interfaceProfileIds} options={interfaces.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "interfaceProfileIds"]} client={client} />
         <CheckField id={`role-control-${role.id}`} label="Control role" checked={role.isControlRole} path={["coreDesign", "sessionRoles", index, "isControlRole"]} client={client} />
-        <ItemActions path={["coreDesign", "sessionRoles"]} index={index} count={roles.length} client={client} label={role.name || "Session Role"} />
+        <ItemActions path={["coreDesign", "sessionRoles"]} index={index} count={roles.length} client={client} label={role.name || "Session Role"} duplicate={() => client.appendAtPath(["coreDesign", "sessionRoles"], { ...structuredClone(role), id: identifier(), name: `${role.name} copy` })} />
       </div></details>)}</div>
     <AddButton label="Add Session Role" onClick={() => client.appendAtPath(["coreDesign", "sessionRoles"], { id: identifier(), name: "New Session Role", capabilities: [], interfaceProfileIds: [], isControlRole: false, enabled: true })} />
   </Workspace>;
@@ -128,15 +164,35 @@ function SeatEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
         <TextField id={`seat-max-${seat.id}`} label="Maximum occupancy" value={seat.maxOccupancy ?? 0} path={["coreDesign", "seats", index, "maxOccupancy"]} client={client} type="number" />
         <MultiCheck legend="Session Roles" values={seat.sessionRoleIds} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "seats", index, "sessionRoleIds"]} client={client} />
         <CheckField id={`seat-required-${seat.id}`} label="Required Seat" checked={seat.required} path={["coreDesign", "seats", index, "required"]} client={client} />
-        <ItemActions path={["coreDesign", "seats"]} index={index} count={seats.length} client={client} label={seat.name || "Seat"} />
+        <ItemActions path={["coreDesign", "seats"]} index={index} count={seats.length} client={client} label={seat.name || "Seat"} duplicate={() => client.appendAtPath(["coreDesign", "seats"], { ...structuredClone(seat), id: identifier(), name: `${seat.name} copy` })} />
       </div></details>)}</div>
     <AddButton label="Add Seat" onClick={() => client.appendAtPath(["coreDesign", "seats"], { id: identifier(), name: "New Seat", sessionRoleIds: [], minOccupancy: 0, maxOccupancy: 1, required: false, joinMode: "operator_assignment" })} />
+  </Workspace>;
+}
+
+function ActivityEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
+  const activities = coreArray(core, "activities");
+  const roles = coreArray(core, "sessionRoles");
+  const artifacts = coreArray(core, "artifactTypes");
+  return <Workspace id="activities" title="Activities" intro="Define reusable participant work, role requirements, and expected Artifact Types before assigning Activities to Stages.">
+    <div className="editor-list">{activities.map((activity, index) => <details className="editor-item" id={`activities-${activity.id}`} key={activity.id}>
+      <summary><span>{activity.name || "Untitled Activity"}</span><span className="badge badge-muted">{activity.required ? "required" : "optional"}</span></summary><div className="item-body grid-fields">
+        <TextField id={`activity-name-${activity.id}`} label="Activity name" value={activity.name} path={["coreDesign", "activities", index, "name"]} client={client} />
+        <TextField id={`activity-description-${activity.id}`} label="Description" value={activity.description ?? ""} path={["coreDesign", "activities", index, "description"]} client={client} multiline />
+        <TextField id={`activity-instructions-${activity.id}`} label="Participant instructions" value={activity.instructions ?? ""} path={["coreDesign", "activities", index, "instructions"]} client={client} multiline />
+        <MultiCheck legend="Session Role requirements" values={activity.sessionRoleIds} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "activities", index, "sessionRoleIds"]} client={client} />
+        <MultiCheck legend="Artifact requirements" values={activity.artifactTypeIds} options={artifacts.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "activities", index, "artifactTypeIds"]} client={client} />
+        <CheckField id={`activity-required-${activity.id}`} label="Required to complete its Stage" checked={activity.required} path={["coreDesign", "activities", index, "required"]} client={client} />
+        <ItemActions path={["coreDesign", "activities"]} index={index} count={activities.length} client={client} label={activity.name || "Activity"} duplicate={() => client.appendAtPath(["coreDesign", "activities"], { ...structuredClone(activity), id: identifier(), name: `${activity.name} copy` })} />
+      </div></details>)}</div>
+    <AddButton label="Add Activity" onClick={() => client.appendAtPath(["coreDesign", "activities"], { id: identifier(), name: "New Activity", description: "", instructions: "", sessionRoleIds: [], artifactTypeIds: [], required: false })} />
   </Workspace>;
 }
 
 function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const groups = coreArray(core, "stageGroups");
   const stages = coreArray(core, "stages");
+  const activities = coreArray(core, "activities");
   const canReorder = stages.every((stage) => stage.transitions.length <= 1 && stage.transitionMode !== "parallel" && stage.joinMode === undefined);
   const addStage = () => {
     const stage = basicStage(`Stage ${stages.length + 1}`, stages.length);
@@ -166,15 +222,23 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
     <h3>Stage Groups</h3><div className="editor-list compact-list">{groups.map((group, index) => <details className="editor-item" id={`stageGroups-${group.id}`} key={group.id}><summary>{group.name}</summary><div className="item-body grid-fields">
       <TextField id={`group-name-${group.id}`} label="Group name" value={group.name} path={["coreDesign", "stageGroups", index, "name"]} client={client} />
       <TextField id={`group-type-${group.id}`} label="Stage Type label" value={group.stageType} path={["coreDesign", "stageGroups", index, "stageType"]} client={client} />
-      <ItemActions path={["coreDesign", "stageGroups"]} index={index} count={groups.length} client={client} label={group.name} />
+      <SelectField id={`group-parent-${group.id}`} label="Parent Stage Group" value={group.parentGroupId ?? ""}
+        options={[{ value: "", label: "Top level" }, ...groups.filter(({ id }) => id !== group.id).map(({ id, name }) => ({ value: id, label: name }))]}
+        path={["coreDesign", "stageGroups", index, "parentGroupId"]} client={client} emptyDeletes />
+      <ItemActions path={["coreDesign", "stageGroups"]} index={index} count={groups.length} client={client} label={group.name} duplicate={() => client.appendAtPath(["coreDesign", "stageGroups"], { ...structuredClone(group), id: identifier(), name: `${group.name} copy`, parentGroupId: group.parentGroupId })} />
     </div></details>)}</div>
     <AddButton label="Add Stage Group" onClick={() => client.appendAtPath(["coreDesign", "stageGroups"], { id: identifier(), name: "New Stage Group", stageType: "group", order: groups.length })} />
     <h3>Sequential timeline</h3><ol className="timeline">{stages.map((stage, index) => <li key={stage.id}><details className="editor-item" id={`stages-${stage.id}`}>
       <summary><span>{stage.name}</span><span className="badge badge-muted">{stage.stageType}</span></summary><div className="item-body grid-fields">
         <TextField id={`stage-name-${stage.id}`} label="Stage name" value={stage.name} path={["coreDesign", "stages", index, "name"]} client={client} />
         <TextField id={`stage-type-${stage.id}`} label="Stage Type" value={stage.stageType} path={["coreDesign", "stages", index, "stageType"]} client={client} />
+        <TextField id={`stage-instructions-${stage.id}`} label="Stage instructions" value={stage.instructions ?? ""} path={["coreDesign", "stages", index, "instructions"]} client={client} multiline />
         <SelectField id={`stage-group-${stage.id}`} label="Parent Stage Group" value={stage.stageGroupId ?? ""} options={[{ value: "", label: "No parent" }, ...groups.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "stages", index, "stageGroupId"]} client={client} emptyDeletes />
         <TextField id={`stage-duration-${stage.id}`} label="Duration in seconds (0 for untimed)" value={stage.durationSeconds ?? 0} path={["coreDesign", "stages", index, "durationSeconds"]} client={client} type="number" />
+        <SelectField id={`stage-timer-${stage.id}`} label="Timer behavior" value={stage.timerMode ?? "none"}
+          options={[{ value: "none", label: "No timer" }, { value: "countdown", label: "Count down" }, { value: "countup", label: "Count up" }]}
+          path={["coreDesign", "stages", index, "timerMode"]} client={client} />
+        <MultiCheck legend="Available Activities" values={stage.allowedActivityIds} options={activities.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "stages", index, "allowedActivityIds"]} client={client} />
         <SelectField id={`stage-transition-mode-${stage.id}`} label="Outgoing branch behavior" value={stage.transitionMode ?? "exclusive"}
           options={[{ value: "exclusive", label: "Choose one passing branch" }, { value: "parallel", label: "Start all passing branches" }]}
           path={["coreDesign", "stages", index, "transitionMode"]} client={client} />
@@ -184,10 +248,23 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
         <SelectField id={`stage-join-mode-${stage.id}`} label="Incoming merge behavior" value={stage.joinMode ?? ""}
           options={[{ value: "", label: "Not a merge" }, { value: "all", label: "Wait for all branches" }, { value: "first", label: "Accept first branch" }]}
           path={["coreDesign", "stages", index, "joinMode"]} client={client} emptyDeletes />
+        <fieldset className="choice-group"><legend>Operator controls</legend>
+          <CheckField id={`stage-control-start-${stage.id}`} label="Allow start" checked={stage.operatorControls.allowStart} path={["coreDesign", "stages", index, "operatorControls", "allowStart"]} client={client} />
+          <CheckField id={`stage-control-end-${stage.id}`} label="Allow end" checked={stage.operatorControls.allowEnd} path={["coreDesign", "stages", index, "operatorControls", "allowEnd"]} client={client} />
+          <CheckField id={`stage-control-extend-${stage.id}`} label="Allow timer extension" checked={stage.operatorControls.allowExtend} path={["coreDesign", "stages", index, "operatorControls", "allowExtend"]} client={client} />
+          <CheckField id={`stage-control-skip-${stage.id}`} label="Allow skip" checked={stage.operatorControls.allowSkip} path={["coreDesign", "stages", index, "operatorControls", "allowSkip"]} client={client} />
+          <CheckField id={`stage-control-return-${stage.id}`} label="Allow return to previous" checked={stage.operatorControls.allowReturnToPrevious} path={["coreDesign", "stages", index, "operatorControls", "allowReturnToPrevious"]} client={client} />
+          <CheckField id={`stage-control-reason-${stage.id}`} label="Require reason for control action" checked={stage.operatorControls.requireReason} path={["coreDesign", "stages", index, "operatorControls", "requireReason"]} client={client} />
+        </fieldset>
         <fieldset className="nested-editor"><legend>Transitions</legend>{stage.transitions.map((transition, transitionIndex) => <div className="field-row" key={transition.id}>
           <SelectField id={`stage-transition-target-${transition.id}`} label="Target Stage" value={transition.targetStageId}
             options={stages.filter(({ id }) => id !== stage.id).map(({ id, name }) => ({ value: id, label: name }))}
             path={["coreDesign", "stages", index, "transitions", transitionIndex, "targetStageId"]} client={client} />
+          <TextField id={`stage-transition-label-${transition.id}`} label="Transition label" value={transition.label ?? ""}
+            path={["coreDesign", "stages", index, "transitions", transitionIndex, "label"]} client={client} />
+          <SelectField id={`stage-transition-mode-${transition.id}`} label="Transition timing" value={transition.mode}
+            options={[{ value: "manual", label: "Operator chooses" }, { value: "automatic", label: "Automatic when eligible" }, { value: "automatic_or_manual", label: "Automatic or operator" }]}
+            path={["coreDesign", "stages", index, "transitions", transitionIndex, "mode"]} client={client} />
           <TextField id={`stage-transition-priority-${transition.id}`} label="Priority" value={transition.priority ?? transitionIndex}
             path={["coreDesign", "stages", index, "transitions", transitionIndex, "priority"]} client={client} type="number" />
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "stages", index, "transitions"], transitionIndex)}>Remove transition</button>
@@ -202,6 +279,10 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
         <div className="item-actions">
           <button className="btn-secondary compact" type="button" disabled={!canReorder || index === 0} onClick={() => reorderStage(index, -1)}>Earlier</button>
           <button className="btn-secondary compact" type="button" disabled={!canReorder || index === stages.length - 1} onClick={() => reorderStage(index, 1)}>Later</button>
+          <button className="btn-secondary compact" type="button" disabled={!canReorder} onClick={() => {
+            const copy = { ...structuredClone(stage), id: identifier(), name: `${stage.name} copy`, transitions: [] };
+            replaceSequentialStages([...stages.slice(0, index + 1), copy, ...stages.slice(index + 1)]);
+          }}>Duplicate</button>
           <button className="btn-danger compact" type="button" disabled={!canReorder} onClick={() => { if (confirm(`Remove ${stage.name}? References will remain visible as validation errors.`)) replaceSequentialStages(stages.filter((_, candidate) => candidate !== index)); }}>Remove</button>
         </div>
       </div></details></li>)}</ol>
@@ -355,10 +436,27 @@ function InterfaceEditor({ core, client }: { core: CoreDesignV1; client: StudioC
 
 function MethodologyEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const concepts = coreArray(core, "methodologyConcepts");
-  return <Workspace id="methodology" title="Methodology" intro="Disabled concepts retain their authored content. Publication remains blocked while enabled elements depend on them (OPEN-004).">
+  const authoredCounts: Record<string, number> = {
+    team: coreArray(core, "teams").length, stage: coreArray(core, "stages").length,
+    session_role: coreArray(core, "sessionRoles").length, seat: coreArray(core, "seats").length,
+    artifact_type: coreArray(core, "artifactTypes").length, workflow_definition: coreArray(core, "workflows").length,
+    information_policy: coreArray(core, "informationPolicies").length, decision_record: coreArray(core, "decisionTraceability").length,
+    research_question: coreArray(core, "researchQuestions").length
+  };
+  const changeConcept = (index: number, enabled: boolean) => {
+    const concept = concepts[index];
+    if (concept === undefined || enabled) return client.setAtPath(["coreDesign", "methodologyConcepts", index, "enabled"], enabled);
+    const dependents = concepts.filter((candidate) => candidate.enabled && candidate.dependsOn.includes(concept.key)).map(({ label }) => label);
+    const authored = authoredCounts[concept.key] ?? 0;
+    const impact = [...dependents.map((label) => `${label} depends on it`), ...(authored === 0 ? [] : [`${authored} authored item${authored === 1 ? "" : "s"} remain`])];
+    if (impact.length === 0 || confirm(`Disable ${concept.label}? ${impact.join("; ")}. Publication will remain blocked until dependencies are resolved.`)) {
+      client.setAtPath(["coreDesign", "methodologyConcepts", index, "enabled"], false);
+    }
+  };
+  return <Workspace id="methodology" title="Methodology" intro="These optional controls are a visible proposal pending OPEN-004. Disabled concepts retain authored content, and unresolved dependencies block Publication.">
     {concepts.length === 0 ? <AddButton label="Add methodology controls" onClick={() => client.setAtPath(["coreDesign", "methodologyConcepts"], METHODOLOGY_CONCEPTS)} /> :
       <div className="concept-grid">{concepts.map((concept, index) => <div className="concept-row" key={concept.key}>
-        <CheckField id={`concept-${concept.key}`} label={concept.label} checked={concept.enabled} path={["coreDesign", "methodologyConcepts", index, "enabled"]} client={client} />
+        <label className="choice" htmlFor={`concept-${concept.key}`}><input id={`concept-${concept.key}`} type="checkbox" checked={concept.enabled} onChange={(event) => changeConcept(index, event.target.checked)} />{concept.label}</label>
         <span>{concept.dependsOn.length === 0 ? "No dependencies" : `Depends on ${concept.dependsOn.join(", ")}`}</span>
       </div>)}</div>}
   </Workspace>;
@@ -394,10 +492,34 @@ function ResearchEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
   </Workspace>;
 }
 
-function ScenarioEditor({ scenario, client }: { scenario: ScenarioV1; client: StudioCollaborationClient }) {
+function ScenarioEditor({ core, scenario, client }: { core: CoreDesignV1; scenario: ScenarioV1; client: StudioCollaborationClient }) {
   const content = scenario.content ?? [];
+  const objectives = coreArray(core, "objectives");
+  const identity = core.identity;
   return <Workspace id="overview" title="Overview & Scenario" intro="Define exercise identity and content with ordinary controls. Scenario content is excluded from template copies unless explicitly chosen.">
-    <div className="grid-fields"><TextField id="scenario-name" label="Scenario name" value={scenario.name} path={["scenario", "name"]} client={client} />
+    <h3>Core Design identity</h3><div className="grid-fields">
+      <TextField id="identity-title" label="Core Design title" value={identity?.title ?? ""} path={["coreDesign", "identity", "title"]} client={client} />
+      <TextField id="identity-subtitle" label="Subtitle" value={identity?.subtitle ?? ""} path={["coreDesign", "identity", "subtitle"]} client={client} />
+      <TextField id="identity-developer" label="Developer or owner" value={identity?.developer ?? ""} path={["coreDesign", "identity", "developer"]} client={client} />
+      <TextField id="identity-summary" label="Summary" value={identity?.summary ?? ""} path={["coreDesign", "identity", "summary"]} client={client} multiline />
+      <TextField id="identity-purpose" label="Purpose" value={identity?.purpose ?? ""} path={["coreDesign", "identity", "purpose"]} client={client} multiline />
+      <TextField id="identity-audience" label="Intended audience" value={identity?.audience ?? ""} path={["coreDesign", "identity", "audience"]} client={client} />
+      <TextField id="identity-duration" label="Estimated duration (minutes)" value={identity?.estimatedDurationMinutes ?? 0} path={["coreDesign", "identity", "estimatedDurationMinutes"]} client={client} type="number" />
+    </div>
+    <h3>Learning objectives</h3><div className="editor-list compact-list">{objectives.map((objective, index) => <details className="editor-item" id={`objectives-${objective.id}`} key={objective.id}>
+      <summary>{objective.name || "Untitled objective"}</summary><div className="item-body grid-fields">
+        <TextField id={`objective-name-${objective.id}`} label="Objective name" value={objective.name} path={["coreDesign", "objectives", index, "name"]} client={client} />
+        <TextField id={`objective-description-${objective.id}`} label="Description" value={objective.description} path={["coreDesign", "objectives", index, "description"]} client={client} multiline />
+        <TextField id={`objective-measures-${objective.id}`} label="Success measures (comma separated)" value={(objective.successMeasures ?? []).join(", ")} path={["coreDesign", "objectives", index, "successMeasures"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
+        <ItemActions path={["coreDesign", "objectives"]} index={index} count={objectives.length} client={client} label={objective.name || "objective"} duplicate={() => client.appendAtPath(["coreDesign", "objectives"], { ...structuredClone(objective), id: identifier(), name: `${objective.name} copy` })} />
+      </div></details>)}</div>
+    <AddButton label="Add learning objective" onClick={() => client.appendAtPath(["coreDesign", "objectives"], { id: identifier(), name: "New objective", description: "", successMeasures: [] })} />
+    <h3>Terminology</h3><p className="hint">Blank fields use the canonical labels. Custom labels do not change stable identifiers.</p><div className="grid-fields">
+      <TextField id="terminology-team" label="Custom label for Team" value={core.terminology?.customLabels.Team ?? ""} path={["coreDesign", "terminology", "customLabels", "Team"]} client={client} emptyDeletes />
+      <TextField id="terminology-role" label="Custom label for Session Role" value={core.terminology?.customLabels["Session Role"] ?? ""} path={["coreDesign", "terminology", "customLabels", "Session Role"]} client={client} emptyDeletes />
+      <TextField id="terminology-stage" label="Custom label for Stage" value={core.terminology?.customLabels.Stage ?? ""} path={["coreDesign", "terminology", "customLabels", "Stage"]} client={client} emptyDeletes />
+    </div>
+    <h3>Scenario</h3><div className="grid-fields"><TextField id="scenario-name" label="Scenario name" value={scenario.name} path={["scenario", "name"]} client={client} />
       <TextField id="scenario-description" label="Scenario description" value={scenario.description} path={["scenario", "description"]} client={client} multiline />
       <TextField id="scenario-tags" label="Tags (comma separated)" value={scenario.tags.join(", ")} path={["scenario", "tags"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
       <MultiCheck legend="Delivery modes" values={scenario.deliveryModes} options={["in_person", "virtual", "hybrid", "asynchronous"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["scenario", "deliveryModes"]} client={client} /></div>
@@ -463,14 +585,15 @@ function RolePreview({ projectId, core }: { projectId: string; core: CoreDesignV
 export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
   projectId: string; client: StudioCollaborationClient; core: CoreDesignV1; scenario: ScenarioV1;
 }) {
-  return <div className="visual-editor" data-contract-id={CORE_DESIGN_EDITOR_CONTRACT_ID}>
-    <nav className="editor-nav" aria-label="Core Design editor sections"><h2>Design workspaces</h2><ul>{SECTIONS.map(([id, label]) => <li key={id}><a href={`#${id}`}>{label}</a></li>)}</ul></nav>
+  return <div className="visual-editor" data-contract-id={STUDIO_FOUNDATION_EDITOR_CONTRACT_ID}>
+    <nav className="editor-nav" aria-label="Core Design editor sections"><h2>Design workspaces</h2><button className="btn-secondary compact" type="button" onClick={() => client.undo()}>Undo last change</button><ul>{SECTIONS.map(([id, label]) => <li key={id}><a href={`#${id}`}>{label}</a></li>)}</ul></nav>
     <div className="editor-canvas">
-      <ScenarioEditor scenario={scenario} client={client} />
+      <ScenarioEditor core={core} scenario={scenario} client={client} />
       <MethodologyEditor core={core} client={client} />
       <TeamEditor core={core} client={client} />
       <RoleEditor core={core} client={client} />
       <SeatEditor core={core} client={client} />
+      <ActivityEditor core={core} client={client} />
       <StageEditor core={core} client={client} />
       <FormsEditor core={core} client={client} />
       <WorkflowEditor core={core} client={client} />

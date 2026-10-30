@@ -48,6 +48,7 @@ export const FLOOR_LEASE_CONTRACT_ID = "floor-lease-v1";
 export const STUDIO_CRDT_CONTRACT_ID = "studio-crdt-v1";
 export const STUDIO_PUBLISH_CONTRACT_ID = "studio-publish-v1";
 export const CORE_DESIGN_EDITOR_CONTRACT_ID = "core-design-editor-v1";
+export const STUDIO_FOUNDATION_EDITOR_CONTRACT_ID = "studio-foundation-editor-v1";
 export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
 export const POLL_DEFINITION_CONTRACT_ID = "poll-definition-v1";
 export const VOICE_DEFINITION_CONTRACT_ID = "voice-definition-v1";

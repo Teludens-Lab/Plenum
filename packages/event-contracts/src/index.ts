@@ -69,6 +69,8 @@ export const PROJECT_PORTAL_CONTRACT_ID = "project-portal-v1";
 export const TEMPLATE_LIBRARY_CONTRACT_ID = "template-library-v1";
 export const RELEASE_CATALOG_CONTRACT_ID = "release-catalog-v1";
 export const SESSION_CATALOG_CONTRACT_ID = "session-catalog-v1";
+export const CONTENT_LIBRARY_CONTRACT_ID = "content-library-v1";
+export const UPLOAD_QUARANTINE_CONTRACT_ID = "upload-quarantine-v1";
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;
@@ -112,6 +114,41 @@ export interface ProjectMutationV1 extends JsonObject {
   lifecycleStatus: "active" | "archived";
   version: number;
   editorUrl: string;
+  replayed: boolean;
+}
+
+export interface ContentLibraryVersionV1 extends JsonObject {
+  id: string;
+  version: number;
+  fileName: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  scanStatus: "quarantined" | "clean" | "infected" | "failed";
+  scanDetail: string;
+  availableAt: string | null;
+  createdAt: string;
+}
+
+export interface ContentLibraryItemV1 extends JsonObject {
+  id: string;
+  projectId: string;
+  title: string;
+  currentVersion: number;
+  versions: ContentLibraryVersionV1[];
+}
+
+export interface ContentLibraryV1 extends JsonObject {
+  contractId: typeof CONTENT_LIBRARY_CONTRACT_ID;
+  projectId: string;
+  permissions: { canUpload: boolean };
+  items: ContentLibraryItemV1[];
+}
+
+export interface UploadQuarantineV1 extends JsonObject {
+  contractId: typeof UPLOAD_QUARANTINE_CONTRACT_ID;
+  projectId: string;
+  contentItem: ContentLibraryItemV1;
   replayed: boolean;
 }
 

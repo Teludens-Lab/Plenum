@@ -57,6 +57,7 @@ import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLe
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
 import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, reopenProject } from "../studio/portal.js";
+import { listContentLibrary, uploadContentVersion, type ContentScanner, type UploadContentInput } from "../studio/content-library.js";
 import {
   createConfiguredSession,
   getReleaseCatalogItem,
@@ -79,6 +80,7 @@ export interface RuntimeHttpOptions {
   floorTokenSecret?: string;
   objectStore?: ObjectStore;
   replayAdapter?: SessionReplayAdapter;
+  contentScanner?: ContentScanner;
 }
 
 function collaborativePublishInput(body: JsonObject, correlationId: string): CollaborativePublishInput {
@@ -112,6 +114,19 @@ function rolePreviewInput(body: JsonObject, correlationId: string): RolePreviewI
     throw authorizationError("VALIDATION_FAILED", "The role preview selection is invalid.", correlationId);
   }
   return body as unknown as RolePreviewInput;
+}
+
+function contentUploadInput(body: JsonObject, correlationId: string): UploadContentInput {
+  const allowed = new Set(["requestId", "contentItemId", "title", "fileName", "mediaType", "contentBase64"]);
+  const encoded = body.contentBase64;
+  if (Object.keys(body).some((field) => !allowed.has(field)) || typeof body.requestId !== "string" || !uuid.test(body.requestId) ||
+      (body.contentItemId !== undefined && (typeof body.contentItemId !== "string" || !uuid.test(body.contentItemId))) ||
+      typeof body.title !== "string" || typeof body.fileName !== "string" || typeof body.mediaType !== "string" ||
+      typeof encoded !== "string" || encoded.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/u.test(encoded)) {
+    throw authorizationError("VALIDATION_FAILED", "The governed content upload is invalid.", correlationId);
+  }
+  return { requestId: body.requestId, ...(typeof body.contentItemId === "string" ? { contentItemId: body.contentItemId } : {}),
+    title: body.title, fileName: body.fileName, mediaType: body.mediaType, bytes: Buffer.from(encoded, "base64") };
 }
 
 function statusFor(code: ErrorEnvelopeV1["error"]["code"]): number {
@@ -391,6 +406,16 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/draft$/u))) {
         send(response, 200, await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/content-library$/u))) {
+        send(response, 200, await listContentLibrary(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/content-library\/uploads$/u))) {
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Content storage is not configured.", correlationId);
+        send(response, 201, await uploadContentVersion(options.pool, options.objectStore, options.contentScanner, principal,
+          pathId(match[1], correlationId), contentUploadInput(await readBody(request, correlationId), correlationId), correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/plugin-catalog$/u))) {

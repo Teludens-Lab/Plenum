@@ -51,6 +51,22 @@ select { min-height: 2.75rem; }
 .preview-module, .preview-content article { padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); }
 .preview-module h3, .preview-module p, .preview-content h4, .preview-content p { margin: 0; }
 .preview-content { margin-top: var(--space-5); }
+.form-preview { margin-block: var(--space-5); padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); }
+.form-preview > legend { padding-inline: var(--space-2); font-weight: var(--weight-medium); }
+.form-preview-canvas { width: 100%; max-width: 72rem; margin: var(--space-4) auto 0; padding: var(--space-5); border: 1px solid var(--color-border-focus); border-radius: var(--radius-lg); background: var(--color-bg-surface); }
+.form-preview-canvas.preview-tablet { max-width: 48rem; }
+.form-preview-canvas.preview-mobile { max-width: 24rem; }
+.form-preview-canvas section { display: grid; gap: var(--space-3); margin-block: var(--space-5); }
+.form-preview-canvas .field { display: grid; gap: var(--space-2); font-weight: var(--weight-medium); }
+.form-preview-canvas .hint { font-weight: var(--weight-regular); }
+.workflow-preview, .inject-timeline { margin-block: var(--space-5); padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); }
+.workflow-preview li, .inject-timeline li { margin-block: var(--space-2); }
+.inject-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); }
+.inject-timeline > h3 { grid-column: 1 / -1; }
+.inject-timeline section { padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
+.inject-timeline h3, .inject-timeline h4 { margin-block-start: 0; }
+.content-upload { margin-block: var(--space-5); padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); }
+.content-upload .btn-primary { margin-block-start: var(--space-4); }
 .badge-muted { color: var(--color-text-secondary); background: var(--color-bg-surface); border: 1px solid var(--color-border-default); }
 .badge-info { color: var(--color-status-info); background: var(--color-status-info-bg); }
 .review-grid { display: grid; grid-template-columns: minmax(20rem, 0.7fr) minmax(0, 1.3fr); gap: var(--space-5); align-items: start; margin-top: var(--space-6); }

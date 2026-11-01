@@ -121,7 +121,9 @@ import {
   listSimulationTemplates,
   createProject,
   archiveProject,
-  reopenProject
+  reopenProject,
+  listContentLibrary,
+  uploadContentVersion
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -263,7 +265,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/024_reporting_research.sql",
     "apps/server/migrations/025_security_retention_enforcement.sql",
     "apps/server/migrations/026_product_portal.sql",
-    "apps/server/migrations/027_release_session_catalog.sql"
+    "apps/server/migrations/027_release_session_catalog.sql",
+    "apps/server/migrations/028_content_library.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -544,6 +547,85 @@ test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, v
   } finally {
     await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'reviewer')", [ids.orgA, ids.personF]);
   }
+});
+
+test("PS-740-T01 Content Library is tenant-scoped, immutable, replay-safe, and fails closed", async () => {
+  const cleanScanner = { async scan() { return { status: "clean", detail: "No threat detected." }; } };
+  const safeBytes = Buffer.from("Synthetic governed content for PS-740.", "utf8");
+  const requestId = randomUUID();
+  const input = {
+    requestId,
+    title: "PS-740 governed content",
+    fileName: "governed-content.txt",
+    mediaType: "text/plain",
+    bytes: safeBytes
+  };
+
+  const initial = await listContentLibrary(app, principalE, ids.projectA, randomUUID());
+  assert.equal(initial.contractId, "content-library-v1");
+  assert.equal(initial.items.length, 0);
+
+  const concurrent = await Promise.all([
+    uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, input, randomUUID()),
+    uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, input, randomUUID())
+  ]);
+  assert.equal(new Set(concurrent.map(({ contentItem }) => contentItem.id)).size, 1);
+  assert.deepEqual(concurrent.map(({ replayed }) => replayed).sort(), [false, true]);
+  const contentItemId = concurrent[0].contentItem.id;
+  assert.equal(concurrent[0].contentItem.versions[0].scanStatus, "clean");
+  assert.notEqual(concurrent[0].contentItem.versions[0].availableAt, null);
+
+  const second = await uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, {
+    ...input,
+    requestId: randomUUID(),
+    contentItemId,
+    title: "PS-740 governed content revision",
+    bytes: Buffer.from("Synthetic governed content version two.", "utf8")
+  }, randomUUID());
+  assert.equal(second.contentItem.currentVersion, 2);
+  const afterVersion = await listContentLibrary(app, principalE, ids.projectA, randomUUID());
+  assert.equal(afterVersion.items.length, 1);
+  assert.deepEqual(afterVersion.items[0].versions.map(({ version }) => version), [2, 1]);
+
+  const infected = await uploadContentVersion(app, objectStore, {
+    async scan() { return { status: "infected", detail: "Synthetic threat signature detected." }; }
+  }, principalE, ids.projectA, {
+    ...input, requestId: randomUUID(), title: "Quarantined content", fileName: "quarantined.txt",
+    bytes: Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE", "utf8")
+  }, randomUUID());
+  assert.equal(infected.contentItem.versions[0].scanStatus, "infected");
+  assert.equal(infected.contentItem.versions[0].availableAt, null);
+
+  const failed = await uploadContentVersion(app, objectStore, {
+    async scan() { throw new Error("synthetic scanner outage"); }
+  }, principalE, ids.projectA, {
+    ...input, requestId: randomUUID(), title: "Failed scan content", fileName: "failed.txt"
+  }, randomUUID());
+  assert.equal(failed.contentItem.versions[0].scanStatus, "failed");
+  assert.equal(failed.contentItem.versions[0].availableAt, null);
+
+  await assert.rejects(() => uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, {
+    ...input, requestId: randomUUID(), mediaType: "application/pdf"
+  }, randomUUID()), (error) => error.envelope?.error.code === "VALIDATION_FAILED");
+  await assert.rejects(() => uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, {
+    ...input, requestId: randomUUID(), bytes: Buffer.alloc(512 * 1024 + 1, 65)
+  }, randomUUID()), (error) => error.envelope?.error.code === "TOO_LARGE");
+  await assert.rejects(() => listContentLibrary(app, principalF, ids.projectA, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  await assert.rejects(() => listContentLibrary(app, principalE, ids.projectB, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  const interruptedRequestId = randomUUID();
+  const interruptedBytes = Buffer.from("Interrupted content version.", "utf8");
+  await assert.rejects(() => uploadContentVersion(app, objectStore, cleanScanner, principalE, ids.projectA, {
+    ...input, requestId: interruptedRequestId, contentItemId: randomUUID(), bytes: interruptedBytes
+  }, randomUUID()), (error) => error.envelope?.error.code === "NOT_FOUND");
+  const interruptedDigest = createHash("sha256").update(interruptedBytes).digest("hex");
+  await assert.rejects(() => objectStore.get(
+    `studio-content/${ids.orgA}/${ids.projectA}/${interruptedRequestId}/${interruptedDigest}`
+  ), (error) => error?.code === "ENOENT");
+  await assert.rejects(() => owner.query(
+    "UPDATE studio.content_versions SET scan_detail='mutated' WHERE content_item_id=$1", [contentItemId]
+  ), /append-only/i);
 });
 
 test("PS-720-T01/T02 AC-03 catalogs immutable Releases and creates one configured Session exactly once", async () => {

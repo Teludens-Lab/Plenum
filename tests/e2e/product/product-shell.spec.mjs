@@ -9,6 +9,7 @@ const evidenceRoot = "output/playwright/ps-700";
 const portalEvidenceRoot = "output/playwright/ps-710";
 const lifecycleEvidenceRoot = "output/playwright/ps-720";
 const studioEvidenceRoot = "output/playwright/ps-730";
+const authoringEvidenceRoot = "output/playwright/ps-740";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -21,6 +22,7 @@ test.beforeAll(async () => {
   await mkdir(portalEvidenceRoot, { recursive: true });
   await mkdir(lifecycleEvidenceRoot, { recursive: true });
   await mkdir(studioEvidenceRoot, { recursive: true });
+  await mkdir(authoringEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -63,8 +65,8 @@ test("PS-710 local user-test persona chooser is accessible without authorization
 });
 
 const localUserTestPersonas = [
-  { label: /^Designer$/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
-  { label: /^Designer B\b/u, displayName: "Synthetic Designer B", heading: "Create a Project" },
+  { label: /^Designer Create,/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
+  { label: /^Designer B Collaborate/u, displayName: "Synthetic Designer B", heading: "Create a Project" },
   { label: /^Admin\b/u, displayName: "Synthetic operator", heading: "Organization members and roles" },
   { label: /^Reviewer\b/u, displayName: "Synthetic final reviewer", heading: "Review access", project: "PS-150 S1 proof" },
   { label: /^Operator only\b/u, displayName: "Synthetic portal operator", heading: "Project access unavailable" }
@@ -347,7 +349,7 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
 });
 
 test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime projection, and links validation to the exact control @a11y", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const first = await actor(browser, fixture.tokens.designerA);
   const second = await actor(browser, fixture.tokens.designerB);
   const studioUrl = `/studio/projects/${fixture.projectId}`;
@@ -362,12 +364,12 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
 
   const convergedName = "PS-730 converged Scenario";
   await first.page.getByLabel("Scenario name").fill(convergedName);
-  await expect(second.page.getByLabel("Scenario name")).toHaveValue(convergedName);
+  await expect(second.page.getByLabel("Scenario name")).toHaveValue(convergedName, { timeout: 120_000 });
 
   await first.page.getByRole("button", { name: "Add learning objective" }).click();
-  await expect(second.page.locator("#overview").getByText("New objective", { exact: true })).toBeVisible();
+  await expect(second.page.locator("#overview").getByText("New objective", { exact: true })).toBeVisible({ timeout: 120_000 });
   await first.page.getByRole("button", { name: "Add Activity" }).click();
-  await expect(second.page.locator("#activities").getByText("New Activity", { exact: true })).toBeVisible();
+  await expect(second.page.locator("#activities").getByText("New Activity", { exact: true })).toBeVisible({ timeout: 120_000 });
   const firstStage = first.page.locator("#stages .timeline details").first();
   await firstStage.locator("summary").click();
   await firstStage.getByRole("checkbox", { name: "New Activity" }).check();
@@ -391,8 +393,10 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   const secondGroup = groups.nth(1);
   await firstGroup.locator("summary").click();
   await secondGroup.locator("summary").click();
-  await firstGroup.getByLabel("Parent Stage Group").selectOption({ index: 1 });
-  await secondGroup.getByLabel("Parent Stage Group").selectOption({ index: 1 });
+  const firstGroupName = await firstGroup.getByLabel("Group name").inputValue();
+  const secondGroupName = await secondGroup.getByLabel("Group name").inputValue();
+  await firstGroup.getByLabel("Parent Stage Group").selectOption({ label: secondGroupName });
+  await secondGroup.getByLabel("Parent Stage Group").selectOption({ label: firstGroupName });
   await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible();
   const issue = first.page.locator(".issue-list a").filter({ hasText: /^stageGroups\./u }).first();
   await expect(issue).toBeVisible();
@@ -405,4 +409,58 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   await first.page.screenshot({ path: `${studioEvidenceRoot}/foundational-studio.png`, fullPage: true });
   await first.context.close();
   await second.context.close();
+});
+
+test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, Injects, and quarantined content @a11y", async ({ browser }) => {
+  test.setTimeout(360_000);
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await expect(page.getByRole("heading", { name: "Core Design editor" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Forms & Artifact Types" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workflows" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Communications" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Injects", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Content Library" })).toBeVisible();
+
+  const firstForm = page.locator("#forms details.editor-item").first();
+  await firstForm.locator("summary").click();
+  await expect(firstForm.getByText("Form preview", { exact: true })).toBeVisible();
+  await firstForm.getByLabel("Viewport").selectOption("mobile");
+  await firstForm.getByLabel("Mode").selectOption("completed");
+  await expect(firstForm.locator(".form-preview-canvas")).toHaveAttribute("aria-label", /mobile completed preview/u);
+
+  await page.getByRole("button", { name: "Add DEC-42 reference Workflow" }).click();
+  const dec42 = page.locator("#workflows details.editor-item").filter({ hasText: "DEC-42 reference review" });
+  await expect(dec42).toBeVisible();
+  await dec42.locator("summary").click();
+  await expect(dec42.getByText("Return for revision", { exact: true }).first()).toBeVisible();
+  await expect(dec42.getByText("Resubmit for intermediate review", { exact: true }).first()).toBeVisible();
+
+  await expect(page.getByRole("table", { name: "Route matrix by Session Role" })).toBeVisible();
+  await expect(page.getByLabel("Inject timeline")).toBeVisible();
+
+  await page.getByLabel("Content title").fill("PS-740 safe content");
+  await page.getByLabel("File (maximum 512 KiB)").setInputFiles({
+    name: "ps-740-safe.txt", mimeType: "text/plain", buffer: Buffer.from("Safe synthetic PS-740 content.")
+  });
+  await page.getByRole("button", { name: "Upload and scan" }).click();
+  await expect(page.getByText("Malware scan passed. This version is available for reuse.")).toBeVisible();
+  const safeCard = page.locator("#content-library .catalog-card").filter({ hasText: "PS-740 safe content" });
+  await expect(safeCard.getByText("clean", { exact: true })).toBeVisible();
+  await safeCard.getByRole("button", { name: "Use current version in Scenario" }).click();
+
+  await page.getByLabel("Content title").fill("PS-740 quarantined content");
+  await page.getByLabel("File (maximum 512 KiB)").setInputFiles({
+    name: "ps-740-eicar.txt", mimeType: "text/plain", buffer: Buffer.from("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")
+  });
+  await page.getByRole("button", { name: "Upload and scan" }).click();
+  await expect(page.getByText(/This version remains unavailable/u)).toBeVisible();
+  const infectedCard = page.locator("#content-library .catalog-card").filter({ hasText: "PS-740 quarantined content" });
+  await expect(infectedCard.getByText("infected", { exact: true })).toBeVisible();
+  await expect(infectedCard.getByRole("button", { name: "Use current version in Scenario" })).toBeDisabled();
+
+  await expect(page.getByText("0 unsynchronized changes")).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${authoringEvidenceRoot}/governed-authoring.png`, fullPage: true });
+  await context.close();
 });

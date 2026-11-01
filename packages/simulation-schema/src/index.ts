@@ -234,6 +234,10 @@ export interface RuntimeFormFieldDefinitionV1 {
   requiredWhen?: RuntimeFieldConditionV1;
   visibleWhen?: RuntimeFieldConditionV1;
   helpText?: string;
+  defaultValue?: RuntimeScalarV1 | RuntimeScalarV1[];
+  dataClassification?: RuntimeDataClassificationV1;
+  reportingLabel?: string;
+  editableBySessionRoleIds?: string[];
   options?: Array<{ value: string; label: string }>;
   optionSource?: RuntimeFieldOptionSourceV1;
   reference?: RuntimeArtifactReferenceV1;
@@ -479,12 +483,14 @@ export interface RuntimeArtifactTypeDefinitionV1 {
   workflowId: string;
   informationPolicyId: string;
   allowedCreatorSessionRoleIds: string[];
+  recipientSessionRoleIds?: string[];
   allowedTeamIds?: string[];
   availableStageIds?: string[];
   ownership: "individual" | "team" | "session";
   decisionBearing: boolean;
   versioning: "none" | "draft_versions" | "full_history";
   exportable: boolean;
+  retentionPolicyId?: string;
   instanceScope?: RuntimeArtifactInstanceScopeV1;
   evidenceLinks?: RuntimeArtifactEvidenceLinkV1[];
 }
@@ -647,7 +653,7 @@ export interface RuntimeCoreDesignV1 {
   workflows: RuntimeWorkflowDefinitionV1[];
   informationPolicies: Array<{ id: string; name: string; classification?: RuntimeDataClassificationV1; grants: RuntimeInformationGrantV1[] }>;
   communications: {
-    messageChannels: Array<{ id: string; name: string; type: string; supportsAttachments: boolean; supportsThreading: boolean; structuredArtifactTypeId?: string; informationPolicyId?: string; threadProtocol?: RuntimeProposalThreadProtocolV1 }>;
+    messageChannels: Array<{ id: string; name: string; type: string; supportsAttachments: boolean; supportsThreading: boolean; structuredArtifactTypeId?: string; informationPolicyId?: string; approvalRequired?: boolean; retentionPolicyId?: string; exportable?: boolean; activeStageIds?: string[]; threadProtocol?: RuntimeProposalThreadProtocolV1 }>;
     routes: Array<{ id: string; channelId: string; sender: RuntimeActorSelectorV1; recipient: RuntimeActorSelectorV1; approvalWorkflowId?: string; informationPolicyId?: string; activeStageIds?: string[] }>;
     voiceChannels: RuntimeVoiceChannelDefinitionV1[];
   };
@@ -690,7 +696,8 @@ export interface ScenarioV1 {
   description: string;
   deliveryModes: Array<"in_person" | "virtual" | "hybrid" | "asynchronous">;
   tags: string[];
-  content?: Array<{ id: string; title: string; type: string; body?: string; informationPolicyId: string; version: string }>;
+  content?: Array<{ id: string; title: string; type: string; body?: string; informationPolicyId: string; version: string;
+    contentLibraryItemId?: string; contentLibraryVersion?: number }>;
   injects?: RuntimeInjectDefinitionV1[];
   initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: RuntimeScalarV1 }>;
   initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
@@ -1601,6 +1608,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       }
     }
     for (const field of fields) {
+      field.editableBySessionRoleIds?.forEach((id) => reference(roles, id, `Form ${form.id} field ${field.key}`));
       if ((field.type === "single_select" || field.type === "multi_select") && (field.options?.length ?? 0) === 0) {
         throw new Error(`Form ${form.id} field ${field.key} needs choices`);
       }
@@ -1631,6 +1639,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     reference(workflows, type.workflowId, `Artifact Type ${type.id}`);
     reference(policies, type.informationPolicyId, `Artifact Type ${type.id}`);
     type.allowedCreatorSessionRoleIds.forEach((id) => reference(roles, id, `Artifact Type ${type.id}`));
+    type.recipientSessionRoleIds?.forEach((id) => reference(roles, id, `Artifact Type ${type.id}`));
     type.allowedTeamIds?.forEach((id) => reference(teams, id, `Artifact Type ${type.id}`));
     type.availableStageIds?.forEach((id) => reference(stages, id, `Artifact Type ${type.id}`));
     const form = runtime.forms.find((candidate) => candidate.id === type.formId);
@@ -1810,6 +1819,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   });
   for (const channel of runtime.communications.messageChannels) {
     if (channel.informationPolicyId !== undefined) reference(policies, channel.informationPolicyId, `Message Channel ${channel.id}`);
+    channel.activeStageIds?.forEach((id) => reference(stages, id, `Message Channel ${channel.id}`));
     const protocol = channel.threadProtocol;
     if (protocol === undefined) continue;
     if (channel.supportsThreading !== true || protocol.actions.length === 0) {

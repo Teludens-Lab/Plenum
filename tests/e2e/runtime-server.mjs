@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,16 @@ if (seedUserTest && !localUserTest) throw new Error("--seed-user-test requires -
 if (seedUserTest) await (await import("./global-setup.mjs")).default();
 const localUserTestCookieName = "plenum_ps700_identity";
 const localOfflineCookie = "plenum_ps700_offline=1";
+const userTestFixtureRoot = join(process.cwd(), "output", "user-test", "ps-740");
+if (seedUserTest) {
+  await mkdir(userTestFixtureRoot, { recursive: true });
+  await Promise.all([
+    writeFile(join(userTestFixtureRoot, "ps-740-safe.txt"), "Safe synthetic PS-740 governed content.\n"),
+    writeFile(join(userTestFixtureRoot, "ps-740-eicar.txt"), "EICAR-STANDARD-ANTIVIRUS-TEST-FILE\n"),
+    writeFile(join(userTestFixtureRoot, "ps-740-scanner-failure.txt"), "PS740-SCANNER-FAILURE\n"),
+    writeFile(join(userTestFixtureRoot, "ps-740-oversized.txt"), Buffer.alloc(512 * 1024 + 1, 65))
+  ]);
+}
 const pool = createDatabasePool(databaseUrl);
 const fakeMediaAdapter = {
   id: "e2e-local-media",
@@ -94,6 +104,15 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 
 const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
 const objectStore = new LocalObjectStore(objectRoot);
+const contentScanner = {
+  async scan(bytes) {
+    const content = Buffer.from(bytes).toString("utf8");
+    if (content.includes("PS740-SCANNER-FAILURE")) throw new Error("Synthetic scanner outage");
+    return content.includes("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")
+      ? { status: "infected", detail: "Synthetic scanner detected the EICAR test marker." }
+      : { status: "clean", detail: "Synthetic loopback scanner found no malware marker." };
+  }
+};
 let packagesSeeded = false;
 let packageSeedPromise;
 async function ensureFixturePackages() {
@@ -150,6 +169,7 @@ const api = createRuntimeHttpHandler({
   deploymentId: fixture.deploymentId,
   mediaAdapter,
   objectStore,
+  contentScanner,
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
   authenticate
 });
@@ -266,7 +286,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 }));
 
 server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710/PS-720/PS-730 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173`
+  `${localUserTest ? "PS-710/PS-720/PS-730/PS-740 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
 ));
 
 let closing = false;

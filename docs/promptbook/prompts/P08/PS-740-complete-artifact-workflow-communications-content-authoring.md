@@ -7,7 +7,7 @@
 - Goal: Make every content and human-workflow mechanism visually authorable and previewable.
 - User outcome: Designers can create forms, Artifact Types, workflows, Message routes, Inject timelines, and governed reusable content without source edits.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

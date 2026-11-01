@@ -35,7 +35,8 @@ const migrations = [
   "apps/server/migrations/024_reporting_research.sql",
   "apps/server/migrations/025_security_retention_enforcement.sql",
   "apps/server/migrations/026_product_portal.sql",
-  "apps/server/migrations/027_release_session_catalog.sql"
+  "apps/server/migrations/027_release_session_catalog.sql",
+  "apps/server/migrations/028_content_library.sql"
 ];
 
 export default async function globalSetup() {

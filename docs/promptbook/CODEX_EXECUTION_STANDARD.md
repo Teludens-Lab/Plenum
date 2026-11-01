@@ -11,7 +11,7 @@ Roadmap section 16 applies first: anyone changing code reads the requirement row
 3. Supply any required human inputs named under `depends_on_unratified`; do not silently promote Assumed/Proposed items.
 4. Ask for implementation, verification, and handoff. A commit remains optional and requires explicit workflow authorization.
 
-The current first eligible prompt is PS-740. P00-P05 and PS-700 through PS-730 are implemented/verified slices. PS-600 remains an optional post-release Plugin catalog expansion. PS-740 continues the specification-complete Studio sequence and must keep `OPEN-010` explicitly unratified.
+The current first eligible prompt is PS-750. P00-P05 and PS-700 through PS-740 are implemented/verified slices. PS-600 remains an optional post-release Plugin catalog expansion, and `OPEN-010` remains explicitly unratified.
 
 For every P07-P11 task, read `PRODUCT_COMPLETENESS_MATRIX.md` and the cited files under `references/teludens-design-system-catalog/`. A task is not user-complete because an API or deep-linked fixture works: its public UI path, applicable states, authorization, responsive/accessibility behavior and short task-based user test must pass. Fractured Order uses the shared Teludens Plenum shell and official catalog wordmarks; simulation-specific chrome or legacy branding is a failed gate.
 

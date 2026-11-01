@@ -34,6 +34,7 @@ export * from "./comms/voice.js";
 export * from "./studio/collaboration/service.js";
 export * from "./studio/collaboration/gateway.js";
 export * from "./studio/portal.js";
+export * from "./studio/content-library.js";
 export * from "./http/runtime-http.js";
 
 /** Identity and authority values created by authenticated server middleware. */

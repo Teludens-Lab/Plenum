@@ -7,7 +7,8 @@ import type {
   RuntimePollDefinitionV1,
   RuntimeStageDefinitionV1,
   RuntimeVoiceChannelDefinitionV1,
-  RuntimeWorkflowDefinitionV1
+  RuntimeWorkflowDefinitionV1,
+  RuntimeWorkflowTransitionV1
 } from "@plenum/simulation-schema";
 
 export const METHODOLOGY_CONCEPTS: readonly MethodologyConceptV1[] = [
@@ -52,6 +53,35 @@ export function basicWorkflow(name: string, sessionRoleId: string | undefined): 
       { id: identifier(), from: null, command: "artifact.create", label: "Save draft", to: "draft", allowedSessionRoleIds: roles },
       { id: identifier(), from: "draft", command: "artifact.submit", label: "Submit for review", to: "review", allowedSessionRoleIds: roles },
       { id: identifier(), from: "review", command: "artifact.accept", label: "Accept", to: "completed", allowedSessionRoleIds: roles }
+    ]
+  };
+}
+
+export function dec42Workflow(sessionRoleIds: readonly string[]): RuntimeWorkflowDefinitionV1 {
+  const [author = "", reviewer = "", control = ""] = sessionRoleIds;
+  const transition = (from: string | null, command: string, label: string, to: string, roles: string[],
+    extra: Partial<RuntimeWorkflowTransitionV1> = {}): RuntimeWorkflowTransitionV1 =>
+    ({ id: identifier(), from, command, label, to, allowedSessionRoleIds: roles.filter(Boolean), ...extra });
+  return {
+    id: identifier(), key: `dec42_${identifier()}`, name: "DEC-42 reference review", initialState: "draft",
+    description: "The author drafts and submits; the intermediate reviewer forwards or returns; Control accepts or returns; returned work resubmits through the intermediate reviewer.",
+    states: [
+      { key: "draft", label: "Draft", kind: "draft", holderSessionRoleIds: [author].filter(Boolean) },
+      { key: "submitted", label: "Submitted for intermediate review", kind: "review", holderSessionRoleIds: [reviewer].filter(Boolean) },
+      { key: "in_review", label: "In Control review", kind: "review", holderSessionRoleIds: [control].filter(Boolean) },
+      { key: "returned", label: "Returned for revision", kind: "draft", holderSessionRoleIds: [author].filter(Boolean) },
+      { key: "accepted", label: "Accepted", kind: "terminal" }
+    ],
+    transitions: [
+      transition(null, "artifact.create", "Save draft", "draft", [author]),
+      transition("draft", "artifact.edit", "Save changes", "draft", [author], { contentOnly: true }),
+      transition("draft", "artifact.submit", "Submit for intermediate review", "submitted", [author], { notifySessionRoleIds: [reviewer].filter(Boolean) }),
+      transition("submitted", "artifact.forward", "Forward to Control", "in_review", [reviewer], { notifySessionRoleIds: [control].filter(Boolean) }),
+      transition("submitted", "artifact.return", "Return to author", "returned", [reviewer], { notifySessionRoleIds: [author].filter(Boolean) }),
+      transition("in_review", "artifact.accept", "Accept", "accepted", [control]),
+      transition("in_review", "artifact.return", "Return for revision", "returned", [control], { notifySessionRoleIds: [author, reviewer].filter(Boolean) }),
+      transition("returned", "artifact.edit", "Save revision", "returned", [author], { contentOnly: true }),
+      transition("returned", "artifact.submit", "Resubmit for intermediate review", "submitted", [author], { notifySessionRoleIds: [reviewer].filter(Boolean) })
     ]
   };
 }

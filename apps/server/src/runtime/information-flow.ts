@@ -15,7 +15,7 @@ import { evaluateGate } from "@plenum/workflow-engine";
 
 import { authorizationError } from "../errors.js";
 import type { SessionAccessContextV1 } from "../identity/context.js";
-import type { CommandDecision, CommandExecutionContext } from "./commands/processor.js";
+import type { CommandDecision, CommandExecutionContext, PrincipalCommandExecutionContext } from "./commands/processor.js";
 import { applyDueStateValueChanges, applyStateValueChange, initializeWorldState, readWorldStateFacts,
   scheduleStateValueChange } from "./state/world-state.js";
 
@@ -741,7 +741,7 @@ export async function releaseStageInjects(
   mode: "stage_entry" | "stage_exit",
   stageId: string
 ): Promise<string[]> {
-  const release = await readInformationRelease(input.client, input.context, input.activeReleaseId, input.command.commandId);
+  const release = await readInformationRelease(input.client, input.context as SessionAccessContextV1, input.activeReleaseId, input.command.commandId);
   const released: string[] = [];
   for (const definition of release.scenario.injects.filter((inject) => inject.releaseMode === mode && inject.stageId === stageId)) {
     const instanceId = randomUUID();
@@ -819,7 +819,11 @@ async function updateInjectAggregateState(
   return version;
 }
 
-async function executeInjectCommand(input: CommandExecutionContext, release: InformationRelease): Promise<CommandDecision> {
+async function executeInjectCommand(
+  input: CommandExecutionContext | PrincipalCommandExecutionContext,
+  release: InformationRelease,
+  operatorAuthority = false
+): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
   if (command.governingReleaseId !== activeReleaseId) {
     return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "Injects use the active Release." };
@@ -830,16 +834,16 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
     }
     const definitionId = text(command.payload.injectDefinitionId);
     const definition = release.scenario.injects.find(({ id }) => id === definitionId);
-    const role = release.coreDesign.sessionRoles.find(({ id }) => id === context.activeSessionRoleId);
+    const role = release.coreDesign.sessionRoles.find(({ id }) => id === ("activeSessionRoleId" in context ? context.activeSessionRoleId : undefined));
     if (definition === undefined) return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Inject Definition was not found." };
     if (definition.releaseMode !== "manual") return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This Inject is not released manually." };
-    if (!role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
+    if (!operatorAuthority && !role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
       return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The Active Role Context cannot release Injects." };
     }
-    if (!await releaseInject(client, context, activeReleaseId, release, definition, command.aggregateId, command.commandId)) {
+    if (!await releaseInject(client, context as SessionAccessContextV1, activeReleaseId, release, definition, command.aggregateId, command.commandId)) {
       return { status: "rejected", errorCode: "TARGET_EXISTS", message: "The Inject has already been released." };
     }
-    const releasedInjectIds = await releaseGateInjects(input);
+    const releasedInjectIds = operatorAuthority ? [] : await releaseGateInjects(input as CommandExecutionContext);
     return { status: "accepted", aggregateVersion: 1, eventType: "inject.released",
       eventPayload: { injectInstanceId: command.aggregateId, injectDefinitionId: definition.id, releasedInjectIds } };
   }
@@ -854,8 +858,8 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
   const definition = release.scenario.injects.find(({ id }) => id === instance.inject_definition_id);
   if (definition === undefined) throw new Error(`Release lacks Inject Definition ${instance.inject_definition_id}`);
   if (command.operationType === "inject.cancel") {
-    const role = release.coreDesign.sessionRoles.find(({ id }) => id === context.activeSessionRoleId);
-    if (!role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
+    const role = release.coreDesign.sessionRoles.find(({ id }) => id === ("activeSessionRoleId" in context ? context.activeSessionRoleId : undefined));
+    if (!operatorAuthority && !role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
       return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The Active Role Context cannot cancel Injects." };
     }
     if (command.expectedAggregateVersion !== Number(instance.version)) {
@@ -873,10 +877,15 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
       eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id } };
   }
 
+  if (operatorAuthority) {
+    return { status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE", message: "This Inject operation is participant-scoped." };
+  }
+  const participantContext = context as SessionAccessContextV1;
+
   const recipient = await client.query<{ version: string; acknowledged_at: Date | null; responded_at: Date | null }>(
     `SELECT version,acknowledged_at,responded_at FROM runtime.inject_recipient_states
       WHERE organization_id=$1 AND session_id=$2 AND inject_instance_id=$3 AND participant_id=$4 FOR UPDATE`,
-    [context.organizationId, context.sessionId, instance.id, context.participantId]
+    [context.organizationId, context.sessionId, instance.id, participantContext.participantId]
   );
   const recipientState = recipient.rows[0];
   if (recipientState === undefined) return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Inject was not found." };
@@ -890,14 +899,14 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
     await client.query(
       `UPDATE runtime.inject_recipient_states SET acknowledged_at=transaction_timestamp(),version=$1
         WHERE organization_id=$2 AND inject_instance_id=$3 AND participant_id=$4`,
-      [recipientVersion, context.organizationId, instance.id, context.participantId]
+      [recipientVersion, context.organizationId, instance.id, participantContext.participantId]
     );
     await client.query(
       `UPDATE runtime.information_deliveries SET acknowledged_at=transaction_timestamp()
         WHERE organization_id=$1 AND record_type='inject' AND record_id=$2 AND participant_id=$3`,
-      [context.organizationId, instance.id, context.participantId]
+      [context.organizationId, instance.id, participantContext.participantId]
     );
-    const version = await updateInjectAggregateState(client, context, instance.id, definition.requiredResponseArtifactTypeId !== undefined);
+    const version = await updateInjectAggregateState(client, participantContext, instance.id, definition.requiredResponseArtifactTypeId !== undefined);
     return { status: "accepted", aggregateVersion: version, eventType: "inject.acknowledged",
       eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id } };
   }
@@ -926,20 +935,23 @@ async function executeInjectCommand(input: CommandExecutionContext, release: Inf
       `UPDATE runtime.inject_recipient_states
           SET responded_at=transaction_timestamp(),response_artifact_id=$1,version=$2
         WHERE organization_id=$3 AND inject_instance_id=$4 AND participant_id=$5`,
-      [artifactId, recipientVersion, context.organizationId, instance.id, context.participantId]
+      [artifactId, recipientVersion, context.organizationId, instance.id, participantContext.participantId]
     );
-    const version = await updateInjectAggregateState(client, context, instance.id, true);
+    const version = await updateInjectAggregateState(client, participantContext, instance.id, true);
     return { status: "accepted", aggregateVersion: version, eventType: "inject.responded",
       eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id, responseArtifactId: artifactId } };
   }
   return { status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE", message: "This Inject operation is not available." };
 }
 
-export async function executeInformationCommand(input: CommandExecutionContext): Promise<CommandDecision> {
-  const release = await readInformationRelease(input.client, input.context, input.activeReleaseId, input.command.commandId);
-  if (input.command.operationType === "message.send") return executeMessageSend(input, release);
-  if (input.command.operationType.startsWith("message.proposal_")) return executeProposalCommand(input, release);
-  if (input.command.operationType.startsWith("inject.")) return executeInjectCommand(input, release);
+export async function executeInformationCommand(
+  input: CommandExecutionContext | PrincipalCommandExecutionContext,
+  operatorAuthority = false
+): Promise<CommandDecision> {
+  const release = await readInformationRelease(input.client, input.context as SessionAccessContextV1, input.activeReleaseId, input.command.commandId);
+  if (input.command.operationType === "message.send") return executeMessageSend(input as CommandExecutionContext, release);
+  if (input.command.operationType.startsWith("message.proposal_")) return executeProposalCommand(input as CommandExecutionContext, release);
+  if (input.command.operationType.startsWith("inject.")) return executeInjectCommand(input, release, operatorAuthority);
   return { status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE", message: "This configured information-flow capability is not available." };
 }
 

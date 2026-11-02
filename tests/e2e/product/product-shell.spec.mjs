@@ -13,6 +13,7 @@ const authoringEvidenceRoot = "output/playwright/ps-740";
 const advancedAuthoringEvidenceRoot = "output/playwright/ps-750";
 const governanceEvidenceRoot = "output/playwright/ps-760";
 const participantEvidenceRoot = "output/playwright/ps-770";
+const operatorEvidenceRoot = "output/playwright/ps-780";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -29,6 +30,7 @@ test.beforeAll(async () => {
   await mkdir(advancedAuthoringEvidenceRoot, { recursive: true });
   await mkdir(governanceEvidenceRoot, { recursive: true });
   await mkdir(participantEvidenceRoot, { recursive: true });
+  await mkdir(operatorEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -619,5 +621,45 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   await page.goto(runtimeLocation);
   await expect(page.getByLabel("Plenum status: Connected")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: /workspace$/u })).toBeVisible();
+  await context.close();
+});
+
+test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage controls without a Participant Seat @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const { context, page } = await actor(browser, fixture.tokens.portalOperator);
+  await page.goto(`/admin/sessions/${fixture.operatorSessionId}`);
+  await expect(page.getByRole("heading", { name: "Session control view" })).toBeVisible();
+  await expect(page.getByText("PS-780 Operator Control Exercise")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Session control", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Injects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Adjudications" })).toBeVisible();
+
+  const applySession = async (operation, reason) => {
+    const target = { "session.start": "active", "session.pause": "paused", "session.resume": "active",
+      "session.complete": "completed", "session.lock": "locked" }[operation];
+    await page.getByLabel("Next valid action").selectOption(operation);
+    await page.getByLabel("Reason", { exact: true }).first().fill(reason);
+    await page.getByLabel("Confirm this authoritative lifecycle change.").check();
+    await page.getByRole("button", { name: "Apply Session control" }).click();
+    await expect(page.locator(".hero")).toContainText(`Session ${target}`);
+  };
+  await applySession("session.start", "Start PS-780 operator exercise");
+  await expect(page.getByText(/Session active/u)).toBeVisible();
+
+  await page.getByLabel("Stage action").selectOption("stage.start");
+  await page.getByLabel("Reason", { exact: true }).nth(1).fill("Start first governed Stage");
+  await page.getByLabel("Confirm the previewed Stage intervention.").check();
+  await page.getByRole("button", { name: "Apply Stage control" }).click();
+  await expect(page.getByText("Authoritative Session state updated.")).toBeVisible();
+  await expect(page.getByText(/Status:\s*active/u)).toBeVisible();
+
+  await applySession("session.pause", "Pause for operator verification");
+  await applySession("session.resume", "Resume after operator verification");
+  await applySession("session.complete", "Complete operator exercise");
+  await applySession("session.lock", "Lock immutable exercise evidence");
+  await expect(page.getByText(/Session locked/u)).toBeVisible();
+  await expect(page.getByText("session.locked")).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${operatorEvidenceRoot}/operator-control-floor.png`, fullPage: true });
   await context.close();
 });

@@ -201,7 +201,8 @@ export default async function globalSetup() {
     );
     await owner.query(
       `INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)
-       VALUES ($1,$2,$3,$3)`, [fixture.organizationId, fixture.sessionId, fixture.people.operator]
+       VALUES ($1,$2,$3,$3),($1,$2,$4,$3)`,
+      [fixture.organizationId, fixture.sessionId, fixture.people.operator, fixture.people.portalOperator]
     );
     for (const seat of releaseDefinition.coreDesign.seats) {
       await owner.query(
@@ -341,6 +342,69 @@ export default async function globalSetup() {
     await owner.query(
       "INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)",
       [fixture.sessionId, fixture.organizationId]
+    );
+    await owner.query(
+      `INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by,title)
+       VALUES ($1,$2,$3,$4,'open',$5,'PS-780 Operator Control Exercise')`,
+      [fixture.operatorSessionId, fixture.organizationId, fixture.projectId, fixture.activationReleaseId, fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO runtime.session_authorities(session_id,organization_id,deployment_id,authority_epoch,status)
+       VALUES ($1,$2,$3,1,'active')`, [fixture.operatorSessionId, fixture.organizationId, fixture.deploymentId]
+    );
+    await owner.query(
+      `INSERT INTO runtime.release_activations
+       (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+       VALUES ('17000000-0000-4000-8000-000000000780',$1,$2,$3,$4,1,'{}',$5)`,
+      [fixture.organizationId, fixture.projectId, fixture.operatorSessionId, fixture.activationReleaseId, fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO runtime.session_access_configs
+       (organization_id,session_id,governing_release_id,access_policy,assignment_version,configured_by)
+       VALUES ($1,$2,$3,$4::jsonb,1,$5)`,
+      [fixture.organizationId, fixture.operatorSessionId, fixture.activationReleaseId, JSON.stringify(releaseDefinition.coreDesign.accessPolicy), fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)
+       VALUES ($1,$2,$3,$3),($1,$2,$4,$3)`,
+      [fixture.organizationId, fixture.operatorSessionId, fixture.people.operator, fixture.people.portalOperator]
+    );
+    for (const seat of releaseDefinition.coreDesign.seats) {
+      await owner.query(
+        `INSERT INTO runtime.session_seats
+         (organization_id,session_id,seat_id,session_role_ids,team_id,min_occupancy,max_occupancy,required,join_mode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [fixture.organizationId, fixture.operatorSessionId, seat.id, seat.sessionRoleIds, seat.teamId ?? null,
+          seat.minOccupancy, seat.maxOccupancy, seat.required, seat.joinMode]
+      );
+    }
+    await owner.query(
+      `INSERT INTO runtime.participants(id,organization_id,session_id,person_id)
+       VALUES ('32000000-0000-4000-8000-000000000780',$1,$2,$3)`,
+      [fixture.organizationId, fixture.operatorSessionId, fixture.people.author]
+    );
+    await owner.query(
+      `INSERT INTO runtime.seat_assignments
+       (id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by)
+       VALUES ('42000000-0000-4000-8000-000000000780',$1,$2,'32000000-0000-4000-8000-000000000780','scribe','blue-scribe',$3)`,
+      [fixture.organizationId, fixture.operatorSessionId, fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id)
+       VALUES ($1,$2,'32000000-0000-4000-8000-000000000780')`,
+      [fixture.organizationId, fixture.operatorSessionId]
+    );
+    for (const check of releaseDefinition.coreDesign.accessPolicy.readiness) {
+      await owner.query(
+        `INSERT INTO runtime.session_readiness_checks
+         (organization_id,session_id,check_key,label,blocking,governing_release_id,assignment_version,completed_by,completed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,1,$7,now())`,
+        [fixture.organizationId, fixture.operatorSessionId, check.key, check.label, check.blocking, fixture.activationReleaseId, fixture.people.operator]
+      );
+    }
+    await owner.query(
+      "INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)",
+      [fixture.operatorSessionId, fixture.organizationId]
     );
     const voiceDefinitions = new Map(releaseDefinition.coreDesign.communications.voiceChannels.map((channel) => [channel.id, channel]));
     for (const [key, channelId] of Object.entries(fixture.voiceChannels)) {

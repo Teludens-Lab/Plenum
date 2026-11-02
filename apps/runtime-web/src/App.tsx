@@ -1224,12 +1224,12 @@ function OperatorView() {
   const states = Object.entries(projection.artifactsByState);
   const send = async (path: string, operationType: string, payload: JsonObject = {}, aggregateId = id,
     expectedAggregateVersion = readiness?.assignmentVersion ?? 0) => {
-    if (id === null || deviceId === null || readiness === null || pending || aggregateId === null) return null;
+    if (id === null || deviceId === null || pending || aggregateId === null) return null;
     setPending(true); setNotice("Submitting authoritative Session change.");
     try {
       const result = await api<CommandReceiptV1 | { receipt: CommandReceiptV1; invitationToken: string | null }>(path, { method: "POST", body: JSON.stringify({
         commandId: crypto.randomUUID(), deviceId, operationType, aggregateId,
-        expectedAggregateVersion, governingReleaseId: readiness.governingReleaseId, payload
+        expectedAggregateVersion, governingReleaseId: projection.releaseId, payload
       }) });
       const receipt = "receipt" in result ? result.receipt : result;
       setNotice(receipt.status === "accepted" ? "Authoritative Session state updated." : receipt.message ?? "The change was not accepted.");
@@ -1239,15 +1239,12 @@ function OperatorView() {
     finally { setPending(false); }
     return null;
   };
-  const retryDeadLetter = async (outboxId: string) => {
-    if (id === null || pending) return;
-    setPending(true); setNotice("Retrying the failed delivery.");
-    try {
-      await api(`/v1/operator/sessions/${id}/dead-letters/${outboxId}/retry`, { method: "POST", body: "{}" });
-      setNotice("Delivery returned to the pending queue.");
-      await load();
-    } catch (cause) { setNotice(cause instanceof Error ? cause.message : "The delivery retry failed."); }
-    finally { setPending(false); }
+  const retryDeadLetter = async (outboxId: string, attempts: number) => {
+    if (id === null) return;
+    const result = await send(`/v1/operator/sessions/${id}/dead-letters/${outboxId}/retry`, "delivery.retry",
+      { reason: "Retry dead-lettered Runtime delivery", confirmed: true }, outboxId, attempts);
+    const receipt = result === null ? null : "receipt" in result ? result.receipt : result;
+    if (receipt?.status === "accepted") setNotice("Delivery returned to the pending queue.");
   };
   const operationView = window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
   const generateReport = async (event: FormEvent<HTMLFormElement>) => {
@@ -1282,7 +1279,7 @@ function OperatorView() {
   };
   return <Shell connection={connection}>
     <main id="main-content" className="runtime-layout" tabIndex={-1}>
-      <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p>{projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
+      <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p><strong>{projection.sessionTitle}</strong> · {projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
       <nav className="card session-operation-navigation" aria-label="Session operations">
         <a href={`/admin/sessions/${projection.sessionId}#staffing-title`}>Staffing</a>
         <a href={`/sessions/${projection.sessionId}/runtime`}>Runtime</a>
@@ -1321,9 +1318,75 @@ function OperatorView() {
         </form>
       </section> : null}
       <section className="metric-grid" aria-label="Session summary">
-        <div className="card metric"><span>Participants</span><strong>{projection.participantCount}</strong></div>
-        <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount}</strong></div>
+        <div className="card metric"><span>Connected Participants</span><strong>{projection.connectedParticipantCount} / {projection.participantCount}</strong></div>
+        <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount} / {projection.totalSeatCount}</strong></div>
         <div className="card metric"><span>Active tasks</span><strong>{projection.activeTasks.length}</strong></div>
+      </section>
+      {projection.warnings.length === 0 ? null : <section className="card operation-panel" aria-labelledby="warning-title">
+        <p className="eyebrow">Attention required</p><h2 id="warning-title">Operational warnings</h2>
+        <ul className="status-list">{projection.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+      </section>}
+      <section className="card operation-panel" aria-labelledby="lifecycle-control-title">
+        <p className="eyebrow">Authoritative lifecycle · version {projection.sessionVersion}</p><h2 id="lifecycle-control-title">Session control</h2>
+        <p>The preview below names the requested transition. Plenum records the confirmed reason, before/after state, actor, Release, and server time.</p>
+        <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+          const operation = String(data.get("operation"));
+          void send(`/v1/operator/sessions/${projection.sessionId}/lifecycle`, operation,
+            { reason: String(data.get("reason")), confirmed: data.get("confirmed") === "on" }, projection.sessionId, projection.sessionVersion); }}>
+          <div className="field"><label htmlFor="session-control-operation">Next valid action</label><select id="session-control-operation" name="operation" required defaultValue="">
+            <option value="" disabled>Select an action</option>
+            {projection.sessionStatus === "open" ? <option value="session.start">Start Session: open → active</option> : null}
+            {projection.sessionStatus === "active" ? <><option value="session.pause">Pause Session: active → paused</option><option value="session.complete">Complete Session: active → completed</option></> : null}
+            {projection.sessionStatus === "paused" ? <><option value="session.resume">Resume Session: paused → active</option><option value="session.complete">Complete Session: paused → completed</option></> : null}
+            {projection.sessionStatus === "completed" ? <option value="session.lock">Lock Session: completed → locked</option> : null}
+          </select></div>
+          <div className="field"><label htmlFor="session-control-reason">Reason</label><input id="session-control-reason" name="reason" required minLength={3} maxLength={500} /></div>
+          <label className="choice"><input name="confirmed" type="checkbox" required /> Confirm this authoritative lifecycle change.</label>
+          <button className="btn-primary" type="submit" disabled={pending || !["open","active","paused","completed"].includes(projection.sessionStatus)}>Apply Session control</button>
+        </form>
+      </section>
+      {projection.stage === null ? null : <section className="card operation-panel" aria-labelledby="stage-control-title">
+        <p className="eyebrow">Server-authoritative timer · Stage version {projection.stage.version}</p><h2 id="stage-control-title">{projection.stage.label}</h2>
+        <p>Status: <strong>{projection.stage.status.replaceAll("_", " ")}</strong> · elapsed {projection.stage.elapsedSeconds}s
+          {projection.stage.remainingSeconds === null ? " · untimed" : ` · ${projection.stage.remainingSeconds}s remaining`} · extension {projection.stage.extensionSeconds}s</p>
+        <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const operation = String(data.get("operation"));
+          const payload: JsonObject = { reason: String(data.get("reason")), confirmed: data.get("confirmed") === "on" };
+          const target = String(data.get("targetStageId") ?? ""); if (target !== "") payload.targetStageId = target;
+          const seconds = Number(data.get("seconds")); if (operation === "stage.extend") payload.seconds = seconds;
+          void send(`/v1/operator/sessions/${projection.sessionId}/stage`, operation, payload, projection.sessionId, projection.stage?.version ?? 0); }}>
+          <div className="field"><label htmlFor="stage-control-operation">Stage action</label><select id="stage-control-operation" name="operation" required defaultValue="">
+            <option value="" disabled>Select an action</option>
+            {projection.stage.status === "not_started" && projection.stage.controls.allowStart ? <option value="stage.start">Start Stage</option> : null}
+            {projection.stage.status === "active" ? <option value="stage.pause">Pause timer</option> : null}
+            {projection.stage.status === "paused" ? <option value="stage.resume">Resume timer</option> : null}
+            {projection.stage.controls.allowExtend && ["active","paused"].includes(projection.stage.status) ? <option value="stage.extend">Extend timer</option> : null}
+            {projection.stage.controls.allowEnd && projection.stage.status !== "not_started" ? <option value="stage.end">End Stage</option> : null}
+            {projection.stage.controls.allowReopen && projection.stage.status === "completed" ? <option value="stage.reopen">Reopen Stage</option> : null}
+            {projection.stage.transitions.map((transition) => <option key={transition.targetStageId} value={projection.stage?.controls.allowSkip ? "stage.skip" : "stage.advance"}>
+              {projection.stage?.controls.allowSkip ? "Skip/advance" : "Advance"} to {transition.label}</option>)}
+          </select></div>
+          <div className="field"><label htmlFor="stage-target">Transition target</label><select id="stage-target" name="targetStageId" defaultValue=""><option value="">No target</option>
+            {projection.stage.transitions.map((transition) => <option key={transition.targetStageId} value={transition.targetStageId}>{transition.label}</option>)}</select></div>
+          <div className="field"><label htmlFor="stage-extension">Extension seconds</label><input id="stage-extension" name="seconds" type="number" min={1} step={1} defaultValue={300} /></div>
+          <div className="field"><label htmlFor="stage-control-reason">Reason</label><input id="stage-control-reason" name="reason" required minLength={3} maxLength={500} /></div>
+          <label className="choice"><input name="confirmed" type="checkbox" required /> Confirm the previewed Stage intervention.</label>
+          <button className="btn-primary" type="submit" disabled={pending || !["active","paused"].includes(projection.sessionStatus)}>Apply Stage control</button>
+        </form>
+      </section>}
+      <section aria-labelledby="inject-queue-title"><div className="section-heading"><p className="eyebrow">Decision-relevant queue</p><h2 id="inject-queue-title">Injects</h2></div>
+        {projection.injectQueue.length === 0 ? <p className="empty-state">No Inject Definitions are configured.</p> : <ul className="readiness-list">{projection.injectQueue.map((item) => <li key={item.definitionId}>
+          <span><strong>{item.title}</strong> · {item.state} · {item.releaseMode}{item.scheduledAt === null ? "" : ` · ${new Date(item.scheduledAt).toLocaleString()}`}</span>
+          {item.releaseMode === "manual" && item.id === null ? <button className="btn-secondary" type="button" disabled={pending}
+            onClick={() => void send(`/v1/operator/sessions/${projection.sessionId}/inject`, "inject.release",
+              { injectDefinitionId: item.definitionId, reason: `Release ${item.title}`, confirmed: true }, crypto.randomUUID(), 0)}>Release Inject</button> : null}
+          {item.id !== null && !["cancelled","closed","expired"].includes(item.state) ? <button className="btn-secondary" type="button" disabled={pending}
+            onClick={() => void send(`/v1/operator/sessions/${projection.sessionId}/inject`, "inject.cancel",
+              { reason: `Cancel ${item.title}`, confirmed: true }, item.id, item.version)}>Cancel Inject</button> : null}
+        </li>)}</ul>}
+      </section>
+      <section aria-labelledby="adjudication-queue-title"><div className="section-heading"><p className="eyebrow">Decision-relevant queue</p><h2 id="adjudication-queue-title">Adjudications</h2></div>
+        {projection.adjudicationQueue.length === 0 ? <p className="empty-state">No Adjudications require action.</p> : <ul className="readiness-list">
+          {projection.adjudicationQueue.map((item) => <li key={item.id}><span><strong>{item.status}</strong> · version {item.version}</span><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></li>)}</ul>}
       </section>
       <section aria-labelledby="delivery-health-title">
         <div className="section-heading"><p className="eyebrow">Delivery health</p><h2 id="delivery-health-title">Runtime deliveries</h2></div>
@@ -1331,7 +1394,7 @@ function OperatorView() {
         {projection.deliveryHealth.deadLetters.length === 0 ? <p className="empty-state">No dead-lettered deliveries.</p> :
           <ul className="readiness-list">{projection.deliveryHealth.deadLetters.map((item) => <li key={item.outboxId}>
             <span><strong>{item.eventType}</strong> · {item.attempts} failed attempts<br /><small>Queued <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></small></span>
-            <button className="btn-secondary" type="button" disabled={pending} onClick={() => void retryDeadLetter(item.outboxId)}>
+            <button className="btn-secondary" type="button" disabled={pending} onClick={() => void retryDeadLetter(item.outboxId, item.attempts)}>
               Retry delivery
             </button>
           </li>)}</ul>}

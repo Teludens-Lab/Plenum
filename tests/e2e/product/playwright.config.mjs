@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const port = Number(process.env.PLENUM_E2E_PORT ?? 4173);
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: ".",
   testMatch: "product-shell.spec.mjs",
@@ -12,14 +15,14 @@ export default defineConfig({
   outputDir: "../../../output/playwright/ps-710/results",
   reporter: [["line"]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     browserName: "chromium",
     colorScheme: "light",
     trace: "retain-on-failure"
   },
   webServer: {
     command: "node ../runtime-server.mjs --local-user-test",
-    url: "http://127.0.0.1:4173",
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 30_000
   }

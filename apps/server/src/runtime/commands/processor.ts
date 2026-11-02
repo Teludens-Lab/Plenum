@@ -45,19 +45,21 @@ export interface PrincipalSessionCommandContext {
   authorityEpoch: number;
 }
 
+export interface PrincipalCommandExecutionContext {
+  client: PoolClient;
+  context: PrincipalSessionCommandContext;
+  command: CommandEnvelopeV1;
+  activeReleaseId: string;
+  sessionStatus: string;
+}
+
 export interface ProcessPrincipalCommandInput {
   pool: Pool;
   context: PrincipalSessionCommandContext;
   command: CommandEnvelopeV1;
   correlationId: string;
   deploymentId: string;
-  lockSessionAndExecute: (input: {
-    client: PoolClient;
-    context: PrincipalSessionCommandContext;
-    command: CommandEnvelopeV1;
-    activeReleaseId: string;
-    sessionStatus: string;
-  }) => Promise<CommandDecision>;
+  lockSessionAndExecute: (input: PrincipalCommandExecutionContext) => Promise<CommandDecision>;
 }
 
 type RecordedCommandContext = {

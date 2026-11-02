@@ -4,7 +4,7 @@
 
 - ID: `PS-800`
 - Title: Complete Teludens conformance and every UI state
-- Goal: Replace proof-oriented long-scroll screens with a coherent professional workstation and verify every supported viewport, input and state.
+- Goal: Replace proof-oriented long-scroll screens with a coherent, cohesive, intuitive professional workstation and verify every supported viewport, input and state. Use the impecable skill.
 - User outcome: Users can easily understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.
 - Risk: **HIGH**
 - Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
@@ -188,7 +188,7 @@ Refs: PS-800, REQ-009, REQ-063, REQ-064
 
 Proposed PR description:
 
-Summary: Users can understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
+Summary: Users can intuitively understand, navigate and complete complex work efficiently on aesthetically pleasing, professional and intuitive desktop and constrained displays with keyboard, pointer, touch and assistive technology. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

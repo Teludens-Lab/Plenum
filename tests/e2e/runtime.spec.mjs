@@ -589,7 +589,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const authored = author.page.locator("article.artifact").first();
     await expect(authored.getByText("Draft", { exact: true })).toBeVisible();
     await authored.getByRole("button", { name: "Submit to Team Facilitator" }).click();
-    await expect(author.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
+    await expect(author.page.getByLabel("Plenum status: Connected")).toBeVisible({ timeout: 15_000 });
     await expect(authored.getByText("With Team Facilitator", { exact: true })).toBeVisible({ timeout: commandTimeout });
     await expect(authored.getByRole("button", { name: "Save changes" })).toHaveCount(0);
 
@@ -648,13 +648,13 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     const reviewer = await actor(browser, fixture.tokens.reviewer);
     await reviewer.page.goto(runtimeUrl());
     await reviewer.page.getByRole("button", { name: "Forward to White Cell" }).click();
-    await expect(reviewer.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
+    await expect(reviewer.page.getByLabel("Plenum status: Connected")).toBeVisible({ timeout: 15_000 });
     await expect(reviewer.page.getByText("With White Cell", { exact: true })).toBeVisible({ timeout: commandTimeout });
 
     const finalReviewer = await actor(browser, fixture.tokens.finalReviewer);
     await finalReviewer.page.goto(runtimeUrl());
     await finalReviewer.page.getByRole("button", { name: "Return for revision" }).click();
-    await expect(finalReviewer.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
+    await expect(finalReviewer.page.getByLabel("Plenum status: Connected")).toBeVisible({ timeout: 15_000 });
     await expect(finalReviewer.page.getByText("Returned for revision", { exact: true })).toBeVisible({ timeout: commandTimeout });
 
     await author.page.reload();
@@ -1170,7 +1170,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await participant.context.setOffline(true);
     await expect(participant.page.getByLabel("Connection status: Offline")).toBeVisible();
     await participant.context.setOffline(false);
-    await expect(participant.page.getByLabel("Connection status: Connected")).toBeVisible({ timeout: 15_000 });
+    await expect(participant.page.getByLabel("Plenum status: Connected")).toBeVisible({ timeout: 15_000 });
     await expect(participant.page.getByText("Reconnect parity broadcast.", { exact: true })).toHaveCount(1);
     await expect(participant.page.locator(".live-region")).toHaveText("Connection restored. Refreshing authoritative state.");
     await Promise.all(actors.map(({ context }) => context.close()));

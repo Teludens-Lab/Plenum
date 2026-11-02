@@ -23,7 +23,8 @@ import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpa
 import { getAdjudications } from "../adjudication/service.js";
 import { getRuntimeBootstrap, getRuntimeDeltas, getRuntimeSnapshot, getRuntimeSse } from "../sync/runtime-sync.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
-import { getOperatorProjection, retryDeadLetteredRuntimeDelta } from "../runtime/operator-projection.js";
+import { getOperatorProjection } from "../runtime/operator-projection.js";
+import { executeOperatorInjectControl, executeOperatorSessionCommand, executeOperatorStageControl, retryOperatorDelivery } from "../runtime/operator-control.js";
 import {
   archiveSession,
   assignParticipant,
@@ -981,10 +982,27 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         ));
         return true;
       }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/operator\/sessions\/([^/]+)\/(lifecycle|stage|inject)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = match[2] === "lifecycle"
+          ? await executeOperatorSessionCommand(options.pool, context, command, correlationId, options.deploymentId)
+          : match[2] === "stage"
+            ? await executeOperatorStageControl(options.pool, context, command, correlationId, options.deploymentId)
+            : await executeOperatorInjectControl(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/operator\/sessions\/([^/]+)\/dead-letters\/([^/]+)\/retry$/u))) {
-        send(response, 200, await retryDeadLetteredRuntimeDelta(
-          options.pool, principal, pathId(match[1], correlationId), pathId(match[2], correlationId), correlationId
-        ));
+        const sessionId = pathId(match[1], correlationId), outboxId = pathId(match[2], correlationId);
+        const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        validateCommandEnvelope(command, correlationId);
+        if (command.aggregateId !== outboxId) throw authorizationError("VALIDATION_FAILED", "The delivery path and Command target differ.", correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await retryOperatorDelivery(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
         return true;
       }
       send(response, 404, createErrorEnvelope("NOT_FOUND", "The endpoint was not found.", correlationId));

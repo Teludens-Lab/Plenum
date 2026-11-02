@@ -33,7 +33,6 @@ import {
   createDatabasePool,
   exportReleasePackage,
   getOperatorProjection,
-  retryDeadLetteredRuntimeDelta,
   getReadiness,
   getPluginCatalog,
   getRuntimeDeltas,
@@ -51,6 +50,7 @@ import {
   registerPluginPublisher,
   reassignParticipant,
   reassignSeat,
+  retryOperatorDelivery,
   removeParticipants,
   requireActiveGuest,
   resolveInvitationSession,
@@ -921,6 +921,40 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
   const filtered = await getReadiness(app, principal, accessIds.session, randomUUID(), "red-lead");
   assert.equal(filtered.staffing.assignments.length, 1);
   assert.equal(filtered.staffing.assignments[0].seatId, "red-lead");
+  const failedDelivery = await owner.query(
+    `WITH target AS (
+       SELECT id,publication_status,attempts,published_at FROM sync.session_delta_outbox
+        WHERE organization_id=$1 AND session_id=$2 ORDER BY created_at,id LIMIT 1
+     )
+     UPDATE sync.session_delta_outbox item SET publication_status='dead_lettered',attempts=3,published_at=NULL
+      FROM target WHERE item.id=target.id
+      RETURNING item.id,target.publication_status,target.attempts,target.published_at`,
+    [ids.orgA, accessIds.session]
+  );
+  assert.equal(failedDelivery.rowCount, 1);
+  const failedId = failedDelivery.rows[0].id;
+  const staleRetry = await retryOperatorDelivery(app, operator,
+    command(operator, "delivery.retry", failedId, { reason: "Stale delivery recovery", confirmed: true }, 2),
+    randomUUID(), ids.deploymentA);
+  assert.deepEqual([staleRetry.status, staleRetry.errorCode], ["needs_reconciliation", "STALE_AGGREGATE_VERSION"]);
+  const deniedRetry = await retryOperatorDelivery(app, { ...operator, organizationRoles: [] },
+    command(operator, "delivery.retry", failedId, { reason: "Unauthorized recovery", confirmed: true }, 3),
+    randomUUID(), ids.deploymentA);
+  assert.deepEqual([deniedRetry.status, deniedRetry.errorCode], ["rejected", "PERMISSION_DENIED"]);
+  const retryCommand = command(operator, "delivery.retry", failedId,
+    { reason: "Retry failed Runtime delivery", confirmed: true }, 3);
+  const recovered = await retryOperatorDelivery(app, operator, retryCommand, randomUUID(), ids.deploymentA);
+  assert.deepEqual([recovered.status, recovered.aggregateVersion, recovered.replayed], ["accepted", 4, false]);
+  const replayed = await retryOperatorDelivery(app, operator, retryCommand, randomUUID(), ids.deploymentA);
+  assert.deepEqual([replayed.status, replayed.aggregateVersion, replayed.replayed], ["accepted", 4, true]);
+  const recovery = await owner.query(
+    `SELECT item.publication_status,
+            (SELECT count(*) FROM evidence.events WHERE session_id=$1 AND event_type='delivery.retried' AND aggregate_id=$2) events,
+            (SELECT count(*) FROM sync.command_receipts WHERE session_id=$1 AND command_id=$3) receipts
+       FROM sync.session_delta_outbox item WHERE item.organization_id=$4 AND item.id=$2`,
+    [accessIds.session, failedId, retryCommand.commandId, ids.orgA]
+  );
+  assert.deepEqual(recovery.rows[0], { publication_status: "pending", events: "1", receipts: "1" });
   const participantIds = staffed.staffing.assignments.map(({ participantId }) => participantId);
   assert.equal(participantIds.length, 2);
   const removed = await removeParticipants(app, operator,
@@ -978,23 +1012,6 @@ test("Game Master projection requires Operator authorization and remains tenant/
   assert.equal(projection.releaseId, accessIds.release);
   assert.equal(projection.deliveryHealth.deadLettered, 1);
   assert.equal(projection.deliveryHealth.deadLetters[0].attempts, 3);
-
-  await assert.rejects(
-    retryDeadLetteredRuntimeDelta(app, principalD, accessIds.session, failed.rows[0].id, randomUUID()),
-    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
-  );
-  assert.deepEqual(
-    await retryDeadLetteredRuntimeDelta(app, principal, accessIds.session, failed.rows[0].id, randomUUID()),
-    { outboxId: failed.rows[0].id, status: "pending" }
-  );
-  const recovery = await owner.query(
-    `SELECT item.publication_status,audit.action
-       FROM sync.session_delta_outbox item
-       JOIN evidence.audit_records audit ON audit.organization_id=item.organization_id AND audit.target_ref='outbox:'||item.id::text
-      WHERE item.organization_id=$1 AND item.id=$2`,
-    [ids.orgA, failed.rows[0].id]
-  );
-  assert.deepEqual(recovery.rows[0], { publication_status: "pending", action: "delivery.dead_letter_retried" });
 
   await assert.rejects(
     getOperatorProjection(

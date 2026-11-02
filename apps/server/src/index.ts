@@ -15,6 +15,7 @@ export * from "./runtime/commands/processor.js";
 export * from "./runtime/artifact-workflow.js";
 export * from "./runtime/information-flow.js";
 export * from "./runtime/operator-projection.js";
+export * from "./runtime/operator-control.js";
 export * from "./runtime/state/world-state.js";
 export * from "./runtime/release-activation.js";
 export * from "./adjudication/service.js";

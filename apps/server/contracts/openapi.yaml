@@ -1050,7 +1050,7 @@ paths:
   /v1/operator/sessions/{sessionId}:
     get:
       operationId: getOperatorProjection
-      x-contract-id: operator-projection-v1
+      x-contract-id: operator-control-floor-v1
       x-authorized-organization-role: operator
       x-operator-display-label: Game Master
       x-authorization-scope: [organization, session]
@@ -1071,27 +1071,65 @@ paths:
   /v1/operator/sessions/{sessionId}/dead-letters/{outboxId}/retry:
     post:
       operationId: retryDeadLetteredRuntimeDelta
-      x-contract-id: operator-projection-v1
+      x-contract-id: operator-control-floor-v1
       x-authorized-organization-role: operator
       x-authorization-scope: [organization, session]
       security: [{ SessionCookie: [] }]
       parameters:
         - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
         - { in: path, name: outboxId, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
       responses:
         "200":
           description: The dead-lettered delivery was returned to the pending queue and audited.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [outboxId, status]
-                properties:
-                  outboxId: { type: string, format: uuid }
-                  status: { const: pending }
+          content: { application/json: { schema: { $ref: "#/components/schemas/CommandReceiptV1" } } }
         "403": { description: The authenticated Principal is not a current Operator. }
         "404": { description: The tenant-scoped dead letter does not exist or is no longer retryable. }
+  /v1/operator/sessions/{sessionId}/lifecycle:
+    post:
+      operationId: controlOperatorSessionLifecycle
+      x-contract-id: operator-control-floor-v1
+      x-authorized-organization-role: operator
+      x-authorization-scope: [organization, session]
+      x-participant-seat: forbidden
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Reasoned Session lifecycle Command outcome., content: { application/json: { schema: { $ref: "#/components/schemas/CommandReceiptV1" } } } }
+        "403": { description: Current Organization and Session Operator authority is required. }
+        "409": { description: The Session version or lifecycle state changed. }
+  /v1/operator/sessions/{sessionId}/stage:
+    post:
+      operationId: controlOperatorSessionStage
+      x-contract-id: operator-control-floor-v1
+      x-authorized-organization-role: operator
+      x-authorization-scope: [organization, session]
+      x-participant-seat: forbidden
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Reasoned Stage/timer Command outcome., content: { application/json: { schema: { $ref: "#/components/schemas/CommandReceiptV1" } } } }
+        "403": { description: Current Organization and Session Operator authority is required. }
+        "409": { description: The Stage version, gate, or control policy rejected the Command. }
+  /v1/operator/sessions/{sessionId}/inject:
+    post:
+      operationId: controlOperatorSessionInject
+      x-contract-id: operator-control-floor-v1
+      x-authorized-organization-role: operator
+      x-authorization-scope: [organization, session]
+      x-participant-seat: forbidden
+      x-offline-queue: forbidden
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CommandEnvelopeV1" } } } }
+      responses:
+        "200": { description: Reasoned Inject release or cancellation outcome., content: { application/json: { schema: { $ref: "#/components/schemas/CommandReceiptV1" } } } }
+        "403": { description: Current Organization and Session Operator authority is required. }
+        "409": { description: The Inject version or lifecycle state changed. }
   /v1/projects/{projectId}/sessions:
     post:
       operationId: createSession
@@ -2108,17 +2146,27 @@ components:
     OperatorProjectionV1:
       type: object
       additionalProperties: false
-      required: [contractId, sessionId, sessionStatus, releaseId, releaseLabel, participantCount, occupiedSeatCount, artifactsByState, activeTasks, recentEvents, deliveryHealth]
+      required: [contractId, sessionId, sessionTitle, sessionStatus, sessionVersion, authority, releaseId, releaseLabel, participantCount, connectedParticipantCount, occupiedSeatCount, totalSeatCount, stage, artifactsByState, activeTasks, requiredSubmissions, injectQueue, adjudicationQueue, warnings, recentEvents, deliveryHealth]
       properties:
-        contractId: { const: operator-projection-v1 }
+        contractId: { const: operator-control-floor-v1 }
         sessionId: { type: string, format: uuid }
+        sessionTitle: { type: string, minLength: 1 }
         sessionStatus: { type: string, minLength: 1 }
+        sessionVersion: { type: integer, minimum: 1 }
+        authority: { type: object }
         releaseId: { type: string, format: uuid }
         releaseLabel: { type: string, minLength: 1 }
         participantCount: { type: integer, minimum: 0 }
+        connectedParticipantCount: { type: integer, minimum: 0 }
         occupiedSeatCount: { type: integer, minimum: 0 }
+        totalSeatCount: { type: integer, minimum: 0 }
+        stage: { type: [object, "null"] }
         artifactsByState: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         activeTasks: { type: array, items: { type: object } }
+        requiredSubmissions: { type: array, items: { type: object } }
+        injectQueue: { type: array, items: { type: object } }
+        adjudicationQueue: { type: array, items: { type: object } }
+        warnings: { type: array, items: { type: string } }
         recentEvents: { type: array, items: { type: object } }
         deliveryHealth:
           type: object

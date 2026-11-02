@@ -286,8 +286,9 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
   if (!handled) socket.destroy();
 }));
 
-server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710 through PS-770 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
+const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
+server.listen(runtimePort, "127.0.0.1", () => console.log(
+  `${localUserTest ? "PS-710 through PS-780 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:${runtimePort}${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
 ));
 
 let closing = false;

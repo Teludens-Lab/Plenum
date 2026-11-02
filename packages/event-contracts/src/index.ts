@@ -36,7 +36,7 @@ export const MESSAGE_COMMAND_CONTRACT_ID = "message-command-v1";
 export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
 export const PARTICIPANT_ENTRY_CONTRACT_ID = "participant-entry-v1";
 export const RUNTIME_NAVIGATION_CONTRACT_ID = "runtime-navigation-v1";
-export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
+export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-control-floor-v1";
 export const MODEL_RUN_CONTRACT_ID = "model-run-v1";
 export const EFFECT_PROPOSAL_CONTRACT_ID = "effect-proposal-v1";
 export const STATE_TRANSACTION_CONTRACT_ID = "state-transaction-v1";
@@ -915,14 +915,35 @@ export interface RuntimeProjectionV1 {
 export interface OperatorProjectionV1 {
   contractId: typeof OPERATOR_PROJECTION_CONTRACT_ID;
   sessionId: string;
+  sessionTitle: string;
   sessionStatus: string;
   releaseId: string;
   releaseLabel: string;
+  sessionVersion: number;
+  authority: { epoch: number; status: string };
   participantCount: number;
+  connectedParticipantCount: number;
   occupiedSeatCount: number;
+  totalSeatCount: number;
+  stage: null | {
+    id: string;
+    label: string;
+    status: "not_started" | "active" | "paused" | "completed";
+    version: number;
+    durationSeconds: number | null;
+    elapsedSeconds: number;
+    remainingSeconds: number | null;
+    extensionSeconds: number;
+    transitions: Array<{ targetStageId: string; label: string }>;
+    controls: { allowStart: boolean; allowEnd: boolean; allowReopen: boolean; allowExtend: boolean; allowSkip: boolean; allowReturnToPrevious: boolean };
+  };
   artifactsByState: Record<string, number>;
   activeTasks: Array<{ artifactId: string; artifactTypeKey: string; state: string; version: number }>;
-  recentEvents: Array<{ type: string; recordedAt: string; aggregateId: string | null }>;
+  requiredSubmissions: Array<{ id: string; label: string; complete: boolean }>;
+  injectQueue: Array<{ id: string | null; definitionId: string; title: string; state: string; version: number; scheduledAt: string | null; releaseMode: string }>;
+  adjudicationQueue: Array<{ id: string; status: string; version: number; createdAt: string }>;
+  warnings: string[];
+  recentEvents: Array<{ sequence: number; type: string; recordedAt: string; aggregateId: string | null }>;
   deliveryHealth: {
     pending: number;
     deadLettered: number;

@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | PRD |
 | Number | 01 |
-| Version | 0.7.4 |
-| Date | 2026-10-21 |
+| Version | 0.7.5 |
+| Date | 2026-11-01 |
 | Status | Draft — reconstructed (DEC-21, Assumed). Not ratified. |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -146,7 +146,7 @@ REQ-001 to REQ-008 replace PLENUM-NEW-01 to PLENUM-NEW-08 in order.
 | ID | Requirement | Acceptance | Basis | Owner doc |
 |---|---|---|---|---|
 | REQ-021 | Publication MUST freeze a validated Draft into an immutable Definition Revision and compile it into an immutable Simulation Release with a content digest, schema version, compiler version, author and provenance. | Re-reading a Release returns identical bytes and digest; modification attempts are refused. | INV-005, INV-012 | 02, 03 |
-| REQ-022 | Publication MUST follow the Publication lifecycle, with organization-configurable controls for approvers, release notes, validation evidence, data-classification review, accessibility review status and an optional test-session requirement. | A Release cannot reach `published` without the controls its organization policy requires. | DEC-39; OPEN-013 | 04, 06 |
+| REQ-022 | Publication MUST follow the Publication lifecycle, with organization-configurable controls for approvers, release notes, validation evidence, data-classification review, accessibility review status and an optional test-session requirement. Production policy has a two-person integrity minimum: a Reviewer acting as Methodology Owner approves the exact frozen revision and cannot be its author; a Publisher publishes only a validated revision with current approval. | A Release cannot reach `published` without the controls its organization policy requires; production rejects author self-approval, a material change invalidates approval, and non-production sandbox self-approval remains explicitly identified. | DEC-39; resolved OPEN-013 | 04, 06 |
 | REQ-023 | A Simulation Release MUST be exportable and importable as a portable Package that preserves identity and digest. | A Package exported from one Deployment imports into an air-gapped Deployment and verifies. | DEC-19; OPEN-020 | 02 |
 
 ### 6.3 Runtime
@@ -411,3 +411,4 @@ Section numbers cited here refer to the superseded source documents (Foundation 
 | 0.7.2 | 2026-10-17 | Added §6.12 to §6.14 (REQ-072 to REQ-094) and INV-023 to INV-028 for polling and voting, voice and the Extension Framework; strengthened REQ-038 and INV-020 (DEC-54); stated first-release scope in §9; updated non-goals, governing decisions, domain summary and Appendix A note (DEC-57). |
 | 0.7.3 | 2026-10-17 | Updated the open-item status note after the Product Owner resolved OPEN-003 by confirming the official Fractured Order golden reference. No requirement or acceptance criterion changed. |
 | 0.7.4 | 2026-10-21 | Applied the OPEN-007 identity-profile resolution and DEC-61 Reviewer and Research Analyst Organization Roles; no requirement IDs changed. |
+| 0.7.5 | 2026-11-01 | Applied resolved OPEN-013 to REQ-022: production two-person integrity, distinct-author approval and explicit sandbox-only self-approval; no requirement IDs changed. |

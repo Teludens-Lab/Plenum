@@ -119,7 +119,7 @@ graph TD
 | PS-100 | P01 | PS-001 | ADR-008, OPEN-022 | No |
 | PS-110 | P01 | PS-100 | - | No |
 | PS-120 | P01 | PS-100, PS-110 | ADR-014, OPEN-016 | No |
-| PS-130 | P01 | PS-100, PS-110 | ADR-011, ADR-014, OPEN-013, OPEN-020 | No |
+| PS-130 | P01 | PS-100, PS-110 | ADR-011, ADR-014, OPEN-020 | No |
 | PS-140 | P01 | PS-110, PS-120 | ADR-010 | No |
 | PS-150 | P01 | PS-120, PS-140 | ADR-007, ADR-008 | No |
 | PS-200 | P02 | PS-000, PS-130, PS-150 | DEC-30, DEC-31, DEC-33, DEC-34, DEC-35, DEC-37, DEC-38, DEC-40 | No |
@@ -128,7 +128,7 @@ graph TD
 | PS-230 | P02 | PS-120, PS-210, PS-220 | - | No |
 | PS-240 | P02 | PS-120, PS-140, PS-210 | - | No |
 | PS-250 | P02 | PS-110, PS-120, PS-140, PS-210 | ADR-013, ADR-017 | No |
-| PS-300 | P03 | PS-100, PS-110, PS-130, PS-140 | ADR-002, ADR-010, OPEN-013 | No |
+| PS-300 | P03 | PS-100, PS-110, PS-130, PS-140 | ADR-002, ADR-010 | No |
 | PS-310 | P03 | PS-210, PS-300 | DEC-31, DEC-32, DEC-33, OPEN-004, OPEN-010, OPEN-018 | No |
 | PS-320 | P03 | PS-240, PS-250, PS-310 | ADR-017 | No |
 | PS-330 | P03 | PS-220, PS-230, PS-310 | ADR-018, OPEN-022, OPEN-029 | No |
@@ -151,8 +151,8 @@ graph TD
 | PS-720 | P07 | PS-710 | - | No |
 | PS-730 | P08 | PS-720 | OPEN-004 | No |
 | PS-740 | P08 | PS-730 | OPEN-010 | No |
-| PS-750 | P08 | PS-740 | - | Yes |
-| PS-760 | P08 | PS-750 | OPEN-013 | No |
+| PS-750 | P08 | PS-740 | - | No |
+| PS-760 | P08 | PS-750 | - | Yes |
 | PS-770 | P09 | PS-760 | - | No |
 | PS-780 | P09 | PS-770 | - | No |
 | PS-790 | P09 | PS-780 | - | No |

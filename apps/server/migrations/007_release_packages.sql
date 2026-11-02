@@ -1,5 +1,5 @@
 -- Plenum 007: immutable Release Package manifests and publication approvals.
--- Sources: REQ-021 to REQ-023, INV-005, INV-012, INV-013, INV-028; OPEN-013 remains open; OPEN-012/020 are resolved.
+-- Sources: REQ-021 to REQ-023, INV-005, INV-012, INV-013, INV-028. OPEN-013 was unresolved when this baseline was authored; it was resolved on 2026-11-01 and its additive enforcement is assigned to migration 030. OPEN-012/020 are resolved.
 
 CREATE UNIQUE INDEX definition_revisions_one_content_per_project
   ON studio.definition_revisions (organization_id, project_id, snapshot_sha256);

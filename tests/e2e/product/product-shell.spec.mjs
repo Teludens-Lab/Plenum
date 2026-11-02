@@ -10,6 +10,7 @@ const portalEvidenceRoot = "output/playwright/ps-710";
 const lifecycleEvidenceRoot = "output/playwright/ps-720";
 const studioEvidenceRoot = "output/playwright/ps-730";
 const authoringEvidenceRoot = "output/playwright/ps-740";
+const advancedAuthoringEvidenceRoot = "output/playwright/ps-750";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -23,6 +24,7 @@ test.beforeAll(async () => {
   await mkdir(lifecycleEvidenceRoot, { recursive: true });
   await mkdir(studioEvidenceRoot, { recursive: true });
   await mkdir(authoringEvidenceRoot, { recursive: true });
+  await mkdir(advancedAuthoringEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -462,5 +464,76 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
   await expect(page.getByText("0 unsynchronized changes")).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${authoringEvidenceRoot}/governed-authoring.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and preview-only @a11y", async ({ browser }) => {
+  test.setTimeout(360_000);
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await page.getByRole("link", { name: "Advanced logic & world state" }).click();
+  await expect(page.locator("#advanced-logic").getByRole("heading", { name: "Advanced logic & world state" })).toBeVisible();
+  await expect(page.locator("#adjudication")).toBeAttached();
+  await expect(page.locator("#plugins")).toBeAttached();
+  await expect(page.locator("#compositions")).toBeAttached();
+  await expect(page.locator("#polls")).toBeAttached();
+  await expect(page.locator("#voice")).toBeAttached();
+
+  await page.getByRole("button", { name: "Add State Value" }).click();
+  const stateValue = page.locator("#advanced-logic details.editor-item").first();
+  await stateValue.locator("summary").click();
+  await expect(stateValue.getByLabel("Scenario initial value")).toBeVisible();
+  await expect(stateValue.getByLabel("Unit")).toBeVisible();
+  await expect(stateValue.getByLabel("History")).toBeVisible();
+  await expect(stateValue.getByLabel("Display")).toBeVisible();
+  await page.getByRole("button", { name: "Add Resource", exact: true }).click();
+  await expect(page.getByLabel("Scenario initial balance").last()).toBeVisible();
+  await page.getByRole("button", { name: "Add Capability" }).click();
+  const capability = page.locator("#advanced-logic details.editor-item").filter({ hasText: "New Capability" });
+  await expect(capability.getByText("Activation Gate", { exact: true })).toBeVisible();
+  await expect(capability.getByText("Degradation Effects", { exact: true })).toBeVisible();
+  await expect(capability.getByText("Resource costs", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Adjudication Model" }).click();
+  const adjudication = page.locator("#adjudication details.editor-item").last();
+  await adjudication.getByLabel("Mechanism").selectOption("rules");
+  await adjudication.getByRole("button", { name: "Add constrained rule" }).click();
+  await expect(adjudication.getByLabel("Explanation shown in trace")).toBeVisible();
+  await adjudication.getByRole("button", { name: "Run synthetic preview" }).click();
+  await expect(adjudication.getByText("Preview complete. Authoritative state changes: 0.")).toBeVisible();
+  for (const phase of ["Suggestion", "Review", "Approval", "Committed effect"]) {
+    await expect(adjudication.getByText(phase, { exact: true })).toBeVisible();
+  }
+
+  const catalogCard = page.locator("#plugins article.catalog-card").first();
+  await catalogCard.getByRole("button", { name: "Bind installed Plugin" }).click();
+  const binding = page.locator("#plugins details.editor-item").last();
+  await binding.locator("summary").click();
+  await expect(binding.getByRole("table", { name: /Deployment compatibility/u })).toBeVisible();
+  await expect(binding.getByText("Policy-filtered input mappings", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Model Composition" }).click();
+  const composition = page.locator("#compositions details.editor-item").last();
+  await expect(composition.getByText(/cannot mutate Session state/u)).toBeVisible();
+  await expect(composition.getByRole("button", { name: "Add approval gate" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Poll" }).click();
+  const poll = page.locator("#polls details.editor-item").last();
+  await poll.locator("summary").click();
+  await expect(poll.locator('[role="status"]').filter({ hasText: "Publication readiness:" })).toContainText("Complete");
+  await expect(poll.getByText(/Count accepted ballots/u)).toBeVisible();
+  await poll.getByLabel("Ballot visibility").selectOption("secret_ballot");
+  await expect(poll.getByText(/resolved OPEN-028/u).first()).toBeVisible();
+  await poll.getByLabel("Ballot visibility").selectOption("open");
+
+  await page.getByLabel("Target deployment profile").selectOption("air_gapped");
+  const voice = page.locator("#voice details.editor-item").first();
+  await voice.locator("summary").click();
+  await expect(voice.getByText(/air gapped compatibility:/u)).toBeVisible();
+  await expect(voice.getByText(/Non-audio path:/u)).toBeVisible();
+
+  await expect(page.getByText("0 unsynchronized changes")).toBeVisible({ timeout: 40_000 });
+  expect((await new AxeBuilder({ page }).include("#advanced-logic").include("#adjudication").include("#plugins").include("#compositions").include("#polls").include("#voice").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${advancedAuthoringEvidenceRoot}/advanced-authoring.png`, fullPage: true });
   await context.close();
 });

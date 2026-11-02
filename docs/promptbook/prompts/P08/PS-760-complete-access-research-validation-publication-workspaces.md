@@ -7,7 +7,7 @@
 - Goal: Finish the remaining Studio specification and turn validation into an operable simulation rehearsal and publication process.
 - User outcome: Designers and Reviewers can configure access, interfaces, research, measurements and reports; rehearse the Release; resolve every issue; approve, publish and prepare live changes.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 
@@ -39,7 +39,7 @@ Observed source evidence:
 - references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png
 - references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-013`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
@@ -93,6 +93,7 @@ Before adding a command, event, enum, schema, or error, search its authoritative
 
 - Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries
 - Return only server-authorized data and test cross-Organization, cross-Session and revoked access
+- Enforce resolved OPEN-013 at the trusted server boundary: a production author cannot approve the exact freeze, Admin alone cannot approve methodology, and sandbox self-approval is visibly non-production
 - Use synthetic test identities and never expose secrets or protected content in screenshots or logs
 
 Derive the Principal, Organization, Session, Seat Assignments, Active Role Context, and Authority Epoch from trusted server context. Add at least one negative authorization test. Enforce INV-002 by omitting unauthorized data server-side, not hiding it in the UI.
@@ -118,6 +119,11 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then every Studio section 3-27 has a reachable, complete and tested workspace
 - Given the documented preconditions, when the task behavior is exercised, then a Designer completes a deterministic rehearsal and receives explanations for every evaluated trigger
 - Given the documented preconditions, when the task behavior is exercised, then a Reviewer can resolve linked issues and approve an exact freeze
+- Given the documented preconditions, when the task behavior is exercised, then production rejects author self-approval and Admin-only methodology approval while permitting a Reviewer and Publisher to be the same non-author
+- Given the documented preconditions, when the task behavior is exercised, then a material content change invalidates approval and requires review of the new exact digest
+- Given the documented preconditions, when the task behavior is exercised, then published Template and Release versions remain immutable with attributable supersession, deprecation and archival history
+- Given the documented preconditions, when the task behavior is exercised, then consequential live activation requires a fresh distinct-author Reviewer approval; disruptive change requires a new Session
+- Given the documented preconditions, when the task behavior is exercised, then approvals, publications and activations record actor, active roles, policy version, artifact digest, evidence, rationale and timestamp
 - Given the documented preconditions, when the task behavior is exercised, then a published Release is created without raw JSON, SQL, UUID pasting or test fixture intervention
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
@@ -142,6 +148,7 @@ Run only commands whose registry status is **Verified** or that this task explic
 ## Regression and quality gates
 
 - Post-freeze edits remain in the next Draft
+- Production two-person integrity remains enforced by person and exact artifact digest rather than role label alone
 - Role previews and Runtime projections remain identical
 - Live activation preserves in-flight governing Releases
 - Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant

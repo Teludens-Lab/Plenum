@@ -57,6 +57,7 @@ export const SESSION_ONBOARDING_CONTRACT_ID = "session-onboarding-v1";
 export const READINESS_CONTRACT_ID = "readiness-v1";
 export const ADJUDICATION_REQUEST_CONTRACT_ID = "adjudication-request-v1";
 export const ADJUDICATION_RECORD_CONTRACT_ID = "adjudication-record-v1";
+export const ADJUDICATION_MODEL_EDITOR_CONTRACT_ID = "adjudication-model-editor-v1";
 export const COMPATIBILITY_REPORT_CONTRACT_ID = "compatibility-report-v1";
 export const RELEASE_ACTIVATION_CONTRACT_ID = "release-activation-v1";
 export const CHECKPOINT_CONTRACT_ID = "checkpoint-v1";

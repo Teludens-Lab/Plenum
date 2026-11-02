@@ -102,10 +102,10 @@ export function basicInterface(name: string, sessionRoleId: string | undefined):
   };
 }
 
-export function basicPoll(name: string, policyId: string | undefined): RuntimePollDefinitionV1 {
+export function basicPoll(name: string, policyId: string | undefined, certifierSessionRoleId?: string): RuntimePollDefinitionV1 {
   return {
     id: identifier(), scope: "session", question: name,
-    options: [{ id: identifier(), label: "Yes" }, { id: identifier(), label: "No" }, { id: identifier(), label: "Abstain" }],
+    options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }, { id: "abstain", label: "Abstain" }],
     pollType: "yes_no_abstain", minSelections: 1, maxSelections: 1,
     tallyMethod: "builtin_count", tallyMethodVersion: "1", electoratePolicyId: policyId ?? "",
     oneBallotPer: "seat_assignment", allowRevote: false, secrecy: "open",
@@ -113,7 +113,7 @@ export function basicPoll(name: string, policyId: string | undefined): RuntimePo
     quorumRule: { basis: "electorate_at_open", minimum: 0, abstentionCountsTowardParticipation: true },
     weights: [], vetoRule: { holderSeatIds: [] }, tieRule: "no_decision",
     openTrigger: { mode: "manual" }, closeTrigger: { mode: "manual" }, deadlinePolicy: { graceSeconds: 0 },
-    resultVisibilityPolicyId: policyId ?? "", certificationPolicy: {}
+    resultVisibilityPolicyId: policyId ?? "", certificationPolicy: { certifierSessionRoleIds: certifierSessionRoleId === undefined ? [] : [certifierSessionRoleId] }
   };
 }
 

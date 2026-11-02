@@ -13,6 +13,7 @@ import { VoiceEditor } from "../voice/VoiceEditor.js";
 import { PluginCatalogEditor } from "../plugins/PluginCatalogEditor.js";
 import { CompositionEditor } from "../compositions/CompositionEditor.js";
 import { AdvancedLogicEditor } from "../advanced-logic/AdvancedLogicEditor.js";
+import { AdjudicationEditor } from "../adjudication/AdjudicationEditor.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, dec42Workflow, defaultGrant, identifier
@@ -27,6 +28,7 @@ const SECTIONS = [
   ["forms", "Forms & Artifacts"], ["workflows", "Workflows"], ["policies", "Information Policy"],
   ["communications", "Communications"], ["injects", "Injects"], ["content-library", "Content Library"],
   ["advanced-logic", "Advanced logic & world state"],
+  ["adjudication", "Adjudication Models"],
   ["polls", "Polls"], ["voice", "Voice Channels"], ["plugins", "Plugin catalog & bindings"],
   ["compositions", "Model Compositions"], ["interfaces", "Interfaces"], ["research", "Research"],
   ["access", "Access"], ["preview", "Role preview"]
@@ -807,6 +809,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
       <InjectEditor core={core} scenario={scenario} client={client} />
       <ContentLibraryEditor projectId={projectId} core={core} client={client} />
       <AdvancedLogicEditor core={core} scenario={scenario} client={client} />
+      <AdjudicationEditor core={core} scenario={scenario} client={client} />
       <PollEditor core={core} client={client} />
       <VoiceEditor core={core} client={client} />
       <PluginCatalogEditor projectId={projectId} core={core} client={client} />

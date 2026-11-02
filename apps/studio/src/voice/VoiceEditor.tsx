@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { VOICE_DEFINITION_CONTRACT_ID } from "@plenum/event-contracts";
 import type { CoreDesignV1, RuntimeActorSelectorV1, RuntimeVoiceChannelDefinitionV1 } from "@plenum/simulation-schema";
 
@@ -39,12 +40,23 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
   const stages = coreArray(core, "stages");
   const roles = coreArray(core, "sessionRoles");
   const adapters = (core.platformAdapters ?? []).filter(({ kind }) => kind === "media_provider" || kind === undefined);
+  const profiles = ["cloud", "institutional", "air_gapped"] as const;
+  const [targetProfile, setTargetProfile] = useState<(typeof profiles)[number]>("institutional");
 
   return <Workspace id="voice" title="Voice Channels" intro="Configure voice permissions and provider capability by deployment profile. Every channel also provides non-audio instructions.">
-    <p className="rule-sentence"><strong>Privacy default:</strong> recording and transcription start off. Production enablement remains blocked by OPEN-027 until consent, retention, deletion, and provider controls are ratified.</p>
+    <p className="rule-sentence"><strong>Version 1 privacy restriction:</strong> resolved OPEN-027 requires production recording and transcription to remain off. A future enablement needs a new approved legal, consent, retention, access, export, and provider decision.</p>
+    <div className="preview-controls"><label>Target deployment profile<select value={targetProfile} onChange={(event) => setTargetProfile(event.target.value as (typeof profiles)[number])}>{profiles.map((profile) => <option key={profile} value={profile}>{words(profile)}</option>)}</select></label></div>
     <div className="editor-list" data-contract-id={VOICE_DEFINITION_CONTRACT_ID}>{channels.map((channel, index) => {
       const base = ["coreDesign", "communications", "voiceChannels", index] as const;
       const adapter = adapters.find(({ id }) => id === channel.mediaProviderAdapterBindingId);
+      const targetCapabilities = adapter?.voiceCapabilities?.find(({ profile }) => profile === targetProfile);
+      const targetReasons = [
+        ...(adapter === undefined ? ["No pinned Media Provider Adapter is selected."] : []),
+        ...(adapter !== undefined && targetCapabilities === undefined ? ["The adapter declares no capability for this profile."] : []),
+        ...(targetCapabilities !== undefined && !targetCapabilities.modes.includes(channel.mode) ? [`${words(channel.mode)} is not supported.`] : []),
+        ...(channel.recordingPolicy !== "off" ? ["Recording is disabled in the version 1 production profile."] : []),
+        ...(channel.transcriptionPolicy !== "off" ? ["Transcription is disabled in the version 1 production profile."] : [])
+      ];
       return <details className="editor-item" id={`voice-${channel.id}`} key={channel.id}>
         <summary><span>{channel.name || "Untitled Voice Channel"}</span><span className="item-id">{channel.id}</span></summary>
         <div className="item-body grid-fields">
@@ -72,10 +84,11 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
 
           <SelectField id={`voice-recording-${channel.id}`} label="Recording policy" value={channel.recordingPolicy} options={["off", "on", "with_consent"].map((value) => ({ value, label: words(value) }))} path={[...base, "recordingPolicy"]} client={client} />
           <SelectField id={`voice-transcription-${channel.id}`} label="Transcription policy" value={channel.transcriptionPolicy} options={["off", "with_consent"].map((value) => ({ value, label: words(value) }))} path={[...base, "transcriptionPolicy"]} client={client} />
-          {(channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") && <p className="status-error">Production publication is blocked by OPEN-027. Every active participant must consent; withdrawal stops the relevant process immediately.</p>}
+          {(channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") && <p className="status-error">Production publication is blocked by the version 1 restriction recorded in resolved OPEN-027. Every active participant must consent in any future approved profile; withdrawal must stop the relevant process immediately.</p>}
           <TextField id={`voice-retention-${channel.id}`} label="Retention policy ID (required when enabled)" value={channel.retentionPolicyId ?? ""} path={[...base, "retentionPolicyId"]} client={client} transform={(value) => value || undefined} />
           <SelectField id={`voice-adapter-${channel.id}`} label="Media provider adapter" value={channel.mediaProviderAdapterBindingId} options={[{ value: "", label: "Select adapter" }, ...adapters.map(({ id }) => ({ value: id, label: id }))]} path={[...base, "mediaProviderAdapterBindingId"]} client={client} />
-          <div className="table-scroll" tabIndex={0} aria-label={`Adapter capability preview for ${channel.name}`}><table className="permission-matrix"><caption>Selected adapter capability by target profile</caption><thead><tr><th scope="col">Profile</th><th scope="col">Mode</th><th scope="col">Recording</th><th scope="col">Transcription</th></tr></thead><tbody>{["cloud", "institutional", "air_gapped"].map((profile) => {
+          <div className={targetReasons.length === 0 ? "rule-sentence" : "status-error"} role="status"><strong>{words(targetProfile)} compatibility:</strong> {targetReasons.length === 0 ? "Available with the pinned adapter; permissions still fail closed at Runtime." : targetReasons.join(" ")}</div>
+          <div className="table-scroll" tabIndex={0} aria-label={`Adapter capability preview for ${channel.name}`}><table className="permission-matrix"><caption>Selected adapter capability by target profile</caption><thead><tr><th scope="col">Profile</th><th scope="col">Mode</th><th scope="col">Recording</th><th scope="col">Transcription</th></tr></thead><tbody>{profiles.map((profile) => {
             const capabilities = adapter?.voiceCapabilities?.find((item) => item.profile === profile);
             return <tr key={profile}><th scope="row">{words(profile)}</th><td>{capabilities?.modes.includes(channel.mode) ? "Supported" : "Unsupported"}</td><td>{capabilities?.recording ? "Supported" : "Unsupported"}</td><td>{capabilities?.transcription ? "Supported" : "Unsupported"}</td></tr>;
           })}</tbody></table></div>

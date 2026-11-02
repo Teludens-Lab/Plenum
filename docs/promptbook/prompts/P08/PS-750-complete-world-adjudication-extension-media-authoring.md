@@ -7,7 +7,7 @@
 - Goal: Expose all advanced simulation mechanics through safe visual editors and test previews.
 - User outcome: Designers can author world state, capabilities, resources, adjudication models, Plugins, compositions, Polls, and Voice Channels without code or hidden defaults.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

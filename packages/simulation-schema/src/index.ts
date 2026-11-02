@@ -622,15 +622,38 @@ export interface TeamDefinitionV1 {
 export interface AdjudicationModelDefinitionV1 {
   id: string;
   name: string;
+  doctrine?: "structured_argument" | "expert_judgment" | "rules_based" | "model_supported" | "probability_based" | "hybrid";
   mechanism: "manual" | "rubric" | "rules" | "plugin" | "hybrid";
   appliesToArtifactTypeIds: string[];
   reviewerSessionRoleIds: string[];
   leadReviewerSessionRoleIds: string[];
   perspectives: Array<{ id: string; label: string; reviewerSessionRoleIds: string[] }>;
-  rubric?: Array<{ id: string; label: string; weight: number; minimum: number; maximum: number }>;
-  rules?: Array<{ id: string; label: string; when: GateV1; outcome: RuntimeScalarV1 }>;
+  rubric?: Array<{
+    id: string;
+    label: string;
+    weight: number;
+    minimum: number;
+    maximum: number;
+    anchors?: Array<{ score: number; label: string }>;
+    requiredEvidenceArtifactTypeIds?: string[];
+    eligibleReviewerSessionRoleIds?: string[];
+  }>;
+  rules?: Array<{ id: string; label: string; when: GateV1; outcome: RuntimeScalarV1; explanation?: string }>;
   pluginBindingIds?: string[];
+  compositionIds?: string[];
+  inputMappings?: Array<{ source: string; target: string; maxClassification: RuntimeDataClassificationV1 }>;
+  timeoutSeconds?: number;
+  approvingSessionRoleIds?: string[];
+  output?: {
+    outcomeCategories: string[];
+    rationaleRequired: boolean;
+    confidenceRequired: boolean;
+    revealedInformationPolicyId?: string;
+    stateEffects: StateEffectV1[];
+    followOnInjectIds: string[];
+  };
   publicationScope: { public?: boolean; sessionRoleIds?: string[]; teamIds?: string[] };
+  precedent?: "none" | "advisory" | "binding";
 }
 
 export interface RuntimeCoreDesignV1 {
@@ -1284,6 +1307,7 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     }
   }
   for (const composition of runtime.compositions ?? []) assertModelComposition(composition, runtime.pluginBindings, roles);
+  const compositionIds = new Set((runtime.compositions ?? []).map(({ id }) => id));
   uniqueIds(runtime.adjudicationModels ?? [], "Adjudication Model");
   for (const model of runtime.adjudicationModels ?? []) {
     if (model.appliesToArtifactTypeIds.length === 0 || model.reviewerSessionRoleIds.length === 0 ||
@@ -1299,10 +1323,45 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     uniqueIds(model.perspectives, `Adjudication Model ${model.id} perspective`);
     model.perspectives.forEach((perspective) => perspective.reviewerSessionRoleIds.forEach((id) =>
       reference(roles, id, `Adjudication Model ${model.id} perspective ${perspective.id}`)));
-    model.rules?.forEach((rule) => assertGateDefinition(rule.when, facts, `Adjudication Model ${model.id} rule ${rule.id}`));
+    model.rubric?.forEach((criterion) => {
+      if (criterion.label.trim().length === 0 || !Number.isFinite(criterion.weight) || criterion.weight <= 0 ||
+          !Number.isFinite(criterion.minimum) || !Number.isFinite(criterion.maximum) || criterion.minimum > criterion.maximum) {
+        throw new Error(`Adjudication Model ${model.id} has an invalid rubric criterion`);
+      }
+      criterion.requiredEvidenceArtifactTypeIds?.forEach((id) => reference(artifactTypes, id, `Adjudication Model ${model.id} rubric evidence`));
+      criterion.eligibleReviewerSessionRoleIds?.forEach((id) => reference(roles, id, `Adjudication Model ${model.id} rubric reviewer`));
+      criterion.anchors?.forEach(({ score, label }) => {
+        if (!Number.isFinite(score) || score < criterion.minimum || score > criterion.maximum || label.trim().length === 0) {
+          throw new Error(`Adjudication Model ${model.id} has an invalid rubric anchor`);
+        }
+      });
+    });
+    model.rules?.forEach((rule) => {
+      assertGateDefinition(rule.when, facts, `Adjudication Model ${model.id} rule ${rule.id}`);
+      if (rule.label.trim().length === 0 || rule.explanation !== undefined && rule.explanation.trim().length === 0) {
+        throw new Error(`Adjudication Model ${model.id} has an incomplete rule explanation`);
+      }
+    });
     model.pluginBindingIds?.forEach((id) => reference(bindingIds, id, `Adjudication Model ${model.id}`));
-    if ((model.mechanism === "plugin" || model.mechanism === "hybrid") && (model.pluginBindingIds?.length ?? 0) === 0) {
-      throw new Error(`Adjudication Model ${model.id} requires a Plugin Binding`);
+    model.compositionIds?.forEach((id) => {
+      if (!compositionIds.has(id)) throw new Error(`Adjudication Model ${model.id} references missing Model Composition ${id}`);
+    });
+    if ((model.mechanism === "plugin" || model.mechanism === "hybrid") &&
+        (model.pluginBindingIds?.length ?? 0) === 0 && (model.compositionIds?.length ?? 0) === 0) {
+      throw new Error(`Adjudication Model ${model.id} requires a Plugin Binding or Model Composition`);
+    }
+    if (model.timeoutSeconds !== undefined && (!Number.isSafeInteger(model.timeoutSeconds) || model.timeoutSeconds < 1)) {
+      throw new Error(`Adjudication Model ${model.id} has an invalid timeout`);
+    }
+    model.approvingSessionRoleIds?.forEach((id) => reference(roles, id, `Adjudication Model ${model.id} approver`));
+    if (model.output !== undefined) {
+      if (model.output.outcomeCategories.length === 0 || model.output.outcomeCategories.some((value) => value.trim().length === 0)) {
+        throw new Error(`Adjudication Model ${model.id} has no outcome categories`);
+      }
+      if (model.output.revealedInformationPolicyId !== undefined) {
+        reference(policies, model.output.revealedInformationPolicyId, `Adjudication Model ${model.id} revealed information`);
+      }
+      model.output.stateEffects.forEach((effect) => stateEffect(effect, `Adjudication Model ${model.id} output Effect`));
     }
     model.publicationScope.sessionRoleIds?.forEach((id) => reference(roles, id, `Adjudication Model ${model.id} publication scope`));
     model.publicationScope.teamIds?.forEach((id) => reference(teams, id, `Adjudication Model ${model.id} publication scope`));
@@ -1418,6 +1477,18 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     if (poll.tallyMethodVersion.trim().length === 0 || poll.quorumRule === undefined || poll.weights === undefined || poll.vetoRule === undefined ||
         !Number.isFinite(poll.quorumRule.minimum) || poll.quorumRule.minimum < 0 || !Number.isInteger(poll.deadlinePolicy.graceSeconds) || poll.deadlinePolicy.graceSeconds < 0) {
       throw new Error(`Poll ${poll.id} must explicitly define quorum, weights, vetoes and deadline grace`);
+    }
+    if (poll.openTrigger.mode === "scheduled" && (!Number.isSafeInteger(poll.openTrigger.offsetSeconds) || Number(poll.openTrigger.offsetSeconds) < 0) ||
+        poll.closeTrigger.mode === "scheduled" && (!Number.isSafeInteger(poll.closeTrigger.offsetSeconds) || Number(poll.closeTrigger.offsetSeconds) < 0)) {
+      throw new Error(`Poll ${poll.id} has an incomplete scheduled trigger`);
+    }
+    if (poll.openTrigger.mode === "stage_entry" && (poll.openTrigger.stageId === undefined || !stages.has(poll.openTrigger.stageId)) ||
+        poll.closeTrigger.mode === "stage_exit" && (poll.closeTrigger.stageId === undefined || !stages.has(poll.closeTrigger.stageId))) {
+      throw new Error(`Poll ${poll.id} has an invalid Stage trigger`);
+    }
+    if ((poll.certificationPolicy.certifierSessionRoleIds?.length ?? 0) === 0 &&
+        (poll.certificationPolicy.certifierOrganizationRoles?.length ?? 0) === 0) {
+      throw new Error(`Poll ${poll.id} has no explicit certifier`);
     }
     if (poll.thresholdRule.kind === "supermajority" &&
         (poll.thresholdRule.fraction === undefined || poll.thresholdRule.fraction <= 0.5 || poll.thresholdRule.fraction > 1)) {
@@ -1929,6 +2000,11 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
       recipient.relation !== undefined || recipient.payloadTeamField !== undefined ||
       (recipient.sessionRoleIds?.length ?? 0) > 0 || (recipient.teamIds?.length ?? 0) > 0 || (recipient.seatIds?.length ?? 0) > 0;
     if (!populated) throw new Error(`Inject ${inject.id} has an empty default-deny recipient selector`);
+  }
+  for (const model of runtime.adjudicationModels ?? []) {
+    model.output?.followOnInjectIds.forEach((id) => {
+      if (!injects.has(id)) throw new Error(`Adjudication Model ${model.id} references missing follow-on Inject ${id}`);
+    });
   }
   for (const initial of scenario.initialState ?? []) {
     const definition = stateVariables.get(initial.stateVariableId);

@@ -49,7 +49,7 @@ Migration `015_collaboration_runtime` is additive. It adds CRDT generation/state
 ## Release limits
 
 - ADR-002 and ADR-010 were Approved by Product Owner direction on 2026-10-20. Their named Technical Lead and Security Owner sign-offs remain required.
-- OPEN-013 remains unresolved. The local slice permits the current Publisher to perform publication with `requireDistinctApprover: false`; production approval separation is not established.
+- At verification time, OPEN-013 remained unresolved and the local slice permitted the current Publisher to publish with `requireDistinctApprover: false`. OPEN-013 was subsequently resolved by user direction on 2026-11-01. The existing slice still does not prove the new production two-person integrity rule; enforcement and regression evidence are assigned to PS-760.
 - At PS-300 completion, offline changes survived an in-page network partition only in memory; reloading or closing an offline tab lost its unsynchronized local queue. PS-500 later added a persistent encrypted Offline Outbox, and OPEN-014 was resolved by user direction on 2026-10-23; production managed-device and high-security key controls still require accreditation evidence.
 - Formal Security Owner/Operations Owner approval, collaboration/publication load, production recovery, deployment and manual assistive-technology review remain pending.
 

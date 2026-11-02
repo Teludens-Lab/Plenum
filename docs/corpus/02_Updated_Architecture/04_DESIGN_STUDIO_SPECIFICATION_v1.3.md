@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | SAS |
 | Number | 04 |
-| Version | 1.3.3 |
-| Date | 2026-10-21 |
+| Version | 1.3.4 |
+| Date | 2026-11-01 |
 | Status | Draft for review. v1.2 amendment merged (DEC-26). |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -183,6 +183,8 @@ Desktop, tablet, mobile, role-specific, read-only review, and completed-artifact
 
 Designers start from SSG workflow templates (DEC-08) or build a custom workflow in the advanced editor. Both produce the Workflow Definition in 03 §10.
 
+Template versions follow the production publication controls in §23. A Designer submits an exact frozen version; a Reviewer acting as Methodology Owner who did not author that version approves it; and a Publisher makes the approved version available. Published Template versions are immutable. Supersession, deprecation and archival preserve history and record a reason (resolved OPEN-013).
+
 ### 11.2 State and transition settings
 
 State: label, kind (draft, task, review, approval, wait, terminal, cancelled), holder Session Roles or "creator", assignment rule, due period, quorum. Transition: from state, command, to state, permitted Session Roles, Gate, notifications, automation, content-only flag.
@@ -298,10 +300,12 @@ Lifecycle (DEC-39): Draft → Validated → In Review → Approved → Published
 | Freeze | Publication freezes an exact materialization of the merged Draft; edits arriving after the freeze belong to the next Draft version (ADR-002). |
 | Validation | No errors. Warnings must be acknowledged. |
 | Version | Semantic version and release notes. |
-| Approval | Approver identity; organization policy may require an approver other than the author (OPEN-013). |
+| Approval | Production uses a two-person integrity minimum. A Reviewer acting as Methodology Owner approves the exact frozen revision and must not be an author of it. A material change invalidates approval. A Publisher may publish only a validated revision with current approval; the Reviewer and Publisher may be the same non-author. Self-approval is limited to an explicitly non-production sandbox policy (resolved OPEN-013). |
 | Test session | Optional by default; organization policy may require a passed test session (DEC-39). |
 | Reviews | Data-classification review, retention-policy selection, accessibility review status (06 §21). |
 | Output | Immutable Definition Revision; immutable Simulation Release with content digest, compiler version and validation report (REQ-021). |
+
+Admin authority alone grants no methodology approval authority. Organizations may require stricter separation or additional evidence. Every approval and publication records the actor, active roles, policy version, artifact digest, evidence, rationale and timestamp (resolved OPEN-013).
 
 Changes to an upstream element show affected downstream elements and historical compatibility.
 
@@ -320,7 +324,7 @@ The activation screen shows:
 
 Activation also lists Polls, Voice Channels and Plugin Bindings that would change; an open Poll is never changed (INV-023) and in-flight Composition Runs stay pinned (10 §15).
 
-Activation is an audited Command (`release.activate`). Safe prospective changes apply after activation; consequential changes require explicit approval; existing workflow instances stay pinned unless a validated migration is approved.
+Activation is an audited Command (`release.activate`) executed by an Operator against a published compatible Release. Safe prospective changes apply after activation. Consequential changes require a fresh Reviewer approval of the exact impact and Release digest by a person who did not author that revision. Disruptive changes require a new Session. Every activation records the actor, active roles, policy version, artifact digest, evidence, rationale and timestamp; existing workflow instances stay pinned unless a validated migration is approved (resolved OPEN-013).
 
 ## 25. Polls
 
@@ -360,4 +364,5 @@ Owned by 10 Extension Framework (DEC-52 to DEC-60). Designers never write plugin
 | 1.3.1 | 2026-10-17 | Replaced "Workspaces" with "Navigation areas" in §3 to avoid confusion with the removed Workspace level (DEC-36). |
 | 1.3.2 | 2026-10-17 | Added §25 Polls, §26 Voice Channels and §27 Plugins and Model Compositions; renamed Channel editor to Message Channel editor (DEC-51); plugin approval always on (DEC-54); new validation checks, test runs and live-change notes. |
 | 1.3.3 | 2026-10-21 | Repointed Organization Role governance from superseded DEC-44 to DEC-61. |
+| 1.3.4 | 2026-11-01 | Applied resolved OPEN-013: production two-person integrity, immutable Template governance, distinct-author methodology approval, approval invalidation, governed activation and complete decision provenance. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |

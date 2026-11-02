@@ -687,7 +687,6 @@
     "depends_on_unratified": [
       "ADR-011",
       "ADR-014",
-      "OPEN-013",
       "OPEN-020"
     ],
     "prerequisites": [
@@ -1956,8 +1955,7 @@
     ],
     "depends_on_unratified": [
       "ADR-002",
-      "ADR-010",
-      "OPEN-013"
+      "ADR-010"
     ],
     "prerequisites": [
       "PS-100",
@@ -2047,7 +2045,7 @@
       "Update PROJECT_STATE.md"
     ],
     "risk": "high",
-    "approval_gate": "ADR-002 is Product Owner Approved; named Technical Lead sign-off remains and publication controls depend on OPEN-013",
+    "approval_gate": "ADR-002 is Product Owner Approved; named Technical Lead sign-off remains. Resolved OPEN-013 production publication controls are implemented by PS-760.",
     "implementation_state": "verified",
     "evidence": [
       "docs/ps-300-verification.md",
@@ -2058,12 +2056,12 @@
       "CMD-PLATFORM-E2E"
     ],
     "commit_subject": "feat(studio): freeze collaborative drafts safely",
-    "commit_body": "Why:\n- Make concurrent authoring publishable and reproducible.\nWhat:\n- Add CRDT sync, validation, and fenced freeze.\nVerification:\n- SYNC-01, SYNC-02, AC-01, AC-02.\nCompatibility / migrations:\n- Adds 015 collaboration runtime.\nRisks / follow-up:\n- Approval policy remains OPEN-013.\nRefs: PS-300, REQ-001, ADR-002",
+    "commit_body": "Why:\n- Make concurrent authoring publishable and reproducible.\nWhat:\n- Add CRDT sync, validation, and fenced freeze.\nVerification:\n- SYNC-01, SYNC-02, AC-01, AC-02.\nCompatibility / migrations:\n- Adds 015 collaboration runtime.\nRisks / follow-up:\n- Resolved OPEN-013 production approval controls remain assigned to PS-760.\nRefs: PS-300, REQ-001, ADR-002",
     "pr_description": "Summary: delivers collaborative Draft publication. Risks: convergence and freeze races. Migration: 015. Evidence: partition tests. Rollback: stop collaboration sessions; preserve update log.",
     "revisit_triggers": [
       "ADR-002 changes",
       "CRDT compatibility breaks",
-      "OPEN-013 resolves"
+      "Resolved OPEN-013 publication controls regress"
     ]
   },
   {
@@ -5240,17 +5238,21 @@
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": true,
-    "ready_to_execute": true,
+    "ready_to_execute": false,
     "migration_ids": [
       "029_authoring_models"
     ],
     "api_contract_ids": [
       "adjudication-model-editor-v1"
     ],
-    "evidence": [],
+    "evidence": [
+      "docs/ps-750-verification.md",
+      "docs/acceptance/PS-750-user-test.md",
+      "output/playwright/ps-750/advanced-authoring.png"
+    ],
     "risk": "high",
     "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
-    "implementation_state": "planned",
+    "implementation_state": "verified",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
@@ -5389,11 +5391,9 @@
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
     ],
-    "depends_on_unratified": [
-      "OPEN-013"
-    ],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "depends_on_unratified": [],
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "migration_ids": [
       "030_template_review_governance"
     ],
@@ -5408,6 +5408,7 @@
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
+      "Enforce resolved OPEN-013 at the trusted server boundary: a production author cannot approve the exact freeze, Admin alone cannot approve methodology, and sandbox self-approval is visibly non-production",
       "Use synthetic test identities and never expose secrets or protected content in screenshots or logs"
     ],
     "concurrency_idempotency_versions": [
@@ -5504,10 +5505,16 @@
       "Every Studio section 3-27 has a reachable, complete and tested workspace",
       "A Designer completes a deterministic rehearsal and receives explanations for every evaluated trigger",
       "A Reviewer can resolve linked issues and approve an exact freeze",
+      "Production rejects author self-approval and Admin-only methodology approval while permitting a Reviewer and Publisher to be the same non-author",
+      "A material content change invalidates approval and requires review of the new exact digest",
+      "Published Template and Release versions remain immutable with attributable supersession, deprecation and archival history",
+      "Consequential live activation requires a fresh distinct-author Reviewer approval; disruptive change requires a new Session",
+      "Approvals, publications and activations record actor, active roles, policy version, artifact digest, evidence, rationale and timestamp",
       "A published Release is created without raw JSON, SQL, UUID pasting or test fixture intervention"
     ],
     "regression_quality_gates": [
       "Post-freeze edits remain in the next Draft",
+      "Production two-person integrity remains enforced by person and exact artifact digest rather than role label alone",
       "Role previews and Runtime projections remain identical",
       "Live activation preserves in-flight governing Releases",
       "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",

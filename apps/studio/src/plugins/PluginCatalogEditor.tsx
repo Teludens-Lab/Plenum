@@ -40,6 +40,18 @@ const classifications: CompositionPortV1["classification"][] = ["public", "inter
 const profiles: PluginBindingV1["enabledInProfiles"] = ["cloud", "institutional", "air_gapped"];
 const prohibitedConfigurationKeys = new Set(["apikey", "authorization", "clientsecret", "credential", "credentials", "password", "privatekey", "secretkey", "secretref", "secretreference", "secrets", "token"]);
 
+function profileCompatibility(binding: PluginBindingV1, profile: PluginBindingV1["enabledInProfiles"][number], bindings: PluginBindingV1[]): { status: string; reason: string } {
+  if (!binding.enabledInProfiles.includes(profile)) return { status: "Disabled", reason: "This binding is not enabled for the target profile." };
+  if (profile === "air_gapped" && binding.connectivity === "external_required") {
+    const replacement = bindings.find(({ id }) => id === binding.localReplacementBindingId);
+    return replacement?.connectivity === "offline_capable" && replacement.enabledInProfiles.includes("air_gapped")
+      ? { status: "Compatible", reason: `Uses verified local replacement ${replacement.pluginId} ${replacement.pluginVersion}.` }
+      : { status: "Blocked", reason: "External connectivity is unavailable and no verified offline-capable replacement is selected." };
+  }
+  if (binding.connectivity === "lan_required") return { status: "Compatible with condition", reason: "The target Deployment must provision the approved LAN-local service." };
+  return { status: "Compatible", reason: binding.connectivity === "external_required" ? "The target Deployment must permit the approved controlled egress route." : "The pinned Plugin runs without public network access." };
+}
+
 function hasSecretReference(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(hasSecretReference);
   if (typeof value !== "object" || value === null) return false;
@@ -153,6 +165,16 @@ export function PluginCatalogEditor({ projectId, core, client }: { projectId: st
       <TextField id={`binding-timeout-${binding.id}`} label="Timeout seconds" value={binding.timeoutSeconds} type="number" path={["coreDesign", "pluginBindings", index, "timeoutSeconds"]} client={client} />
       <fieldset className="choice-group"><legend>Enabled deployment profiles</legend>{profiles.map((profile) => <label className="choice" key={profile}><input type="checkbox" checked={binding.enabledInProfiles.includes(profile)} onChange={(event) => client.setAtPath(["coreDesign", "pluginBindings", index, "enabledInProfiles"], event.target.checked ? [...binding.enabledInProfiles, profile] : binding.enabledInProfiles.filter((value) => value !== profile))} />{profile.replaceAll("_", " ")}</label>)}</fieldset>
       {binding.connectivity === "external_required" ? <SelectField id={`binding-replacement-${binding.id}`} label="Air-gap local replacement" value={binding.localReplacementBindingId ?? ""} options={[{ value: "", label: "Select a verified local replacement" }, ...bindings.filter((candidate) => candidate.id !== binding.id && candidate.connectivity === "offline_capable").map((candidate) => ({ value: candidate.id, label: `${candidate.pluginId} ${candidate.pluginVersion}` }))]} path={["coreDesign", "pluginBindings", index, "localReplacementBindingId"]} client={client} emptyDeletes /> : null}
+      <div className="table-scroll" tabIndex={0} aria-label={`Deployment compatibility for ${binding.pluginId}`}><table className="permission-matrix"><caption>Deployment compatibility and fail-closed reason</caption><thead><tr><th scope="col">Profile</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead><tbody>{profiles.map((profile) => {
+        const result = profileCompatibility(binding, profile, bindings);
+        return <tr key={profile}><th scope="row">{profile.replaceAll("_", " ")}</th><td>{result.status}</td><td>{result.reason}</td></tr>;
+      })}</tbody></table></div>
+      <fieldset className="nested-editor"><legend>Policy-filtered input mappings</legend>{binding.inputMappings.map((mapping, mappingIndex) => <div className="field-row" key={`${binding.id}-mapping-${mappingIndex}`}>
+        <TextField id={`binding-source-${binding.id}-${mappingIndex}`} label="Authorized source" value={mapping.source} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "source"]} client={client} />
+        <TextField id={`binding-target-${binding.id}-${mappingIndex}`} label="Plugin input" value={mapping.target} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "target"]} client={client} />
+        <SelectField id={`binding-mapping-class-${binding.id}-${mappingIndex}`} label="Classification ceiling" value={mapping.maxClassification ?? "internal"} options={classifications.map((value) => ({ value, label: value }))} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "maxClassification"]} client={client} />
+        <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "pluginBindings", index, "inputMappings"], mappingIndex)}>Remove mapping</button>
+      </div>)}<AddButton label="Add input mapping" onClick={() => client.appendAtPath(["coreDesign", "pluginBindings", index, "inputMappings"], { source: "state.authorized", target: "input", maxClassification: "internal" })} /></fieldset>
       <PortEditor binding={binding} bindingIndex={index} direction="inputPorts" client={client} /><PortEditor binding={binding} bindingIndex={index} direction="outputPorts" client={client} />
       <ItemActions path={["coreDesign", "pluginBindings"]} index={index} count={bindings.length} client={client} label={`${binding.pluginId} binding`} />
     </div></details>)}</div>

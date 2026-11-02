@@ -22,6 +22,7 @@ function sourceId(path: string): string {
     interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
     decisionTraceability: "research", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
     stateVariables: "advanced-logic", capabilities: "advanced-logic", resourceDefinitions: "advanced-logic",
+    adjudicationModels: "adjudication",
     objectives: "overview", identity: "overview", terminology: "overview", coreDesign: "overview", draft: "overview", scenario: "overview"
   };
   if (elementId !== undefined && ["objectives", "teams", "sessionRoles", "seats", "activities", "stages", "stageGroups", "forms", "workflows", "informationPolicies", "interfaces", "pluginBindings", "compositions"].includes(collection ?? "")) {

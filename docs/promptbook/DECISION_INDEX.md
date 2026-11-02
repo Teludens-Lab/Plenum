@@ -22,7 +22,8 @@ Pointer table only. Decision text and status live exclusively in `03_Governance_
 | OPEN-001..002 | Formal ratification and ADR-001..005 approval | PS-120, PS-350, PS-550 |
 | OPEN-003 | Resolved; the official snapshot pins source identity but does not itself prove parity | PS-000, PS-200, PS-350 |
 | OPEN-007 | Resolved; use the ADR-012 deployment-profile federation rules | PS-110, PS-340, PS-530 |
-| OPEN-004..013 | Methodology, Stage/workflow/form/compatibility/publication policy gates | PS-300, PS-310, PS-400, PS-410, PS-420 |
+| OPEN-004..012 | Methodology, Stage/workflow/form and compatibility policy gates | PS-300, PS-310, PS-400, PS-410, PS-420 |
+| OPEN-013 | Resolved 2026-11-01: production two-person integrity, distinct-author methodology approval, immutable Template/Release governance, governed activation and complete provenance | PS-300, PS-420, PS-760 |
 | OPEN-014, OPEN-015, OPEN-017 | Resolved 2026-10-23: managed-device/key custody, offline authority/allowlist, and recovery/anchor policy; implementation evidence remains with PS-500/510/530/550 | PS-500, PS-510, PS-530, PS-550 |
 | OPEN-019 | Resolved 2026-10-24: Owner, Technical Lead, and Operations Owner approved the measurable capacity targets; current PS-540 command/Floor failures remain release blockers assigned to PS-545 | PS-540, PS-545, PS-550 |
 | OPEN-016, OPEN-018, OPEN-020 | Authority transfer and remaining signing operational gates | PS-001, PS-130, PS-510, PS-530 |

@@ -31,7 +31,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function sourceFor(message: string): { path: string; elementId: string | null } {
-  const match = message.match(/^(Workflow|Stage Group|Stage|Activity|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Session Role|Team|Team Cell|Scenario content|Readiness check|Model Composition) ([^ ]+)/u);
+  const match = message.match(/^(Workflow|Stage Group|Stage|Activity|Form|Artifact Type|Information Policy|Interface Profile|Communication Route|Message Channel|Voice Channel|Poll|Inject|Report|Seat|Session Role|Team|Team Cell|Scenario content|Readiness check|Model Composition|Adjudication Model) ([^ ]+)/u);
   if (match === null) return { path: "coreDesign", elementId: null };
   const collections: Record<string, string> = {
     "Workflow": "workflows", "Stage Group": "stageGroups", "Stage": "stages", "Activity": "activities", "Form": "forms", "Artifact Type": "artifactTypes",
@@ -39,7 +39,7 @@ function sourceFor(message: string): { path: string; elementId: string | null } 
     "Communication Route": "communications.routes", "Message Channel": "communications.messageChannels",
     "Voice Channel": "communications.voiceChannels", "Poll": "polls", "Inject": "scenario.injects",
     "Report": "reports", "Seat": "seats", "Session Role": "sessionRoles", "Team": "teams", "Team Cell": "teams", "Scenario content": "scenario.content",
-    "Readiness check": "readinessChecks", "Model Composition": "compositions"
+    "Readiness check": "readinessChecks", "Model Composition": "compositions", "Adjudication Model": "adjudicationModels"
   };
   const label = match[1] ?? "";
   const elementId = match[2] ?? null;
@@ -169,11 +169,14 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
     const id = String(poll.id);
     const threshold = record(poll.thresholdRule) ? poll.thresholdRule : {};
     if (typeof threshold.denominator !== "string" || typeof poll.tieRule !== "string" ||
-        typeof threshold.abstentionCountsTowardDenominator !== "boolean") {
-      issues.push(issue("poll.counting_rule_incomplete", `Poll ${id} must explicitly define its denominator, abstention treatment and tie rule.`, `polls.${id}`, id));
+        typeof threshold.abstentionCountsTowardDenominator !== "boolean" ||
+        !record(poll.certificationPolicy) ||
+        stringList((poll.certificationPolicy as Record<string, unknown>).certifierSessionRoleIds).length === 0 &&
+          stringList((poll.certificationPolicy as Record<string, unknown>).certifierOrganizationRoles).length === 0) {
+      issues.push(issue("poll.counting_rule_incomplete", `Poll ${id} must explicitly define its denominator, abstention treatment, tie rule and certifier.`, `polls.${id}`, id));
     }
     if (poll.secrecy === "secret_ballot") {
-      issues.push(issue("poll.secret_ballot_policy_pending", `Poll ${id} uses secret ballot, which remains blocked for production by OPEN-028.`, `polls.${id}`, id));
+      issues.push(issue("poll.secret_ballot_policy_pending", `Poll ${id} uses secret ballot, which is disabled in the version 1 production profile under resolved OPEN-028.`, `polls.${id}`, id));
     }
     if (poll.secrecy === "anonymous_survey") {
       issues.push(issue("poll.anonymous_survey_unavailable", `Poll ${id} uses anonymous survey, which is not available in the first Runtime proof.`, `polls.${id}`, id));
@@ -183,7 +186,7 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
   for (const channel of records((core.communications as Record<string, unknown> | undefined)?.voiceChannels)) {
     const id = String(channel.id);
     if (channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") {
-      issues.push(issue("voice.consent_policy_pending", `Voice Channel ${id} enables recording or transcription, which remains blocked for production by OPEN-027.`, `communications.voiceChannels.${id}`, id));
+      issues.push(issue("voice.consent_policy_pending", `Voice Channel ${id} enables recording or transcription, which is disabled in the version 1 production profile under resolved OPEN-027.`, `communications.voiceChannels.${id}`, id));
     }
     const adapter = adapters.get(String(channel.mediaProviderAdapterBindingId));
     const capabilities = records(adapter?.voiceCapabilities);

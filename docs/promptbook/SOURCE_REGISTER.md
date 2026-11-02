@@ -1,26 +1,26 @@
 # Source register
 
-Authority and status remain owned by the source documents. "Read" means inspected while generating this promptbook on 2026-10-17; it does not mean ratified.
+Authority and status remain owned by the source documents. "Read" means inspected while generating or reconciling this promptbook through 2026-11-01; it does not mean ratified.
 
 | Path | Version | Corpus status | Owner | Verified read | Contradictions / notes |
 |---|---:|---|---|---|---|
 | `docs/corpus/README.md` | 2026-10-20 | Corpus contents table | Product Owner | Yes | Records the 2026-10-20 Product Owner approval update; drafts and named specialist gates remain |
-| `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` | 1.0.14 | Controlled | Product Owner | Yes | Sole decision authority; version 1 owner, retention, classification, restricted-media/ballot and first Plugin decisions are resolved |
+| `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` | 1.0.15 | Controlled | Product Owner | Yes | Sole decision authority; OPEN-013 production publication governance is resolved; implementation evidence remains with PS-760 |
 | `references/fractured-order.snapshot.json` and `references/fractured-order/` | `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` | Official immutable golden reference | Product Owner | Yes | Tree `771510b6180bd4826dc5688789d131f2109eeb62`; 1,111 files; 151,409,464 bytes; archive SHA-256 recorded in manifest |
 | `references/teludens-design-system-catalog/` | 1.3 catalog / 1.0 specifications | Binding Plenum UI, interaction and branding reference by Product Owner direction 2026-10-29 | Product Owner / Design owner | Yes | Applies to every platform surface including Fractured Order; exact dark/light Plenum wordmarks are platform branding. PS-700 must version the production token map and explicitly reconcile the catalog's rendered Graphite/Mineral Sage decision mapping with the specification's Electric Vermilion decision token before broad propagation. |
 | `docs/corpus/03_Governance_and_Reconciliation/GLOSSARY_AND_CROSSWALK_v1.0.md` | 1.0.1 | Controlled draft | Product Owner | Yes | Sole terminology authority; DEC-51 replacement name remains Assumed |
-| `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.3 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; not ratified |
+| `docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md` | 0.7.5 | Draft reconstructed | Product Owner | Yes | Owns REQ/INV/AC; REQ-022 reflects resolved OPEN-013; document-level ratification remains separate |
 | `docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md` | 1.0.2 | Draft reconstructed | Methodology Lead | Yes | OPEN-001/026 resolved; DEC-22 confirmation remains |
 | `docs/corpus/02_Updated_Architecture/02_PLATFORM_ARCHITECTURE_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns topology and stack; its ADRs are Confirmed or Product Owner Approved, with named specialist sign-offs still required where recorded |
 | `docs/corpus/02_Updated_Architecture/03_CANONICAL_SIMULATION_SCHEMA_v1.3.md` | 1.3.1 | Draft for review | Technical + Methodology Leads | Yes | Owns portable design types; compatibility follows resolved OPEN-012 |
 | `docs/corpus/02_Updated_Architecture/09_API_EVENT_WORKFLOW_CONTRACTS_v1.3.md` | 1.3.2 | Draft for review | Technical Lead | Yes | Owns event and error catalogs; OPEN-015 resolved |
-| `docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md` | 1.3.2 | Draft for review | Product Owner | Yes | Owns no-code authoring behavior |
+| `docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md` | 1.3.4 | Draft for review | Product Owner | Yes | Owns no-code authoring behavior; production publication and activation controls reflect resolved OPEN-013 |
 | `docs/corpus/02_Updated_Architecture/05_RUNTIME_AND_ADJUDICATION_v1.3.md` | 1.3.1 | Draft for review | Technical Lead | Yes | Owns Runtime behavior |
 | `docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md` | 1.3.2 | Draft for review | Security Owner | Yes | Owns data, security, reporting, accessibility and recovery; OPEN-014/015/017 resolved, implementation evidence pending |
 | `docs/corpus/02_Updated_Architecture/10_EXTENSION_FRAMEWORK_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | First-release scope; trust OPEN-029 and named specialist sign-off remain |
 | `docs/corpus/02_Updated_Architecture/11_LIVE_POLLING_AND_VOTING_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | OPEN-028 resolved for version 1 by disabling production secret ballots |
 | `docs/corpus/02_Updated_Architecture/12_VOICE_AND_RADIO_v1.1.md` | 1.1.0 | Confirmed product; Approved technical | Technical Lead | Yes | OPEN-027 resolved for version 1 by disabling production recording/transcription |
-| `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md` | 1.1.3 | Approved | Technical Lead | Yes | OPEN-002/014/015/017 resolved; implementation status is recorded per entity and named specialist sign-off remains |
+| `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/POSTGRESQL_LOGICAL_DATA_MODEL_v1.1.md` | 1.1.4 | Approved | Technical Lead | Yes | OPEN-013 Template/Release/activation provenance extension specified for PS-760; implementation status is recorded per entity and named specialist sign-off remains |
 | `docs/corpus/Plenum_PostgreSQL_Data_Model_and_Synchronization_Protocol_v1.1/SYNCHRONIZATION_PROTOCOL_v1.1.md` | 1.1.2 | Approved | Technical Lead | Yes | OPEN-002/014/015/017 resolved; fixed feature offline rules are preserved and named specialist sign-off remains |
 | `docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md` | 1.3.2 | Draft for review | Product Owner + Technical Lead | Yes | Owns sequencing and evidence, not product meaning |
 | `docs/corpus/03_Governance_and_Reconciliation/CHANGE_LOG.md` | n/a | Consolidated history | Product Owner | Registered, not used as authority | Not cited for requirements |

@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | PGLDM |
-| Version | 1.1.3 |
-| Date | 2026-10-23 |
+| Version | 1.1.4 |
+| Date | 2026-11-01 |
 | Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001 to ADR-005 and ADR-014 to ADR-016; named specialist sign-offs remain required. OPEN-002 is resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -77,6 +77,8 @@ Status: **Implemented** (in migrations 001–004 and exercised by tests), **Sche
 | document_updates | id, document_id, update_id, author_person_id, client_context, bytes, size_bytes, sha256 | Schema only |
 | definition_revisions | id, organization_id, project_id, parent_revision_id, snapshot, snapshot_sha256, methodology_version, author_id | Implemented; parent chain enforced within the same project |
 | validation_reports | id, organization_id, project_id, revision_id or draft_version, errors, warnings, created_at | Specified (REQ-011) |
+| simulation_templates | id, organization_id, source_project_id, version, frozen_sha256, published_by, published_at, lifecycle_status | Implemented baseline; governed version lifecycle extension specified by resolved OPEN-013 and PS-760 |
+| template_approvals | id, organization_id, template_id, frozen_sha256, approver_person_id, approver_roles, policy_version, evidence, rationale, decided_at | Specified (REQ-022, resolved OPEN-013) |
 
 A Core Design and its Scenarios are stored as collaborative documents in one project; a Definition Revision snapshot materializes them together as `{coreDesign, scenario}` (03 §3).
 
@@ -85,7 +87,7 @@ A Core Design and its Scenarios are stored as collaborative documents in one pro
 | Table | Key columns | Status |
 |---|---|---|
 | releases | id, organization_id, project_id, definition_revision_id (unique), release_number, release_label, package_schema_version, compiler_version, package_sha256, blob_key, published_by | Implemented |
-| release_approvals | release_id, approver_person_id, decision, notes, decided_at | Specified (REQ-022, OPEN-013) |
+| release_approvals | id, organization_id, release_id, frozen_sha256, approver_person_id, approver_roles, policy_version, evidence, rationale, decision, decided_at | Implemented baseline; distinct-author and complete provenance extension specified by REQ-022, resolved OPEN-013 and PS-760 |
 | package_manifests | release_id, manifest, signature, signing_key_id | Specified (OPEN-020) |
 | release_compatibility | from_release_id, to_release_id, change_classes, report | Specified (ADR-004, OPEN-012) |
 
@@ -97,6 +99,7 @@ A Core Design and its Scenarios are stored as collaborative documents in one pro
 | session_authorities | session_id, deployment_id, authority_epoch, status | Implemented; checked on every consequential write |
 | authority_transfers | id, session_id, from_deployment_id, to_deployment_id, from_epoch, to_epoch, fencing_proof, operator_person_id, reason, status | Specified (OPEN-016) |
 | release_activations | id, session_id, project_id, release_id, previous_activation_id, activation_sequence, compatibility_policy, approved_by | Implemented (initial activation only); release must belong to the session's project |
+| release_activation_reviews | id, organization_id, session_id, from_release_id, to_release_id, report_sha256, change_classification, reviewed_by, reviewer_roles, policy_version, evidence, rationale, reviewed_at | Implemented baseline; fresh distinct-author consequential approval and complete provenance extension specified by resolved OPEN-013 and PS-760 |
 | participants | id, organization_id, session_id, person_id (unique per session) | Implemented |
 | seat_assignments | id, participant_id, session_role_id, valid_from, valid_to, assigned_by | Implemented; one active assignment per participant and role |
 | session_seats | session_id, seat_id (Release-defined), state (open, reserved, occupied, vacated, disabled) | Specified |
@@ -279,6 +282,7 @@ OPEN-014, OPEN-015 and OPEN-017 resolve the managed-device, signing-key custody,
 | Version | Date | Change |
 |---|---|---|
 | 1.1.3 | 2026-10-23 | Recorded resolved OPEN-014/015/017 operational policy and separated approved values from remaining open parameters. |
+| 1.1.4 | 2026-11-01 | Applied resolved OPEN-013 to Template, Release approval and live-activation review provenance; additive enforcement remains assigned to PS-760 migration 030. |
 | 1.1.2 | 2026-10-21 | Recorded DEC-61 Reviewer and Research Analyst roles and the explicit migration gap from the implemented four-role constraint. |
 | 1.1.1 | 2026-10-17 | Added `voting`, `comms` and `extension` schemas (ADR-016) with entity catalogs §4.7 to §4.9 and DB-11 to DB-13. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms; added persons, Organization Role memberships and seat assignments (DEC-44); moved Release-defined identifiers out of `CHECK` constraints (DEC-45); added project-consistency foreign keys, application role, append-only triggers and corrected row-level security; recorded rejected and reconciliation receipts with evidence (DEC-43); split checkpoint storage into batches, signatures and anchors; replaced inline SQL with the tested migrations 001–004; added entity catalog with implementation status and acceptance test status. |

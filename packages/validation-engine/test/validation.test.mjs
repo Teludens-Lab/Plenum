@@ -177,3 +177,41 @@ test("PS-730 validation links identify the exact Team with a missing Objective",
   assert.equal(report.valid, false);
   assert.ok(report.issues.some(({ path, message }) => path === `teams.${draft.coreDesign.teams[0].id}` && /missing-objective/u.test(message)));
 });
+
+test("PS-750-T01 validates an explicit world-state adjudication contract and rejects unknown Facts", async () => {
+  const draft = structuredClone(await fixture());
+  draft.coreDesign.stateVariables = [{
+    id: "ps750-pressure", name: "Operational pressure", description: "Synthetic adjudication input",
+    scope: "global", type: "integer", minimum: 0, maximum: 10, unit: "points",
+    informationPolicyId: "policy-public", editableBySessionRoleIds: ["white_cell"],
+    historyMode: "full", display: "gauge"
+  }];
+  draft.scenario.initialState = [{ stateVariableId: "ps750-pressure", value: 2 }];
+  draft.coreDesign.adjudicationModels = [{
+    id: "ps750-model", name: "PS-750 rules preview", doctrine: "rules_based", mechanism: "rules",
+    appliesToArtifactTypeIds: ["blue-action"], reviewerSessionRoleIds: ["white_cell"],
+    leadReviewerSessionRoleIds: ["white_cell"], perspectives: [{
+      id: "ps750-control-perspective", label: "Control perspective", reviewerSessionRoleIds: ["white_cell"]
+    }],
+    rules: [{
+      id: "ps750-pressure-rule", label: "Pressure is elevated",
+      when: { operator: "all", conditions: [{ fact: "state.ps750-pressure", operator: "greater_than", value: 1 }] },
+      outcome: "review", explanation: "Suggest review when operational pressure exceeds one point."
+    }],
+    timeoutSeconds: 300, approvingSessionRoleIds: ["white_cell"],
+    output: {
+      outcomeCategories: ["accept", "revise", "reject"], rationaleRequired: true, confidenceRequired: true,
+      revealedInformationPolicyId: "policy-public",
+      stateEffects: [{ stateVariableId: "ps750-pressure", operation: "increment", value: 1, rationale: "Approved synthetic fixture" }],
+      followOnInjectIds: ["opening-briefing"]
+    },
+    publicationScope: { public: true }, precedent: "advisory"
+  }];
+
+  const validReport = validateStudioDraft(draft);
+  assert.equal(validReport.valid, true, JSON.stringify(validReport.issues));
+  draft.coreDesign.adjudicationModels[0].rules[0].when.conditions[0].fact = "state.missing";
+  const report = validateStudioDraft(draft);
+  assert.equal(report.valid, false);
+  assert.ok(report.issues.some(({ path, message }) => path === "adjudicationModels.ps750-model" && /state\.missing/u.test(message)));
+});

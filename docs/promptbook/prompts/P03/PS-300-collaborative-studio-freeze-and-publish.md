@@ -26,7 +26,7 @@ Observed source evidence:
 
 - references/plenum-runtime-slice/migrations/003_collaboration.sql
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-002`, `ADR-010`, `OPEN-013`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `ADR-002`, `ADR-010`.
 
 ## Prerequisites
 
@@ -130,7 +130,7 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Validation messages link to source elements
 - No raw JSON is required from end users
 
-The approval gate is: ADR-002 is Product Owner Approved; named Technical Lead sign-off remains and publication controls depend on OPEN-013. A task may be implementation-complete without being release-approved.
+The approval gate is: ADR-002 is Product Owner Approved; named Technical Lead sign-off remains. Resolved OPEN-013 production publication controls are implemented by PS-760.. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
@@ -159,7 +159,7 @@ Verification:
 Compatibility / migrations:
 - Adds 015 collaboration runtime.
 Risks / follow-up:
-- Approval policy remains OPEN-013.
+- Resolved OPEN-013 production approval controls remain assigned to PS-760.
 Refs: PS-300, REQ-001, ADR-002
 ```
 
@@ -171,4 +171,4 @@ Review the focused diff and list exact files. Never commit failed gates or unrel
 
 ## Handoff
 
-Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-002 changes; CRDT compatibility breaks; OPEN-013 resolves.
+Return PASS / FAIL / BLOCKED / NOT RUN for every validation reference; exact command-output or artifact references; modified files; demonstrated behavior; migrations and rollback/forward-fix implications; unresolved defects and unratified dependencies; and the next eligible task. If blocked, complete independent safe work first. Revisit when: ADR-002 changes; CRDT compatibility breaks; Resolved OPEN-013 publication controls regress.

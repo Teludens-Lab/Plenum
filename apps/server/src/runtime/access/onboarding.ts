@@ -346,6 +346,19 @@ export async function submitJoinRequest(
       }
       invitationId = row.id; requestedSeatId = row.seat_id;
       await client.query("UPDATE identity.session_invitations SET accepted_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2", [context.organizationId, row.id]);
+    } else if (typeof payload.invitationId === "string" && uuid.test(payload.invitationId)) {
+      const invitation = await client.query<{ id: string; seat_id: string | null }>(
+        `SELECT id,seat_id FROM identity.session_invitations
+          WHERE organization_id=$1 AND session_id=$2 AND id=$3 AND recipient_person_id=$4
+            AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>transaction_timestamp() FOR UPDATE`,
+        [context.organizationId, context.sessionId, payload.invitationId, context.principalId]
+      );
+      const row = invitation.rows[0];
+      if (row === undefined) {
+        return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "The invitation is invalid or expired." };
+      }
+      invitationId = row.id; requestedSeatId = row.seat_id;
+      await client.query("UPDATE identity.session_invitations SET accepted_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2", [context.organizationId, row.id]);
     } else if (typeof payload.sessionCode === "string" && access.access_policy.joinMethods.includes("code_and_verified_email")) {
       const code = await client.query<{ matches: boolean }>(
         `SELECT session_code_sha256=$3 AS matches FROM runtime.session_access_configs
@@ -357,15 +370,24 @@ export async function submitJoinRequest(
       return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "A code alone never grants Session access." };
     }
     const waitingRoom = access.access_policy.joinMethods.includes("waiting_room");
+    const admitted = !waitingRoom;
     await client.query(
       `INSERT INTO runtime.join_requests(id,organization_id,session_id,person_id,invitation_id,requested_seat_id,status)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [command.aggregateId, context.organizationId, context.sessionId, context.principalId, invitationId, requestedSeatId,
-        waitingRoom ? "waiting_room" : "assignment_pending"]
+        waitingRoom ? "waiting_room" : "admitted"]
     );
+    if (admitted) {
+      await client.query(
+        `INSERT INTO runtime.participants(id,organization_id,session_id,person_id)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (session_id,person_id) DO UPDATE SET person_id=EXCLUDED.person_id RETURNING id`,
+        [randomUUID(), context.organizationId, context.sessionId, context.principalId]
+      );
+    }
     await audit(client, context, "join_request.submitted", `join-request:${command.aggregateId}`, {});
     return { status: "accepted", aggregateVersion: 1, eventType: "join_request.submitted",
-      eventPayload: { joinRequestId: command.aggregateId, status: waitingRoom ? "waiting_room" : "assignment_pending" } };
+      eventPayload: { joinRequestId: command.aggregateId, status: waitingRoom ? "waiting_room" : "admitted" } };
   }});
 }
 
@@ -386,6 +408,24 @@ export async function resolveInvitationSession(
       throw authorizationError("PERMISSION_DENIED", "The invitation is invalid or expired.", correlationId);
     }
     return invitation.session_id;
+  });
+}
+
+export async function resolveVisibleInvitationSession(
+  pool: Pool, principal: AuthenticatedPrincipal, invitationId: string, correlationId: string
+): Promise<string> {
+  if (!uuid.test(invitationId)) throw authorizationError("INVALID_ID", "The invitation is invalid.", correlationId);
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ session_id: string }>(
+      `SELECT session_id FROM identity.session_invitations
+        WHERE organization_id=$1 AND id=$2 AND recipient_person_id=$3
+          AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>transaction_timestamp()`,
+      [principal.organizationId, invitationId, principal.principalId]
+    );
+    if (result.rows[0] === undefined) {
+      throw authorizationError("PERMISSION_DENIED", "The invitation is invalid or expired.", correlationId);
+    }
+    return result.rows[0].session_id;
   });
 }
 
@@ -471,7 +511,7 @@ export async function claimSeat(
 ): Promise<CommandReceiptV1> {
   return processPrincipalSessionCommand({ pool, context, command, correlationId, deploymentId, lockSessionAndExecute: async ({ client, sessionStatus }) => {
     const payload = requireOperation(command, "seat.claim", correlationId);
-    if (!["configured", "ready", "open"].includes(sessionStatus) || typeof payload.seatId !== "string" || typeof payload.sessionRoleId !== "string") {
+    if (!["configured", "ready", "open", "active", "paused"].includes(sessionStatus) || typeof payload.seatId !== "string" || typeof payload.sessionRoleId !== "string") {
       return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Seat cannot be claimed now." };
     }
     const access = await config(client, context);

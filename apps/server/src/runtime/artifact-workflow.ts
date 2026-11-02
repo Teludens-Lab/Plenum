@@ -8,6 +8,7 @@ import {
   type RuntimeFormV1,
   type RuntimeModuleV1,
   type RuntimeProjectionV1,
+  RUNTIME_NAVIGATION_CONTRACT_ID,
   RUNTIME_PROJECTION_CONTRACT_ID
 } from "@plenum/event-contracts";
 import { randomUUID } from "node:crypto";
@@ -1130,6 +1131,7 @@ export interface RuntimeProjectionInput {
   sessionId: string;
   deviceId: string;
   correlationId: string;
+  activeSessionRoleId?: string;
 }
 
 export async function getRuntimeProjection(input: RuntimeProjectionInput): Promise<RuntimeProjectionV1> {
@@ -1137,7 +1139,8 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     const context = await resolveSessionAccessContext(client, input.principal, {
       sessionId: input.sessionId,
       deviceId: input.deviceId,
-      correlationId: input.correlationId
+      correlationId: input.correlationId,
+      ...(input.activeSessionRoleId === undefined ? {} : { activeSessionRoleId: input.activeSessionRoleId })
     });
     const { definition, releaseLabel } = await readRelease(
       client, context.organizationId, context.activeReleaseId, input.correlationId
@@ -1207,6 +1210,21 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     const information = await getInformationProjection(client, context, actor, input.correlationId);
     const polls = await getPollProjection(client, context);
     const voiceChannels = await getVoiceProjection(client, context);
+    const assignments = await client.query<{ session_role_id: string; seat_id: string; team_id: string | null }>(
+      `SELECT session_role_id,seat_id,team_id FROM runtime.seat_assignments
+        WHERE organization_id=$1 AND session_id=$2 AND participant_id=$3 AND valid_to IS NULL
+        ORDER BY seat_id,session_role_id`,
+      [context.organizationId, context.sessionId, context.participantId]
+    );
+    const roleContexts = assignments.rows.map((assignment) => ({
+      sessionRoleId: assignment.session_role_id,
+      sessionRoleLabel: definition.sessionRoles.find((candidate) => candidate.id === assignment.session_role_id)?.name
+        ?? assignment.session_role_id,
+      teamLabel: assignment.team_id === null ? null
+        : definition.teams.find((candidate) => candidate.id === assignment.team_id)?.name ?? assignment.team_id,
+      seatLabel: assignment.seat_id,
+      runtimeUrl: `/sessions/${context.sessionId}/runtime?role=${encodeURIComponent(assignment.session_role_id)}`
+    }));
     return {
       contractId: RUNTIME_PROJECTION_CONTRACT_ID,
       sessionId: context.sessionId,
@@ -1237,6 +1255,12 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       Number(stageState?.accumulated_pause_seconds ?? 0), new Date()),
       interfaceProfileId: profile.id,
       layout: profile.layout,
+      navigation: {
+        contractId: RUNTIME_NAVIGATION_CONTRACT_ID,
+        items: [...profile.modules].sort((left, right) => left.id.localeCompare(right.id))
+          .map((module) => ({ id: `navigation-${module.id}`, label: module.title, moduleId: module.id }))
+      },
+      roleContexts,
       modules: [...profile.modules].sort((left, right) => left.id.localeCompare(right.id)),
       createTasks,
       artifacts,

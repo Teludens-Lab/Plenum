@@ -91,7 +91,8 @@ const localPersonas = {
   operator: { label: "Admin", description: "Inspect Organization members and their Organization Roles." },
   finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
   portalOperator: { label: "Operator only", description: "Find Releases, create configured Sessions, and verify Project data remains denied." },
-  publisher: { label: "Publisher", description: "Find immutable Releases and verify Package export and import." }
+  publisher: { label: "Publisher", description: "Find immutable Releases and verify Package export and import." },
+  invitedParticipant: { label: "Invited Participant", description: "Accept an invitation, choose an eligible Seat, and enter the role-scoped Runtime." }
 };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],
@@ -286,7 +287,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 }));
 
 server.listen(4173, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710/PS-720/PS-730/PS-740 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
+  `${localUserTest ? "PS-710 through PS-770 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:4173${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
 ));
 
 let closing = false;

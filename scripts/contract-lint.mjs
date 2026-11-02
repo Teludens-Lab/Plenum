@@ -15,6 +15,8 @@ import {
   EVENT_ENVELOPE_CONTRACT_ID,
   RUNTIME_SSE_CONTRACT_ID,
   RUNTIME_PROJECTION_CONTRACT_ID,
+  PARTICIPANT_ENTRY_CONTRACT_ID,
+  RUNTIME_NAVIGATION_CONTRACT_ID,
   MODEL_RUN_CONTRACT_ID,
   EFFECT_PROPOSAL_CONTRACT_ID,
   STATE_TRANSACTION_CONTRACT_ID,
@@ -52,6 +54,8 @@ import {
   eventEnvelopeV1Schema,
   runtimeSseV1Schema,
   runtimeProjectionV1Schema,
+  participantEntryV1Schema,
+  runtimeNavigationV1Schema,
   modelRunV1Schema,
   effectProposalV1Schema,
   stateTransactionV1Schema,
@@ -152,6 +156,8 @@ assert.equal(eventEnvelopeV1Schema.$id, EVENT_ENVELOPE_CONTRACT_ID);
 assert.equal(errorEnvelopeV1Schema.$id, ERROR_ENVELOPE_CONTRACT_ID);
 assert.equal(runtimeSseV1Schema.$id, RUNTIME_SSE_CONTRACT_ID);
 assert.equal(runtimeProjectionV1Schema.$id, RUNTIME_PROJECTION_CONTRACT_ID);
+assert.equal(participantEntryV1Schema.$id, PARTICIPANT_ENTRY_CONTRACT_ID);
+assert.equal(runtimeNavigationV1Schema.$id, RUNTIME_NAVIGATION_CONTRACT_ID);
 assert.equal(modelRunV1Schema.$id, MODEL_RUN_CONTRACT_ID);
 assert.equal(effectProposalV1Schema.$id, EFFECT_PROPOSAL_CONTRACT_ID);
 assert.equal(stateTransactionV1Schema.$id, STATE_TRANSACTION_CONTRACT_ID);
@@ -185,7 +191,8 @@ assert.equal(gateExpressionV1Schema.$id, GATE_EXPRESSION_CONTRACT_ID);
 
 const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
-  eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, runtimeSseV1Schema,
+  eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, participantEntryV1Schema,
+  runtimeNavigationV1Schema, runtimeSseV1Schema,
   syncDeltasV1Schema, syncSnapshotV1Schema, syncBootstrapV1Schema, offlineOutboxV1Schema,
   modelRunV1Schema, effectProposalV1Schema,
   stateTransactionV1Schema,

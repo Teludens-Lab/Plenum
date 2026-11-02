@@ -12,6 +12,7 @@ const studioEvidenceRoot = "output/playwright/ps-730";
 const authoringEvidenceRoot = "output/playwright/ps-740";
 const advancedAuthoringEvidenceRoot = "output/playwright/ps-750";
 const governanceEvidenceRoot = "output/playwright/ps-760";
+const participantEvidenceRoot = "output/playwright/ps-770";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -27,6 +28,7 @@ test.beforeAll(async () => {
   await mkdir(authoringEvidenceRoot, { recursive: true });
   await mkdir(advancedAuthoringEvidenceRoot, { recursive: true });
   await mkdir(governanceEvidenceRoot, { recursive: true });
+  await mkdir(participantEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -566,5 +568,56 @@ test("PS-760-T02 remaining Studio workspaces rehearse deterministically without 
   await expect(page.locator('#review-publish input[pattern="[0-9a-fA-F-]{36}"]')).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include("#interfaces").include("#research").include("#measurements-reports").include("#access").include("#preview").include("#test-validate").include("#review-publish").include("#live-changes").analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${governanceEvidenceRoot}/rehearsal-publication.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled Seats, switches role, and recovers offline @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const { context, page } = await actor(browser, fixture.tokens.invitedParticipant);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Your Sessions" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Studio/u })).toHaveCount(0);
+  await expect(page.getByText("Synthetic invited participant")).toBeVisible();
+  const deniedAcceptance = await context.request.post(`/v1/participant-entry/invitations/${fixture.invitationId}/accept`, {
+    headers: headers(fixture.tokens.author), data: {}
+  });
+  expect(deniedAcceptance.status()).toBe(403);
+  expect(JSON.stringify(await deniedAcceptance.json())).not.toContain("PS-150 S1 proof Session");
+  await page.getByRole("button", { name: "Accept invitation" }).click();
+  await expect(page.getByRole("group", { name: "Choose an eligible Seat" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Choose an eligible Seat" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
+  const choices = page.getByRole("group", { name: "Choose an eligible Seat" }).getByRole("button");
+  await choices.first().click();
+  await expect(page.getByRole("heading", { name: "Enter as" })).toBeVisible();
+  const remainingChoices = page.getByRole("group", { name: "Choose an eligible Seat" }).getByRole("button");
+  if (await remainingChoices.count() > 0) await remainingChoices.first().click();
+  const entryLinks = page.locator(".role-entry-list a");
+  await expect(entryLinks.first()).toBeVisible();
+  await entryLinks.first().click();
+  await expect(page).toHaveURL(/\/sessions\/[0-9a-f-]{36}\/runtime\?role=[a-z_]+$/u);
+  await expect(page.getByRole("heading", { level: 1, name: /workspace$/u })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Runtime modules" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Exit Session" })).toBeVisible();
+  if (await page.getByLabel("Active Role Context").count() > 0) {
+    const roles = page.getByLabel("Active Role Context");
+    expect((await roles.locator("option").allTextContents()).length).toBeGreaterThan(1);
+    await roles.selectOption({ index: 1 });
+    await expect(page).toHaveURL(/\?role=/u);
+  }
+  const runtimeLocation = page.url();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime.png`, fullPage: true });
+
+  await page.goto("/__test__/offline");
+  await page.goto(runtimeLocation);
+  await expect(page.getByLabel("Plenum status: Offline")).toBeVisible();
+  await expect(page.getByText(/protected offline view/u)).toBeVisible();
+  await expect(page.getByText(/accepted/u).filter({ hasText: /local pending/u })).toHaveCount(0);
+  await page.goto("/__test__/online");
+  await page.goto(runtimeLocation);
+  await expect(page.getByLabel("Plenum status: Connected")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /workspace$/u })).toBeVisible();
   await context.close();
 });

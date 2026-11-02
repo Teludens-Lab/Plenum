@@ -34,6 +34,8 @@ export const STAGE_COMMAND_CONTRACT_ID = "stage-command-v1";
 export const INJECT_COMMAND_CONTRACT_ID = "inject-command-v1";
 export const MESSAGE_COMMAND_CONTRACT_ID = "message-command-v1";
 export const RUNTIME_PROJECTION_CONTRACT_ID = "runtime-projection-v1";
+export const PARTICIPANT_ENTRY_CONTRACT_ID = "participant-entry-v1";
+export const RUNTIME_NAVIGATION_CONTRACT_ID = "runtime-navigation-v1";
 export const OPERATOR_PROJECTION_CONTRACT_ID = "operator-projection-v1";
 export const MODEL_RUN_CONTRACT_ID = "model-run-v1";
 export const EFFECT_PROPOSAL_CONTRACT_ID = "effect-proposal-v1";
@@ -234,6 +236,44 @@ export interface CreatedConfiguredSessionV1 extends JsonObject {
   evidenceSequence: number;
   detailUrl: string;
   staffingUrl: string;
+}
+
+export interface ParticipantRoleContextV1 extends JsonObject {
+  sessionRoleId: string;
+  sessionRoleLabel: string;
+  teamLabel: string | null;
+  seatLabel: string;
+  runtimeUrl: string;
+}
+
+export interface ParticipantSeatChoiceV1 extends JsonObject {
+  seatId: string;
+  seatLabel: string;
+  sessionRoleId: string;
+  sessionRoleLabel: string;
+  teamLabel: string | null;
+}
+
+export interface ParticipantSessionEntryV1 extends JsonObject {
+  sessionId: string;
+  governingReleaseId: string;
+  title: string;
+  releaseLabel: string;
+  status: SessionLifecycleStatusV1;
+  entryState: "invited" | "waiting_room" | "assignment_pending" | "ready";
+  invitationId: string | null;
+  roleContexts: ParticipantRoleContextV1[];
+  eligibleSeats: ParticipantSeatChoiceV1[];
+}
+
+export interface ParticipantEntryV1 extends JsonObject {
+  contractId: typeof PARTICIPANT_ENTRY_CONTRACT_ID;
+  sessions: ParticipantSessionEntryV1[];
+}
+
+export interface RuntimeNavigationV1 extends JsonObject {
+  contractId: typeof RUNTIME_NAVIGATION_CONTRACT_ID;
+  items: Array<{ id: string; label: string; moduleId: string }>;
 }
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
@@ -861,6 +901,8 @@ export interface RuntimeProjectionV1 {
   stageRemainingSeconds: number | null;
   interfaceProfileId: string;
   layout: "single_column" | "main_with_sidebar" | "dashboard_grid" | "workspace_tabs";
+  navigation: RuntimeNavigationV1;
+  roleContexts: ParticipantRoleContextV1[];
   modules: RuntimeModuleV1[];
   createTasks: RuntimeCreateTaskV1[];
   artifacts: RuntimeArtifactV1[];
@@ -1728,6 +1770,26 @@ export const createdConfiguredSessionV1Schema = {
   }
 } as const satisfies ContractSchema<CreatedConfiguredSessionV1>;
 
+export const participantEntryV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: PARTICIPANT_ENTRY_CONTRACT_ID,
+  title: "Participant entry v1", type: "object", additionalProperties: false,
+  required: ["contractId", "sessions"],
+  properties: {
+    contractId: { const: PARTICIPANT_ENTRY_CONTRACT_ID },
+    sessions: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<ParticipantEntryV1>;
+
+export const runtimeNavigationV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: RUNTIME_NAVIGATION_CONTRACT_ID,
+  title: "Runtime navigation v1", type: "object", additionalProperties: false,
+  required: ["contractId", "items"],
+  properties: {
+    contractId: { const: RUNTIME_NAVIGATION_CONTRACT_ID },
+    items: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<RuntimeNavigationV1>;
+
 export const commandReceiptV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: COMMAND_RECEIPT_CONTRACT_ID,
@@ -1928,7 +1990,7 @@ export const runtimeProjectionV1Schema = {
     "contractId", "sessionId", "sessionStatus", "releaseId", "releaseLabel", "participantId",
     "activeSessionRoleId", "activeSessionRoleLabel", "authorityEpoch", "activeTeamId", "activeTeamLabel", "currentStageId", "currentStageLabel", "currentStageStatus",
     "stageStartedAt", "stageDeadlineAt", "stageRemainingSeconds",
-    "interfaceProfileId", "layout", "modules", "createTasks", "artifacts", "messages", "injects", "polls", "voiceChannels"
+    "interfaceProfileId", "layout", "navigation", "roleContexts", "modules", "createTasks", "artifacts", "messages", "injects", "polls", "voiceChannels"
   ],
   properties: {
     contractId: { const: RUNTIME_PROJECTION_CONTRACT_ID },
@@ -1950,6 +2012,8 @@ export const runtimeProjectionV1Schema = {
     stageRemainingSeconds: { type: ["integer", "null"], minimum: 0 },
     interfaceProfileId: { type: "string", minLength: 1 },
     layout: { type: "string", enum: ["single_column", "main_with_sidebar", "dashboard_grid", "workspace_tabs"] },
+    navigation: { type: "object" },
+    roleContexts: { type: "array", items: { type: "object" } },
     modules: { type: "array", items: { type: "object" } },
     createTasks: { type: "array", items: { type: "object" } },
     artifacts: { type: "array", items: { type: "object" } },

@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-11-01.
+Updated: 2026-11-02.
 
 ## Repository
 
@@ -100,12 +100,13 @@ Updated: 2026-11-01.
 - PS-740 implementation, automated evidence, and independent ten-minute user test PASS on 2026-11-01. Guided Form/Artifact previews, complete DEC-42 forward/return authoring, governed Communications and Inject controls, and the versioned quarantine-first Content Library passed. The product owner confirmed leakage recovery, Stage-entry Inject placement, clean v2 history/reuse, infected/failed/oversized quarantine, type-mismatch recovery, persistence, and Reviewer least privilege. Production approval remains **NOT RUN**; `OPEN-010` remains explicitly unratified. Evidence is in `docs/ps-740-verification.md`, `docs/acceptance/PS-740-user-test.md`, and `output/playwright/ps-740/`.
 - PS-750 implementation, automated evidence and independent ten-minute user test PASS on 2026-11-01. Advanced world state, adjudication, Plugin/profile compatibility, typed composition, explicit Poll rules, Voice profile capability and non-authoritative previews pass 107 unit tests, 28 integration tests, focused product/Axe evidence, the 11 accessibility scenarios across the corrected aggregate and focused rerun, air-gap 9/9, the 228-obligation completeness audit and product-owner evidence. The owner explicitly confirmed restoration to Poll **open** and Voice recording/transcription **off** after the negative checks. No SQL migration was required; the existing versioned Draft JSON remains authoritative. Evidence is in `docs/ps-750-verification.md`, `docs/acceptance/PS-750-user-test.md`, and `output/playwright/ps-750/`.
 - PS-760 implementation, automated evidence, and independent ten-minute user test PASS as of 2026-11-02. The remaining Studio sections, versioned measurements/reports, deterministic rehearsal, exact-digest review, immutable Template lifecycle and governed live-change approval passed all ten product-owner steps. Unit/contract 108/108, integration 28/28, product E2E 18/18, accessibility 11/11, generalization 1/1, lint, typecheck, build and the 228-obligation structural completeness audit pass. Evidence is in `docs/ps-760-verification.md`, `docs/acceptance/PS-760-user-test.md`, and `output/playwright/ps-760/`.
-- Promptbook v1.4 covers 48 tasks and prompts, REQ 94/94, INV 28/28, and no dependency cycles. `OPEN-013` was resolved by user direction on 2026-11-01; PS-760 is verified and PS-770 is now the first runnable task.
+- PS-770 implementation, automated acceptance, and the independent ten-minute user test **PASS** as of 2026-11-02. Visible addressed invitation acceptance, policy-approved labeled Seat selection, role-scoped stable Runtime links, Active Role Context switching, configured module navigation, explicit curated module states, protected offline recovery and exit passed unit/contract 108/108, integration 28/28, product E2E 19/19, accessibility 11/11, offline 7/7, and all ten product-owner steps. No migration was required because migration 017 already owns the access entities. Evidence is in `docs/ps-770-verification.md`, `docs/acceptance/PS-770-user-test.md`, and `output/playwright/ps-770/`.
+- Promptbook v1.4 covers 48 tasks and prompts, REQ 94/94, INV 28/28, and no dependency cycles. `OPEN-013` was resolved by user direction on 2026-11-01; PS-770 is verified with automated and product-owner acceptance PASS.
 
 ## Next eligible work
 
-PS-770 is the next eligible task after PS-760 automated and human acceptance passed.
+PS-780 is the next eligible work.
 
-P07 has verified PS-700, PS-710, and PS-720, and P08 has verified PS-730 through PS-760. PS-770 through P11 remain **planned, not implemented**. They complete participant/operator/admin/report/replay/archive workflows, all UI states, full-route Teludens conformance, CI/security/observability, clean install/upgrade/recovery, manual accessibility, the blank-install Fractured Order golden journey and cross-simulation UAT. PS-740 keeps `OPEN-010` labeled as unratified. See `PRODUCT_COMPLETENESS_MATRIX.md`.
+P07 has verified PS-700, PS-710, and PS-720, P08 has verified PS-730 through PS-760, and PS-770 has automated and product-owner acceptance PASS. PS-780 through P11 remain **planned, not implemented**. They complete operator/admin/report/replay/archive workflows, all UI states, full-route Teludens conformance, CI/security/observability, clean install/upgrade/recovery, manual accessibility, the blank-install Fractured Order golden journey and cross-simulation UAT. PS-740 keeps `OPEN-010` labeled as unratified. See `PRODUCT_COMPLETENESS_MATRIX.md`.
 
 PS-600 remains a separately blocked post-release Plugin catalog expansion and is not a prerequisite for the core platform completion sequence. Production remains NO-GO until PS-850 records an exact-artifact owner decision after every applicable completeness row passes.

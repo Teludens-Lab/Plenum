@@ -43,6 +43,7 @@ import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
 import { OfflineRuntimeStore } from "./offline/storage.js";
 import { ProjectPortal } from "./product/ProjectPortal.js";
 import { LifecyclePortal } from "./product/LifecyclePortal.js";
+import { ParticipantPortal } from "./product/ParticipantPortal.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -221,18 +222,19 @@ function ProductEntry() {
           <p className="eyebrow">Destinations</p><h2 id="navigation-title">Choose a workspace</h2>
           <ul>
             <li><a aria-current="page" href="/">Home<span>Account and Organization context</span></a></li>
-            <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li>
-            <li><a href="/#session-catalog">Sessions<span>Find governed Sessions and stable links</span></a></li>
+            {context.destinations.includes("studio") ? <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li> : null}
+            <li><a href="/#participant-sessions-title">Sessions<span>Enter an invited or assigned Session</span></a></li>
             {context.destinations.includes("operations") ? <li><a href="/#session-catalog">Operations<span>Prepare and monitor a Session</span></a></li> : null}
           </ul>
         </nav>
         <div className="product-workspaces">
-          <ProjectPortal />
-          <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} />
+          <ParticipantPortal />
+          {context.destinations.includes("studio") ? <ProjectPortal /> : null}
+          {context.destinations.includes("studio") ? <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : null}
         </div>
         <aside className="card account-context teludens-branch" aria-labelledby="account-title">
           <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
-          <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Member"}</dd></div></dl>
+          <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div></dl>
           <button className="btn-secondary" type="button" onClick={() => void signOut()}>Sign out</button>
         </aside>
       </div>}
@@ -815,6 +817,7 @@ function PollCard({ poll, disabled, send }: { poll: RuntimePollV1; disabled: boo
 
 function RuntimeView() {
   const id = sessionId();
+  const requestedRole = new URLSearchParams(window.location.search).get("role");
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [deviceId, setDeviceId] = useState<string | null>(() => localStorage.getItem(DEVICE_STORAGE_KEY));
   const [bootstrap, setBootstrap] = useState<SyncBootstrapV1 | null>(null);
@@ -840,9 +843,10 @@ function RuntimeView() {
       setDeviceId(registered.deviceId);
       localStorage.setItem(DEVICE_STORAGE_KEY, registered.deviceId);
       const headers = { "x-device-id": registered.deviceId };
+      const roleQuery = requestedRole === null ? "" : `?activeSessionRoleId=${encodeURIComponent(requestedRole)}`;
       const [nextBootstrap, initialProjection, proposalResponse, adjudicationResponse] = await Promise.all([
-        api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap`, { headers }),
-        api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers }),
+        api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap${roleQuery}`, { headers }),
+        api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection${roleQuery}`, { headers }),
         api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers }),
         api<{ adjudications: AdjudicationRequestV1[] }>(`/v1/sessions/${id}/adjudications`, { headers })
       ]);
@@ -863,7 +867,7 @@ function RuntimeView() {
         const reconciled = await reconcileOfflineOutbox(id, nextOutbox);
         nextOutbox = reconciled.outbox;
         if (reconciled.accepted > 0) {
-          nextProjection = await api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection`, { headers });
+          nextProjection = await api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection${roleQuery}`, { headers });
         }
         const outcomes = [
           reconciled.accepted === 0 ? "" : `${reconciled.accepted} accepted`,
@@ -932,7 +936,7 @@ function RuntimeView() {
       setConnection(navigator.onLine ? "error" : "offline");
       setError(cause instanceof Error ? cause.message : "The Runtime could not be loaded.");
     }
-  }, [deviceId, id]);
+  }, [deviceId, id, requestedRole]);
 
   useEffect(() => { void load(); }, []); // Initial load owns device registration.
   useEffect(() => {
@@ -1128,26 +1132,50 @@ function RuntimeView() {
         <h1 id="runtime-title">{projection.activeTeamLabel === null ? projection.activeSessionRoleLabel : `${projection.activeTeamLabel} ${projection.activeSessionRoleLabel}`} workspace</h1>
         <p>{projection.currentStageLabel ?? "Session workspace"} · Session {projection.sessionStatus}</p>
       </section>
+      <div className="runtime-context-actions">
+        {projection.roleContexts.length > 1 ? <label>Active Role Context
+          <select value={projection.activeSessionRoleId} disabled={pending || connection !== "online"} onChange={(event) => {
+            const selected = projection.roleContexts.find((candidate) => candidate.sessionRoleId === event.target.value);
+            if (selected !== undefined) window.location.assign(selected.runtimeUrl);
+          }}>{projection.roleContexts.map((role) => <option value={role.sessionRoleId} key={`${role.seatLabel}:${role.sessionRoleId}`}>
+            {role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`}
+          </option>)}</select>
+        </label> : null}
+        <a className="btn-secondary link-button" href="/">Exit Session</a>
+      </div>
+      <nav className="card runtime-module-navigation" aria-label="Runtime modules"><ul>
+        {projection.navigation.items.map((item) => <li key={item.id}><a href={`#runtime-module-${item.moduleId}`}>{item.label}</a></li>)}
+      </ul></nav>
       <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
       {outbox === null ? null : <OfflineOutboxPanel outbox={outbox} retry={() => void retryPending()} saveDraft={saveOfflineDraft} />}
-      {formModule === undefined ? null : <section aria-labelledby="create-heading">
+      {formModule === undefined ? null : <section id={`runtime-module-${formModule.id}`} aria-labelledby="create-heading">
         <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="create-heading">{formModule.title}</h2></div>
         {projection.createTasks.length === 0 ? <p className="empty-state">{formModule.emptyStateText}</p>
           : <div className="card-grid">{projection.createTasks.map((task) => <CreateTask key={task.artifactTypeKey} task={task}
               disabled={submitting} send={send} />)}</div>}
       </section>}
-      {taskModule === undefined ? null : <section aria-labelledby="tasks-heading">
+      {taskModule === undefined ? null : <section id={`runtime-module-${taskModule.id}`} aria-labelledby="tasks-heading">
         <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="tasks-heading">{taskModule.title}</h2></div>
         {projection.artifacts.length === 0 ? <p className="empty-state">{taskModule.emptyStateText}</p>
           : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
               artifact={artifact} disabled={submitting} send={send} />)}</div>}
       </section>}
-      {messageModules.map((module) => <MessageInbox key={module.id} module={module} projection={projection}
-        disabled={submitting} send={sendInformation} />)}
-      {proposalModules.map((module) => <ProposalThreads key={module.id} module={module} projection={projection}
-        disabled={submitting} send={sendInformation} />)}
-      {injectModules.map((module) => <InjectInbox key={module.id} module={module} projection={projection}
-        disabled={submitting} send={sendInformation} />)}
+      {messageModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><MessageInbox module={module} projection={projection}
+        disabled={submitting} send={sendInformation} /></div>)}
+      {proposalModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><ProposalThreads module={module} projection={projection}
+        disabled={submitting} send={sendInformation} /></div>)}
+      {injectModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><InjectInbox module={module} projection={projection}
+        disabled={submitting} send={sendInformation} /></div>)}
+      {projection.modules.filter((module) => ["session_status", "artifact_presentation", "slide_deck"].includes(module.type))
+        .map((module) => <section className="card curated-runtime-module" id={`runtime-module-${module.id}`} key={module.id}
+          aria-labelledby={`runtime-module-${module.id}-title`}>
+          <p className="eyebrow">Configured module</p><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
+          {module.type === "session_status" ? <dl className="runtime-status-list">
+            <div><dt>Session</dt><dd>{projection.sessionStatus}</dd></div>
+            <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({projection.currentStageStatus})</dd></div>
+            <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
+          </dl> : <p className="empty-state">{module.emptyStateText}</p>}
+        </section>)}
       {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
         <div className="section-heading"><p className="eyebrow">Authoritative voting</p><h2 id="polls-heading">Polls</h2></div>
         <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>

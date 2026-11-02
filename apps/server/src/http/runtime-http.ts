@@ -44,9 +44,11 @@ import {
   removeParticipants,
   revokeSessionPrincipal,
   resolveInvitationSession,
+  resolveVisibleInvitationSession,
   resolvePrincipalCommandContext,
   submitJoinRequest
 } from "../runtime/access/onboarding.js";
+import { getParticipantEntry } from "../runtime/access/participant-entry.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 import { getPluginCatalog } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
@@ -266,22 +268,35 @@ async function registerDevice(pool: Pool, principal: AuthenticatedPrincipal): Pr
 
 async function getProductShellContext(pool: Pool, principal: AuthenticatedPrincipal, correlationId: string) {
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    const result = await client.query<{ display_name: string; organization_name: string }>(
+    const result = await client.query<{ display_name: string; organization_name: string; is_member: boolean }>(
       `SELECT person.display_name, organization.name AS organization_name
          FROM identity.persons person
          JOIN identity.organizations organization ON organization.id = $1
-         JOIN identity.memberships membership
-           ON membership.organization_id = organization.id
-          AND membership.person_id = person.id
-        WHERE organization.id = $1 AND person.id = $2
+        WHERE organization.id = $1 AND person.id = $2 AND (
+          EXISTS (SELECT 1 FROM identity.memberships membership
+            WHERE membership.organization_id=$1 AND membership.person_id=$2)
+          OR EXISTS (SELECT 1 FROM runtime.participants participant
+            JOIN runtime.seat_assignments assignment
+              ON assignment.organization_id=participant.organization_id AND assignment.session_id=participant.session_id
+             AND assignment.participant_id=participant.id AND assignment.valid_to IS NULL
+            WHERE participant.organization_id=$1 AND participant.person_id=$2)
+          OR EXISTS (SELECT 1 FROM identity.session_invitations invitation
+            WHERE invitation.organization_id=$1 AND invitation.recipient_person_id=$2
+              AND invitation.accepted_at IS NULL AND invitation.revoked_at IS NULL
+              AND invitation.expires_at>transaction_timestamp())
+          OR EXISTS (SELECT 1 FROM runtime.join_requests request
+            WHERE request.organization_id=$1 AND request.person_id=$2
+              AND request.status IN ('waiting_room','assignment_pending','admitted'))
+        )
         LIMIT 1`,
       [principal.organizationId, principal.principalId]
     );
     const row = result.rows[0];
     if (row === undefined) {
-      throw authorizationError("PERMISSION_DENIED", "Current Organization membership is required.", correlationId);
+      throw authorizationError("PERMISSION_DENIED", "Current Organization or Session access is required.", correlationId);
     }
-    const destinations: Array<"home" | "studio" | "runtime" | "operations"> = ["home", "studio", "runtime"];
+    const destinations: Array<"home" | "studio" | "runtime" | "operations"> = ["home", "runtime"];
+    if (principal.organizationRoles.length > 0) destinations.splice(1, 0, "studio");
     if (principal.organizationRoles.some((role) => role === "operator" || role === "admin")) destinations.push("operations");
     return {
       contractId: PRODUCT_SHELL_CONTRACT_ID,
@@ -334,6 +349,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       let match: RegExpMatchArray | null;
       if (request.method === "GET" && url.pathname === "/v1/product-context") {
         send(response, 200, await getProductShellContext(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/participant-entry") {
+        send(response, 200, await getParticipantEntry(options.pool, principal));
         return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
@@ -634,6 +653,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           principal,
           sessionId: pathId(match[1], correlationId),
           deviceId: deviceHeader(request, correlationId),
+          ...(url.searchParams.get("activeSessionRoleId") === null ? {}
+            : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }),
           correlationId
         }));
         return true;
@@ -722,6 +743,17 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         const sessionId = await resolveInvitationSession(options.pool, principal, invitationToken, correlationId);
         const submitted = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
         const command = { ...submitted, payload: { ...submitted.payload, invitationToken } };
+        validateCommandEnvelope(command, correlationId);
+        const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
+        const receipt = await submitJoinRequest(options.pool, context, command, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/participant-entry\/invitations\/([^/]+)\/accept$/u))) {
+        const invitationId = pathId(match[1], correlationId);
+        const sessionId = await resolveVisibleInvitationSession(options.pool, principal, invitationId, correlationId);
+        const submitted = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+        const command = { ...submitted, payload: { ...submitted.payload, invitationId } };
         validateCommandEnvelope(command, correlationId);
         const context = await resolvePrincipalCommandContext(options.pool, principal, sessionId, command.deviceId, correlationId);
         const receipt = await submitJoinRequest(options.pool, context, command, correlationId, options.deploymentId);

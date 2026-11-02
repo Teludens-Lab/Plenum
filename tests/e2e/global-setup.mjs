@@ -61,6 +61,8 @@ export default async function globalSetup() {
       resultVisibilityPolicyId: "policy-public", certificationPolicy: { certifierSessionRoleIds: ["white_cell"] }
     }] }, scenario: release.scenario };
     const releaseDefinition = structuredClone(definition);
+    releaseDefinition.coreDesign.accessPolicy.joinMethods = ["invitation", "open_seat_selection", "operator_assignment"];
+    for (const seat of releaseDefinition.coreDesign.seats.slice(0, 2)) seat.joinMode = "open_selection";
     const consentChannel = releaseDefinition.coreDesign.communications.voiceChannels.find(({ id }) => id === "team-open-room");
     consentChannel.transcriptionPolicy = "with_consent";
     consentChannel.retentionPolicyId = "voice-short";
@@ -87,7 +89,7 @@ export default async function globalSetup() {
        ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
        ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer'),
        ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher'),($11,'Synthetic Blue notetaker'),
-       ($12,'Synthetic portal operator')`,
+       ($12,'Synthetic portal operator'),($13,'Synthetic invited participant')`,
       people
     );
     await owner.query(
@@ -190,6 +192,12 @@ export default async function globalSetup() {
        (organization_id,session_id,governing_release_id,access_policy,assignment_version,configured_by)
        VALUES ($1,$2,$3,$4::jsonb,1,$5)`,
       [fixture.organizationId, fixture.sessionId, fixture.releaseId, JSON.stringify(releaseDefinition.coreDesign.accessPolicy), fixture.people.operator]
+    );
+    await owner.query(
+      `INSERT INTO identity.session_invitations
+       (id,organization_id,session_id,token_sha256,recipient_person_id,expires_at,issued_by)
+       VALUES ($1,$2,$3,repeat('7',64),$4,'2099-01-01T00:00:00.000Z',$5)`,
+      [fixture.invitationId, fixture.organizationId, fixture.sessionId, fixture.people.invitedParticipant, fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by)

@@ -88,6 +88,7 @@ const roles = { operator: ["operator", "admin"], designerA: ["designer"], design
 const localPersonas = {
   designerA: { label: "Designer", description: "Create, find, archive, reopen, and resume Projects." },
   designerB: { label: "Designer B", description: "Collaborate on the same Project from a separate browser profile." },
+  researchAnalyst: { label: "Research Analyst", description: "Generate consent-filtered, pseudonymized reports with source provenance.", tokenKey: "designerB" },
   operator: { label: "Admin", description: "Inspect Organization members and their Organization Roles." },
   finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
   portalOperator: { label: "Operator only", description: "Find Releases, create configured Sessions, and verify Project data remains denied." },
@@ -157,7 +158,8 @@ function cookieValue(request, name) {
 const authenticate = async (request, correlationId) => {
   const authorization = request.headers.authorization;
   const persona = localUserTest ? cookieValue(request, localUserTestCookieName) : undefined;
-  const cookieIdentity = persona !== undefined && Object.hasOwn(localPersonas, persona) ? fixture.tokens[persona] : undefined;
+  const personaKey = persona !== undefined && Object.hasOwn(localPersonas, persona) ? (localPersonas[persona].tokenKey ?? persona) : undefined;
+  const cookieIdentity = personaKey === undefined ? undefined : fixture.tokens[personaKey];
   const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
     ? authorization.slice(7)
     : cookieIdentity;
@@ -170,6 +172,7 @@ const api = createRuntimeHttpHandler({
   deploymentId: fixture.deploymentId,
   mediaAdapter,
   objectStore,
+  replayAdapter: { async replay(input) { return input; } },
   contentScanner,
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
   authenticate
@@ -288,7 +291,7 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
 
 const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
 server.listen(runtimePort, "127.0.0.1", () => console.log(
-  `${localUserTest ? "PS-710 through PS-780 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:${runtimePort}${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}` : ""}`
+  `${localUserTest ? "PS-710 through PS-790 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:${runtimePort}${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}; PS-790 files: ${join(process.cwd(), "output", "user-test", "ps-790")}` : ""}`
 ));
 
 let closing = false;

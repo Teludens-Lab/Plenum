@@ -11,6 +11,8 @@ import {
 } from "@plenum/event-contracts";
 import type { Pool } from "pg";
 import type { MediaProviderAdapter } from "@plenum/media-adapter";
+import type { PluginRevocationsV1 } from "@plenum/plugin-sdk";
+import type { OrganizationRole } from "@plenum/policy-engine";
 import { compileModelComposition, previewCompositionFixture } from "@plenum/release-compiler";
 import { COMPOSITION_DEFINITION_CONTRACT_ID } from "@plenum/simulation-schema";
 
@@ -51,13 +53,19 @@ import {
 } from "../runtime/access/onboarding.js";
 import { getParticipantEntry } from "../runtime/access/participant-entry.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
-import { getPluginCatalog } from "../extensions/registry.js";
+import { acceptPluginLicense, approvePluginArtifact, getPluginCatalog, importPluginRevocations,
+  installPluginArtifact, provisionPluginTrustRoot, registerPluginPublisher, revokePluginArtifact,
+  submitPluginArtifact } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
-import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLegalHold, type ReportFormat } from "../reporting/service.js";
+import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport, importOrganizationArchive,
+  placeLegalHold, recordCorrection, recordResearchConsent, releaseLegalHold,
+  type OrganizationArchive, type ReportFormat } from "../reporting/service.js";
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
+import { getDataPolicyOperations, getReportArtifact, getSessionRetentionStatus, listOrganizationMemberAdministration,
+  listPluginOperations, listResearchReportableSessions, listSessionReportArtifacts, replaceOrganizationMemberRoles } from "../operations/administration.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getPublicationReview, getRolePreview,
   publishCollaborativeDraft, rehearseCollaborativeDraft, type CollaborativePublishInput,
   type RolePreviewInput } from "../studio/collaboration/service.js";
@@ -205,6 +213,23 @@ async function readPackageBytes(request: IncomingMessage, correlationId: string)
     chunks.push(bytes);
   }
   if (size === 0) throw authorizationError("VALIDATION_FAILED", "The Release Package is empty.", correlationId);
+  return Buffer.concat(chunks);
+}
+
+async function readPluginBytes(request: IncomingMessage, correlationId: string): Promise<Uint8Array> {
+  const contentType = request.headers["content-type"]?.split(";", 1)[0];
+  if (contentType !== "application/vnd.plenum.plugin+json" && contentType !== "application/json") {
+    throw authorizationError("VALIDATION_FAILED", "A signed Plenum Plugin bundle content type is required.", correlationId);
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > MAX_PACKAGE_BYTES) throw authorizationError("TOO_LARGE", "The Plugin bundle exceeds 32 MB.", correlationId);
+    chunks.push(bytes);
+  }
+  if (size === 0) throw authorizationError("VALIDATION_FAILED", "The Plugin bundle is empty.", correlationId);
   return Buffer.concat(chunks);
 }
 
@@ -363,6 +388,178 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && url.pathname === "/v1/devices") {
         send(response, 201, await registerDevice(options.pool, principal));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/operations/members") {
+        send(response, 200, await listOrganizationMemberAdministration(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "PUT" && (match = url.pathname.match(/^\/v1\/operations\/members\/([^/]+)\/roles$/u))) {
+        const body = await readBody(request, correlationId);
+        const roles = body.roles;
+        if (Object.keys(body).some((field) => !["roles", "expectedRevision"].includes(field)) ||
+            !Array.isArray(roles) || !roles.every((role) => typeof role === "string") ||
+            typeof body.expectedRevision !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The Organization Role change is invalid.", correlationId);
+        }
+        send(response, 200, await replaceOrganizationMemberRoles(options.pool, principal,
+          pathId(match[1], correlationId), { roles: roles as OrganizationRole[], expectedRevision: body.expectedRevision }, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/operations/plugins") {
+        send(response, 200, await listPluginOperations(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/plugin-publishers") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["publisherPrincipalId", "displayName", "signatureKeyId", "publicKeyPem"].includes(field)) ||
+            ![body.publisherPrincipalId, body.displayName, body.signatureKeyId, body.publicKeyPem].every((value) => typeof value === "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The Plugin Publisher registration is invalid.", correlationId);
+        }
+        const publisherId = randomUUID();
+        await registerPluginPublisher(options.pool, principal, { publisherId,
+          publisherPrincipalId: body.publisherPrincipalId as string, displayName: body.displayName as string,
+          signatureKeyId: body.signatureKeyId as string, publicKeyPem: body.publicKeyPem as string, correlationId });
+        send(response, 201, { publisherId });
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/plugin-trust-roots") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["publisherId", "publisherKeyId", "publisherPublicKeyPem", "revocationKeyId", "revocationPublicKeyPem"].includes(field)) ||
+            ![body.publisherId, body.publisherKeyId, body.publisherPublicKeyPem, body.revocationKeyId,
+              body.revocationPublicKeyPem].every((value) => typeof value === "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The Plugin trust root is invalid.", correlationId);
+        }
+        const trustRootId = randomUUID();
+        await provisionPluginTrustRoot(options.pool, principal, { trustRootId, publisherId: body.publisherId as string,
+          publisherKeyId: body.publisherKeyId as string, publisherPublicKeyPem: body.publisherPublicKeyPem as string,
+          revocationKeyId: body.revocationKeyId as string, revocationPublicKeyPem: body.revocationPublicKeyPem as string,
+          correlationId });
+        send(response, 201, { trustRootId });
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/plugin-revocations") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["publisherId", "document"].includes(field)) ||
+            typeof body.publisherId !== "string" || typeof body.document !== "object" || body.document === null || Array.isArray(body.document)) {
+          throw authorizationError("VALIDATION_FAILED", "The signed Plugin revocation list is invalid.", correlationId);
+        }
+        const revocationListId = randomUUID();
+        await importPluginRevocations(options.pool, principal, { revocationListId,
+          publisherId: body.publisherId, document: body.document as PluginRevocationsV1, correlationId });
+        send(response, 201, { revocationListId });
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/plugins/submissions") {
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Plugin storage is not configured.", correlationId);
+        send(response, 201, await submitPluginArtifact(options.pool, options.objectStore, principal,
+          await readPluginBytes(request, correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/plugins\/([^/]+)\/(approve|revoke)$/u))) {
+        const artifactId = pathId(match[1], correlationId);
+        if (match[2] === "approve") send(response, 200, await approvePluginArtifact(options.pool, principal, artifactId, correlationId));
+        else { await revokePluginArtifact(options.pool, principal, artifactId, correlationId); send(response, 200, { revoked: true }); }
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/plugins/licenses") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["pluginId", "license", "termsDigest"].includes(field)) ||
+            ![body.pluginId, body.license, body.termsDigest].every((value) => typeof value === "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The Plugin license acceptance is invalid.", correlationId);
+        }
+        const acceptanceId = randomUUID();
+        await acceptPluginLicense(options.pool, principal, {
+          acceptanceId, pluginId: body.pluginId as string,
+          license: body.license as string, termsDigest: body.termsDigest as string, correlationId
+        });
+        send(response, 201, { accepted: true, acceptanceId });
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/organizations\/([^/]+)\/plugin-installations$/u))) {
+        if (pathId(match[1], correlationId) !== principal.organizationId) {
+          throw authorizationError("PERMISSION_DENIED", "Plugin installation is restricted to the active Organization.", correlationId);
+        }
+        if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Plugin storage is not configured.", correlationId);
+        const body = await readBody(request, correlationId);
+        const compatibility = body.compatibility;
+        if (Object.keys(body).some((field) => !["installationId", "artifactId", "permittedPermissions", "compatibility"].includes(field)) ||
+            ![body.installationId, body.artifactId].every((value) => typeof value === "string") ||
+            !Array.isArray(body.permittedPermissions) || !body.permittedPermissions.every((value) => typeof value === "string") ||
+            typeof compatibility !== "object" || compatibility === null || Array.isArray(compatibility) ||
+            typeof compatibility.hostApiVersion !== "string" || typeof compatibility.releaseSchemaVersion !== "string" ||
+            !["connected", "self_hosted", "air_gapped"].includes(String(compatibility.deploymentProfile))) {
+          throw authorizationError("VALIDATION_FAILED", "The Plugin installation request is invalid.", correlationId);
+        }
+        send(response, 201, await installPluginArtifact(options.pool, options.objectStore, principal, {
+          installationId: body.installationId as string, deploymentId: options.deploymentId,
+          artifactId: body.artifactId as string, permittedPermissions: body.permittedPermissions as string[],
+          compatibility: { hostApiVersion: compatibility.hostApiVersion, releaseSchemaVersion: compatibility.releaseSchemaVersion,
+            deploymentProfile: compatibility.deploymentProfile as "connected" | "self_hosted" | "air_gapped" }, correlationId
+        }));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/operations/data-policy") {
+        send(response, 200, await getDataPolicyOperations(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/research/reportable-sessions") {
+        send(response, 200, await listResearchReportableSessions(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/retention/policies") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["policyKey", "version", "scopeType", "scopeReference", "periodDays",
+          "legalHoldBehavior", "expiryAction", "archiveDestination", "approvalRequired"].includes(field)) ||
+            typeof body.policyKey !== "string" || typeof body.version !== "number" || typeof body.scopeType !== "string" ||
+            typeof body.scopeReference !== "string" || typeof body.periodDays !== "number" ||
+            !["retain", "block_action"].includes(String(body.legalHoldBehavior)) ||
+            !["archive", "anonymize", "delete"].includes(String(body.expiryAction)) ||
+            typeof body.archiveDestination !== "string" || typeof body.approvalRequired !== "boolean") {
+          throw authorizationError("VALIDATION_FAILED", "The retention policy request is invalid.", correlationId);
+        }
+        send(response, 201, await createRetentionPolicy(options.pool, principal, {
+          policyKey: body.policyKey, version: body.version,
+          scopeType: body.scopeType as "organization" | "project" | "artifact_type" | "message_channel" | "voice_channel" | "poll" | "session" | "export",
+          scopeReference: body.scopeReference, periodDays: body.periodDays,
+          legalHoldBehavior: body.legalHoldBehavior as "retain" | "block_action",
+          expiryAction: body.expiryAction as "archive" | "anonymize" | "delete",
+          archiveDestination: body.archiveDestination, approvalRequired: body.approvalRequired
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/reporting/corrections") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["targetReference", "originalValue", "correctedValue", "reason", "reportsMustRegenerate"].includes(field)) ||
+            typeof body.targetReference !== "string" || body.originalValue === undefined || body.correctedValue === undefined ||
+            typeof body.reason !== "string" || typeof body.reportsMustRegenerate !== "boolean") {
+          throw authorizationError("VALIDATION_FAILED", "The correction request is invalid.", correlationId);
+        }
+        send(response, 201, await recordCorrection(options.pool, principal, {
+          targetReference: body.targetReference, originalValue: body.originalValue,
+          correctedValue: body.correctedValue, reason: body.reason,
+          reportsMustRegenerate: body.reportsMustRegenerate
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/organizations\/([^/]+)\/archive$/u))) {
+        if (pathId(match[1], correlationId) !== principal.organizationId) {
+          throw authorizationError("PERMISSION_DENIED", "Portable export is restricted to the active Organization.", correlationId);
+        }
+        const archive = await exportOrganizationArchive(options.pool, principal, correlationId);
+        sendArtifact(response, { contentType: "application/json", filename: "plenum-organization-archive.json",
+          bytes: new TextEncoder().encode(JSON.stringify(archive)) });
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/organizations\/([^/]+)\/archive\/import$/u))) {
+        if (pathId(match[1], correlationId) !== principal.organizationId) {
+          throw authorizationError("PERMISSION_DENIED", "Portable import is restricted to the active Organization.", correlationId);
+        }
+        const bytes = await readPluginBytes(request, correlationId);
+        let archive: OrganizationArchive;
+        try { archive = JSON.parse(new TextDecoder().decode(bytes)) as OrganizationArchive; }
+        catch { throw authorizationError("INVALID_JSON", "The Organization archive is not valid JSON.", correlationId); }
+        send(response, 201, await importOrganizationArchive(options.pool, principal, archive, correlationId));
         return true;
       }
       if (request.method === "GET" && url.pathname === "/v1/releases") {
@@ -598,6 +795,15 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           body.purposeLabel, body.consentVersion, body.decision, correlationId));
         return true;
       }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/reports$/u))) {
+        send(response, 200, await listSessionReportArtifacts(options.pool, principal,
+          pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/report-artifacts\/([^/]+)$/u))) {
+        sendArtifact(response, await getReportArtifact(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/reports$/u))) {
         const body = await readBody(request, correlationId);
         const reportKinds = new Set(["session_archive", "after_action", "team", "control", "research_dataset"]);
@@ -616,6 +822,11 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           ...purpose
         }, correlationId);
         sendArtifact(response, artifact);
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/retention-status$/u))) {
+        send(response, 200, await getSessionRetentionStatus(options.pool, principal,
+          pathId(match[1], correlationId), correlationId));
         return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/retention/legal-holds") {

@@ -76,6 +76,8 @@ export const RELEASE_CATALOG_CONTRACT_ID = "release-catalog-v1";
 export const SESSION_CATALOG_CONTRACT_ID = "session-catalog-v1";
 export const CONTENT_LIBRARY_CONTRACT_ID = "content-library-v1";
 export const UPLOAD_QUARANTINE_CONTRACT_ID = "upload-quarantine-v1";
+export const OPERATIONS_ADMIN_CONTRACT_ID = "operations-admin-v1";
+export const REPORT_DELIVERY_CONTRACT_ID = "report-delivery-v1";
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;

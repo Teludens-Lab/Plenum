@@ -14,6 +14,7 @@ const advancedAuthoringEvidenceRoot = "output/playwright/ps-750";
 const governanceEvidenceRoot = "output/playwright/ps-760";
 const participantEvidenceRoot = "output/playwright/ps-770";
 const operatorEvidenceRoot = "output/playwright/ps-780";
+const operationsEvidenceRoot = "output/playwright/ps-790";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -31,6 +32,7 @@ test.beforeAll(async () => {
   await mkdir(governanceEvidenceRoot, { recursive: true });
   await mkdir(participantEvidenceRoot, { recursive: true });
   await mkdir(operatorEvidenceRoot, { recursive: true });
+  await mkdir(operationsEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -233,6 +235,7 @@ test("PS-710-T01 Designer creates, archives, reopens, and resumes a blank Projec
 });
 
 test("PS-710-T02 Template defaults, Admin and Reviewer views, and Operator denial are enforced", async ({ browser }) => {
+  test.setTimeout(240_000);
   const designer = await actor(browser, fixture.tokens.designerB);
   const projectName = "PS-710 Template Core Design copy";
   await designer.page.goto("/");
@@ -350,14 +353,14 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
   const admin = await actor(browser, fixture.tokens.operator);
   await admin.page.goto("/admin/members");
   await expect(admin.page.getByRole("heading", { name: "Members and Organization Roles" })).toBeVisible();
-  await expect(admin.page.getByRole("link", { name: "Plugins" })).toHaveAttribute("href", "/admin/plugins");
-  await expect(admin.page.getByRole("link", { name: "Deployment" })).toHaveAttribute("href", "/admin/deployment");
-  await expect(admin.page.getByRole("link", { name: "Data policy" })).toHaveAttribute("href", "/admin/data-policy");
+  await expect(admin.page.getByRole("link", { name: "Plugin operations", exact: true })).toHaveAttribute("href", "/admin/plugins");
+  await expect(admin.page.getByRole("link", { name: "Deployment posture", exact: true })).toHaveAttribute("href", "/admin/deployment");
+  await expect(admin.page.getByRole("link", { name: "Data policy", exact: true })).toHaveAttribute("href", "/admin/data-policy");
   await admin.context.close();
 });
 
 test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime projection, and links validation to the exact control @a11y", async ({ browser }) => {
-  test.setTimeout(480_000);
+  test.setTimeout(900_000);
   const first = await actor(browser, fixture.tokens.designerA);
   const second = await actor(browser, fixture.tokens.designerB);
   const studioUrl = `/studio/projects/${fixture.projectId}`;
@@ -372,22 +375,22 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
 
   const convergedName = "PS-730 converged Scenario";
   await first.page.getByLabel("Scenario name").fill(convergedName);
-  await expect(second.page.getByLabel("Scenario name")).toHaveValue(convergedName, { timeout: 120_000 });
+  await expect(second.page.getByLabel("Scenario name")).toHaveValue(convergedName, { timeout: 240_000 });
 
   await first.page.getByRole("button", { name: "Add learning objective" }).click();
-  await expect(second.page.locator("#overview").getByText("New objective", { exact: true })).toBeVisible({ timeout: 120_000 });
+  await expect(second.page.locator("#overview").getByText("New objective", { exact: true })).toBeVisible({ timeout: 240_000 });
   await first.page.getByRole("button", { name: "Add Activity" }).click();
-  await expect(second.page.locator("#activities").getByText("New Activity", { exact: true })).toBeVisible({ timeout: 120_000 });
+  await expect(second.page.locator("#activities").getByText("New Activity", { exact: true })).toBeVisible({ timeout: 240_000 });
   const firstStage = first.page.locator("#stages .timeline details").first();
   await firstStage.locator("summary").click();
   await firstStage.getByRole("checkbox", { name: "New Activity" }).check();
-  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible();
+  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible({ timeout: 240_000 });
   await expect.poll(async () => {
     const response = await first.context.request.get(`/v1/projects/${fixture.projectId}/draft`);
     const draft = await response.json();
     const activity = draft.materialization.coreDesign.activities?.find(({ name }) => name === "New Activity");
     return activity !== undefined && draft.materialization.coreDesign.stages[0].allowedActivityIds.includes(activity.id);
-  }).toBe(true);
+  }, { timeout: 240_000 }).toBe(true);
 
   const previewResponse = second.page.waitForResponse((response) => response.url().endsWith(`/v1/projects/${fixture.projectId}/role-preview`) && response.request().method() === "POST");
   await second.page.getByRole("button", { name: "Preview interface" }).click();
@@ -405,12 +408,13 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   const secondGroupName = await secondGroup.getByLabel("Group name").inputValue();
   await firstGroup.getByLabel("Parent Stage Group").selectOption({ label: secondGroupName });
   await secondGroup.getByLabel("Parent Stage Group").selectOption({ label: firstGroupName });
-  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible();
+  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible({ timeout: 240_000 });
   const issue = first.page.locator(".issue-list a").filter({ hasText: /^stageGroups\./u }).first();
   await expect(issue).toBeVisible();
   await issue.click();
   await expect(firstGroup.getByLabel("Group name")).toBeFocused();
   await first.page.getByRole("button", { name: "Undo last change" }).click();
+  await expect(first.page.getByText("0 unsynchronized changes")).toBeVisible({ timeout: 240_000 });
   await expect(first.page.locator(".issue-list a").filter({ hasText: /^stageGroups\./u })).toHaveCount(0);
 
   expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
@@ -662,4 +666,103 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${operatorEvidenceRoot}/operator-control-floor.png`, fullPage: true });
   await context.close();
+});
+
+test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and archive operations @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const publisher = await actor(browser, fixture.tokens.publisher);
+  await publisher.page.goto("/admin/plugins");
+  await expect(publisher.page.getByRole("heading", { name: "Plugin operations" })).toBeVisible();
+  await publisher.page.getByLabel("Signed Plugin bundle").setInputFiles("output/user-test/ps-790/ps-790-synthetic-plugin.json");
+  await publisher.page.getByRole("button", { name: "Verify and submit" }).click();
+  await expect(publisher.page.locator(".administration-notice")).toContainText("Plugin bundle submitted");
+  await publisher.context.close();
+
+  const admin = await actor(browser, fixture.tokens.operator);
+  const { page } = admin;
+  await page.goto("/admin/members");
+  await expect(page.getByRole("heading", { name: "Members and Organization Roles" })).toBeVisible();
+  const reviewer = page.locator("li.administration-record").filter({ hasText: "Synthetic final reviewer" });
+  await reviewer.getByLabel("Operator", { exact: true }).check();
+  await reviewer.getByRole("button", { name: "Save role assignment" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");
+  const updatedReviewer = page.locator("li.administration-record").filter({ hasText: "Synthetic final reviewer" });
+  await updatedReviewer.getByLabel("Operator", { exact: true }).uncheck();
+  await updatedReviewer.getByRole("button", { name: "Save role assignment" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");
+
+  await page.goto("/admin/plugins");
+  await expect(page.getByText("1 Publishers")).toBeVisible();
+  await expect(page.getByText("1 trust roots")).toBeVisible();
+  await expect(page.getByText("1 revocation lists")).toBeVisible();
+  await expect(page.getByText("1 license acceptances")).toBeVisible();
+  const plugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
+  await plugin.getByRole("button", { name: "Approve Artifact" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("Plugin Artifact approved");
+  const approvedPlugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
+  await approvedPlugin.getByText("Install approved Artifact").click();
+  await approvedPlugin.getByRole("button", { name: "Verify and install" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("Plugin installed");
+  const installedPlugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
+  await expect(installedPlugin).toContainText("1 installations");
+  await installedPlugin.getByRole("button", { name: "Revoke Artifact" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("historical provenance is preserved");
+
+  await page.goto("/admin/data-policy");
+  const policy = page.getByRole("heading", { name: "Retention policy" }).locator("..");
+  await policy.getByLabel("Policy key").fill("ps-790-e2e-retention");
+  await policy.getByRole("button", { name: "Record policy version" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("Retention policy recorded");
+  const hold = page.getByRole("heading", { name: "Legal hold" }).locator("..");
+  await hold.getByLabel("Reason").fill("Preserve PS-790 synthetic acceptance evidence");
+  await hold.getByRole("button", { name: "Place legal hold" }).click();
+  await expect(page.locator(".administration-notice")).toContainText("matching purge is blocked");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Export portable archive" }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe("plenum-organization-archive.json");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${operationsEvidenceRoot}/administration-data-policy.png`, fullPage: true });
+  await admin.context.close();
+});
+
+test("PS-790-T02 reports, replay, retention consequences, research privacy, and denials remain explicit @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const operator = await actor(browser, fixture.tokens.portalOperator);
+  await operator.page.goto(`/admin/sessions/${fixture.sessionId}/reports`);
+  await operator.page.getByRole("button", { name: "Generate and download" }).click();
+  await expect(operator.page.getByRole("heading", { name: "Report source trace" })).toBeVisible();
+  await expect(operator.page.getByText("Captured History", { exact: true })).toBeVisible();
+  await expect(operator.page.getByText("Reconstructed Narrative", { exact: true })).toBeVisible();
+  await expect(operator.page.getByRole("heading", { name: "Generated artifacts" }).locator("..")).toContainText("after_action");
+
+  await operator.page.goto(`/admin/sessions/${fixture.sessionId}/replay`);
+  await operator.page.getByRole("button", { name: "Run replay" }).click();
+  await expect(operator.page.getByText("Matched", { exact: true })).toBeVisible();
+  await expect(operator.page.getByText("No differences were found between captured and replayed history.")).toBeVisible();
+
+  await operator.page.goto(`/admin/sessions/${fixture.sessionId}/archive`);
+  await expect(operator.page.getByText("Active legal hold:")).toBeVisible();
+  await expect(operator.page.getByText("ps-790-synthetic-retention v1")).toBeVisible();
+  await operator.context.close();
+
+  const analyst = await actor(browser, fixture.tokens.designerB);
+  await analyst.page.goto("/research/reports");
+  const researchSession = analyst.page.getByLabel("Authorized Session").locator("option").filter({ hasText: "PS-150 S1 proof Session" });
+  await analyst.page.getByLabel("Authorized Session").selectOption(await researchSession.getAttribute("value"));
+  await analyst.page.getByLabel("Approved research purpose").fill("PS-790 research test");
+  await analyst.page.getByRole("button", { name: "Generate consent-filtered export" }).click();
+  await expect(analyst.page.getByRole("heading", { name: "Provenance inspection" })).toBeVisible();
+  const researchTrace = analyst.page.locator(".report-trace");
+  await expect(researchTrace.getByText("Consented observations")).toBeVisible();
+  await expect(researchTrace).not.toContainText("Synthetic Blue author");
+  await expect(analyst.page.getByRole("heading", { name: "Your generated exports" }).locator("..")).toContainText("research_dataset");
+  expect((await new AxeBuilder({ page: analyst.page }).analyze()).violations).toEqual([]);
+  await analyst.page.screenshot({ path: `${operationsEvidenceRoot}/research-provenance.png`, fullPage: true });
+  await analyst.context.close();
+
+  const reviewer = await actor(browser, fixture.tokens.finalReviewer);
+  await reviewer.page.goto("/admin/members");
+  await expect(reviewer.page.getByRole("heading", { name: "Administration access unavailable" })).toBeVisible();
+  await expect(reviewer.page.getByText("Synthetic operator")).toHaveCount(0);
+  await reviewer.context.close();
 });

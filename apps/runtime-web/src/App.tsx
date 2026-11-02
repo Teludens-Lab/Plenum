@@ -44,6 +44,8 @@ import { OfflineRuntimeStore } from "./offline/storage.js";
 import { ProjectPortal } from "./product/ProjectPortal.js";
 import { LifecyclePortal } from "./product/LifecyclePortal.js";
 import { ParticipantPortal } from "./product/ParticipantPortal.js";
+import { AdministrationPortal } from "./product/AdministrationPortal.js";
+import { ResearchReportingPortal } from "./product/ResearchReportingPortal.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -145,6 +147,8 @@ function ProductEntry() {
   const [context, setContext] = useState<ProductShellContextV1 | null>(null);
   const [unauthenticated, setUnauthenticated] = useState(false);
   const [message, setMessage] = useState("Checking your secure Plenum session.");
+  const administration = /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(window.location.pathname);
+  const researchReporting = /^\/research\/reports\/?$/u.test(window.location.pathname);
 
   const load = useCallback(async () => {
     setConnection("loading");
@@ -221,16 +225,23 @@ function ProductEntry() {
         <nav className="card shell-navigation teludens-node" aria-labelledby="navigation-title">
           <p className="eyebrow">Destinations</p><h2 id="navigation-title">Choose a workspace</h2>
           <ul>
-            <li><a aria-current="page" href="/">Home<span>Account and Organization context</span></a></li>
+            <li><a aria-current={administration || researchReporting ? undefined : "page"} href="/">Home<span>Account and Organization context</span></a></li>
             {context.destinations.includes("studio") ? <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li> : null}
             <li><a href="/#participant-sessions-title">Sessions<span>Enter an invited or assigned Session</span></a></li>
             {context.destinations.includes("operations") ? <li><a href="/#session-catalog">Operations<span>Prepare and monitor a Session</span></a></li> : null}
+            {context.organization.roles.some((role) => role === "admin" || role === "publisher") ? <li><a aria-current={administration ? "page" : undefined} href="/admin/plugins">Administration<span>Roles, Plugins, policy, and deployment posture</span></a></li> : null}
+            {context.organization.roles.includes("research_analyst") ? <li><a aria-current={researchReporting ? "page" : undefined} href="/research/reports">Research reports<span>Consent-filtered evidence and provenance</span></a></li> : null}
           </ul>
         </nav>
         <div className="product-workspaces">
-          <ParticipantPortal />
-          {context.destinations.includes("studio") ? <ProjectPortal /> : null}
-          {context.destinations.includes("studio") ? <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : null}
+          {administration ? <AdministrationPortal organizationId={context.organization.id} roles={context.organization.roles} /> : researchReporting ?
+            context.organization.roles.includes("research_analyst") ? <ResearchReportingPortal /> :
+              <section className="card portal-state teludens-state" data-state="unauthorized"><p className="eyebrow">Least privilege</p>
+                <h1>Research reporting access unavailable</h1><p>An active Research Analyst Organization Role and project-scoped Research Access Grant are required. Protected research data was not loaded.</p></section> : <>
+            <ParticipantPortal />
+            {context.destinations.includes("studio") ? <ProjectPortal /> : null}
+            {context.destinations.includes("studio") ? <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : null}
+          </>}
         </div>
         <aside className="card account-context teludens-branch" aria-labelledby="account-title">
           <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
@@ -1191,6 +1202,7 @@ function RuntimeView() {
 
 function OperatorView() {
   const id = sessionId();
+  const operationView = window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [projection, setProjection] = useState<OperatorProjectionV1 | null>(null);
   const [readiness, setReadiness] = useState<ReadinessProjectionV1 | null>(null);
@@ -1200,6 +1212,18 @@ function OperatorView() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operationNotice, setOperationNotice] = useState("");
+  const [reportPreview, setReportPreview] = useState<{
+    capturedHistoryLabel?: string; reconstructedNarrativeLabel?: string; reconstructedNarrativeIsTranscript?: boolean;
+    observations?: Array<{ elementId?: string; eventType?: string; recordedAt?: string; sourceReferences?: string[] }>;
+    derivedMetrics?: Array<{ metricKey?: string; value?: number; sourceReferences?: string[] }>;
+  } | null>(null);
+  const [reportArtifacts, setReportArtifacts] = useState<Array<{ artifactId: string; filename: string; sha256: string; format: string;
+    createdAt: string; purgedAt: string | null; manifest: JsonObject }>>([]);
+  const [replayResult, setReplayResult] = useState<{ matched: boolean; comparedEvents: number; manifestDigest: string;
+    divergences: Array<{ code?: string; sequence?: number | null; recordedDigest?: string | null; replayedDigest?: string | null }> } | null>(null);
+  const [retentionStatus, setRetentionStatus] = useState<{ organizationLegalHoldActive: boolean;
+    policies: Array<{ id: string; key: string; version: number; periodDays: number; expiryAction: string; scopeType: string }>;
+    consequences: string[] } | null>(null);
   const load = useCallback(async () => {
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
     setConnection("loading");
@@ -1218,6 +1242,16 @@ function OperatorView() {
     } catch (cause) { setConnection(navigator.onLine ? "error" : "offline"); setError(cause instanceof Error ? cause.message : "Operator view unavailable."); }
   }, [deviceId, id]);
   useEffect(() => { void load(); }, [load]);
+  const loadOperationContext = useCallback(async () => {
+    if (id === null) return;
+    if (operationView === "reports") {
+      const result = await api<{ artifacts: typeof reportArtifacts }>(`/v1/sessions/${id}/reports`);
+      setReportArtifacts(result.artifacts);
+    }
+    if (operationView === "archive") setRetentionStatus(await api(`/v1/sessions/${id}/retention-status`));
+  }, [id, operationView]);
+  useEffect(() => { void loadOperationContext().catch((cause: unknown) =>
+    setOperationNotice(cause instanceof Error ? cause.message : "Operation context did not load.")); }, [loadOperationContext]);
   if (projection === null) return <StatePage connection={connection} title={connection === "loading" ? "Loading operator view" : "Access denied"}
     message={connection === "loading" ? "Reading authoritative Session state." : error ?? "This view is unavailable."}
     {...(connection === "loading" ? {} : { retry: () => void load() })} />;
@@ -1246,7 +1280,6 @@ function OperatorView() {
     const receipt = result === null ? null : "receipt" in result ? result.receipt : result;
     if (receipt?.status === "accepted") setNotice("Delivery returned to the pending queue.");
   };
-  const operationView = window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
   const generateReport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (id === null || pending) return;
@@ -1260,11 +1293,16 @@ function OperatorView() {
         const body = await response.json() as ErrorEnvelopeV1;
         throw new Error(body.error.message);
       }
-      const blobUrl = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      if (String(data.get("format")) === "json") {
+        setReportPreview(JSON.parse(await blob.text()) as NonNullable<typeof reportPreview>);
+      } else setReportPreview(null);
+      const blobUrl = URL.createObjectURL(blob);
       const download = document.createElement("a");
       download.href = blobUrl; download.download = `plenum-session-${id}-report.${String(data.get("format"))}`; download.click();
       URL.revokeObjectURL(blobUrl);
-      setOperationNotice("Report generated and downloaded.");
+      await loadOperationContext();
+      setOperationNotice(String(data.get("format")) === "json" ? "Report generated, downloaded, and opened for source-trace inspection." : "Report generated and downloaded.");
     } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "The report could not be generated."); }
     finally { setPending(false); }
   };
@@ -1272,8 +1310,9 @@ function OperatorView() {
     if (id === null || pending) return;
     setPending(true); setOperationNotice("Replaying authoritative Session evidence.");
     try {
-      const result = await api<{ matched: boolean; comparedEvents: number }>(`/v1/sessions/${id}/replay`, { method: "POST", body: "{}" });
-      setOperationNotice(result.matched ? `Replay matched across ${result.comparedEvents} Evidence Events.` : "Replay completed with divergences.");
+      const result = await api<NonNullable<typeof replayResult>>(`/v1/sessions/${id}/replay`, { method: "POST", body: "{}" });
+      setReplayResult(result);
+      setOperationNotice(result.matched ? `Replay matched across ${result.comparedEvents} Evidence Events.` : `Replay completed with ${result.divergences.length} divergence${result.divergences.length === 1 ? "" : "s"}.`);
     } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "Replay is unavailable."); }
     finally { setPending(false); }
   };
@@ -1301,15 +1340,48 @@ function OperatorView() {
           </select></div>
           <button className="btn-primary" type="submit" disabled={pending}>Generate and download</button>
         </form>
+        <p className="hint">Choose JSON to inspect element-level source traces here. PDF output paginates automatically when Captured History exceeds one page.</p>
+        {reportPreview === null ? null : <section className="report-trace" aria-labelledby="report-trace-title">
+          <h3 id="report-trace-title">Report source trace</h3>
+          <p><strong>{reportPreview.capturedHistoryLabel ?? "Captured History"}</strong> is authoritative captured evidence.
+            <strong> {reportPreview.reconstructedNarrativeLabel ?? "Reconstructed Narrative"}</strong> is analytical context and is not a transcript.</p>
+          <dl className="provenance-grid"><div><dt>Captured observations</dt><dd>{reportPreview.observations?.length ?? 0}</dd></div>
+            <div><dt>Derived metrics</dt><dd>{reportPreview.derivedMetrics?.length ?? 0}</dd></div></dl>
+          <ol className="trace-list">{reportPreview.observations?.slice(0, 20).map((item, index) => <li key={item.elementId ?? index}>
+            <span><strong>{item.eventType ?? "Evidence Event"}</strong>{item.recordedAt === undefined ? "" : ` · ${new Date(item.recordedAt).toLocaleString()}`}</span>
+            <code>{item.sourceReferences?.join(", ") ?? "No source reference"}</code></li>)}</ol>
+        </section>}
+        <section aria-labelledby="report-history-title"><h3 id="report-history-title">Generated artifacts</h3>
+          {reportArtifacts.length === 0 ? <p className="empty-state">No reports have been generated for this Session.</p> : <ul className="administration-list compact">
+            {reportArtifacts.map((artifact) => <li key={artifact.artifactId}><span><strong>{artifact.filename}</strong> · {new Date(artifact.createdAt).toLocaleString()}</span>
+              <code>{artifact.sha256}</code>{artifact.purgedAt === null ? <a className="btn-secondary link-button" href={`/v1/report-artifacts/${artifact.artifactId}`}>Download</a> : <span>Purged under retention policy</span>}</li>)}</ul>}
+        </section>
       </section> : null}
       {operationView === "replay" ? <section className="card operation-panel" aria-labelledby="replay-title">
         <p className="eyebrow">Deterministic verification</p><h2 id="replay-title">Replay Session evidence</h2>
         <p>Replay compares authoritative Evidence against the configured deterministic adapter without changing Session state.</p>
         <button className="btn-primary" type="button" disabled={pending} onClick={() => void runReplay()}>Run replay</button>
+        {replayResult === null ? null : <div className="replay-result">
+          <div className={`status-notice ${replayResult.matched ? "status-success" : "status-warning"}`} role="status">
+            <strong>{replayResult.matched ? "Matched" : "Divergence detected"}</strong> · {replayResult.comparedEvents} compared Evidence Events
+          </div>
+          <dl className="provenance-grid"><div><dt>Captured History manifest digest</dt><dd><code>{replayResult.manifestDigest}</code></dd></div>
+            <div><dt>Reconstructed Narrative</dt><dd>Deterministic comparison only; never represented as a transcript</dd></div></dl>
+          {replayResult.divergences.length === 0 ? <p>No differences were found between captured and replayed history.</p> : <table className="data-table">
+            <caption>Machine-readable replay differences</caption><thead><tr><th scope="col">Difference</th><th scope="col">Sequence</th><th scope="col">Captured digest</th><th scope="col">Replayed digest</th></tr></thead>
+            <tbody>{replayResult.divergences.map((item, index) => <tr key={`${item.code}-${item.sequence}-${index}`}><td>{item.code ?? "difference"}</td><td>{item.sequence ?? "—"}</td>
+              <td><code>{item.recordedDigest ?? "—"}</code></td><td><code>{item.replayedDigest ?? "—"}</code></td></tr>)}</tbody></table>}
+        </div>}
       </section> : null}
       {operationView === "archive" ? <section className="card operation-panel" aria-labelledby="archive-title">
         <p className="eyebrow">Retention lifecycle</p><h2 id="archive-title">Archive Session</h2>
         <p>Archiving preserves immutable Release and Evidence history while removing this Session from active operations.</p>
+        {retentionStatus === null ? <p aria-busy="true">Loading retention consequences.</p> : <div className="retention-impact">
+          {retentionStatus.organizationLegalHoldActive ? <p className="status-notice"><strong>Active legal hold:</strong> matching purge remains blocked after archive.</p> : null}
+          <ul>{retentionStatus.consequences.map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>
+          <h3>Applicable retention policies</h3>{retentionStatus.policies.length === 0 ? <p className="empty-state">No Organization or Session-specific retention policy is recorded.</p> :
+            <ul className="administration-list compact">{retentionStatus.policies.map((policy) => <li key={policy.id}><strong>{policy.key} v{policy.version}</strong><span>{policy.periodDays} days · {policy.expiryAction}</span></li>)}</ul>}
+        </div>}
         <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
           void send(`/v1/sessions/${projection.sessionId}/archive`, "session.archive", { reason: String(data.get("reason")) }, projection.sessionId, 0); }}>
           <div className="field"><label htmlFor="archive-reason">Archive reason</label><input id="archive-reason" name="reason" required minLength={3} maxLength={500} /></div>
@@ -1499,7 +1571,7 @@ export function App() {
   const productEntry = useMemo(() => {
     const pathname = window.location.pathname;
     return pathname === "/" || /^\/(?:releases|sessions)\/[0-9a-f-]{36}$/iu.test(pathname) ||
-      /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(pathname);
+      /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(pathname) || /^\/research\/reports\/?$/u.test(pathname);
   }, []);
   if (productEntry) return <ProductEntry />;
   return operator ? <OperatorView /> : <RuntimeView />;

@@ -60,16 +60,35 @@ export function createStoredZip(files: Array<{ path: string; bytes: Uint8Array }
 const pdfEscape = (value: string): string => value.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
 
 export function createTextPdf(lines: string[]): Uint8Array {
-  const visible = lines.slice(0, 48).map((line) => line.slice(0, 110));
-  const stream = `BT /F1 10 Tf 40 760 Td ${visible.map((line, index) =>
-    `${index === 0 ? "" : "0 -14 Td "}(${pdfEscape(line)}) Tj`).join(" ")} ET`;
-  const objects = [
+  const wrapped = lines.flatMap((line) => {
+    if (line.length === 0) return [""];
+    const parts: string[] = [];
+    for (let offset = 0; offset < line.length; offset += 96) parts.push(line.slice(offset, offset + 96));
+    return parts;
+  });
+  const chunks: string[][] = [];
+  for (let offset = 0; offset < Math.max(wrapped.length, 1); offset += 44) chunks.push(wrapped.slice(offset, offset + 44));
+  const pageIds = chunks.map((_, index) => 4 + index * 2);
+  const objects: string[] = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${chunks.length} >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
   ];
+  chunks.forEach((chunk, index) => {
+    const pageId = pageIds[index]!;
+    const contentId = pageId + 1;
+    const heading = index === 0 ? "Plenum governed report" : "Plenum governed report (continued)";
+    const stream = [
+      `BT /F1 13 Tf 40 760 Td (${pdfEscape(heading)}) Tj ET`,
+      `BT /F1 9 Tf 40 738 Td ${chunk.map((line, lineIndex) =>
+        `${lineIndex === 0 ? "" : "0 -15 Td "}(${pdfEscape(line)}) Tj`).join(" ")} ET`,
+      `BT /F1 8 Tf 500 24 Td (Page ${index + 1} of ${chunks.length}) Tj ET`
+    ].join("\n");
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`,
+      `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+    );
+  });
   let output = "%PDF-1.4\n";
   const offsets = [0];
   for (const [index, object] of objects.entries()) {

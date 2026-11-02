@@ -3,6 +3,113 @@ info:
   title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/operations/members:
+    get:
+      operationId: listOrganizationMemberAdministration
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Organization members with current role-set revisions. }
+        "403": { description: Current Admin authority is absent or revoked. }
+  /v1/operations/members/{personId}/roles:
+    put:
+      operationId: replaceOrganizationMemberRoles
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: personId, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [roles, expectedRevision]
+              properties:
+                roles: { type: array, minItems: 1, uniqueItems: true, items: { type: string, enum: [admin, designer, publisher, operator, reviewer, research_analyst] } }
+                expectedRevision: { type: string, pattern: "^[0-9a-f]{64}$" }
+      responses:
+        "200": { description: Role set replaced atomically and audited. }
+        "409": { description: Role set is stale or the final Admin would be removed. }
+  /v1/operations/plugins:
+    get:
+      operationId: listPluginOperations
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-roles: [admin, publisher]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Plugin Artifact lifecycle, digest, publisher, installation, binding, and supply-chain provenance. }
+  /v1/operations/data-policy:
+    get:
+      operationId: getDataPolicyOperations
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Versioned retention policies, legal holds, corrections, and portable import history. }
+  /v1/research/reportable-sessions:
+    get:
+      operationId: listResearchReportableSessions
+      x-contract-id: report-delivery-v1
+      x-authorized-organization-role: research_analyst
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Sessions covered by active project-scoped Research Access Grants; identity mappings are omitted. }
+  /v1/retention/policies:
+    post:
+      operationId: createRetentionPolicy
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Immutable retention policy version and Audit Record created atomically. }
+  /v1/reporting/corrections:
+    post:
+      operationId: recordReportCorrection
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Correction recorded without overwriting the original value. }
+  /v1/report-artifacts/{artifactId}:
+    get:
+      operationId: downloadReportArtifact
+      x-contract-id: report-delivery-v1
+      x-authorized-organization-roles: [admin, operator, research_analyst]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: artifactId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Existing authorized immutable report artifact. }
+        "404": { description: Artifact is absent, unauthorized, or purged under retention policy. }
+  /v1/sessions/{sessionId}/retention-status:
+    get:
+      operationId: getSessionRetentionStatus
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-roles: [admin, operator]
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Applicable retention policies, active Organization hold, and archive consequences. }
+  /v1/organizations/{organizationId}/archive:
+    get:
+      operationId: exportOrganizationArchive
+      x-contract-id: report-delivery-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Portable logical Organization archive with digest and excluded-data declaration. }
+  /v1/organizations/{organizationId}/archive/import:
+    post:
+      operationId: importOrganizationArchive
+      x-contract-id: report-delivery-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "201": { description: Verified logical archive imported into an empty Organization deployment. }
   /v1/projects:
     get:
       operationId: listProjectPortal
@@ -319,6 +426,16 @@ paths:
         "201": { description: Append-only research consent decision recorded and audited. }
         "403": { description: Current Session participation is absent. }
   /v1/sessions/{sessionId}/reports:
+    get:
+      operationId: listSessionReportArtifacts
+      x-contract-id: report-delivery-v1
+      x-authorized-organization-roles: [admin, operator, research_analyst]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Authorized report artifacts and source-reconciliation manifests; Research Analysts receive only their own exports. }
+        "403": { description: Current role or project-scoped Research Access Grant is absent. }
     post:
       operationId: generateSessionReport
       x-contract-ids: [report-definition-v1, research-export-v1]
@@ -410,7 +527,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/octet-stream:
+          application/vnd.plenum.plugin+json:
             schema: { type: string, format: binary }
       responses:
         "201":
@@ -420,6 +537,70 @@ paths:
               schema: { $ref: "#/components/schemas/PluginArtifactV1" }
         "403": { description: Publisher is not approved or its authority was revoked. }
         "422": { description: Manifest, signature, digest closure, SBOM, vulnerability, or contract validation failed. }
+  /v1/plugin-publishers:
+    post:
+      operationId: registerPluginPublisher
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [publisherPrincipalId, displayName, signatureKeyId, publicKeyPem]
+              properties:
+                publisherPrincipalId: { type: string, format: uuid }
+                displayName: { type: string, minLength: 1 }
+                signatureKeyId: { type: string, minLength: 1 }
+                publicKeyPem: { type: string, minLength: 1 }
+      responses:
+        "201": { description: Active Organization Publisher registered with a pinned signing key and Audit Record. }
+        "403": { description: Admin authority is absent or the selected person is not an active Publisher. }
+  /v1/plugin-trust-roots:
+    post:
+      operationId: provisionPluginTrustRoot
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [publisherId, publisherKeyId, publisherPublicKeyPem, revocationKeyId, revocationPublicKeyPem]
+              properties:
+                publisherId: { type: string, format: uuid }
+                publisherKeyId: { type: string, minLength: 1 }
+                publisherPublicKeyPem: { type: string, minLength: 1 }
+                revocationKeyId: { type: string, minLength: 1 }
+                revocationPublicKeyPem: { type: string, minLength: 1 }
+      responses:
+        "201": { description: Institution-provisioned Publisher and revocation trust keys recorded and audited. }
+  /v1/plugin-revocations:
+    post:
+      operationId: importPluginRevocations
+      x-contract-ids: [operations-admin-v1, plugin-revocations-v1]
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [publisherId, document]
+              properties:
+                publisherId: { type: string, format: uuid }
+                document: { type: object }
+      responses:
+        "201": { description: Signed current revocation document verified against the institution trust root and audited. }
+        "422": { description: Revocation signature, key, freshness, or document shape is invalid. }
   /v1/plugins/{artifactId}/approve:
     post:
       operationId: approvePluginArtifact
@@ -439,6 +620,35 @@ paths:
               schema: { $ref: "#/components/schemas/PluginArtifactV1" }
         "403": { description: Admin authority or separation of duties is absent. }
         "409": { description: Artifact is not in a valid approval state. }
+  /v1/plugins/{artifactId}/revoke:
+    post:
+      operationId: revokePluginArtifact
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: artifactId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Plugin Artifact revoked for future use while historical provenance remains intact. }
+  /v1/plugins/licenses:
+    post:
+      operationId: acceptPluginLicense
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pluginId, license, termsDigest]
+              properties:
+                pluginId: { type: string, minLength: 1 }
+                license: { type: string, minLength: 1 }
+                termsDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+      responses:
+        "201": { description: Exact Plugin license terms digest accepted and audited. }
   /v1/plugins/offline-imports:
     post:
       operationId: importOfflinePluginBundle
@@ -1815,15 +2025,19 @@ components:
     PluginInstallationRequestV1:
       type: object
       additionalProperties: false
-      required: [installationId, deploymentId, artifactId, permittedPermissions, hostApiVersion, releaseSchemaVersion, deploymentProfile]
+      required: [installationId, artifactId, permittedPermissions, compatibility]
       properties:
         installationId: { type: string, format: uuid }
-        deploymentId: { type: string, format: uuid }
         artifactId: { type: string, format: uuid }
         permittedPermissions: { type: array, uniqueItems: true, items: { type: string } }
-        hostApiVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
-        releaseSchemaVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
-        deploymentProfile: { type: string, enum: [connected, self_hosted, air_gapped] }
+        compatibility:
+          type: object
+          additionalProperties: false
+          required: [hostApiVersion, releaseSchemaVersion, deploymentProfile]
+          properties:
+            hostApiVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+            releaseSchemaVersion: { type: string, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+            deploymentProfile: { type: string, enum: [connected, self_hosted, air_gapped] }
     PluginCatalogV1:
       type: object
       additionalProperties: false

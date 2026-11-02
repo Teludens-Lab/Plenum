@@ -125,7 +125,13 @@ import {
   archiveProject,
   reopenProject,
   listContentLibrary,
-  uploadContentVersion
+  uploadContentVersion,
+  getDataPolicyOperations,
+  getSessionRetentionStatus,
+  listOrganizationMemberAdministration,
+  listPluginOperations,
+  listSessionReportArtifacts,
+  replaceOrganizationMemberRoles
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -269,7 +275,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/026_product_portal.sql",
     "apps/server/migrations/027_release_session_catalog.sql",
     "apps/server/migrations/028_content_library.sql",
-    "apps/server/migrations/030_template_review_governance.sql"
+    "apps/server/migrations/030_template_review_governance.sql",
+    "apps/server/migrations/032_operations_administration.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -450,6 +457,55 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
     withOrganizationTransaction(app, ids.orgA, (client) => client.query("SELECT * FROM evidence.audit_records")),
     /permission denied/
   );
+});
+
+test("PS-790-T01 administration is tenant-scoped, least-privilege, auditable, and concurrency safe", async () => {
+  const members = await listOrganizationMemberAdministration(app, principalD, randomUUID());
+  assert.equal(members.contractId, "operations-admin-v1");
+  assert.equal(members.members.every((member) => member.personId !== ids.personB), true);
+  const reviewer = members.members.find((member) => member.personId === ids.personF);
+  assert.ok(reviewer);
+  assert.deepEqual(reviewer.roles, ["reviewer"]);
+
+  const changed = await replaceOrganizationMemberRoles(app, principalD, ids.personF,
+    { roles: ["operator", "reviewer"], expectedRevision: reviewer.revision }, randomUUID());
+  assert.deepEqual(changed.roles, ["operator", "reviewer"]);
+  await assert.rejects(
+    replaceOrganizationMemberRoles(app, principalD, ids.personF,
+      { roles: ["reviewer"], expectedRevision: reviewer.revision }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "STALE_AGGREGATE_VERSION"
+  );
+  const restored = await replaceOrganizationMemberRoles(app, principalD, ids.personF,
+    { roles: ["reviewer"], expectedRevision: changed.revision }, randomUUID());
+  assert.deepEqual(restored.roles, ["reviewer"]);
+
+  const admin = members.members.find((member) => member.personId === ids.personD);
+  assert.ok(admin);
+  await assert.rejects(
+    replaceOrganizationMemberRoles(app, principalD, ids.personD,
+      { roles: admin.roles.filter((role) => role !== "admin"), expectedRevision: admin.revision }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION"
+  );
+  const auditRows = await owner.query(
+    "SELECT action,target_ref FROM evidence.audit_records WHERE organization_id=$1 AND action='organization.roles_replaced' AND target_ref=$2",
+    [ids.orgA, `person:${ids.personF}`]
+  );
+  assert.equal(auditRows.rowCount, 2);
+
+  const publisherOnly = { ...principalD, organizationRoles: ["publisher"] };
+  const plugins = await listPluginOperations(app, publisherOnly, randomUUID());
+  assert.deepEqual(plugins.permissions, { canSubmit: true, canApprove: false, canInstall: false, canRevoke: false });
+  await assert.rejects(listPluginOperations(app, principalF, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+
+  const policies = await getDataPolicyOperations(app, principalD, randomUUID());
+  assert.equal(policies.contractId, "operations-admin-v1");
+  const retention = await getSessionRetentionStatus(app, principalD, ids.sessionA, randomUUID());
+  assert.equal(retention.sessionId, ids.sessionA);
+  assert.match(retention.consequences.join(" "), /immutable Governing Release/u);
+  assert.deepEqual((await listSessionReportArtifacts(app, principalD, ids.sessionA, randomUUID())).artifacts, []);
+  await assert.rejects(getDataPolicyOperations(app, principalF, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
 });
 
 test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, versioned, and least-privilege", async () => {

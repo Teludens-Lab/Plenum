@@ -1,6 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { Pool } from "pg";
+import { canonicalizeJson } from "@plenum/event-contracts";
+import { createOfflinePluginBundle, createPluginRevocations, pluginDigest } from "@plenum/plugin-sdk";
 import { compileRelease } from "@plenum/release-compiler";
 
 import { fixture } from "./fixture.mjs";
@@ -37,7 +40,8 @@ const migrations = [
   "apps/server/migrations/026_product_portal.sql",
   "apps/server/migrations/027_release_session_catalog.sql",
   "apps/server/migrations/028_content_library.sql",
-  "apps/server/migrations/030_template_review_governance.sql"
+  "apps/server/migrations/030_template_review_governance.sql",
+  "apps/server/migrations/032_operations_administration.sql"
 ];
 
 export default async function globalSetup() {
@@ -113,6 +117,20 @@ export default async function globalSetup() {
       "INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'PS-150 S1 proof',$3)",
       [fixture.projectId, fixture.organizationId, fixture.people.operator]
     );
+    await owner.query(
+      `INSERT INTO evidence.research_access_grants
+       (id,organization_id,project_id,analyst_person_id,protocol_reference,classification_ceiling,approved_by,expires_at)
+       VALUES ('2a000000-0000-4000-8000-000000000790',$1,$2,$3,'PS-790 synthetic protocol','internal',$4,'2099-01-01T00:00:00.000Z')`,
+      [fixture.organizationId, fixture.projectId, fixture.people.designerB, fixture.people.operator]
+    );
+    await owner.query(`INSERT INTO reporting.retention_policies
+      (id,organization_id,policy_key,version,scope_type,scope_reference,period_days,legal_hold_behavior,expiry_action,archive_destination,approval_required,created_by)
+      VALUES ('2a000000-0000-4000-8000-000000000791',$1,'ps-790-synthetic-retention',1,'organization',$3,365,'retain','archive','institutional-archive',false,$2)`,
+    [fixture.organizationId, fixture.people.operator, fixture.organizationId]);
+    await owner.query(`INSERT INTO reporting.legal_hold_events
+      (id,organization_id,hold_id,action,scope_type,scope_reference,reason,recorded_by)
+      VALUES ('2a000000-0000-4000-8000-000000000792',$1,'2a000000-0000-4000-8000-000000000793','placed','organization',$3,'Synthetic PS-790 active hold',$2)`,
+    [fixture.organizationId, fixture.people.operator, fixture.organizationId]);
     await owner.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
       [fixture.organizationId, fixture.projectId, JSON.stringify(definition), fixture.people.designerA]
@@ -237,6 +255,13 @@ export default async function globalSetup() {
         fixture.participants.blueNotetaker, fixture.people.blueNotetaker]
     );
     await owner.query(
+      `INSERT INTO reporting.research_consents
+       (id,organization_id,session_id,participant_id,purpose_label,consent_version,decision,recorded_by)
+       SELECT gen_random_uuid(),$1,$2,participant.id,'PS-790 research test','1','granted',$3
+         FROM runtime.participants participant WHERE participant.organization_id=$1 AND participant.session_id=$2`,
+      [fixture.organizationId, fixture.sessionId, fixture.people.operator]
+    );
+    await owner.query(
       `INSERT INTO runtime.seat_assignments
        (id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by) VALUES
        ($1,$2,$3,$4,'scribe','blue-scribe',$5),
@@ -273,6 +298,8 @@ export default async function globalSetup() {
       publisher: "24000000-0000-4000-8000-000000000001", artifact: "24000000-0000-4000-8000-000000000002",
       installation: "24000000-0000-4000-8000-000000000003", binding: "24000000-0000-4000-8000-000000000004",
       artifactB: "24000000-0000-4000-8000-000000000012", installationB: "24000000-0000-4000-8000-000000000013",
+      pendingArtifact: "24000000-0000-4000-8000-000000000790", trustRoot: "24000000-0000-4000-8000-000000000791",
+      revocations: "24000000-0000-4000-8000-000000000792", license: "24000000-0000-4000-8000-000000000793",
       compositionRun: "24000000-0000-4000-8000-000000000005", modelRun: "24000000-0000-4000-8000-000000000006",
       stateValue: "24000000-0000-4000-8000-000000000007", proposal: "24000000-0000-4000-8000-000000000008"
     };
@@ -280,6 +307,41 @@ export default async function globalSetup() {
     const configurationDigest = `sha256:${"4".repeat(64)}`;
     const inputDigest = `sha256:${"5".repeat(64)}`;
     const outputDigest = `sha256:${"6".repeat(64)}`;
+    const publisherKeys = generateKeyPairSync("ed25519");
+    const revocationKeys = generateKeyPairSync("ed25519");
+    const publisherKeyId = "ps-790-publisher-key-1";
+    const revocationKeyId = "ps-790-revocation-key-1";
+    const publicKeyPem = publisherKeys.publicKey.export({ type: "spki", format: "pem" }).toString();
+    const revocationPublicKeyPem = revocationKeys.publicKey.export({ type: "spki", format: "pem" }).toString();
+    const pluginBytes = new TextEncoder().encode("export default function syntheticPs790Plugin() { return { score: 1 }; }\n");
+    const schemaBytes = new TextEncoder().encode('{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}');
+    const sbomBytes = new TextEncoder().encode('{"bomFormat":"CycloneDX","specVersion":"1.5","version":1}');
+    const pluginManifest = {
+      contractId: "plugin-manifest-v1", manifestVersion: "1.0.0", pluginId: "org.ssg.fixtures.pending", version: "1.0.0",
+      digest: pluginDigest(pluginBytes), artifactPath: "plugin/plugin.mjs",
+      publisher: { id: extensionIds.publisher, signatureKeyId: publisherKeyId }, categories: ["world_and_simulation"],
+      capabilities: ["compute"], execution: { mode: "container", entrypoint: "plugin/plugin.mjs", rootless: true, readOnlyRoot: true },
+      connectivity: "offline_capable", contracts: { inputSchema: "schemas/input.json", outputSchema: "schemas/output.json" },
+      compatibility: { hostApi: ">=1.0.0 <2.0.0", releaseSchema: ">=1.0.0 <2.0.0" },
+      limits: { timeoutSeconds: 5, memoryMiB: 64, cpuMillis: 1000, outputBytes: 4096 }, requestedPermissions: [],
+      dataClassificationMaximum: "internal", reproducibility: { deterministic: true, seedInput: "seed" }, dependencies: [],
+      provenance: { sourceRevision: "synthetic-ps-790-only", buildSystem: "fixture" }, license: "ps-790-fixture-license-v1"
+    };
+    const pluginBuilt = createOfflinePluginBundle({ manifest: pluginManifest,
+      files: new Map([["plugin/plugin.mjs", pluginBytes], ["schemas/input.json", schemaBytes],
+        ["schemas/output.json", schemaBytes], ["sbom/sbom.cdx.json", sbomBytes]]),
+      supplyChain: { sbomPath: "sbom/sbom.cdx.json", attestationType: "synthetic-ps-790",
+        attestedAt: new Date().toISOString(), vulnerabilities: [], vulnerabilityExceptions: [], license: pluginManifest.license },
+      privateKey: publisherKeys.privateKey });
+    const revocations = createPluginRevocations({ generatedAt: new Date().toISOString(), publisherId: extensionIds.publisher,
+      keyId: revocationKeyId, privateKey: revocationKeys.privateKey });
+    const userTestRoot = new URL("../../output/user-test/ps-790/", import.meta.url);
+    await mkdir(userTestRoot, { recursive: true });
+    await Promise.all([
+      writeFile(new URL("ps-790-synthetic-plugin.json", userTestRoot), pluginBuilt.bytes),
+      writeFile(new URL("ps-790-revocations.json", userTestRoot), canonicalizeJson(revocations)),
+      writeFile(new URL("ps-790-license-terms.txt", userTestRoot), "Synthetic PS-790 fixture license terms. No production rights are implied.\n")
+    ]);
     const catalogManifest = (pluginId, digest, capability) => ({
       pluginId, version: "1.0.0", digest, categories: ["world_and_simulation"], capabilities: [capability],
       connectivity: "offline_capable", contracts: { inputSchema: `${pluginId}.input.schema.json`, outputSchema: `${pluginId}.output.schema.json` },
@@ -288,15 +350,34 @@ export default async function globalSetup() {
       dependencies: []
     });
     await owner.query(`INSERT INTO extension.publishers(id,organization_id,principal_id,display_name,signature_key_id,public_key_pem,status,approved_by)
-      VALUES ($1,$2,$3,'PS-230 fixture','fixture','fixture','approved',$3)`, [extensionIds.publisher, fixture.organizationId, fixture.people.operator]);
+      VALUES ($1,$2,$3,'PS-790 synthetic Publisher',$4,$5,'approved',$6)`,
+      [extensionIds.publisher, fixture.organizationId, fixture.people.publisher, publisherKeyId, publicKeyPem, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.trust_roots
+      (id,organization_id,publisher_id,publisher_key_id,publisher_public_key_pem,revocation_key_id,revocation_public_key_pem,provisioned_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [extensionIds.trustRoot, fixture.organizationId, extensionIds.publisher,
+      publisherKeyId, publicKeyPem, revocationKeyId, revocationPublicKeyPem, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.revocation_lists
+      (id,organization_id,publisher_id,trust_root_id,document,document_sha256,generated_at,imported_by)
+      VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`, [extensionIds.revocations, fixture.organizationId, extensionIds.publisher,
+      extensionIds.trustRoot, JSON.stringify(revocations), pluginDigest(new TextEncoder().encode(canonicalizeJson(revocations))),
+      revocations.generatedAt, fixture.people.operator]);
+    await owner.query(`INSERT INTO extension.license_acceptances
+      (id,organization_id,plugin_id,license,terms_digest,accepted_by)
+      VALUES ($1,$2,$3,$4,$5,$6)`, [extensionIds.license, fixture.organizationId, pluginManifest.pluginId,
+      pluginManifest.license, pluginDigest(new TextEncoder().encode("Synthetic PS-790 fixture license terms. No production rights are implied.\n")), fixture.people.operator]);
     await owner.query(`INSERT INTO extension.plugin_artifacts
       (id,organization_id,publisher_id,plugin_id,version,digest,manifest_digest,bundle_digest,object_key,manifest,supply_chain,lifecycle_status,submitted_by,approved_by,approved_at)
       VALUES ($1,$2,$3,'org.ssg.fixtures.effect','1.0.0',$4,$5,$6,'fixture',$7::jsonb,'{}','approved',$8,$8,now()),
-             ($9,$2,$3,'org.ssg.fixtures.analysis','1.0.0',$10,$11,$12,'fixture-b',$13::jsonb,'{}','approved',$8,$8,now())`,
+             ($9,$2,$3,'org.ssg.fixtures.analysis','1.0.0',$10,$11,$12,'fixture-b',$13::jsonb,'{}','approved',$8,$8,now()),
+             ($14,$2,$3,'org.ssg.fixtures.pending','1.0.0',$15,$16,$17,$18,$19::jsonb,
+              $20::jsonb,'contract_validated',$21,NULL,NULL)`,
       [extensionIds.artifact, fixture.organizationId, extensionIds.publisher, artifactDigest, `sha256:${"8".repeat(64)}`, `sha256:${"9".repeat(64)}`,
         JSON.stringify(catalogManifest("org.ssg.fixtures.effect", artifactDigest, "propose_effect")), fixture.people.operator,
         extensionIds.artifactB, `sha256:${"c".repeat(64)}`, `sha256:${"d".repeat(64)}`, `sha256:${"f".repeat(64)}`,
-        JSON.stringify(catalogManifest("org.ssg.fixtures.analysis", `sha256:${"c".repeat(64)}`, "compute"))]);
+        JSON.stringify(catalogManifest("org.ssg.fixtures.analysis", `sha256:${"c".repeat(64)}`, "compute")),
+        extensionIds.pendingArtifact, pluginBuilt.bundle.manifest.digest, pluginBuilt.manifestDigest, pluginBuilt.bundleDigest,
+        `plugins/${pluginManifest.pluginId}/${pluginManifest.version}/${pluginBuilt.bundleDigest.slice("sha256:".length)}.json`,
+        JSON.stringify(pluginBuilt.bundle.manifest), JSON.stringify(pluginBuilt.bundle.supplyChain), fixture.people.publisher]);
     await owner.query(`INSERT INTO extension.plugin_installations
       (id,organization_id,deployment_id,artifact_id,artifact_digest,status,permitted_permissions,installed_by)
       VALUES ($1,$2,$3,$4,$5,'enabled',ARRAY['effects.propose'],$6),

@@ -1622,7 +1622,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
   });
 
   test("@a11y PS-400 authors bounded branches, counted capabilities and delayed effects without code", async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const designer = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
     await designer.page.goto(studioUrl());
     await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });

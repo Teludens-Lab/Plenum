@@ -477,7 +477,7 @@ function renderReport(report: JsonObject, format: ReportFormat, basename: string
   if (format === "pdf") {
     return { contentType: "application/pdf", filename: `${basename}.pdf`, bytes: createTextPdf([
       basename, `Captured History: ${observations.length} Evidence Events`,
-      "Reconstructed Narrative: no transcript asserted", ...observations.slice(0, 40).map((item) => `${item.sequence} ${item.eventType} ${(item.sourceReferences as string[])[0]}`)
+      "Reconstructed Narrative: no transcript asserted", ...observations.map((item) => `${item.sequence} ${item.eventType} ${(item.sourceReferences as string[])[0]}`)
     ]) };
   }
   const manifest = encodeJson(report.manifest as JsonObject);

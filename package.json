@@ -14,7 +14,7 @@
   "scripts": {
     "lint": "npm run build --silent && node scripts/contract-lint.mjs",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit --pretty false",
-    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs tests/platform/fractured-order-release.test.mjs tests/parity/ac09-plugin-capabilities.test.mjs tests/sync/offline/offline-outbox.test.mjs tests/evidence/evidence-verification.test.mjs tests/reporting/report-reconciliation.test.mjs packages/policy-engine/test/policy.test.mjs packages/plugin-sdk/test/sdk.test.mjs packages/extension-host/test/host.test.mjs packages/media-adapter/test/adapter.test.mjs packages/release-compiler/test/compiler.test.mjs packages/validation-engine/test/validation.test.mjs packages/workflow-engine/test/workflow.test.mjs packages/sync-client/test/sync-client.test.mjs apps/server/test/identity.unit.test.mjs apps/server/test/voting.unit.test.mjs apps/server/test/adjudication.unit.test.mjs apps/server/test/operator-control.unit.test.mjs",
+    "test": "npm run build --silent && node --test tests/platform/contracts.test.mjs tests/platform/fractured-order-release.test.mjs tests/parity/ac09-plugin-capabilities.test.mjs tests/sync/offline/offline-outbox.test.mjs tests/evidence/evidence-verification.test.mjs tests/reporting/report-reconciliation.test.mjs packages/policy-engine/test/policy.test.mjs packages/plugin-sdk/test/sdk.test.mjs packages/extension-host/test/host.test.mjs packages/media-adapter/test/adapter.test.mjs packages/release-compiler/test/compiler.test.mjs packages/validation-engine/test/validation.test.mjs packages/workflow-engine/test/workflow.test.mjs packages/sync-client/test/sync-client.test.mjs apps/server/test/identity.unit.test.mjs apps/server/test/voting.unit.test.mjs apps/server/test/adjudication.unit.test.mjs apps/server/test/operator-control.unit.test.mjs apps/server/test/reporting-formats.unit.test.mjs",
     "test:offline": "npm run build --silent && node --test tests/sync/offline/offline-outbox.test.mjs packages/sync-client/test/sync-client.test.mjs",
     "test:integration": "npm run build --silent && node --test apps/server/test/identity.integration.test.mjs apps/server/test/object-store.integration.test.mjs",
     "verify:evidence": "npm run build --silent && node --test tests/evidence/evidence-verification.test.mjs",
@@ -39,6 +39,7 @@
     "user-test:ps760": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps770": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps780": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
+    "user-test:ps790": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "test:e2e:media": "npm run build --silent && playwright test --config tests/e2e/playwright.media.config.mjs",
     "test:e2e:media-recovery": "npm run build --silent && playwright test --config tests/e2e/playwright.media-recovery.config.mjs",
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",

@@ -96,6 +96,15 @@
           "exportable": true
         }
       ],
+      "activities": [
+        {
+          "id": "policy-proposal",
+          "name": "Policy proposal",
+          "sessionRoleIds": ["delegate"],
+          "artifactTypeIds": ["policy-proposal"],
+          "required": false
+        }
+      ],
       "forms": [
         {
           "id": "policy-proposal-form",

@@ -5393,7 +5393,7 @@
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": true,
-    "ready_to_execute": true,
+    "ready_to_execute": false,
     "migration_ids": [
       "030_template_review_governance"
     ],
@@ -5549,8 +5549,8 @@
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
     ],
     "depends_on_unratified": [],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "migration_ids": [
       "031_participant_entry"
     ],

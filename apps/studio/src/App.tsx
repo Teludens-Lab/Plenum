@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { StudioPublishV1 } from "@plenum/event-contracts";
+import type { PublicationReviewV1, SimulationTemplateSummaryV1, StudioPublishV1, TemplateLibraryV1 } from "@plenum/event-contracts";
 
 import { StudioCollaborationClient, type StudioClientState } from "./collaboration/client.js";
 import { VisualCoreDesignEditor } from "./core-design/Editor.js";
@@ -20,7 +20,8 @@ function sourceId(path: string): string {
     teams: "teams", sessionRoles: "roles", seats: "seats", activities: "activities", stages: "stages", stageGroups: "stages",
     forms: "forms", artifactTypes: "forms", workflows: "workflows", informationPolicies: "policies",
     interfaces: "interfaces", methodologyConcepts: "methodology", researchQuestions: "research",
-    decisionTraceability: "research", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
+    decisionTraceability: "research", measurementDefinitions: "measurements-reports", reports: "measurements-reports",
+    accessPolicy: "access", communications: "policies", pluginBindings: "plugins", compositions: "compositions",
     stateVariables: "advanced-logic", capabilities: "advanced-logic", resourceDefinitions: "advanced-logic",
     adjudicationModels: "adjudication",
     objectives: "overview", identity: "overview", terminology: "overview", coreDesign: "overview", draft: "overview", scenario: "overview"
@@ -51,6 +52,11 @@ export function App() {
   const [publishing, setPublishing] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [freezeId, setFreezeId] = useState("");
+  const [reviewWorkspace, setReviewWorkspace] = useState<PublicationReviewV1 | null>(null);
+  const [templates, setTemplates] = useState<SimulationTemplateSummaryV1[]>([]);
+  const [templatePublishing, setTemplatePublishing] = useState(false);
+  const [templateLifecycleId, setTemplateLifecycleId] = useState("");
+  const [templateLifecycleRationale, setTemplateLifecycleRationale] = useState("");
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,6 +65,27 @@ export function App() {
     client.connect();
     return () => { unsubscribe(); client.stop(); };
   }, [client]);
+
+  async function loadReviewWorkspace(): Promise<void> {
+    if (projectId === null) return;
+    try {
+      const response = await fetch(`/v1/projects/${projectId}/publication-review`);
+      const body = await response.json() as PublicationReviewV1 | { error?: { message?: string } };
+      if (!response.ok || !("freeze" in body)) throw new Error((body as { error?: { message?: string } }).error?.message ?? "Review workspace failed to load.");
+      setReviewWorkspace(body);
+      setFreezeId(body.freeze?.id ?? "");
+      const templatesResponse = await fetch("/v1/templates?limit=50");
+      const templateBody = await templatesResponse.json() as TemplateLibraryV1;
+      if (templatesResponse.ok) {
+        setTemplates(templateBody.templates);
+        setTemplateLifecycleId((current) => current || templateBody.templates[0]?.id || "");
+      }
+    } catch (error) {
+      setPublishMessage(error instanceof Error ? error.message : "Review workspace failed to load.");
+    }
+  }
+
+  useEffect(() => { if (projectId !== null) void loadReviewWorkspace(); }, [projectId]);
 
   async function publish(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -95,6 +122,7 @@ export function App() {
       if (!response.ok || body.freezeId === undefined) throw new Error(body.error?.message ?? "The Draft could not be frozen.");
       setFreezeId(body.freezeId);
       setPublishMessage(`Freeze ${body.freezeId} is ready for Reviewer approval.`);
+      await loadReviewWorkspace();
     } catch (error) {
       setPublishMessage(error instanceof Error ? error.message : "The Draft could not be frozen.");
     } finally {
@@ -115,11 +143,46 @@ export function App() {
       const body = await response.json() as { reviewerPersonId?: string; error?: { message?: string } };
       if (!response.ok || body.reviewerPersonId === undefined) throw new Error(body.error?.message ?? "The review could not be recorded.");
       setPublishMessage(`Reviewer approval recorded for freeze ${freezeId}.`);
+      await loadReviewWorkspace();
     } catch (error) {
       setPublishMessage(error instanceof Error ? error.message : "The review could not be recorded.");
     } finally {
       setReviewing(false);
     }
+  }
+
+  async function publishTemplate(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (projectId === null) return;
+    setTemplatePublishing(true); setPublishMessage(null);
+    const form = new FormData(event.currentTarget);
+    try {
+      const supersedesTemplateId = String(form.get("supersedesTemplateId") ?? "");
+      const response = await fetch(`/v1/projects/${projectId}/templates`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        title: form.get("templateTitle"), summary: form.get("templateSummary"),
+        includeScenario: form.get("includeScenario") === "on", rationale: form.get("templateRationale"),
+        ...(supersedesTemplateId === "" ? {} : { supersedesTemplateId })
+      }) });
+      const body = await response.json() as { templateId?: string; version?: number; error?: { message?: string } };
+      if (!response.ok || body.templateId === undefined) throw new Error(body.error?.message ?? "Template publication failed.");
+      setPublishMessage(`Published immutable Template version ${body.version}.`);
+      await loadReviewWorkspace();
+    } catch (error) { setPublishMessage(error instanceof Error ? error.message : "Template publication failed."); }
+    finally { setTemplatePublishing(false); }
+  }
+
+  async function changeTemplateLifecycle(action: "deprecate" | "archive"): Promise<void> {
+    if (templateLifecycleId === "" || templateLifecycleRationale.trim() === "") return;
+    setTemplatePublishing(true); setPublishMessage(null);
+    try {
+      const response = await fetch(`/v1/templates/${templateLifecycleId}/${action}`, { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify({ rationale: templateLifecycleRationale }) });
+      const body = await response.json() as { lifecycleStatus?: string; error?: { message?: string } };
+      if (!response.ok || body.lifecycleStatus === undefined) throw new Error(body.error?.message ?? "Template lifecycle change failed.");
+      setPublishMessage(`Template history now records ${body.lifecycleStatus}.`);
+      setTemplateLifecycleRationale(""); await loadReviewWorkspace();
+    } catch (error) { setPublishMessage(error instanceof Error ? error.message : "Template lifecycle change failed."); }
+    finally { setTemplatePublishing(false); }
   }
 
   if (projectId === null || client === null) return <>
@@ -144,20 +207,20 @@ export function App() {
       {materialization.coreDesign === undefined || materialization.scenario === undefined ? <section className="card" aria-busy="true"><h2>Loading Draft</h2><p>Waiting for the synchronized Core Design.</p></section> :
         <VisualCoreDesignEditor projectId={projectId} client={client} core={materialization.coreDesign} scenario={materialization.scenario} />}
       <div className="review-grid">
-        <section className="card" aria-labelledby="validation-title">
+        <section id="validation" className="card" aria-labelledby="validation-title">
           <div className="card-heading"><h2 id="validation-title">Validation</h2><span className={`badge ${valid ? "badge-online" : "badge-error"}`}>{valid ? "Valid" : "Needs attention"}</span></div>
           {state.validation === null ? <p>Waiting for the authoritative validation report.</p> : state.validation.issues.length === 0 ? <p>No validation errors were found.</p> :
             <ul className="issue-list">{state.validation.issues.map((issue) => { const source = sourceId(issue.path); return <li key={`${issue.code}:${issue.path}`}><a href={`#${source}`} onClick={() => revealIssue(source)}>{issue.path}</a><span>{issue.message}</span></li>; })}</ul>}
         </section>
-        <section className="card publish-card" aria-labelledby="publish-title">
+        <section id="review-publish" className="card publish-card" aria-labelledby="publish-title">
           <h2 id="publish-title">Review and publish</h2>
           <p className="hint">A Publisher freezes the exact synchronized state, a Reviewer approves that freeze, and a Publisher publishes it. Later edits remain in the next Draft.</p>
-          <button className="btn-secondary" type="button" disabled={!state.connected || !valid || state.unsynchronizedChanges > 0 || reviewing} onClick={() => void freezeForReview()}>{reviewing ? "Working…" : "Freeze for review"}</button>
-          <div className="field"><label htmlFor="freeze-id">Publication Freeze ID</label><input id="freeze-id" value={freezeId} onChange={(event) => setFreezeId(event.target.value)} required pattern="[0-9a-fA-F-]{36}" aria-describedby="freeze-help" /><p className="hint" id="freeze-help">Reviewers may paste a Freeze ID supplied by the Publisher.</p></div>
+          <button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canFreeze || !state.connected || !valid || state.unsynchronizedChanges > 0 || reviewing} onClick={() => void freezeForReview()}>{reviewing ? "Working…" : "Freeze for review"}</button>
+          {reviewWorkspace?.freeze === null || reviewWorkspace === null ? <p>No frozen revision is awaiting review.</p> : <div className="freeze-summary"><p><strong>Exact frozen revision</strong></p><p className="digest-line">Artifact digest {reviewWorkspace.freeze.artifactDigest}</p><p className="digest-line">Validation report digest {reviewWorkspace.freeze.validationReportDigest}</p><p>Frozen {new Date(reviewWorkspace.freeze.frozenAt).toLocaleString()} by {reviewWorkspace.freeze.frozenBy.displayName}. Policy {reviewWorkspace.freeze.policyVersion}.</p><p>{reviewWorkspace.approvals.length} current approval{reviewWorkspace.approvals.length === 1 ? "" : "s"}.</p>{reviewWorkspace.approvals.map((approval) => <p key={approval.reviewerPersonId}>Approved by {approval.reviewerDisplayName}: {approval.rationale}</p>)}</div>}
           <form onSubmit={(event) => void approveFreeze(event)} aria-labelledby="review-title">
             <h3 id="review-title">Reviewer approval</h3>
             <div className="field"><label htmlFor="review-notes">Methodology review notes</label><textarea id="review-notes" name="reviewNotes" required rows={3} /></div>
-            <button className="btn-secondary" type="submit" disabled={freezeId === "" || reviewing}>{reviewing ? "Working…" : "Approve freeze"}</button>
+            <button className="btn-secondary" type="submit" disabled={!reviewWorkspace?.permissions.canApprove || freezeId === "" || reviewing}>{reviewing ? "Working…" : "Approve freeze"}</button>
           </form>
           <form onSubmit={(event) => void publish(event)} aria-labelledby="release-title">
           <h3 id="release-title">Release details</h3>
@@ -168,8 +231,24 @@ export function App() {
           <div className="field"><label htmlFor="retention-policy">Retention policy ID</label><input id="retention-policy" name="retentionPolicyId" required /></div>
           <div className="field"><label htmlFor="approval-notes">Approval notes</label><textarea id="approval-notes" name="approvalNotes" required rows={3} /></div>
           <label className="choice"><input type="checkbox" name="warningsAcknowledged" />I acknowledge the validation warnings.</label>
-          <button className="btn-primary" type="submit" disabled={!state.connected || !valid || state.unsynchronizedChanges > 0 || freezeId === "" || publishing}>{publishing ? "Publishing…" : "Publish approved freeze"}</button>
+          <button className="btn-primary" type="submit" disabled={!reviewWorkspace?.permissions.canPublish || (reviewWorkspace?.approvals.length ?? 0) === 0 || !state.connected || !valid || state.unsynchronizedChanges > 0 || freezeId === "" || publishing}>{publishing ? "Publishing…" : "Publish approved freeze"}</button>
           </form>
+          <form onSubmit={(event) => void publishTemplate(event)} aria-labelledby="template-title">
+            <h3 id="template-title">Template version</h3>
+            <p className="hint">Publish the same approved frozen revision as an immutable Organization Template. Supersession preserves the earlier version and its history.</p>
+            <div className="field"><label htmlFor="template-name">Template title</label><input id="template-name" name="templateTitle" required maxLength={200} /></div>
+            <div className="field"><label htmlFor="template-summary">Summary</label><textarea id="template-summary" name="templateSummary" maxLength={1000} rows={3} /></div>
+            <div className="field"><label htmlFor="template-supersedes">Supersedes (optional)</label><select id="template-supersedes" name="supersedesTemplateId"><option value="">New Template line</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {template.lifecycleStatus}</option>)}</select></div>
+            <label className="choice"><input type="checkbox" name="includeScenario" />Include the optional Scenario</label>
+            <div className="field"><label htmlFor="template-rationale">Publication rationale</label><textarea id="template-rationale" name="templateRationale" required rows={3} /></div>
+            <button className="btn-primary" type="submit" disabled={!reviewWorkspace?.permissions.canPublish || (reviewWorkspace?.approvals.length ?? 0) === 0 || templatePublishing}>{templatePublishing ? "Publishing…" : "Publish immutable Template version"}</button>
+          </form>
+          <section aria-labelledby="template-history-title"><h3 id="template-history-title">Template lifecycle history</h3>
+            {templates.length === 0 ? <p>No published Templates are available.</p> : <><div className="field"><label htmlFor="template-lifecycle-choice">Template version</label><select id="template-lifecycle-choice" value={templateLifecycleId} onChange={(event) => setTemplateLifecycleId(event.target.value)}>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {template.lifecycleStatus}</option>)}</select></div>
+              {templates.filter(({ id }) => id === templateLifecycleId).map((template) => <details key={template.id}><summary>Attributable history</summary><ol>{template.lifecycleHistory.length === 0 ? <li>Published before lifecycle attribution was introduced.</li> : template.lifecycleHistory.map((item) => <li key={`${item.eventType}-${item.occurredAt}`}>{item.eventType} by {item.actorDisplayName} on {new Date(item.occurredAt).toLocaleString()}: {item.rationale}</li>)}</ol></details>)}
+              <div className="field"><label htmlFor="template-lifecycle-rationale">Lifecycle rationale</label><textarea id="template-lifecycle-rationale" rows={3} value={templateLifecycleRationale} onChange={(event) => setTemplateLifecycleRationale(event.target.value)} /></div>
+              <div className="item-actions"><button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canPublish || templatePublishing || templateLifecycleRationale.trim() === ""} onClick={() => void changeTemplateLifecycle("deprecate")}>Record deprecation</button><button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canPublish || templatePublishing || templateLifecycleRationale.trim() === ""} onClick={() => void changeTemplateLifecycle("archive")}>Record archival</button></div></>}
+          </section>
         </section>
       </div>
       <LiveReleaseActivation projectId={projectId} />

@@ -31,6 +31,8 @@ export interface ReleaseImpactV1 extends JsonObject {
   openPolls: JsonObject[];
   inFlightCompositions: JsonObject[];
   queuedCommandCount: number;
+  approvedImpactReviewId: string | null;
+  approvedBy: string | null;
 }
 
 type ReleaseRow = {
@@ -80,15 +82,28 @@ async function requireOperator(client: PoolClient, principal: AuthenticatedPrinc
   }
 }
 
+async function requireImpactReviewAccess(client: PoolClient, principal: AuthenticatedPrincipal, sessionId: string, correlationId: string) {
+  if (principal.organizationRoles.includes("reviewer")) {
+    const reviewer = await client.query(
+      "SELECT 1 FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='reviewer'",
+      [principal.organizationId, principal.principalId]
+    );
+    if (reviewer.rowCount === 1) return;
+  }
+  await requireOperator(client, principal, sessionId, correlationId);
+}
+
 async function releaseImpact(
   client: PoolClient,
   principal: AuthenticatedPrincipal,
   sessionId: string,
   candidateReleaseId: string,
   correlationId: string,
-  lock = false
+  lock = false,
+  reviewAccess = false
 ): Promise<ReleaseImpactV1> {
-  await requireOperator(client, principal, sessionId, correlationId);
+  if (reviewAccess) await requireImpactReviewAccess(client, principal, sessionId, correlationId);
+  else await requireOperator(client, principal, sessionId, correlationId);
   const session = await client.query<{ project_id: string; current_release_id: string; activation_sequence: string }>(
     `SELECT session.project_id,activation.release_id AS current_release_id,activation.activation_sequence
        FROM runtime.sessions session
@@ -118,6 +133,17 @@ async function releaseImpact(
     throw authorizationError("REFERENCE_INVALID", "Both Releases must be published for this Project.", correlationId);
   }
   const report = classifyReleaseCompatibility(releaseInput(from, correlationId), releaseInput(to, correlationId));
+  const digest = reportDigest(report);
+  const approved = await client.query<{ id: string; display_name: string }>(
+    `SELECT review.id,person.display_name FROM runtime.release_activation_reviews review
+      JOIN identity.persons person ON person.id=review.reviewed_by
+      LEFT JOIN identity.memberships membership ON membership.organization_id=review.organization_id
+        AND membership.person_id=review.reviewed_by AND membership.organization_role='reviewer'
+     WHERE review.organization_id=$1 AND review.session_id=$2 AND review.from_release_id=$3 AND review.to_release_id=$4
+       AND review.report_sha256=$5 AND (review.change_classification<>'consequential' OR membership.person_id IS NOT NULL)
+     ORDER BY review.reviewed_at DESC,review.id DESC LIMIT 1`,
+    [principal.organizationId, sessionId, current.current_release_id, candidateReleaseId, digest]
+  );
   const workflows = await client.query<{ governing_release_id: string; workflow_key: string; state: string; count: string }>(
       `SELECT governing_release_id,workflow_key,state,count(*)::text AS count FROM runtime.artifact_instances
         WHERE organization_id=$1 AND session_id=$2 GROUP BY governing_release_id,workflow_key,state
@@ -138,11 +164,13 @@ async function releaseImpact(
     candidateReleaseId,
     activationSequence: Number(current.activation_sequence),
     report,
-    reportDigest: reportDigest(report),
+    reportDigest: digest,
     existingWorkflows: workflows.rows.map((row) => ({ ...row, count: Number(row.count) })),
     openPolls: polls.rows,
     inFlightCompositions: compositions.rows,
-    queuedCommandCount: Number(queued.rows[0]?.count ?? 0)
+    queuedCommandCount: Number(queued.rows[0]?.count ?? 0),
+    approvedImpactReviewId: approved.rows[0]?.id ?? null,
+    approvedBy: approved.rows[0]?.display_name ?? null
   };
 }
 
@@ -157,7 +185,7 @@ export async function getReleaseImpact(
     throw authorizationError("INVALID_ID", "Valid Session and Release identifiers are required.", correlationId);
   }
   return withOrganizationTransaction(pool, principal.organizationId, (client) =>
-    releaseImpact(client, principal, sessionId, candidateReleaseId, correlationId));
+    releaseImpact(client, principal, sessionId, candidateReleaseId, correlationId, false, true));
 }
 
 export async function reviewReleaseImpact(
@@ -171,7 +199,23 @@ export async function reviewReleaseImpact(
     throw authorizationError("VALIDATION_FAILED", "The impact review is invalid.", correlationId);
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    const impact = await releaseImpact(client, principal, sessionId, input.candidateReleaseId, correlationId);
+    const impact = await releaseImpact(client, principal, sessionId, input.candidateReleaseId, correlationId, false, true);
+    if (impact.report.classification === "consequential" && !principal.organizationRoles.includes("reviewer")) {
+      throw authorizationError("PERMISSION_DENIED", "Consequential live activation requires a fresh Reviewer approval.", correlationId);
+    }
+    const authors = await client.query<{ author_person_ids: string[] }>(
+      `SELECT COALESCE(frozen.author_person_ids,ARRAY[revision.author_id]::uuid[]) AS author_person_ids
+         FROM registry.releases release
+         JOIN studio.definition_revisions revision ON revision.organization_id=release.organization_id
+          AND revision.id=release.definition_revision_id
+         LEFT JOIN studio.publication_freezes AS frozen ON frozen.organization_id=revision.organization_id
+          AND frozen.id=revision.source_freeze_id
+        WHERE release.organization_id=$1 AND release.id=$2`,
+      [principal.organizationId, input.candidateReleaseId]
+    );
+    if (impact.report.classification === "consequential" && (authors.rows[0]?.author_person_ids ?? []).includes(principal.principalId)) {
+      throw authorizationError("PERMISSION_DENIED", "An author of the candidate Release cannot approve its consequential activation.", correlationId);
+    }
     if (impact.reportDigest !== input.reportDigest) {
       throw authorizationError("VERSION_CONFLICT", "The compatibility report changed; review the current impact.", correlationId);
     }
@@ -179,10 +223,12 @@ export async function reviewReleaseImpact(
     const reviewed = await client.query<{ reviewed_at: Date }>(
       `INSERT INTO runtime.release_activation_reviews
         (id,organization_id,project_id,session_id,from_release_id,to_release_id,report,report_sha256,
-         change_classification,existing_instance_handling,reviewed_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,'keep_existing',$10) RETURNING reviewed_at`,
+         change_classification,existing_instance_handling,reviewed_by,reviewer_roles,policy_version,artifact_sha256,rationale,evidence)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,'keep_existing',$10,$11::text[],'OPEN-013.v1',$12,$13,$14::jsonb) RETURNING reviewed_at`,
       [id, principal.organizationId, impact.projectId, sessionId, impact.currentReleaseId, impact.candidateReleaseId,
-        JSON.stringify(impact.report), impact.reportDigest, impact.report.classification, principal.principalId]
+        JSON.stringify(impact.report), impact.reportDigest, impact.report.classification, principal.principalId,
+        principal.organizationRoles, impact.reportDigest, `Reviewed ${impact.report.classification.replaceAll("_", " ")} live-change impact.`,
+        JSON.stringify({ correlationId, reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" })]
     );
     await client.query(
       `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
@@ -190,7 +236,10 @@ export async function reviewReleaseImpact(
       [randomUUID(), principal.organizationId, principal.principalId, `session:${sessionId}`,
         JSON.stringify({ correlationId, impactReviewId: id, fromReleaseId: impact.currentReleaseId,
           toReleaseId: impact.candidateReleaseId, reportDigest: impact.reportDigest,
-          classification: impact.report.classification, existingInstanceHandling: "keep_existing" })]
+          classification: impact.report.classification, existingInstanceHandling: "keep_existing",
+          policyVersion: "OPEN-013.v1", actorRoles: principal.organizationRoles,
+          artifactDigest: impact.reportDigest, evidence: { report: impact.report },
+          rationale: `Reviewed ${impact.report.classification.replaceAll("_", " ")} live-change impact.` })]
     );
     return { impactReviewId: id, reportDigest: impact.reportDigest, reviewedAt: reviewed.rows[0]!.reviewed_at.toISOString() };
   });
@@ -236,10 +285,13 @@ export async function activateRelease(
       if (impact.report.blockedReasons.length > 0) {
         return { status: "rejected", errorCode: "INCOMPATIBLE_RELEASE", message: impact.report.blockedReasons.join(" ") };
       }
-      const review = await client.query(
-        `SELECT 1 FROM runtime.release_activation_reviews
-          WHERE organization_id=$1 AND session_id=$2 AND id=$3 AND from_release_id=$4 AND to_release_id=$5
-            AND report_sha256=$6 AND existing_instance_handling='keep_existing'`,
+      const review = await client.query<{ reviewed_by: string }>(
+        `SELECT review.reviewed_by FROM runtime.release_activation_reviews review
+          LEFT JOIN identity.memberships membership ON membership.organization_id=review.organization_id
+            AND membership.person_id=review.reviewed_by AND membership.organization_role='reviewer'
+          WHERE review.organization_id=$1 AND review.session_id=$2 AND review.id=$3 AND review.from_release_id=$4 AND review.to_release_id=$5
+            AND review.report_sha256=$6 AND review.existing_instance_handling='keep_existing'
+            AND (review.change_classification<>'consequential' OR membership.person_id IS NOT NULL)`,
         [context.organizationId, context.sessionId, impactReviewId, activeReleaseId, candidateReleaseId, submittedDigest]
       );
       if (review.rowCount !== 1) {
@@ -280,7 +332,10 @@ export async function activateRelease(
         `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
          VALUES ($1,$2,$3,'release.activated',$4,$5::jsonb)`,
         [randomUUID(), context.organizationId, context.principalId, `session:${context.sessionId}`,
-          JSON.stringify({ ...event, correlationId })]
+          JSON.stringify({ ...event, correlationId, policyVersion: "OPEN-013.v1", actorRoles: context.organizationRoles,
+            artifactDigest: submittedDigest, approvedBy: review.rows[0]?.reviewed_by,
+            evidence: { impactReviewId, compatibilityReportDigest: submittedDigest },
+            rationale: "Activate the reviewed compatible Release for new work while preserving existing Governing Releases." })]
       );
       return { status: "accepted", aggregateVersion: sequence, eventType: "release.activated", eventPayload: event };
     }

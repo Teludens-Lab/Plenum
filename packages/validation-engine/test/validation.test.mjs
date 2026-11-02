@@ -215,3 +215,26 @@ test("PS-750-T01 validates an explicit world-state adjudication contract and rej
   assert.equal(report.valid, false);
   assert.ok(report.issues.some(({ path, message }) => path === "adjudicationModels.ps750-model" && /state\.missing/u.test(message)));
 });
+
+test("PS-760-T01 validates versioned measurement and report traceability", async () => {
+  const draft = structuredClone(await fixture());
+  const artifact = draft.coreDesign.artifactTypes.find(({ decisionBearing }) => decisionBearing);
+  assert.ok(artifact);
+  draft.coreDesign.measurementDefinitions = [{
+    id: "decision-count", key: "decision_count", version: 1, researchQuestionIds: [],
+    label: "Decision count", description: "Count submitted decisions", source: "artifacts",
+    aggregation: "count", unit: "decisions"
+  }];
+  draft.coreDesign.decisionTraceability = [{
+    id: "decision-trace", artifactTypeId: artifact.id, researchQuestionIds: [],
+    ownerSessionRoleId: draft.coreDesign.sessionRoles[0].id, trigger: "submission",
+    informationRequirements: "governed evidence", availableActions: "submit", adjudicationMethod: "review",
+    affectedStateVariableIds: [], measurementDefinitionIds: ["decision-count"]
+  }];
+  draft.coreDesign.reports = [{ id: "decision-report", name: "Decision report", audience: "Control", formats: ["json"],
+    sections: [{ id: "summary", title: "Summary", source: "artifacts", measurementDefinitionIds: ["decision-count"] }] }];
+  assert.equal(validateStudioDraft(draft).issues.some(({ code }) => code.startsWith("measurement.") || code === "report.measurement_missing"), false);
+  draft.coreDesign.reports[0].sections[0].measurementDefinitionIds = ["missing-measurement"];
+  const report = validateStudioDraft(draft);
+  assert.ok(report.issues.some(({ code, path }) => code === "report.measurement_missing" && path === "reports.decision-report"));
+});

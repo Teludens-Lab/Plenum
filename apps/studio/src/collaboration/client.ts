@@ -60,7 +60,7 @@ export class StudioCollaborationClient {
     this.socket = null;
     this.setState({ connected: false, saveState: this.pending.size > 0 ? "saved_on_device" : this.state.saveState,
       message: "Connection lost. Changes remain in this tab and will retry automatically." });
-    socket?.close(1001, "Browser offline");
+    socket?.close(4001, "Browser offline");
   };
   private readonly online = () => this.socket === null ? this.connect() : this.flush();
   private state: StudioClientState = {
@@ -74,7 +74,7 @@ export class StudioCollaborationClient {
       const updateId = crypto.randomUUID();
       this.pending.set(updateId, { update: bytesToBase64(update), changeCount: 1 });
       this.setState({ saveState: "saved_on_device", unsynchronizedChanges: this.pendingChangeCount(), message: null });
-      if (!navigator.onLine) this.socket?.close(1001, "Browser offline");
+      if (!navigator.onLine) this.socket?.close(4001, "Browser offline");
       else this.flush();
     });
     window.addEventListener("offline", this.offline);

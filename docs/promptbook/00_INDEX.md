@@ -58,4 +58,4 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Exact next runnable prompt
 
-PS-750 passed automated and product-owner evidence on 2026-11-01. `OPEN-013` was resolved by user direction on 2026-11-01, so [PS-760 - Complete access, research, validation, publication, and live-change workspaces](prompts/P08/PS-760-complete-access-research-validation-publication-workspaces.md) is the next eligible prompt. Keep `OPEN-010` explicitly unratified.
+PS-760 passed automated and product-owner evidence on 2026-11-02. [PS-770 - Complete participant entry and Runtime experience](prompts/P09/PS-770-complete-participant-entry-and-runtime-experience.md) is the next eligible prompt. Keep `OPEN-010` explicitly unratified.

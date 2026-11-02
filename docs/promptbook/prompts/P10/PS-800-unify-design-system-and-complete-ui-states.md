@@ -5,7 +5,7 @@
 - ID: `PS-800`
 - Title: Complete Teludens conformance and every UI state
 - Goal: Replace proof-oriented long-scroll screens with a coherent professional workstation and verify every supported viewport, input and state.
-- User outcome: Users can understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.
+- User outcome: Users can easily understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.
 - Risk: **HIGH**
 - Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
 

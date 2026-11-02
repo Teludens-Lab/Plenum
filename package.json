@@ -36,6 +36,7 @@
     "user-test:ps730": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps740": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps750": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
+    "user-test:ps760": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "test:e2e:media": "npm run build --silent && playwright test --config tests/e2e/playwright.media.config.mjs",
     "test:e2e:media-recovery": "npm run build --silent && playwright test --config tests/e2e/playwright.media-recovery.config.mjs",
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",

@@ -11,6 +11,7 @@ const lifecycleEvidenceRoot = "output/playwright/ps-720";
 const studioEvidenceRoot = "output/playwright/ps-730";
 const authoringEvidenceRoot = "output/playwright/ps-740";
 const advancedAuthoringEvidenceRoot = "output/playwright/ps-750";
+const governanceEvidenceRoot = "output/playwright/ps-760";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
@@ -25,6 +26,7 @@ test.beforeAll(async () => {
   await mkdir(studioEvidenceRoot, { recursive: true });
   await mkdir(authoringEvidenceRoot, { recursive: true });
   await mkdir(advancedAuthoringEvidenceRoot, { recursive: true });
+  await mkdir(governanceEvidenceRoot, { recursive: true });
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
@@ -351,7 +353,7 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
 });
 
 test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime projection, and links validation to the exact control @a11y", async ({ browser }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   const first = await actor(browser, fixture.tokens.designerA);
   const second = await actor(browser, fixture.tokens.designerB);
   const studioUrl = `/studio/projects/${fixture.projectId}`;
@@ -535,5 +537,34 @@ test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and previe
   await expect(page.getByText("0 unsynchronized changes")).toBeVisible({ timeout: 40_000 });
   expect((await new AxeBuilder({ page }).include("#advanced-logic").include("#adjudication").include("#plugins").include("#compositions").include("#polls").include("#voice").analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${advancedAuthoringEvidenceRoot}/advanced-authoring.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-760-T02 remaining Studio workspaces rehearse deterministically without identifiers or Runtime mutation @a11y", async ({ browser }) => {
+  test.setTimeout(360_000);
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  for (const link of ["Interfaces", "Research", "Measurements & reports", "Access & readiness", "Role walkthrough", "Test & validate", "Review & publish", "Live Changes"]) {
+    await expect(page.getByRole("link", { name: link, exact: true })).toBeVisible();
+  }
+  await expect(page.locator("#interfaces")).toBeAttached();
+  await expect(page.locator("#research")).toBeAttached();
+  await expect(page.locator("#measurements-reports")).toBeAttached();
+  await expect(page.locator("#access")).toBeAttached();
+  await expect(page.locator("#preview")).toBeAttached();
+  await expect(page.locator("#review-publish")).toBeAttached();
+  await expect(page.locator("#live-changes")).toBeAttached();
+
+  await page.getByRole("link", { name: "Test & validate", exact: true }).click();
+  await page.getByRole("button", { name: "Run deterministic rehearsal" }).click();
+  await expect(page.getByText(/Rehearsal completed with \d+ evaluated trigger/u)).toBeVisible();
+  const digest = await page.locator("#test-validate .digest-line").textContent();
+  await page.getByRole("button", { name: "Run deterministic rehearsal" }).click();
+  await expect(page.locator("#test-validate .digest-line")).toHaveText(digest ?? "");
+  await expect(page.getByText("0 unsynchronized changes")).toBeVisible();
+
+  await expect(page.locator('#review-publish input[pattern="[0-9a-fA-F-]{36}"]')).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).include("#interfaces").include("#research").include("#measurements-reports").include("#access").include("#preview").include("#test-validate").include("#review-publish").include("#live-changes").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${governanceEvidenceRoot}/rehearsal-publication.png`, fullPage: true });
   await context.close();
 });

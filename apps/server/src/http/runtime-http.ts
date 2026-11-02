@@ -55,8 +55,11 @@ import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
 import { generateSessionReport, placeLegalHold, recordResearchConsent, releaseLegalHold, type ReportFormat } from "../reporting/service.js";
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
-import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getRolePreview, publishCollaborativeDraft, type CollaborativePublishInput, type RolePreviewInput } from "../studio/collaboration/service.js";
-import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, reopenProject } from "../studio/portal.js";
+import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getPublicationReview, getRolePreview,
+  publishCollaborativeDraft, rehearseCollaborativeDraft, type CollaborativePublishInput,
+  type RolePreviewInput } from "../studio/collaboration/service.js";
+import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, publishSimulationTemplate,
+  recordTemplateLifecycle, reopenProject } from "../studio/portal.js";
 import { listContentLibrary, uploadContentVersion, type ContentScanner, type UploadContentInput } from "../studio/content-library.js";
 import {
   createConfiguredSession,
@@ -404,6 +407,28 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           : await reopenProject(options.pool, principal, projectId, input, correlationId));
         return true;
       }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/templates$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["title", "summary", "includeScenario", "rationale", "supersedesTemplateId"].includes(field)) ||
+            typeof body.title !== "string" || typeof body.summary !== "string" || typeof body.includeScenario !== "boolean" ||
+            typeof body.rationale !== "string" || (body.supersedesTemplateId !== undefined && typeof body.supersedesTemplateId !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "Template publication fields are invalid.", correlationId);
+        }
+        send(response, 201, await publishSimulationTemplate(options.pool, principal, pathId(match[1], correlationId), {
+          title: body.title, summary: body.summary, includeScenario: body.includeScenario, rationale: body.rationale,
+          ...(body.supersedesTemplateId === undefined ? {} : { supersedesTemplateId: body.supersedesTemplateId })
+        }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/templates\/([^/]+)\/(deprecate|archive)$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "rationale") || typeof body.rationale !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "A Template lifecycle rationale is required.", correlationId);
+        }
+        send(response, 201, await recordTemplateLifecycle(options.pool, principal, pathId(match[1], correlationId),
+          match[2] === "deprecate" ? "deprecated" : "archived", body.rationale, correlationId));
+        return true;
+      }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/draft$/u))) {
         send(response, 200, await getCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
         return true;
@@ -460,6 +485,16 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         send(response, draft.validation.valid ? 200 : 422, draft.validation);
         return true;
       }
+      if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/rehearsals$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["seed", "startedAt"].includes(field)) ||
+            typeof body.seed !== "number" || typeof body.startedAt !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The rehearsal seed and start time are invalid.", correlationId);
+        }
+        send(response, 200, await rehearseCollaborativeDraft(options.pool, principal,
+          pathId(match[1], correlationId), { seed: body.seed, startedAt: body.startedAt }, correlationId));
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/role-preview$/u))) {
         const projectId = pathId(match[1], correlationId);
         send(response, 200, await getRolePreview(options.pool, principal, projectId,
@@ -475,6 +510,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publication-freezes$/u))) {
         send(response, 201, await freezeCollaborativeDraft(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publication-review$/u))) {
+        send(response, 200, await getPublicationReview(options.pool, principal, pathId(match[1], correlationId), correlationId));
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publication-freezes\/([^/]+)\/approve$/u))) {

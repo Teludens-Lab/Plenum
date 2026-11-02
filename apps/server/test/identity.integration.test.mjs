@@ -119,6 +119,8 @@ import {
   createConfiguredSession,
   listProjectPortal,
   listSimulationTemplates,
+  publishSimulationTemplate,
+  recordTemplateLifecycle,
   createProject,
   archiveProject,
   reopenProject,
@@ -266,7 +268,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/025_security_retention_enforcement.sql",
     "apps/server/migrations/026_product_portal.sql",
     "apps/server/migrations/027_release_session_catalog.sql",
-    "apps/server/migrations/028_content_library.sql"
+    "apps/server/migrations/028_content_library.sql",
+    "apps/server/migrations/030_template_review_governance.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -2237,6 +2240,22 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
   };
   const frozen = await freezeCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
   await assert.rejects(
+    approvePublicationFreeze(app, principalD, ids.projectA, frozen.freezeId, "Admin authority is not methodology authority.", randomUUID()),
+    (error) => error.envelope?.error?.code === "ACCESS_REVOKED"
+  );
+  await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'reviewer')",
+    [ids.orgA, ids.personD]);
+  try {
+    await assert.rejects(
+      approvePublicationFreeze(app, { ...principalD, organizationRoles: [...principalD.organizationRoles, "reviewer"] },
+        ids.projectA, frozen.freezeId, "An author must not self-approve.", randomUUID()),
+      (error) => error.envelope?.error?.code === "PERMISSION_DENIED"
+    );
+  } finally {
+    await owner.query("DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='reviewer'",
+      [ids.orgA, ids.personD]);
+  }
+  await assert.rejects(
     publishCollaborativeDraft(app, delayedStore, principalD, ids.projectA, {
       freezeId: frozen.freezeId, releaseLabel: "Unreviewed", semanticVersion: "2.0.0", methodologyVersion: "1.3.1",
       releaseNotes: "must fail", warningsAcknowledged: true, classificationReviewId: "class-review",
@@ -2245,7 +2264,10 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
     (error) => error.envelope?.error?.code === "PERMISSION_DENIED" && error.envelope.error.details?.freezeId === frozen.freezeId
   );
   await approvePublicationFreeze(app, principalF, ids.projectA, frozen.freezeId, "Methodology reviewed.", randomUUID());
-  const publishing = publishCollaborativeDraft(app, delayedStore, principalD, ids.projectA, {
+  await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'publisher')",
+    [ids.orgA, ids.personF]);
+  const reviewerPublisher = { ...principalF, organizationRoles: ["reviewer", "publisher"] };
+  const publishing = publishCollaborativeDraft(app, delayedStore, reviewerPublisher, ids.projectA, {
     freezeId: frozen.freezeId,
     releaseLabel: "Frozen collaboration proof", semanticVersion: "2.0.0", methodologyVersion: "1.3.1",
     releaseNotes: "PS-300 publication fence proof", warningsAcknowledged: true, classificationReviewId: "class-review",
@@ -2263,6 +2285,24 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
     expectedGeneration: ready.generation, update: laterUpdate }, randomUUID());
   releaseUpload();
   const published = await publishing;
+  const template = await publishSimulationTemplate(app, reviewerPublisher, ids.projectA, {
+    title: "PS-760 governed Template", summary: "Exact approved freeze Template.", includeScenario: false,
+    rationale: "Publish the independently reviewed exact revision."
+  }, randomUUID());
+  assert.ok(Number.isSafeInteger(template.version) && template.version > 0);
+  assert.equal(template.immutable, true);
+  await recordTemplateLifecycle(app, reviewerPublisher, template.templateId, "deprecated", "Superseded by the next governed method.", randomUUID());
+  await recordTemplateLifecycle(app, reviewerPublisher, template.templateId, "archived", "Retain attributable history without active use.", randomUUID());
+  await assert.rejects(
+    recordTemplateLifecycle(app, reviewerPublisher, template.templateId, "archived", "Duplicate archive must fail.", randomUUID()),
+    (error) => error.envelope?.error?.code === "VERSION_CONFLICT"
+  );
+  const templates = await listSimulationTemplates(app, reviewerPublisher, { query: "PS-760 governed Template", limit: 10 }, randomUUID());
+  const governedTemplate = templates.templates.find(({ id }) => id === template.templateId);
+  assert.equal(governedTemplate?.lifecycleStatus, "archived");
+  assert.deepEqual(governedTemplate?.lifecycleHistory.map(({ eventType }) => eventType), ["published", "deprecated", "archived"]);
+  await owner.query("DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 AND organization_role='publisher'",
+    [ids.orgA, ids.personF]);
 
   const evidence = await owner.query(
     `SELECT r.snapshot,r.source_freeze_id,f.generation
@@ -2746,7 +2786,10 @@ test("AC-07/AC-11 SYNC-09 EXT-15 activates reviewed Releases without rewriting l
   assert.ok(impact.existingWorkflows.some(({ governing_release_id }) => governing_release_id === currentReleaseId));
   assert.equal(impact.openPolls.some(({ id }) => id === openPollId), true);
   assert.equal(impact.inFlightCompositions.some(({ id }) => id === compositionId), true);
-  const review = await reviewReleaseImpact(app, principal, ids.sessionA, {
+  await assert.rejects(reviewReleaseImpact(app, principal, ids.sessionA, {
+    candidateReleaseId, reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing"
+  }, randomUUID()), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  const review = await reviewReleaseImpact(app, principalF, ids.sessionA, {
     candidateReleaseId, reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing"
   }, randomUUID());
   const context = await resolvePrincipalCommandContext(app, principal, ids.sessionA, ids.deviceA, randomUUID());

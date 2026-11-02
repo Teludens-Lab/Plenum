@@ -654,6 +654,7 @@ export async function exportOrganizationArchive(
       memberships: await query("SELECT to_jsonb(membership) AS value FROM identity.memberships membership WHERE organization_id=$1 ORDER BY person_id,organization_role"),
       projects: await query("SELECT to_jsonb(project) AS value FROM studio.simulation_projects project WHERE organization_id=$1 ORDER BY id"),
       simulationTemplates: await query("SELECT to_jsonb(template) AS value FROM studio.simulation_templates template WHERE organization_id=$1 ORDER BY published_at,id"),
+      templateLifecycleEvents: await query("SELECT to_jsonb(event) AS value FROM studio.template_lifecycle_events event WHERE organization_id=$1 ORDER BY occurred_at,id"),
       projectCollaborators: await query("SELECT to_jsonb(collaborator) AS value FROM studio.project_collaborators collaborator WHERE organization_id=$1 ORDER BY project_id,person_id,project_role"),
       projectMutationReceipts: await query("SELECT to_jsonb(receipt) AS value FROM studio.project_mutation_receipts receipt WHERE organization_id=$1 ORDER BY recorded_at,request_id"),
       collaborativeDocuments: await query("SELECT to_jsonb(document) AS value FROM studio.collaborative_documents document WHERE organization_id=$1 ORDER BY id"),
@@ -690,11 +691,12 @@ export async function exportOrganizationArchive(
 
 const logicalRestoreTables = [
   ["projects", "studio.simulation_projects"],
-  ["simulationTemplates", "studio.simulation_templates"],
   ["projectCollaborators", "studio.project_collaborators"],
   ["projectMutationReceipts", "studio.project_mutation_receipts"],
   ["collaborativeDocuments", "studio.collaborative_documents"],
   ["publicationFreezes", "studio.publication_freezes"],
+  ["simulationTemplates", "studio.simulation_templates"],
+  ["templateLifecycleEvents", "studio.template_lifecycle_events"],
   ["revisions", "studio.definition_revisions"],
   ["releases", "registry.releases"],
   ["sessions", "runtime.sessions"],
@@ -751,7 +753,7 @@ export async function importOrganizationArchive(
   }
   const persons = archiveRows(archive, "persons", correlationId);
   const memberships = archiveRows(archive, "memberships", correlationId);
-  const optionalDatasets = new Set(["simulationTemplates", "projectCollaborators", "projectMutationReceipts", "legalHoldEvents"]);
+  const optionalDatasets = new Set(["simulationTemplates", "templateLifecycleEvents", "projectCollaborators", "projectMutationReceipts", "legalHoldEvents"]);
   const datasets = logicalRestoreTables.map(([key, table]) => ({ key, table,
     rows: optionalDatasets.has(key) ? optionalArchiveRows(archive, key, correlationId) : archiveRows(archive, key, correlationId) }));
   const foreignDataset = memberships.some((row) => row.organization_id !== principal.organizationId) ? "memberships" :

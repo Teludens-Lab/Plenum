@@ -561,6 +561,18 @@ export interface RuntimeReportDefinitionV1 {
   availableToOrganizationRoles?: Array<"Admin" | "Designer" | "Publisher" | "Operator" | "Reviewer" | "Research Analyst">;
 }
 
+export interface MeasurementDefinitionV1 {
+  id: string;
+  key: string;
+  version: number;
+  researchQuestionIds: string[];
+  label: string;
+  description: string;
+  source: "evidence" | "artifacts" | "state" | "polls" | "messages" | "voice" | "plugins";
+  aggregation: "count" | "sum" | "average" | "minimum" | "maximum" | "latest";
+  unit: string;
+}
+
 export interface RuntimeAccessPolicyV1 {
   joinMethods: Array<"invitation" | "code_and_verified_email" | "sso" | "code_and_guest_pin" | "waiting_room" | "open_seat_selection" | "operator_assignment">;
   guests: { allowed: boolean; requiredFields: string[]; expiryHours: number; includeInResearchExports: boolean; operatorApproval: boolean };
@@ -684,6 +696,7 @@ export interface RuntimeCoreDesignV1 {
   adjudicationModels?: AdjudicationModelDefinitionV1[];
   interfaces: RuntimeInterfaceProfileV1[];
   reports: RuntimeReportDefinitionV1[];
+  measurementDefinitions?: MeasurementDefinitionV1[];
   stateVariables?: StateVariableDefinitionV1[];
   capabilities?: CapabilityDefinitionV1[];
   resourceDefinitions?: ResourceDefinitionV1[];

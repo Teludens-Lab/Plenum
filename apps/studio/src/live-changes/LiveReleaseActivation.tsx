@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { CompatibilityReportV1 } from "@plenum/event-contracts";
 
 type ReleaseImpact = {
@@ -12,6 +12,8 @@ type ReleaseImpact = {
   openPolls: Array<{ id: string; definition_id: string; governing_release_id: string; status: string }>;
   inFlightCompositions: Array<{ id: string; governing_release_id: string; status: string }>;
   queuedCommandCount: number;
+  approvedImpactReviewId: string | null;
+  approvedBy: string | null;
 };
 
 function message(body: unknown, fallback: string): string {
@@ -29,6 +31,35 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("Enter a Session and candidate Release to preview the live impact.");
+  const [sessionOptions, setSessionOptions] = useState<Array<{ id: string; name: string; projectId: string }>>([]);
+  const [releaseOptions, setReleaseOptions] = useState<Array<{ id: string; label: string; projectId: string }>>([]);
+
+  useEffect(() => {
+    const applyOptions = (sessions: Array<{ id: string; name: string; projectId: string }>, releases: Array<{ id: string; label: string; projectId: string }>) => {
+      setSessionOptions(sessions); setReleaseOptions(releases);
+      setSessionId((current) => current || sessions[0]?.id || "");
+      setCandidateReleaseId((current) => current || releases[0]?.id || "");
+    };
+    void fetch(`/v1/projects/${projectId}/publication-review`).then(async (reviewResponse) => {
+      if (reviewResponse.ok) {
+        const review = await reviewResponse.json() as { liveChangeOptions?: {
+          sessions?: Array<{ id: string; label: string }>; releases?: Array<{ id: string; label: string }>
+        } };
+        if (review.liveChangeOptions !== undefined) {
+          applyOptions((review.liveChangeOptions.sessions ?? []).map((session) => ({ ...session, name: session.label, projectId })),
+            (review.liveChangeOptions.releases ?? []).map((release) => ({ ...release, projectId })));
+          return;
+        }
+      }
+      const [sessionsResponse, releasesResponse] = await Promise.all([fetch("/v1/sessions?limit=50"), fetch("/v1/releases?limit=50")]);
+      if (!sessionsResponse.ok || !releasesResponse.ok) return;
+      const sessions = await sessionsResponse.json() as { sessions?: Array<{ id: string; title: string; project?: { id: string } }> };
+      const releases = await releasesResponse.json() as { releases?: Array<{ id: string; label: string; project: { id: string } }> };
+      const nextSessions = (sessions.sessions ?? []).map((session) => ({ id: session.id, name: session.title, projectId: session.project?.id ?? "" })).filter((session) => session.projectId === projectId);
+      const nextReleases = (releases.releases ?? []).map((release) => ({ id: release.id, label: release.label, projectId: release.project.id })).filter((release) => release.projectId === projectId);
+      applyOptions(nextSessions, nextReleases);
+    }).catch(() => setStatus("Release and Session choices could not be loaded. Retry after reconnecting."));
+  }, [projectId]);
 
   async function preview(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -56,16 +87,26 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
     if (impact === null || !confirmed || impact.report.blockedReasons.length > 0) return;
     setBusy(true);
     try {
-      const reviewResponse = await fetch(`/v1/sessions/${sessionId}/release-impact-reviews`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-          candidateReleaseId: impact.candidateReleaseId,
-          reportDigest: impact.reportDigest,
-          existingInstanceHandling: "keep_existing"
-        })
-      });
-      const review: unknown = await reviewResponse.json();
-      if (!reviewResponse.ok || typeof review !== "object" || review === null || !("impactReviewId" in review)) {
-        throw new Error(message(review, "Impact review could not be recorded."));
+      let impactReviewId = impact.approvedImpactReviewId;
+      if (impactReviewId === null) {
+        const reviewResponse = await fetch(`/v1/sessions/${sessionId}/release-impact-reviews`, {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+            candidateReleaseId: impact.candidateReleaseId,
+            reportDigest: impact.reportDigest,
+            existingInstanceHandling: "keep_existing"
+          })
+        });
+        const review: unknown = await reviewResponse.json();
+        if (!reviewResponse.ok || typeof review !== "object" || review === null || !("impactReviewId" in review) || typeof review.impactReviewId !== "string") {
+          throw new Error(message(review, "Impact review could not be recorded."));
+        }
+        impactReviewId = review.impactReviewId;
+        if (impact.report.classification === "consequential") {
+          setStatus("Fresh Reviewer approval recorded. An assigned Operator can now activate this exact reviewed impact.");
+          const response = await fetch(`/v1/sessions/${sessionId}/release-impact?candidateReleaseId=${encodeURIComponent(candidateReleaseId)}`);
+          if (response.ok) setImpact(await response.json() as ReleaseImpact);
+          return;
+        }
       }
       const deviceResponse = await fetch("/v1/devices", { method: "POST" });
       const device: unknown = await deviceResponse.json();
@@ -82,7 +123,7 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
           governingReleaseId: impact.currentReleaseId,
           payload: {
             candidateReleaseId: impact.candidateReleaseId,
-            impactReviewId: review.impactReviewId,
+            impactReviewId,
             reportDigest: impact.reportDigest,
             existingInstanceHandling: "keep_existing"
           }
@@ -100,13 +141,13 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
     }
   }
 
-  return <section className="card live-changes" aria-labelledby="live-changes-title">
+  return <section id="live-changes" className="card live-changes" aria-labelledby="live-changes-title">
     <div className="card-heading"><div><p className="eyebrow">Live Changes</p><h2 id="live-changes-title">Activate a Release</h2></div>{impact === null ? null : <span className="badge badge-info">{impact.report.classification.replaceAll("_", " ")}</span>}</div>
     <p className="hint">Activation applies the candidate Release to new work only. Existing workflow instances, open Polls, and in-flight Model Compositions keep their governing Release.</p>
     <p role="status" aria-live="polite">{status}</p>
     <form className="live-change-form" onSubmit={(event) => void preview(event)}>
-      <div className="field"><label htmlFor="live-session-id">Session ID</label><input id="live-session-id" required pattern="[0-9a-fA-F-]{36}" value={sessionId} onChange={(event) => setSessionId(event.target.value)} /></div>
-      <div className="field"><label htmlFor="candidate-release-id">Candidate Release ID</label><input id="candidate-release-id" required pattern="[0-9a-fA-F-]{36}" value={candidateReleaseId} onChange={(event) => setCandidateReleaseId(event.target.value)} /></div>
+      <div className="field"><label htmlFor="live-session-id">Session</label><select id="live-session-id" required value={sessionId} onChange={(event) => setSessionId(event.target.value)}><option value="">Choose a Session</option>{sessionOptions.map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}</select></div>
+      <div className="field"><label htmlFor="candidate-release-id">Candidate Release</label><select id="candidate-release-id" required value={candidateReleaseId} onChange={(event) => setCandidateReleaseId(event.target.value)}><option value="">Choose a Release</option>{releaseOptions.map((release) => <option key={release.id} value={release.id}>{release.label}</option>)}</select></div>
       <button className="btn-secondary" type="submit" disabled={busy}>{busy ? "Working…" : "Preview impact"}</button>
     </form>
     {impact === null ? null : <div className="impact-preview">
@@ -120,8 +161,9 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
       {impact.report.changes.length === 0 ? <p>No definition changes were detected.</p> : <ul className="issue-list">{impact.report.changes.map((change) =>
         <li key={`${change.path}:${change.kind}`}><strong>{change.path}</strong><span>{change.kind}; {change.classification.replaceAll("_", " ")}</span></li>)}</ul>}
       {impact.report.blockedReasons.length === 0 ? null : <div className="status-error" role="alert"><strong>Activation blocked</strong><ul>{impact.report.blockedReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
+      {impact.approvedImpactReviewId === null ? <p>No current approval is recorded for this exact impact.</p> : <p><strong>Current approval:</strong> {impact.approvedBy}</p>}
       <label className="choice"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />I reviewed this exact impact and approve keeping all existing instances on their current Release.</label>
-      <button className="btn-primary" type="button" disabled={busy || !confirmed || impact.report.blockedReasons.length > 0} onClick={() => void activate()}>{busy ? "Activating…" : "Activate for new work"}</button>
+      <button className="btn-primary" type="button" disabled={busy || !confirmed || impact.report.blockedReasons.length > 0} onClick={() => void activate()}>{busy ? "Working…" : impact.report.classification === "consequential" && impact.approvedImpactReviewId === null ? "Record fresh Reviewer approval" : "Activate for new work"}</button>
     </div>}
   </section>;
 }

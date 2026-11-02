@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type ContentLibraryItemV1, type ContentLibraryV1,
-  type RolePreviewV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
+  type RolePreviewV1, type StudioRehearsalV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
 import type {
   CoreDesignV1,
   RuntimeStageDefinitionV1,
@@ -31,7 +31,9 @@ const SECTIONS = [
   ["adjudication", "Adjudication Models"],
   ["polls", "Polls"], ["voice", "Voice Channels"], ["plugins", "Plugin catalog & bindings"],
   ["compositions", "Model Compositions"], ["interfaces", "Interfaces"], ["research", "Research"],
-  ["access", "Access"], ["preview", "Role preview"]
+  ["measurements-reports", "Measurements & reports"], ["access", "Access & readiness"],
+  ["preview", "Role walkthrough"], ["test-validate", "Test & validate"],
+  ["review-publish", "Review & publish"], ["live-changes", "Live Changes"]
 ] as const;
 
 export function TextField({ id, label, value, path, client, multiline = false, type = "text", transform, emptyDeletes = false }: {
@@ -621,20 +623,25 @@ function InterfaceEditor({ core, client }: { core: CoreDesignV1; client: StudioC
   const profiles = coreArray(core, "interfaces");
   const roles = coreArray(core, "sessionRoles");
   const stages = coreArray(core, "stages");
+  const teams = coreArray(core, "teams");
+  const policies = coreArray(core, "informationPolicies");
   return <Workspace id="interfaces" title="Interfaces" intro="Choose curated modules and a responsive layout template. Arbitrary pixel positioning is not available.">
     <div className="editor-list">{profiles.map((profile, index) => <details className="editor-item" id={`interfaces-${profile.id}`} key={profile.id}><summary><span>{profile.name}</span><span className="badge badge-muted">{profile.layout.template.replaceAll("_", " ")}</span></summary><div className="item-body">
       <TextField id={`interface-name-${profile.id}`} label="Interface Profile name" value={profile.name} path={["coreDesign", "interfaces", index, "name"]} client={client} />
       <SelectField id={`interface-layout-${profile.id}`} label="Layout template" value={profile.layout.template} options={["single_column", "main_sidebar", "dashboard", "workspace"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "template"]} client={client} />
       <MultiCheck legend="Session Roles" values={profile.selectors.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "sessionRoleIds"]} client={client} />
+      <MultiCheck legend="Teams (none means all)" values={profile.selectors.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "teamIds"]} client={client} />
       <MultiCheck legend="Visible Stages (none means all)" values={profile.selectors.stageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "stageIds"]} client={client} />
       {profile.layout.regions.map((region, regionIndex) => <fieldset className="nested-editor" key={region.id}><legend>Region {regionIndex + 1}</legend>
         {region.modules.map((module, moduleIndex) => <div className="field-row" key={module.id}>
           <TextField id={`module-title-${module.id}`} label="Module title" value={module.title ?? ""} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "title"]} client={client} />
           <SelectField id={`module-type-${module.id}`} label="Module" value={module.moduleType} options={MODULE_TYPES.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "moduleType"]} client={client} />
+          <SelectField id={`module-policy-${module.id}`} label="Information Policy" value={typeof module.configuration.informationPolicyId === "string" ? module.configuration.informationPolicyId : ""} options={[{ value: "", label: "No additional policy" }, ...policies.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "informationPolicyId"]} client={client} emptyDeletes />
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], moduleIndex)}>Remove module</button>
         </div>)}
         <AddButton label="Add module" onClick={() => client.appendAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], { id: identifier(), moduleType: "session_status", title: "Session status", configuration: { mode: "read", emptyStateText: "Nothing is available." } })} />
       </fieldset>)}
+      <AddButton label="Add layout region" onClick={() => client.appendAtPath(["coreDesign", "interfaces", index, "layout", "regions"], { id: identifier(), modules: [] })} />
       <ItemActions path={["coreDesign", "interfaces"]} index={index} count={profiles.length} client={client} label={profile.name} />
     </div></details>)}</div>
     <AddButton label="Add Interface Profile" onClick={() => client.appendAtPath(["coreDesign", "interfaces"], basicInterface("New Interface Profile", roles[0]?.id))} />
@@ -674,6 +681,8 @@ function ResearchEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
   const traces = coreArray(core, "decisionTraceability");
   const artifacts = coreArray(core, "artifactTypes").filter((item) => item.decisionBearing);
   const roles = coreArray(core, "sessionRoles");
+  const stateVariables = coreArray(core, "stateVariables");
+  const measurements = coreArray(core, "measurementDefinitions");
   const initialize = () => client.transact(() => {
     client.setAtPath(["coreDesign", "researchQuestions"], []);
     client.setAtPath(["coreDesign", "decisionTraceability"], []);
@@ -693,9 +702,52 @@ function ResearchEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
           <TextField id={`trace-info-${trace.id}`} label="Information requirements" value={trace.informationRequirements} path={["coreDesign", "decisionTraceability", traceIndex, "informationRequirements"]} client={client} multiline />
           <TextField id={`trace-actions-${trace.id}`} label="Available actions" value={trace.availableActions} path={["coreDesign", "decisionTraceability", traceIndex, "availableActions"]} client={client} multiline />
           <TextField id={`trace-adjudication-${trace.id}`} label="Adjudication method" value={trace.adjudicationMethod} path={["coreDesign", "decisionTraceability", traceIndex, "adjudicationMethod"]} client={client} />
+          <MultiCheck legend="Affected State Values" values={trace.affectedStateVariableIds} options={stateVariables.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "decisionTraceability", traceIndex, "affectedStateVariableIds"]} client={client} />
+          <MultiCheck legend="Measurement Definitions" values={trace.measurementDefinitionIds} options={measurements.map(({ id, label }) => ({ value: id, label }))} path={["coreDesign", "decisionTraceability", traceIndex, "measurementDefinitionIds"]} client={client} />
         </div></details>;
       })}
     </>}
+  </Workspace>;
+}
+
+function MeasurementReportEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
+  const measurements = coreArray(core, "measurementDefinitions");
+  const reports = coreArray(core, "reports");
+  const questions = coreArray(core, "researchQuestions");
+  const roles = coreArray(core, "sessionRoles");
+  const sources = ["evidence", "artifacts", "state", "polls", "messages", "voice", "plugins"] as const;
+  return <Workspace id="measurements-reports" title="Measurements & reports" intro="Define versioned measurements and report outputs. Every report section uses an available governed source and retains its definition version.">
+    <h3>Measurement Definitions</h3>
+    <div className="editor-list">{measurements.map((measurement, index) => <details className="editor-item" key={measurement.id}><summary><span>{measurement.label}</span><span className="badge badge-muted">v{measurement.version}</span></summary><div className="item-body grid-fields">
+      <TextField id={`measurement-label-${measurement.id}`} label="Measurement label" value={measurement.label} path={["coreDesign", "measurementDefinitions", index, "label"]} client={client} />
+      <TextField id={`measurement-key-${measurement.id}`} label="Stable key" value={measurement.key} path={["coreDesign", "measurementDefinitions", index, "key"]} client={client} />
+      <TextField id={`measurement-version-${measurement.id}`} label="Definition version" value={measurement.version} type="number" path={["coreDesign", "measurementDefinitions", index, "version"]} client={client} />
+      <TextField id={`measurement-description-${measurement.id}`} label="Definition" value={measurement.description} path={["coreDesign", "measurementDefinitions", index, "description"]} client={client} multiline />
+      <SelectField id={`measurement-source-${measurement.id}`} label="Governed source" value={measurement.source} options={sources.map((value) => ({ value, label: value }))} path={["coreDesign", "measurementDefinitions", index, "source"]} client={client} />
+      <SelectField id={`measurement-aggregation-${measurement.id}`} label="Aggregation" value={measurement.aggregation} options={["count", "sum", "average", "minimum", "maximum", "latest"].map((value) => ({ value, label: value }))} path={["coreDesign", "measurementDefinitions", index, "aggregation"]} client={client} />
+      <TextField id={`measurement-unit-${measurement.id}`} label="Unit" value={measurement.unit} path={["coreDesign", "measurementDefinitions", index, "unit"]} client={client} />
+      <MultiCheck legend="Research Questions" values={measurement.researchQuestionIds} options={questions.map(({ id, question }) => ({ value: id, label: question }))} path={["coreDesign", "measurementDefinitions", index, "researchQuestionIds"]} client={client} />
+      <ItemActions path={["coreDesign", "measurementDefinitions"]} index={index} count={measurements.length} client={client} label={measurement.label} />
+    </div></details>)}</div>
+    <AddButton label="Add Measurement Definition" onClick={() => client.appendAtPath(["coreDesign", "measurementDefinitions"], { id: identifier(), key: `measurement_${measurements.length + 1}`, version: 1, researchQuestionIds: [], label: "New measurement", description: "", source: "evidence", aggregation: "count", unit: "events" })} />
+    <h3>Report Definitions</h3>
+    <div className="editor-list">{reports.map((report, index) => {
+      const sections = report.sections as Array<{ id?: string; title?: string; source?: string; measurementDefinitionIds?: string[] }>;
+      return <details className="editor-item" key={report.id}><summary><span>{report.name}</span><span className="badge badge-muted">{report.formats.join(", ")}</span></summary><div className="item-body grid-fields">
+        <TextField id={`report-name-${report.id}`} label="Report name" value={report.name} path={["coreDesign", "reports", index, "name"]} client={client} />
+        <TextField id={`report-audience-${report.id}`} label="Audience" value={report.audience} path={["coreDesign", "reports", index, "audience"]} client={client} />
+        <TextField id={`report-formats-${report.id}`} label="Formats (comma separated)" value={report.formats.join(", ")} path={["coreDesign", "reports", index, "formats"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
+        <MultiCheck legend="Available to Session Roles" values={report.availableToSessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "reports", index, "availableToSessionRoleIds"]} client={client} />
+        <fieldset className="nested-editor"><legend>Report sections</legend>{sections.map((section, sectionIndex) => <div className="grid-fields" key={section.id ?? sectionIndex}>
+          <TextField id={`report-section-title-${report.id}-${sectionIndex}`} label="Section title" value={section.title ?? ""} path={["coreDesign", "reports", index, "sections", sectionIndex, "title"]} client={client} />
+          <SelectField id={`report-section-source-${report.id}-${sectionIndex}`} label="Data source" value={section.source ?? "evidence"} options={sources.map((value) => ({ value, label: value }))} path={["coreDesign", "reports", index, "sections", sectionIndex, "source"]} client={client} />
+          <MultiCheck legend="Measurements" values={section.measurementDefinitionIds ?? []} options={measurements.map(({ id, label }) => ({ value: id, label }))} path={["coreDesign", "reports", index, "sections", sectionIndex, "measurementDefinitionIds"]} client={client} />
+          <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "reports", index, "sections"], sectionIndex)}>Remove section</button>
+        </div>)}<AddButton label="Add report section" onClick={() => client.appendAtPath(["coreDesign", "reports", index, "sections"], { id: identifier(), title: "Summary", source: "evidence", measurementDefinitionIds: [] })} /></fieldset>
+        <ItemActions path={["coreDesign", "reports"]} index={index} count={reports.length} client={client} label={report.name} />
+      </div></details>;
+    })}</div>
+    <AddButton label="Add Report Definition" onClick={() => client.appendAtPath(["coreDesign", "reports"], { id: identifier(), name: "New report", audience: "Control", formats: ["json"], sections: [], availableToSessionRoleIds: [] })} />
   </Workspace>;
 }
 
@@ -742,13 +794,39 @@ function ScenarioEditor({ core, scenario, client }: { core: CoreDesignV1; scenar
 
 function AccessEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const policy = core.accessPolicy;
+  const profiles = coreArray(core, "interfaces");
+  const roles = coreArray(core, "sessionRoles");
+  const [rosterText, setRosterText] = useState("");
+  const rosterRows = rosterText.split(/\r?\n/u).map((row) => row.trim()).filter(Boolean).map((row) => row.split(",").map((cell) => cell.trim()));
   if (policy === undefined) return <Workspace id="access" title="Access" intro="A session code identifies a Session but never grants access by itself."><AddButton label="Add access policy" onClick={() => client.setAtPath(["coreDesign", "accessPolicy"], { joinMethods: ["operator_assignment"], guests: { allowed: false, requiredFields: [], expiryHours: 0, includeInResearchExports: false, operatorApproval: true }, displays: [], reassignment: { allowedBy: "operator", crossTeamAllowed: false, exposureAcknowledgementRequired: true }, readiness: [] })} /></Workspace>;
   const methods = ["invitation", "code_and_verified_email", "sso", "code_and_guest_pin", "waiting_room", "open_seat_selection", "operator_assignment"] as const;
   return <Workspace id="access" title="Access" intro="Configure trusted join methods, guests, shared displays, and reassignment. Ambiguous roster rows must be reviewed in the later roster workflow.">
     <MultiCheck legend="Join methods" values={policy.joinMethods} options={methods.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "accessPolicy", "joinMethods"]} client={client} />
     <CheckField id="guest-access" label="Allow Guests" checked={policy.guests.allowed} path={["coreDesign", "accessPolicy", "guests", "allowed"]} client={client} />
+    <div className="grid-fields">
+      <TextField id="guest-required-fields" label="Required Guest fields (comma separated)" value={policy.guests.requiredFields.join(", ")} path={["coreDesign", "accessPolicy", "guests", "requiredFields"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
+      <TextField id="guest-expiry" label="Guest expiry (hours)" value={policy.guests.expiryHours} type="number" path={["coreDesign", "accessPolicy", "guests", "expiryHours"]} client={client} />
+      <CheckField id="guest-approval" label="Require Operator approval" checked={policy.guests.operatorApproval} path={["coreDesign", "accessPolicy", "guests", "operatorApproval"]} client={client} />
+      <CheckField id="guest-research" label="Include consented Guests in research exports" checked={policy.guests.includeInResearchExports} path={["coreDesign", "accessPolicy", "guests", "includeInResearchExports"]} client={client} />
+      <SelectField id="reassignment-authority" label="Reassignment authority" value={policy.reassignment.allowedBy} options={[{ value: "operator", label: "Operator" }, { value: "operator_with_approval", label: "Operator with approval" }]} path={["coreDesign", "accessPolicy", "reassignment", "allowedBy"]} client={client} />
+    </div>
     <CheckField id="cross-team-reassignment" label="Allow cross-Team reassignment" checked={policy.reassignment.crossTeamAllowed} path={["coreDesign", "accessPolicy", "reassignment", "crossTeamAllowed"]} client={client} />
     <CheckField id="exposure-warning" label="Require exposure acknowledgement when reassigning" checked={policy.reassignment.exposureAcknowledgementRequired} path={["coreDesign", "accessPolicy", "reassignment", "exposureAcknowledgementRequired"]} client={client} />
+    <h3>Shared displays</h3>{policy.displays.map((display, index) => <div className="field-row" key={`${display.interfaceProfileId}-${index}`}>
+      <SelectField id={`display-profile-${index}`} label="Interface Profile" value={display.interfaceProfileId} options={profiles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "accessPolicy", "displays", index, "interfaceProfileId"]} client={client} />
+      <SelectField id={`display-classification-${index}`} label="Classification ceiling" value={display.classificationCeiling} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "accessPolicy", "displays", index, "classificationCeiling"]} client={client} />
+      <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "accessPolicy", "displays"], index)}>Remove display</button>
+    </div>)}<AddButton label="Add shared display" disabled={profiles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "accessPolicy", "displays"], { interfaceProfileId: profiles[0]?.id ?? "", classificationCeiling: "public" })} />
+    <h3>Readiness design</h3>{policy.readiness.map((check, index) => <div className="nested-editor grid-fields" key={`${check.key}-${index}`}>
+      <TextField id={`readiness-key-${index}`} label="Stable key" value={check.key} path={["coreDesign", "accessPolicy", "readiness", index, "key"]} client={client} />
+      <TextField id={`readiness-label-${index}`} label="Readiness check" value={check.label} path={["coreDesign", "accessPolicy", "readiness", index, "label"]} client={client} />
+      <MultiCheck legend="Applicable Session Roles" values={check.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "accessPolicy", "readiness", index, "sessionRoleIds"]} client={client} />
+      <CheckField id={`readiness-blocking-${index}`} label="Blocks Session readiness" checked={check.blocking} path={["coreDesign", "accessPolicy", "readiness", index, "blocking"]} client={client} />
+      <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "accessPolicy", "readiness"], index)}>Remove check</button>
+    </div>)}<AddButton label="Add readiness check" onClick={() => client.appendAtPath(["coreDesign", "accessPolicy", "readiness"], { key: `check_${policy.readiness.length + 1}`, label: "New readiness check", sessionRoleIds: [], blocking: true })} />
+    <h3>Roster import review</h3><p className="hint">Preview synthetic comma-separated rows before any Runtime import. Nothing is submitted from this design review.</p>
+    <div className="field"><label htmlFor="roster-review">Name, email, Seat</label><textarea id="roster-review" rows={4} value={rosterText} onChange={(event) => setRosterText(event.target.value)} /></div>
+    {rosterRows.length === 0 ? <p>No roster rows to review.</p> : <table><caption>Roster review preview</caption><thead><tr><th>Name</th><th>Email</th><th>Seat</th><th>Review</th></tr></thead><tbody>{rosterRows.map((row, index) => <tr key={`${row.join(":")}-${index}`}><td>{row[0] || "Missing"}</td><td>{row[1] || "Missing"}</td><td>{row[2] || "Unassigned"}</td><td>{row.length === 3 && row.every(Boolean) ? "Ready" : "Needs review"}</td></tr>)}</tbody></table>}
   </Workspace>;
 }
 
@@ -789,6 +867,34 @@ function RolePreview({ projectId, core }: { projectId: string; core: CoreDesignV
   </Workspace>;
 }
 
+function Rehearsal({ projectId }: { projectId: string }) {
+  const [seed, setSeed] = useState(760);
+  const [startedAt, setStartedAt] = useState("2026-01-15T12:00:00.000Z");
+  const [result, setResult] = useState<StudioRehearsalV1 | null>(null);
+  const [message, setMessage] = useState("No rehearsal has run. Rehearsal is explanation-only and cannot change a Session.");
+  const [busy, setBusy] = useState(false);
+  async function run(): Promise<void> {
+    setBusy(true); setResult(null); setMessage("Running the bounded deterministic rehearsal.");
+    try {
+      const response = await fetch(`/v1/projects/${projectId}/rehearsals`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, startedAt }) });
+      const body = await response.json() as StudioRehearsalV1 | { error?: { message?: string } };
+      if (!response.ok || !("trace" in body)) throw new Error((body as { error?: { message?: string } }).error?.message ?? "Rehearsal failed.");
+      setResult(body); setMessage(`Rehearsal completed with ${body.trace.length} evaluated trigger${body.trace.length === 1 ? "" : "s"}. No Session state changed.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Rehearsal failed."); }
+    finally { setBusy(false); }
+  }
+  return <Workspace id="test-validate" title="Test & validate" intro="Run a deterministic, bounded Stage rehearsal. The result explains why each evaluated trigger fired or did not fire and never mutates Runtime state.">
+    <div className="grid-fields">
+      <div className="field"><label htmlFor="rehearsal-seed">Deterministic seed</label><input id="rehearsal-seed" type="number" min={0} step={1} value={seed} onChange={(event) => setSeed(Number(event.target.value))} /></div>
+      <div className="field"><label htmlFor="rehearsal-start">Fixed ISO start time</label><input id="rehearsal-start" value={startedAt} onChange={(event) => setStartedAt(event.target.value)} /></div>
+    </div><button className="btn-primary" type="button" disabled={busy || !Number.isSafeInteger(seed) || seed < 0 || Number.isNaN(Date.parse(startedAt))} onClick={() => void run()}>{busy ? "Rehearsingâ€¦" : "Run deterministic rehearsal"}</button>
+    <p role="status" aria-live="polite">{message}</p>
+    {result === null ? null : <div className="rehearsal-result"><p className="digest-line">Exact Draft digest {result.artifactDigest}</p><p>Final Stages: {result.finalStageIds.join(", ") || "none"}</p>
+      {result.trace.length === 0 ? <p>No triggers were evaluated. Add at least one Stage to rehearse.</p> : <ol>{result.trace.map((trace) => <li key={trace.triggerId}><strong>{trace.triggerId}</strong> â€” {trace.fired ? "fired" : "did not fire"}<ul>{trace.explanations.length === 0 ? <li>No condition was required.</li> : trace.explanations.map((explanation) => <li key={`${trace.triggerId}-${explanation.path}`}>{explanation.fact ?? explanation.path}: {explanation.passed ? "passed" : "failed"} ({explanation.reason.replaceAll("_", " ")})</li>)}</ul>{trace.stateChanges.map((change) => <p key={`${trace.triggerId}-${change.stateVariableId}`}>{change.stateVariableId}: {String(change.previousValue)} â†’ {String(change.newValue)}</p>)}</li>)}</ol>}
+    </div>}
+  </Workspace>;
+}
+
 export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
   projectId: string; client: StudioCollaborationClient; core: CoreDesignV1; scenario: ScenarioV1;
 }) {
@@ -816,8 +922,10 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
       <CompositionEditor projectId={projectId} core={core} client={client} />
       <InterfaceEditor core={core} client={client} />
       <ResearchEditor core={core} client={client} />
+      <MeasurementReportEditor core={core} client={client} />
       <AccessEditor core={core} client={client} />
       <RolePreview projectId={projectId} core={core} />
+      <Rehearsal projectId={projectId} />
     </div>
   </div>;
 }

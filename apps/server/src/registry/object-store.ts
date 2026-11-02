@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdir, open, readFile, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { link, mkdir, open, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   DeleteObjectCommand,
@@ -116,16 +116,20 @@ export class LocalObjectStore implements ObjectStore {
     if (digest(bytes) !== sha256) throw new Error("Object digest mismatch");
     const target = this.resolveKey(key);
     await mkdir(path.dirname(target), { recursive: true });
+    const temporary = `${target}.${randomUUID()}.tmp`;
     try {
-      const handle = await open(target, "wx");
+      const handle = await open(temporary, "wx");
       try {
         await handle.writeFile(bytes);
       } finally {
         await handle.close();
       }
+      await link(temporary, target);
     } catch (error) {
       if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
       if (digest(await readFile(target)) !== sha256) throw new Error("Immutable object key collision");
+    } finally {
+      await rm(temporary, { force: true });
     }
   }
 

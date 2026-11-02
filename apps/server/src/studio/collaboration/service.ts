@@ -3,6 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   STUDIO_CRDT_CONTRACT_ID,
   STUDIO_PUBLISH_CONTRACT_ID,
+  STUDIO_REHEARSAL_CONTRACT_ID,
+  PUBLICATION_REVIEW_CONTRACT_ID,
   ROLE_PREVIEW_CONTRACT_ID,
   canonicalizeJson,
   type JsonObject,
@@ -10,6 +12,8 @@ import {
   type StudioCrdtV1,
   type StudioPublishV1,
   type RolePreviewV1,
+  type StudioRehearsalV1,
+  type PublicationReviewV1,
   type StudioValidationReportV1
 } from "@plenum/event-contracts";
 import { validateStudioDraft, type StudioMaterialization } from "@plenum/validation-engine";
@@ -23,6 +27,7 @@ import type { AuthenticatedPrincipal } from "../../identity/login.js";
 import type { ObjectStore } from "../../registry/object-store.js";
 import { publishReleaseFromFreeze, type PublicationControls } from "../../registry/publication.js";
 import { resolveRuntimeInterfaceProfile } from "../../runtime/artifact-workflow.js";
+import { rehearseStages } from "@plenum/workflow-engine";
 
 const MAX_UPDATE_BYTES = 256 * 1024;
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
@@ -75,6 +80,8 @@ export interface RolePreviewInput {
   stageId: string;
   teamId?: string;
 }
+
+const PUBLICATION_POLICY_VERSION = "OPEN-013.v1";
 
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -371,6 +378,7 @@ export async function freezeCollaborativeDraft(
     const snapshot = Y.encodeStateAsUpdate(document);
     const stateVector = Y.encodeStateVector(document);
     const materializationSha256 = sha256(canonicalizeJson(materialization));
+    const validationReportSha256 = sha256(canonicalizeJson(validation));
     const existing = await client.query<{ id: string; validation_report: StudioValidationReportV1 }>(
       `SELECT id,validation_report FROM studio.publication_freezes
         WHERE organization_id=$1 AND project_id=$2 AND materialization_sha256=$3`,
@@ -380,13 +388,31 @@ export async function freezeCollaborativeDraft(
       return { freezeId: existing.rows[0].id, validation: existing.rows[0].validation_report };
     }
     const freezeId = randomUUID();
+    const authors = await client.query<{ person_id: string }>(
+      `SELECT DISTINCT person_id FROM (
+         SELECT project.created_by AS person_id
+           FROM studio.simulation_projects project
+          WHERE project.organization_id=$1 AND project.id=$2
+         UNION
+         SELECT draft.updated_by AS person_id
+           FROM studio.drafts draft
+          WHERE draft.organization_id=$1 AND draft.project_id=$2
+         UNION
+         SELECT update.author_person_id AS person_id
+           FROM studio.document_updates update
+          WHERE update.organization_id=$1 AND update.document_id=$3 AND update.generation<=$4
+       ) authors ORDER BY person_id`,
+      [principal.organizationId, projectId, row.id, Number(row.generation)]
+    );
     await client.query(
       `INSERT INTO studio.publication_freezes
          (id,organization_id,project_id,document_id,generation,state_vector,state_vector_sha256,materialization,
-          materialization_sha256,validation_report,frozen_update_count,frozen_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb,$11,$12)`,
+          materialization_sha256,validation_report,frozen_update_count,frozen_by,author_person_ids,policy_version,
+          validation_report_sha256)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb,$11,$12,$13::uuid[],$14,$15)`,
       [freezeId, principal.organizationId, projectId, row.id, Number(row.generation), stateVector, sha256(stateVector),
-        JSON.stringify(materialization), materializationSha256, JSON.stringify(validation), Number(row.update_count), principal.principalId]
+        JSON.stringify(materialization), materializationSha256, JSON.stringify(validation), Number(row.update_count), principal.principalId,
+        authors.rows.map(({ person_id }) => person_id), PUBLICATION_POLICY_VERSION, validationReportSha256]
     );
     await client.query(
       "UPDATE studio.collaborative_documents SET generation=generation+1 WHERE organization_id=$1 AND id=$2",
@@ -396,7 +422,10 @@ export async function freezeCollaborativeDraft(
       `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
        VALUES ($1,$2,$3,'studio.draft_frozen',$4,$5::jsonb)`,
       [randomUUID(), principal.organizationId, principal.principalId, `publication_freeze:${freezeId}`,
-        JSON.stringify({ correlationId, projectId, generation: Number(row.generation), stateVectorSha256: sha256(stateVector) })]
+        JSON.stringify({ correlationId, projectId, generation: Number(row.generation), stateVectorSha256: sha256(stateVector),
+          artifactDigest: materializationSha256, validationReportDigest: validationReportSha256,
+          policyVersion: PUBLICATION_POLICY_VERSION, actorRoles: principal.organizationRoles,
+          authorPersonIds: authors.rows.map(({ person_id }) => person_id) })]
     );
     return { freezeId, validation };
   });
@@ -421,11 +450,16 @@ export async function approvePublicationFreeze(
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireStudioAccess(client, principal, ["reviewer"], correlationId);
-    const freeze = await client.query(
-      "SELECT 1 FROM studio.publication_freezes WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    const freeze = await client.query<{ materialization_sha256: string; validation_report_sha256: string; author_person_ids: string[] }>(
+      `SELECT materialization_sha256,validation_report_sha256,author_person_ids
+         FROM studio.publication_freezes WHERE organization_id=$1 AND project_id=$2 AND id=$3`,
       [principal.organizationId, projectId, freezeId]
     );
-    if (freeze.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", correlationId);
+    const frozen = freeze.rows[0];
+    if (frozen === undefined) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", correlationId);
+    if (frozen.author_person_ids.includes(principal.principalId)) {
+      throw authorizationError("PERMISSION_DENIED", "An author of this exact frozen revision cannot approve it for production.", correlationId);
+    }
     const existing = await client.query<{ notes: string; decided_at: Date }>(
       `SELECT notes,decided_at FROM studio.publication_reviews
         WHERE organization_id=$1 AND freeze_id=$2 AND reviewer_person_id=$3`,
@@ -440,15 +474,20 @@ export async function approvePublicationFreeze(
     const decidedAt = new Date();
     await client.query(
       `INSERT INTO studio.publication_reviews
-         (id,organization_id,project_id,freeze_id,reviewer_person_id,decision,notes,decided_at)
-       VALUES ($1,$2,$3,$4,$5,'approved',$6,$7)`,
-      [randomUUID(), principal.organizationId, projectId, freezeId, principal.principalId, notes.trim(), decidedAt]
+         (id,organization_id,project_id,freeze_id,reviewer_person_id,decision,notes,decided_at,
+          artifact_sha256,validation_report_sha256,policy_version,reviewer_roles,evidence)
+       VALUES ($1,$2,$3,$4,$5,'approved',$6,$7,$8,$9,$10,$11::text[],$12::jsonb)`,
+      [randomUUID(), principal.organizationId, projectId, freezeId, principal.principalId, notes.trim(), decidedAt,
+        frozen.materialization_sha256, frozen.validation_report_sha256, PUBLICATION_POLICY_VERSION, principal.organizationRoles,
+        JSON.stringify({ correlationId, validationReportSha256: frozen.validation_report_sha256 })]
     );
     await client.query(
       `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
        VALUES ($1,$2,$3,'studio.publication_approved',$4,$5::jsonb)`,
       [randomUUID(), principal.organizationId, principal.principalId, `publication_freeze:${freezeId}`,
-        JSON.stringify({ correlationId, projectId })]
+        JSON.stringify({ correlationId, projectId, policyVersion: PUBLICATION_POLICY_VERSION,
+          artifactDigest: frozen.materialization_sha256, validationReportDigest: frozen.validation_report_sha256,
+          roles: principal.organizationRoles, rationale: notes.trim() })]
     );
     return { freezeId, reviewerPersonId: principal.principalId, decidedAt: decidedAt.toISOString() };
   });
@@ -502,9 +541,85 @@ export async function publishCollaborativeDraft(
   const published = await publishReleaseFromFreeze(pool, store, principal, frozen.freezeId, {
     projectId, releaseLabel: input.releaseLabel, semanticVersion: input.semanticVersion,
     methodologyVersion: input.methodologyVersion, releaseNotes: input.releaseNotes, controls,
+    // OPEN-013 separates the approver from the frozen revision's authors, not necessarily from the Publisher.
     policy: { requireDistinctApprover: false, requireTestSession: false, approverOrganizationRole: "reviewer" }, correlationId
   }, now);
   return { contractId: STUDIO_PUBLISH_CONTRACT_ID, freezeId: frozen.freezeId, ...published, saveState: "published" };
+}
+
+export async function getPublicationReview(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  correlationId: string
+): Promise<PublicationReviewV1> {
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireStudioAccess(client, principal, ["designer", "publisher", "reviewer"], correlationId);
+    const result = await client.query<{
+      id: string; materialization_sha256: string; validation_report_sha256: string; frozen_at: Date;
+      frozen_by: string; frozen_by_name: string; author_person_ids: string[]; policy_version: string;
+    }>(`SELECT frozen.id,frozen.materialization_sha256,frozen.validation_report_sha256,frozen.frozen_at,
+               frozen.frozen_by,person.display_name AS frozen_by_name,frozen.author_person_ids,frozen.policy_version
+          FROM studio.publication_freezes AS frozen
+          JOIN identity.persons person ON person.id=frozen.frozen_by
+         WHERE frozen.organization_id=$1 AND frozen.project_id=$2
+         ORDER BY frozen.frozen_at DESC,frozen.id DESC LIMIT 1`, [principal.organizationId, projectId]);
+    const row = result.rows[0];
+    const approvals = row === undefined ? { rows: [] } : await client.query<{
+      reviewer_person_id: string; reviewer_name: string; notes: string; decided_at: Date; artifact_sha256: string; policy_version: string;
+    }>(`SELECT review.reviewer_person_id,person.display_name AS reviewer_name,review.notes,review.decided_at,
+               review.artifact_sha256,review.policy_version
+          FROM studio.publication_reviews review JOIN identity.persons person ON person.id=review.reviewer_person_id
+         WHERE review.organization_id=$1 AND review.freeze_id=$2 ORDER BY review.decided_at,review.id`,
+      [principal.organizationId, row.id]);
+    const [sessions, releases] = await Promise.all([
+      client.query<{ id: string; label: string }>(
+        "SELECT id,title AS label FROM runtime.sessions WHERE organization_id=$1 AND project_id=$2 ORDER BY updated_at DESC,id",
+        [principal.organizationId, projectId]
+      ),
+      client.query<{ id: string; label: string }>(
+        "SELECT id,release_label AS label FROM registry.releases WHERE organization_id=$1 AND project_id=$2 ORDER BY published_at DESC,id",
+        [principal.organizationId, projectId]
+      )
+    ]);
+    return {
+      contractId: PUBLICATION_REVIEW_CONTRACT_ID, projectId,
+      freeze: row === undefined ? null : { id: row.id, artifactDigest: row.materialization_sha256,
+        validationReportDigest: row.validation_report_sha256, frozenAt: row.frozen_at.toISOString(),
+        frozenBy: { id: row.frozen_by, displayName: row.frozen_by_name }, authorPersonIds: row.author_person_ids,
+        policyVersion: row.policy_version },
+      approvals: approvals.rows.map((review) => ({ reviewerPersonId: review.reviewer_person_id,
+        reviewerDisplayName: review.reviewer_name, rationale: review.notes, decidedAt: review.decided_at.toISOString(),
+        artifactDigest: review.artifact_sha256, policyVersion: review.policy_version })),
+      permissions: { canFreeze: principal.organizationRoles.includes("publisher"),
+        canApprove: principal.organizationRoles.includes("reviewer") && !(row?.author_person_ids ?? []).includes(principal.principalId),
+        canPublish: principal.organizationRoles.includes("publisher") },
+      liveChangeOptions: { sessions: sessions.rows, releases: releases.rows }
+    };
+  });
+}
+
+export async function rehearseCollaborativeDraft(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  input: { seed: number; startedAt: string },
+  correlationId: string
+): Promise<StudioRehearsalV1> {
+  if (!Number.isSafeInteger(input.seed) || input.seed < 0 || Number.isNaN(Date.parse(input.startedAt))) {
+    throw authorizationError("VALIDATION_FAILED", "A non-negative seed and ISO start time are required.", correlationId);
+  }
+  const draft = await getCollaborativeDraft(pool, principal, projectId, correlationId);
+  const materialization = draft.materialization as unknown as StudioMaterialization;
+  const state = Object.fromEntries((materialization.scenario.initialState ?? []).map((item) => [
+    item.scopeReference === undefined ? `state.${item.stateVariableId}` : `state.${item.stateVariableId}.team.${item.scopeReference}`,
+    item.value
+  ]));
+  const rehearsal = rehearseStages({ stages: materialization.coreDesign.stages ?? [], facts: state,
+    startedAt: input.startedAt, seed: input.seed });
+  return { contractId: STUDIO_REHEARSAL_CONTRACT_ID, projectId,
+    artifactDigest: sha256(canonicalizeJson(materialization as unknown as JsonValue)), seed: rehearsal.seed, startedAt: rehearsal.startedAt,
+    finalStageIds: rehearsal.finalStageIds, trace: rehearsal.trace as StudioRehearsalV1["trace"] };
 }
 
 export function studioSyncEnvelope(state: CollaborativeDraftState): StudioCrdtV1 {

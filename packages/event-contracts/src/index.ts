@@ -47,6 +47,8 @@ export const MEDIA_CREDENTIAL_CONTRACT_ID = "media-credential-v1";
 export const FLOOR_LEASE_CONTRACT_ID = "floor-lease-v1";
 export const STUDIO_CRDT_CONTRACT_ID = "studio-crdt-v1";
 export const STUDIO_PUBLISH_CONTRACT_ID = "studio-publish-v1";
+export const STUDIO_REHEARSAL_CONTRACT_ID = "studio-rehearsal-v1";
+export const PUBLICATION_REVIEW_CONTRACT_ID = "publication-review-v1";
 export const CORE_DESIGN_EDITOR_CONTRACT_ID = "core-design-editor-v1";
 export const STUDIO_FOUNDATION_EDITOR_CONTRACT_ID = "studio-foundation-editor-v1";
 export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
@@ -159,6 +161,9 @@ export interface SimulationTemplateSummaryV1 extends JsonObject {
   summary: string;
   includesOptionalScenario: boolean;
   publishedAt: string;
+  version: number;
+  lifecycleStatus: "published" | "superseded" | "deprecated" | "archived";
+  lifecycleHistory: Array<{ eventType: "published" | "superseded" | "deprecated" | "archived"; actorDisplayName: string; rationale: string; occurredAt: string }>;
 }
 
 export interface TemplateLibraryV1 extends JsonObject {
@@ -420,6 +425,49 @@ export interface StudioPublishV1 {
   manifestDigest: string;
   packageDigest: string;
   saveState: "published";
+}
+
+export interface StudioRehearsalV1 extends JsonObject {
+  contractId: typeof STUDIO_REHEARSAL_CONTRACT_ID;
+  projectId: string;
+  artifactDigest: string;
+  seed: number;
+  startedAt: string;
+  finalStageIds: string[];
+  trace: Array<{
+    triggerId: string;
+    kind: "entry" | "completion" | "transition" | "effect";
+    fired: boolean;
+    explanations: Array<{ path: string; fact: string | null; operator: string; passed: boolean; reason: string }>;
+    stateChanges: Array<{ stateVariableId: string; scopeReference: string; previousValue: JsonValue; newValue: JsonValue; operation: string }>;
+  }>;
+}
+
+export interface PublicationReviewV1 extends JsonObject {
+  contractId: typeof PUBLICATION_REVIEW_CONTRACT_ID;
+  projectId: string;
+  freeze: null | {
+    id: string;
+    artifactDigest: string;
+    validationReportDigest: string;
+    frozenAt: string;
+    frozenBy: { id: string; displayName: string };
+    authorPersonIds: string[];
+    policyVersion: string;
+  };
+  approvals: Array<{
+    reviewerPersonId: string;
+    reviewerDisplayName: string;
+    rationale: string;
+    decidedAt: string;
+    artifactDigest: string;
+    policyVersion: string;
+  }>;
+  permissions: { canFreeze: boolean; canApprove: boolean; canPublish: boolean };
+  liveChangeOptions: {
+    sessions: Array<{ id: string; label: string }>;
+    releases: Array<{ id: string; label: string }>;
+  };
 }
 
 export interface RolePreviewV1 {
@@ -1341,6 +1389,29 @@ export const studioPublishV1Schema = {
   }
 } as const satisfies ContractSchema<StudioPublishV1>;
 
+export const studioRehearsalV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: STUDIO_REHEARSAL_CONTRACT_ID, title: "Studio rehearsal result v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "projectId", "artifactDigest", "seed", "startedAt", "finalStageIds", "trace"],
+  properties: {
+    contractId: { const: STUDIO_REHEARSAL_CONTRACT_ID }, projectId: uuidProperty,
+    artifactDigest: { type: "string", pattern: "^[0-9a-f]{64}$" }, seed: { type: "integer", minimum: 0 },
+    startedAt: { type: "string", format: "date-time" }, finalStageIds: { type: "array", items: { type: "string" } },
+    trace: { type: "array", items: { type: "object" } }
+  }
+} as const satisfies ContractSchema<StudioRehearsalV1>;
+
+export const publicationReviewV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: PUBLICATION_REVIEW_CONTRACT_ID, title: "Publication review workspace v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "projectId", "freeze", "approvals", "permissions", "liveChangeOptions"],
+  properties: {
+    contractId: { const: PUBLICATION_REVIEW_CONTRACT_ID }, projectId: uuidProperty,
+    freeze: { type: ["object", "null"] }, approvals: { type: "array", items: { type: "object" } }, permissions: { type: "object" },
+    liveChangeOptions: { type: "object" }
+  }
+} as const satisfies ContractSchema<PublicationReviewV1>;
+
 export const rolePreviewV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema", $id: ROLE_PREVIEW_CONTRACT_ID, title: "Studio role preview v1",
   type: "object", additionalProperties: false,
@@ -1554,10 +1625,12 @@ export const templateLibraryV1Schema = {
       type: "array",
       items: {
         type: "object", additionalProperties: false,
-        required: ["id", "title", "summary", "includesOptionalScenario", "publishedAt"],
+        required: ["id", "title", "summary", "includesOptionalScenario", "publishedAt", "version", "lifecycleStatus", "lifecycleHistory"],
         properties: { id: uuidProperty, title: { type: "string", minLength: 1, maxLength: 200 },
           summary: { type: "string", maxLength: 1000 }, includesOptionalScenario: { type: "boolean" },
-          publishedAt: utcInstantProperty }
+          publishedAt: utcInstantProperty, version: { type: "integer", minimum: 1 },
+          lifecycleStatus: { enum: ["published", "superseded", "deprecated", "archived"] },
+          lifecycleHistory: { type: "array", items: { type: "object" } } }
       }
     },
     nextCursor: { type: ["string", "null"] }

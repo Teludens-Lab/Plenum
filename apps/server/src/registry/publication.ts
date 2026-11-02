@@ -272,7 +272,13 @@ async function publishMaterialization(
          VALUES ($1,$2,$3,'registry.release_published',$4,$5::jsonb)`,
         [randomUUID(), principal.organizationId, principal.principalId, `release:${releaseId}`,
           JSON.stringify({ correlationId: input.correlationId, projectId: input.projectId,
-            definitionRevisionId, sourceFreezeId: frozen.sourceFreezeId ?? null, contentDigest: compiled.contentDigest })]
+            definitionRevisionId, sourceFreezeId: frozen.sourceFreezeId ?? null, contentDigest: compiled.contentDigest,
+            packageDigest: compiled.packageDigest, policyVersion: "OPEN-013.v1", actorRoles: principal.organizationRoles,
+            approvedBy: input.controls.approvedBy, rationale: input.controls.approvalNotes,
+            evidence: { validationReportId: input.controls.validationReportId,
+              classificationReviewId: input.controls.classificationReviewId,
+              accessibilityReviewStatus: input.controls.accessibilityReviewStatus,
+              retentionPolicyId: input.controls.retentionPolicyId } })]
       );
     });
   } catch (error) {

@@ -157,11 +157,34 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
     }
   }
   const reportSources = new Set(["evidence", "artifacts", "state", "polls", "messages", "voice", "plugins"]);
+  const measurementIds = new Set<string>();
+  const measurementKeys = new Set<string>();
+  for (const measurement of records(core.measurementDefinitions)) {
+    const id = String(measurement.id);
+    const key = String(measurement.key);
+    if (measurementIds.has(id) || measurementKeys.has(key) || !reportSources.has(String(measurement.source)) ||
+        !Number.isSafeInteger(measurement.version) || Number(measurement.version) < 1) {
+      issues.push(issue("measurement.definition_invalid", `Measurement Definition ${id} must have unique identity, a positive version and an available governed source.`, `measurementDefinitions.${id}`, id));
+    }
+    measurementIds.add(id); measurementKeys.add(key);
+  }
+  for (const trace of records(core.decisionTraceability)) {
+    const missing = stringList(trace.measurementDefinitionIds).find((id) => !measurementIds.has(id));
+    if (missing !== undefined) {
+      const id = String(trace.id);
+      issues.push(issue("measurement.reference_missing", `Decision trace ${id} references unavailable Measurement Definition ${missing}.`, `decisionTraceability.${id}`, id));
+    }
+  }
   for (const report of records(core.reports)) {
     for (const section of records(report.sections)) {
       if (typeof section.source === "string" && !reportSources.has(section.source)) {
         const id = String(report.id);
         issues.push(issue("report.data_unavailable", `Report ${id} references unavailable data source ${section.source}.`, `reports.${id}`, id));
+      }
+      const missing = stringList(section.measurementDefinitionIds).find((id) => !measurementIds.has(id));
+      if (missing !== undefined) {
+        const id = String(report.id);
+        issues.push(issue("report.measurement_missing", `Report ${id} references unavailable Measurement Definition ${missing}.`, `reports.${id}`, id));
       }
     }
   }

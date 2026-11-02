@@ -1369,7 +1369,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
 test.describe.serial("PS-300 collaborative Studio", () => {
   test("@a11y SYNC-01 SYNC-02 AC-01 AC-02 reconnects, converges, validates, freezes and publishes from visual forms", async ({ browser }) => {
-    test.setTimeout(900_000);
+    test.setTimeout(1_200_000);
     const serverTimeout = 20_000;
     const first = await actor(browser, fixture.tokens.publisher, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     const second = await actor(browser, fixture.tokens.designerA, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
@@ -1441,9 +1441,15 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await first.page.getByLabel("I acknowledge the validation warnings.").check();
     await first.page.getByRole("button", { name: "Freeze for review" }).click();
     await expect(first.page.getByText(/is ready for Reviewer approval/u)).toBeVisible({ timeout: serverTimeout });
-    await first.page.getByLabel("Methodology review notes").fill("Synthetic methodology review.");
-    await first.page.getByRole("button", { name: "Approve freeze" }).click();
-    await expect(first.page.getByText(/Reviewer approval recorded/u)).toBeVisible({ timeout: serverTimeout });
+    const reviewer = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1024, height: 768 }, reducedMotion: "reduce" });
+    await reviewer.page.goto(studioUrl());
+    await expect(reviewer.page.getByRole("button", { name: "Approve freeze" })).toBeEnabled({ timeout: serverTimeout });
+    await reviewer.page.getByLabel("Methodology review notes").fill("Synthetic independent methodology review.");
+    await reviewer.page.getByRole("button", { name: "Approve freeze" }).click();
+    await expect(reviewer.page.getByText(/Reviewer approval recorded/u)).toBeVisible({ timeout: serverTimeout });
+    await reviewer.context.close();
+    await first.page.getByRole("button", { name: "Freeze for review" }).click();
+    await expect(first.page.getByText("1 current approval.")).toBeVisible({ timeout: serverTimeout });
     const publishedResponse = first.page.waitForResponse((response) =>
       response.request().method() === "POST" && response.url().endsWith(`/v1/projects/${fixture.projectId}/publish`));
     await first.page.getByRole("button", { name: "Publish approved freeze" }).click();
@@ -1671,17 +1677,29 @@ test.describe.serial("PS-300 collaborative Studio", () => {
           "64000000-0000-4000-8000-000000000003", `sha256:${"b".repeat(64)}`,
           "64000000-0000-4000-8000-000000000004"]);
 
+      const reviewer = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+      await reviewer.page.goto(studioUrl());
+      const reviewChanges = reviewer.page.getByRole("region", { name: "Activate a Release" });
+      await reviewChanges.getByLabel("Session").selectOption(fixture.sessionId);
+      await reviewChanges.getByLabel("Candidate Release").selectOption(fixture.activationReleaseId);
+      await reviewChanges.getByRole("button", { name: "Preview impact" }).click();
+      await expect(reviewChanges.getByText("Impact preview is ready for explicit review.")).toBeVisible({ timeout: 20_000 });
+      await expect(reviewChanges.getByText("consequential", { exact: true })).toBeVisible();
+      await expect(reviewChanges.locator(".impact-counts > div").filter({ hasText: "Open Polls" })).toContainText("1");
+      await expect(reviewChanges.locator(".impact-counts > div").filter({ hasText: "In-flight compositions" })).toContainText("1");
+      expect((await new AxeBuilder({ page: reviewer.page }).include(".live-changes").analyze()).violations).toEqual([]);
+      await reviewChanges.getByLabel(/I reviewed this exact impact/u).check();
+      await reviewChanges.getByRole("button", { name: "Record fresh Reviewer approval" }).click();
+      await expect(reviewChanges.getByText(/Fresh Reviewer approval recorded/u)).toBeVisible({ timeout: 20_000 });
+      await reviewer.context.close();
+
       const operator = await actor(browser, fixture.tokens.operator, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
       await operator.page.goto(studioUrl());
       const liveChanges = operator.page.getByRole("region", { name: "Activate a Release" });
-      await liveChanges.getByLabel("Session ID").fill(fixture.sessionId);
-      await liveChanges.getByLabel("Candidate Release ID").fill(fixture.activationReleaseId);
+      await liveChanges.getByLabel("Session").selectOption(fixture.sessionId);
+      await liveChanges.getByLabel("Candidate Release").selectOption(fixture.activationReleaseId);
       await liveChanges.getByRole("button", { name: "Preview impact" }).click();
-      await expect(liveChanges.getByText("Impact preview is ready for explicit review.")).toBeVisible({ timeout: 20_000 });
-      await expect(liveChanges.getByText("consequential", { exact: true })).toBeVisible();
-      await expect(liveChanges.locator(".impact-counts > div").filter({ hasText: "Open Polls" })).toContainText("1");
-      await expect(liveChanges.locator(".impact-counts > div").filter({ hasText: "In-flight compositions" })).toContainText("1");
-      expect((await new AxeBuilder({ page: operator.page }).include(".live-changes").analyze()).violations).toEqual([]);
+      await expect(liveChanges.getByText(/Current approval:/u)).toBeVisible({ timeout: 20_000 });
       await liveChanges.getByLabel(/I reviewed this exact impact/u).check();
       await liveChanges.getByRole("button", { name: "Activate for new work" }).click();
       await expect(liveChanges.getByText(/is active for new work. Existing work remains pinned/u)).toBeVisible({ timeout: 20_000 });

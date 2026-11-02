@@ -107,6 +107,15 @@
           "exportable": true
         }
       ],
+      "activities": [
+        {
+          "id": "resource-allocation",
+          "name": "Resource allocation",
+          "sessionRoleIds": ["field-coordinator"],
+          "artifactTypeIds": ["resource-allocation"],
+          "required": false
+        }
+      ],
       "forms": [
         {
           "id": "resource-allocation-form",

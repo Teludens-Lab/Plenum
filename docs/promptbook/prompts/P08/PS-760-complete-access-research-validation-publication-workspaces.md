@@ -7,7 +7,7 @@
 - Goal: Finish the remaining Studio specification and turn validation into an operable simulation rehearsal and publication process.
 - User outcome: Designers and Reviewers can configure access, interfaces, research, measurements and reports; rehearse the Release; resolve every issue; approve, publish and prepare live changes.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false` (completed and verified 2026-11-02).
 
 ## Requirements and invariants
 

@@ -43,6 +43,14 @@ export interface ProjectLifecycleInput {
   expectedVersion: number;
 }
 
+export interface PublishTemplateInput {
+  title: string;
+  summary: string;
+  includeScenario: boolean;
+  rationale: string;
+  supersedesTemplateId?: string;
+}
+
 interface ProjectRow {
   id: string;
   title: string;
@@ -270,21 +278,141 @@ export async function listSimulationTemplates(
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     const access = await requirePortalAccess(client, principal, PORTAL_ROLES, correlationId);
     if (isReviewerOnly(access)) return { contractId: TEMPLATE_LIBRARY_CONTRACT_ID, templates: [], nextCursor: null };
-    const rows = (await client.query<{ id: string; title: string; summary: string; scenario: JsonObject | null; published_at: Date }>(
-      `SELECT id,title,summary,scenario,published_at FROM studio.simulation_templates
-        WHERE organization_id=$1 AND ($2::text IS NULL OR title ILIKE '%' || $2 || '%')
-          AND ($3::timestamptz IS NULL OR (published_at,id)<($3::timestamptz,$4::uuid))
-        ORDER BY published_at DESC,id DESC LIMIT $5`,
+    const rows = (await client.query<{ id: string; title: string; summary: string; scenario: JsonObject | null; published_at: Date;
+      version: number; lifecycle_history: Array<{ eventType: "published" | "superseded" | "deprecated" | "archived"; actorDisplayName: string; rationale: string; occurredAt: string }> | null }>(
+      `SELECT template.id,template.title,template.summary,template.scenario,template.published_at,template.version,
+              (SELECT jsonb_agg(jsonb_build_object('eventType',event.event_type,'actorDisplayName',person.display_name,
+                        'rationale',event.rationale,'occurredAt',event.occurred_at) ORDER BY event.occurred_at,event.id)
+                 FROM studio.template_lifecycle_events event JOIN identity.persons person ON person.id=event.actor_person_id
+                WHERE event.organization_id=template.organization_id AND event.template_id=template.id) AS lifecycle_history
+         FROM studio.simulation_templates template
+        WHERE template.organization_id=$1 AND ($2::text IS NULL OR template.title ILIKE '%' || $2 || '%')
+          AND ($3::timestamptz IS NULL OR (template.published_at,template.id)<($3::timestamptz,$4::uuid))
+        ORDER BY template.published_at DESC,template.id DESC LIMIT $5`,
       [principal.organizationId, query === undefined || query === "" ? null : query, cursor?.date ?? null, cursor?.id ?? null, limit + 1]
     )).rows;
     const visible = rows.slice(0, limit);
     const templates: SimulationTemplateSummaryV1[] = visible.map((row) => ({
       id: row.id, title: row.title, summary: row.summary, includesOptionalScenario: row.scenario !== null,
-      publishedAt: row.published_at.toISOString()
+      publishedAt: row.published_at.toISOString(), version: row.version,
+      lifecycleStatus: row.lifecycle_history?.at(-1)?.eventType ?? "published",
+      lifecycleHistory: (row.lifecycle_history ?? []).map((event) => ({ ...event, occurredAt: new Date(event.occurredAt).toISOString() }))
     }));
     const last = visible.at(-1);
     return { contractId: TEMPLATE_LIBRARY_CONTRACT_ID, templates,
       nextCursor: rows.length > limit && last !== undefined ? encodeCursor(last.published_at, last.id) : null };
+  });
+}
+
+export async function publishSimulationTemplate(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  input: PublishTemplateInput,
+  correlationId: string
+): Promise<JsonObject> {
+  const title = input.title.trim();
+  const summary = input.summary.trim();
+  const rationale = input.rationale.trim();
+  if (!uuid.test(projectId) || title.length === 0 || title.length > 200 || summary.length > 1000 ||
+      rationale.length === 0 || rationale.length > 4000 ||
+      (input.supersedesTemplateId !== undefined && !uuid.test(input.supersedesTemplateId))) {
+    throw authorizationError("VALIDATION_FAILED", "Template publication fields are invalid.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const access = await requirePortalAccess(client, principal, ["publisher"], correlationId);
+    const project = await client.query(
+      "SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2 FOR UPDATE",
+      [principal.organizationId, projectId]
+    );
+    if (project.rowCount !== 1) throw authorizationError("TARGET_NOT_FOUND", "The Project was not found.", correlationId);
+    const freeze = (await client.query<{
+      id: string; materialization: { coreDesign: CoreDesignV1; scenario: ScenarioV1 };
+      materialization_sha256: string; policy_version: string;
+    }>(`SELECT frozen.id,frozen.materialization,frozen.materialization_sha256,frozen.policy_version
+          FROM studio.publication_freezes AS frozen
+         WHERE frozen.organization_id=$1 AND frozen.project_id=$2
+           AND EXISTS (SELECT 1 FROM studio.publication_reviews review
+             JOIN identity.memberships membership ON membership.organization_id=review.organization_id
+              AND membership.person_id=review.reviewer_person_id AND membership.organization_role='reviewer'
+            WHERE review.organization_id=frozen.organization_id AND review.freeze_id=frozen.id
+              AND review.artifact_sha256=frozen.materialization_sha256)
+         ORDER BY frozen.frozen_at DESC,frozen.id DESC LIMIT 1`, [principal.organizationId, projectId])).rows[0];
+    if (freeze === undefined) throw authorizationError("PERMISSION_DENIED", "A current approved Publication Freeze is required.", correlationId);
+    let supersededDigest: string | null = null;
+    if (input.supersedesTemplateId !== undefined) {
+      const previous = await client.query<{ artifact_sha256: string | null; source_project_id: string }>(
+        "SELECT artifact_sha256,source_project_id FROM studio.simulation_templates WHERE organization_id=$1 AND id=$2 FOR UPDATE",
+        [principal.organizationId, input.supersedesTemplateId]);
+      if (previous.rows[0] === undefined || previous.rows[0].source_project_id !== projectId) {
+        throw authorizationError("REFERENCE_INVALID", "The superseded Template is unavailable for this Project.", correlationId);
+      }
+      supersededDigest = previous.rows[0].artifact_sha256;
+    }
+    const next = await client.query<{ version: number }>(
+      "SELECT COALESCE(MAX(version),0)::int+1 AS version FROM studio.simulation_templates WHERE organization_id=$1 AND source_project_id=$2",
+      [principal.organizationId, projectId]);
+    const templateId = randomUUID();
+    const version = next.rows[0]?.version ?? 1;
+    const published = await client.query<{ published_at: Date }>(`INSERT INTO studio.simulation_templates
+      (id,organization_id,title,summary,source_project_id,core_design,scenario,published_by,version,source_freeze_id,
+       artifact_sha256,supersedes_template_id)
+      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10,$11,$12) RETURNING published_at`,
+      [templateId, principal.organizationId, title, summary, projectId, JSON.stringify(freeze.materialization.coreDesign),
+        input.includeScenario ? JSON.stringify(freeze.materialization.scenario) : null, principal.principalId, version,
+        freeze.id, freeze.materialization_sha256, input.supersedesTemplateId ?? null]);
+    const evidence = { correlationId, freezeId: freeze.id, includesScenario: input.includeScenario };
+    await client.query(`INSERT INTO studio.template_lifecycle_events
+      (id,organization_id,template_id,event_type,actor_person_id,actor_roles,policy_version,artifact_sha256,rationale,evidence)
+      VALUES ($1,$2,$3,'published',$4,$5::text[],$6,$7,$8,$9::jsonb)`,
+      [randomUUID(), principal.organizationId, templateId, principal.principalId, access.roles, freeze.policy_version,
+        freeze.materialization_sha256, rationale, JSON.stringify(evidence)]);
+    if (input.supersedesTemplateId !== undefined) {
+      await client.query(`INSERT INTO studio.template_lifecycle_events
+        (id,organization_id,template_id,event_type,actor_person_id,actor_roles,policy_version,artifact_sha256,rationale,evidence)
+        VALUES ($1,$2,$3,'superseded',$4,$5::text[],$6,$7,$8,$9::jsonb)`,
+        [randomUUID(), principal.organizationId, input.supersedesTemplateId, principal.principalId, access.roles,
+          freeze.policy_version, supersededDigest ?? freeze.materialization_sha256, rationale,
+          JSON.stringify({ correlationId, supersededByTemplateId: templateId })]);
+    }
+    return { templateId, version, artifactDigest: freeze.materialization_sha256, lifecycleStatus: "published",
+      immutable: true, publishedAt: published.rows[0]!.published_at.toISOString() };
+  });
+}
+
+export async function recordTemplateLifecycle(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  templateId: string,
+  eventType: "deprecated" | "archived",
+  rationale: string,
+  correlationId: string
+): Promise<JsonObject> {
+  if (!uuid.test(templateId) || rationale.trim().length === 0 || rationale.length > 4000) {
+    throw authorizationError("VALIDATION_FAILED", "Template lifecycle fields are invalid.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const access = await requirePortalAccess(client, principal, ["publisher"], correlationId);
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`template-lifecycle:${principal.organizationId}:${templateId}`]);
+    const template = (await client.query<{ artifact_sha256: string | null }>(
+      "SELECT artifact_sha256 FROM studio.simulation_templates WHERE organization_id=$1 AND id=$2",
+      [principal.organizationId, templateId])).rows[0];
+    if (template === undefined) throw authorizationError("TARGET_NOT_FOUND", "The Simulation Template was not found.", correlationId);
+    const latest = (await client.query<{ event_type: string }>(
+      `SELECT event_type FROM studio.template_lifecycle_events
+        WHERE organization_id=$1 AND template_id=$2 ORDER BY occurred_at DESC,id DESC LIMIT 1`,
+      [principal.organizationId, templateId])).rows[0]?.event_type;
+    if (latest === "archived" || latest === eventType) {
+      throw authorizationError("VERSION_CONFLICT", `The Template is already ${latest}.`, correlationId);
+    }
+    const artifactDigest = template.artifact_sha256 ?? digest({ templateId });
+    const eventId = randomUUID();
+    await client.query(`INSERT INTO studio.template_lifecycle_events
+      (id,organization_id,template_id,event_type,actor_person_id,actor_roles,policy_version,artifact_sha256,rationale,evidence)
+      VALUES ($1,$2,$3,$4,$5,$6::text[],'OPEN-013.v1',$7,$8,$9::jsonb)`,
+      [eventId, principal.organizationId, templateId, eventType, principal.principalId, access.roles, artifactDigest,
+        rationale.trim(), JSON.stringify({ correlationId })]);
+    return { templateId, eventId, lifecycleStatus: eventType, immutable: true };
   });
 }
 

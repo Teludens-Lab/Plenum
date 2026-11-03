@@ -90,7 +90,7 @@ function ConnectionBadge({ state }: { state: ConnectionState }) {
       : state === "offline" ? "Offline"
         : state === "unauthorized" ? "Sign-in required"
           : "Connection error";
-  return <span className={`badge badge-${state}`} aria-label={`Plenum status: ${label}`}>{label}</span>;
+  return <span className={`badge badge-${state}`} role="status" aria-live="polite" aria-atomic="true" aria-label={`Plenum status: ${label}`}>{label}</span>;
 }
 
 function BrandWordmark() {
@@ -112,15 +112,15 @@ function ThemeToggle() {
     onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}>Theme: {theme}</button>;
 }
 
-function Shell({ connection, children }: { connection: ConnectionState; children: ReactNode }) {
-  return <>
+function Shell({ connection, children, bounded = false }: { connection: ConnectionState; children: ReactNode; bounded?: boolean }) {
+  return <div className={`app-frame${bounded ? " app-frame-bounded" : ""}`}>
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="app-header">
       <BrandWordmark />
       <div className="header-actions"><ThemeToggle /><ConnectionBadge state={connection} /></div>
     </header>
     {children}
-  </>;
+  </div>;
 }
 
 function StatePage({ connection, title, message, retry }: {
@@ -142,42 +142,54 @@ const clearsOfflineData = (error: ApiError): boolean =>
   ["ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED", "PERMISSION_DENIED"]
     .includes(error.envelope.error.code);
 
+function AccessContext({ context, titleId, onSignOut, onClose }: {
+  context: ProductShellContextV1;
+  titleId: string;
+  onSignOut: () => Promise<void>;
+  onClose?: () => void;
+}) {
+  return <>
+    <p className="eyebrow">Context inspector</p><h2 id={titleId}>Access</h2>
+    <dl><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization roles</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div><div><dt>Connection</dt><dd>Authoritative service online</dd></div></dl>
+    <div className="account-context-actions"><button className="btn-secondary" type="button" onClick={() => void onSignOut()}>Sign out</button>
+      {onClose === undefined ? null : <button className="btn-secondary account-context-close" type="button" onClick={onClose}>Close access context</button>}</div>
+  </>;
+}
+
 function ProductEntry() {
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [context, setContext] = useState<ProductShellContextV1 | null>(null);
   const [unauthenticated, setUnauthenticated] = useState(false);
-  const [message, setMessage] = useState("Checking your secure Plenum session.");
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountContextRef = useRef<HTMLDialogElement>(null);
+  const accountToggleRef = useRef<HTMLButtonElement>(null);
   const administration = /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(window.location.pathname);
   const researchReporting = /^\/research\/reports\/?$/u.test(window.location.pathname);
 
   const load = useCallback(async () => {
     setConnection("loading");
     setUnauthenticated(false);
-    setMessage("Checking your secure Plenum session.");
     try {
       const next = await api<ProductShellContextV1>("/v1/product-context");
       setContext(next);
       setConnection("online");
-      setMessage("Your account and Organization context are current.");
     } catch (cause) {
       setContext(null);
       if (cause instanceof ApiError && cause.status === 401) {
         setUnauthenticated(true);
         setConnection("unauthorized");
-        setMessage("Sign in with your Organization identity to continue.");
       } else if (!navigator.onLine || cause instanceof TypeError) {
         setConnection("offline");
-        setMessage("Plenum cannot reach the secure service. Check your connection and try again.");
       } else {
         setConnection("error");
-        setMessage(cause instanceof Error ? cause.message : "Plenum could not load your account context.");
       }
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const offline = () => { setConnection("offline"); setMessage("You are offline. Account context cannot be refreshed."); };
+    const offline = () => setConnection("offline");
     const online = () => void load();
     window.addEventListener("offline", offline);
     window.addEventListener("online", online);
@@ -190,21 +202,53 @@ function ProductEntry() {
       setContext(null);
       setUnauthenticated(true);
       setConnection("unauthorized");
-      setMessage("You have signed out of Plenum on this device.");
-    } catch (cause) {
+    } catch {
       setConnection("error");
-      setMessage(cause instanceof Error ? cause.message : "Plenum could not complete sign out.");
     }
   };
 
-  return <Shell connection={connection}>
-    <main id="main-content" className="product-shell" tabIndex={-1}>
-      <section className="product-intro teludens-path" aria-labelledby="product-title">
-        <p className="eyebrow">Simulation design and delivery</p>
-        <h1 id="product-title">Design with intent. Run with authority.</h1>
-        <p>Plenum carries a simulation from governed design through live delivery and evidence without losing its rules, roles, or release history.</p>
-      </section>
-      <p className="live-region shell-notice" role={connection === "error" ? "alert" : "status"} aria-live="polite">{message}</p>
+  const toggleAccountContext = () => {
+    const dialog = accountContextRef.current;
+    if (dialog === null) return;
+    if (dialog.open) {
+      dialog.close();
+      return;
+    }
+    setNavigationOpen(false);
+    dialog.showModal();
+    setAccountOpen(true);
+    requestAnimationFrame(() => dialog.focus());
+  };
+
+  const closeAccountContext = () => {
+    if (accountContextRef.current?.open) {
+      accountContextRef.current.close();
+      return;
+    }
+    setAccountOpen(false);
+  };
+
+  const handleAccountContextClosed = () => {
+    setAccountOpen(false);
+    requestAnimationFrame(() => accountToggleRef.current?.focus());
+  };
+
+  const requestedWorkspace = new URLSearchParams(window.location.search).get("workspace");
+  const releaseOrSessionDetail = /^\/(?:releases|sessions)\/[0-9a-f-]{36}$/iu.test(window.location.pathname);
+  const hashWorkspace = window.location.hash === "#participant-sessions-title" ? "participant" :
+    window.location.hash === "#release-catalog" || window.location.hash === "#session-catalog" ? "lifecycle" : null;
+  const canUseProjects = context?.destinations.includes("studio") ?? false;
+  const canUseLifecycle = context?.destinations.includes("operations") ?? false;
+  const defaultWorkspace = canUseProjects ? "projects" : canUseLifecycle ? "lifecycle" : "participant";
+  const workspace = administration ? "administration" : researchReporting ? "research" : releaseOrSessionDetail ? "lifecycle" :
+    requestedWorkspace === "projects" && canUseProjects ? "projects" :
+      requestedWorkspace === "lifecycle" && canUseLifecycle ? "lifecycle" :
+        requestedWorkspace === "participant" ? "participant" : hashWorkspace ?? defaultWorkspace;
+  const workspaceTitle = workspace === "projects" ? "Projects" : workspace === "lifecycle" ? "Releases and Sessions" :
+    workspace === "participant" ? "Your Sessions" : workspace === "administration" ? "Administration" : "Research reports";
+
+  return <Shell connection={connection} bounded>
+    <main id="main-content" className="product-shell" data-workspace={workspace} tabIndex={-1}>
       {connection === "loading" ? <section className="card shell-state teludens-state" aria-busy="true">
         <p className="eyebrow">Loading</p><h2>Opening your workspace</h2><p>Verifying identity and Organization access.</p>
       </section> : null}
@@ -221,34 +265,53 @@ function ProductEntry() {
         <p className="eyebrow">Unable to open Plenum</p><h2>Account context did not load</h2><p>Retry safely. No Project or Session was changed.</p>
         <button className="btn-secondary" type="button" onClick={() => void load()}>Retry</button>
       </section> : null}
-      {context === null ? null : <div className="shell-grid" data-density="standard">
-        <nav className="card shell-navigation teludens-node" aria-labelledby="navigation-title">
-          <p className="eyebrow">Destinations</p><h2 id="navigation-title">Choose a workspace</h2>
+      {context === null ? null : <>
+        <header className="workspace-context-header teludens-path">
+          <div>
+            <p className="eyebrow">{context.organization.name}</p>
+            <h1 id="product-title">{workspaceTitle}</h1>
+          </div>
+          <dl aria-label="Current workspace context">
+            <div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div>
+            <div><dt>Organization role</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div>
+          </dl>
+          <button className="btn-secondary workspace-navigation-toggle" type="button" aria-expanded={navigationOpen}
+            aria-controls="workspace-navigation" onClick={() => { setAccountOpen(false); setNavigationOpen((open) => !open); }}>
+            {navigationOpen ? "Close workspaces" : "Open workspaces"}
+          </button>
+          <button ref={accountToggleRef} className="btn-secondary account-context-toggle" type="button" aria-expanded={accountOpen}
+            aria-controls="account-context-sheet" onClick={toggleAccountContext}>
+            {accountOpen ? "Close access context" : "Open access context"}
+          </button>
+        </header>
+        <div className="shell-grid" data-density="standard">
+        <nav id="workspace-navigation" className={`shell-navigation teludens-node${navigationOpen ? " is-open" : ""}`} aria-labelledby="navigation-title">
+          <p className="eyebrow">Lifecycle</p><h2 id="navigation-title">Workspaces</h2>
           <ul>
-            <li><a aria-current={administration || researchReporting ? undefined : "page"} href="/">Home<span>Account and Organization context</span></a></li>
-            {context.destinations.includes("studio") ? <li><a href="/studio/">Studio<span>Open or create a governed Project</span></a></li> : null}
-            <li><a href="/#participant-sessions-title">Sessions<span>Enter an invited or assigned Session</span></a></li>
-            {context.destinations.includes("operations") ? <li><a href="/#session-catalog">Operations<span>Prepare and monitor a Session</span></a></li> : null}
+            {canUseProjects ? <li><a aria-current={workspace === "projects" ? "page" : undefined} href="/?workspace=projects">Projects<span>Govern designs and reusable templates</span></a></li> : null}
+            {canUseLifecycle ? <li><a aria-current={workspace === "lifecycle" ? "page" : undefined} href="/?workspace=lifecycle">Releases and Sessions<span>Publish, configure, and monitor delivery</span></a></li> : null}
+            <li><a aria-current={workspace === "participant" ? "page" : undefined} href="/?workspace=participant">Your Sessions<span>Enter an invited or assigned Session</span></a></li>
+            {canUseProjects ? <li><a href="/studio/">Project editor<span>Open the focused authoring workspace</span></a></li> : null}
             {context.organization.roles.some((role) => role === "admin" || role === "publisher") ? <li><a aria-current={administration ? "page" : undefined} href="/admin/plugins">Administration<span>Roles, Plugins, policy, and deployment posture</span></a></li> : null}
             {context.organization.roles.includes("research_analyst") ? <li><a aria-current={researchReporting ? "page" : undefined} href="/research/reports">Research reports<span>Consent-filtered evidence and provenance</span></a></li> : null}
           </ul>
         </nav>
-        <div className="product-workspaces">
+        <div className="product-workspaces" aria-labelledby="product-title">
           {administration ? <AdministrationPortal organizationId={context.organization.id} roles={context.organization.roles} /> : researchReporting ?
             context.organization.roles.includes("research_analyst") ? <ResearchReportingPortal /> :
               <section className="card portal-state teludens-state" data-state="unauthorized"><p className="eyebrow">Least privilege</p>
-                <h1>Research reporting access unavailable</h1><p>An active Research Analyst Organization Role and project-scoped Research Access Grant are required. Protected research data was not loaded.</p></section> : <>
-            <ParticipantPortal />
-            {context.destinations.includes("studio") ? <ProjectPortal /> : null}
-            {context.destinations.includes("studio") ? <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : null}
-          </>}
+                <h2>Research reporting access unavailable</h2><p>An active Research Analyst Organization Role and project-scoped Research Access Grant are required. Protected research data was not loaded.</p></section> :
+            workspace === "projects" ? <ProjectPortal /> : workspace === "lifecycle" ?
+              <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : <ParticipantPortal />}
         </div>
-        <aside className="card account-context teludens-branch" aria-labelledby="account-title">
-          <p className="eyebrow">Trusted context</p><h2 id="account-title">Account</h2>
-          <dl><div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization Roles</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div></dl>
-          <button className="btn-secondary" type="button" onClick={() => void signOut()}>Sign out</button>
+        <aside id="account-context" className="account-context teludens-branch" aria-labelledby="account-title">
+          <AccessContext context={context} titleId="account-title" onSignOut={signOut} />
         </aside>
-      </div>}
+        <dialog ref={accountContextRef} id="account-context-sheet" className="account-context-sheet teludens-branch" aria-labelledby="account-sheet-title"
+          aria-modal="true" tabIndex={-1} onClose={handleAccountContextClosed}>
+          <AccessContext context={context} titleId="account-sheet-title" onSignOut={async () => { closeAccountContext(); await signOut(); }} onClose={closeAccountContext} />
+        </dialog>
+      </div></>}
     </main>
   </Shell>;
 }

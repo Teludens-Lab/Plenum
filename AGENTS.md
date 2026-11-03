@@ -382,3 +382,13 @@ Do not present guessed performance, security certification, scale, or readiness 
 For tools or subagents with small instruction windows, use this summary **with** the full standard, not instead of it:
 
 > Inspect before changing. Preserve the approved stack, domain semantics, and user work. Build the smallest complete vertical slice. Default to a modular monolith and explicit feature boundaries. Keep one source of truth, directional dependencies, server-side authorization, safe data migration, deterministic testing, and repeatable deployment. Avoid speculative infrastructure, needless abstractions, duplicate state, hidden coupling, and giant components. Follow the project's design standards for UI and `rules/QA_STANDARDS.md` for evidence, regression and release gates. Validate real failure paths. Report exactly what changed, what ran, and what remains uncertain. Complexity must have an evidenced reason.
+
+---
+
+## 17. UI quality rules
+
+All Plenum UI work must follow the Teludens authority in `references/teludens-design-system-catalog/`, the production resolution in `packages/design-system/conformance.json`, and the project contracts under `docs/design/`. Before changing a view, read its view-family brief, `docs/design/journeys.md`, `docs/design/state-inventory.md`, `docs/design/motion-inventory.md`, and `docs/design/forms-dialogs-messages.md`.
+
+Use only semantic tokens and approved Teludens primitives. Preserve the single Plenum shell, human-readable context, one scroll owner per region, keyboard/pointer/touch parity, WCAG 2.2 AA, reduced-motion and forced-colors meaning. Do not require internal identifiers, expose raw JSON/error payloads, create unbounded workstation pages, use card grids as default navigation, add decorative motion, hide critical work behind hover/icon-only controls, or duplicate authoritative state.
+
+For PS-800 and successor UI tasks, `docs/design/forms-dialogs-messages.md` and `docs/design/prohibited-patterns.md` own the project-specific working rules. Use the installed Impeccable skill as a subordinate review method: shape before code; baseline critique/audit/detector; close with critique/audit/detector, screenshot review, cold read and cognitive walkthrough; then compare sibling families. Teludens and approved product behavior always win and conflicts go to `docs/design/impeccable/conflicts.md` or, for authority gaps, candidate OPEN text in `docs/promptbook/CONFLICT_REGISTER.md`.

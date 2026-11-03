@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type ContentLibraryItemV1, type ContentLibraryV1,
   type RolePreviewV1, type StudioRehearsalV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
 import type {
@@ -35,6 +35,40 @@ const SECTIONS = [
   ["preview", "Role walkthrough"], ["test-validate", "Test & validate"],
   ["review-publish", "Review & publish"], ["live-changes", "Live Changes"]
 ] as const;
+
+type SectionId = (typeof SECTIONS)[number][0];
+export type EditorSectionId = SectionId;
+
+const SECTION_GROUPS = [
+  { label: "Set the foundation", sections: SECTIONS.slice(0, 3) },
+  { label: "Define people and work", sections: SECTIONS.slice(3, 7) },
+  { label: "Design information flow", sections: SECTIONS.slice(7, 13) },
+  { label: "Model decisions and systems", sections: SECTIONS.slice(13, 19) },
+  { label: "Shape the experience", sections: SECTIONS.slice(19, 23) },
+  { label: "Verify and release", sections: SECTIONS.slice(23) }
+] as const;
+
+const INTERNAL_SECTIONS = SECTIONS;
+
+function isEditorSectionId(value: string): value is EditorSectionId {
+  return INTERNAL_SECTIONS.some(([id]) => id === value);
+}
+
+export function editorSectionIdForTarget(target: string): EditorSectionId {
+  if (isEditorSectionId(target)) return target;
+  const targetPrefixes: readonly (readonly [string, EditorSectionId])[] = [
+    ["objectives-", "overview"], ["scenario-", "overview"], ["teams-", "teams"],
+    ["sessionRoles-", "roles"], ["seats-", "seats"], ["activities-", "activities"],
+    ["stages-", "stages"], ["stageGroups-", "stages"], ["forms-", "forms"],
+    ["workflows-", "workflows"], ["informationPolicies-", "policies"],
+    ["interfaces-", "interfaces"], ["pluginBindings-", "plugins"], ["compositions-", "compositions"]
+  ];
+  return targetPrefixes.find(([prefix]) => target.startsWith(prefix))?.[1] ?? "overview";
+}
+
+export function editorSectionLabel(id: EditorSectionId): string {
+  return INTERNAL_SECTIONS.find(([sectionId]) => sectionId === id)?.[1] ?? "Overview & Scenario";
+}
 
 export function TextField({ id, label, value, path, client, multiline = false, type = "text", transform, emptyDeletes = false }: {
   id: string; label: string; value: string | number; path: Path; client: StudioCollaborationClient;
@@ -86,7 +120,7 @@ export function ItemActions({ path, index, count, client, label, duplicate }: {
 
 export function Workspace({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
   return <section id={id} className="editor-workspace card" aria-labelledby={`${id}-title`}><div className="workspace-heading">
-    <div><h2 id={`${id}-title`}>{title}</h2><p>{intro}</p></div></div>{children}</section>;
+    <div><h2 id={`${id}-title`} tabIndex={-1}>{title}</h2><p>{intro}</p></div></div>{children}</section>;
 }
 
 export function AddButton({ label, onClick, disabled = false }: { label: string; onClick(): void; disabled?: boolean }) {
@@ -895,37 +929,84 @@ function Rehearsal({ projectId }: { projectId: string }) {
   </Workspace>;
 }
 
-export function VisualCoreDesignEditor({ projectId, client, core, scenario }: {
-  projectId: string; client: StudioCollaborationClient; core: CoreDesignV1; scenario: ScenarioV1;
+export function VisualCoreDesignEditor({ projectId, client, core, scenario, inspector, reviewWorkspace, liveChangesWorkspace }: {
+  projectId: string; client: StudioCollaborationClient; core: CoreDesignV1; scenario: ScenarioV1; inspector: React.ReactNode;
+  reviewWorkspace: React.ReactNode; liveChangesWorkspace: React.ReactNode;
 }) {
+  const [activeSection, setActiveSection] = useState<EditorSectionId>(() => editorSectionIdForTarget(location.hash.slice(1)));
+  const focusActiveHeading = useRef(false);
+
+  useEffect(() => {
+    const handleHashChange = () => setActiveSection(editorSectionIdForTarget(location.hash.slice(1)));
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (!focusActiveHeading.current) return;
+    focusActiveHeading.current = false;
+    requestAnimationFrame(() => document.getElementById(`${activeSection}-title`)?.focus());
+  }, [activeSection]);
+
+  function activateSection(id: EditorSectionId): void {
+    focusActiveHeading.current = true;
+    setActiveSection(id);
+    location.hash = id;
+  }
+
+  const workspaces: readonly (readonly [EditorSectionId, React.ReactNode])[] = [
+    ["overview", <ScenarioEditor core={core} scenario={scenario} client={client} />],
+    ["methodology", <MethodologyEditor core={core} client={client} />],
+    ["teams", <TeamEditor core={core} client={client} />],
+    ["roles", <RoleEditor core={core} client={client} />],
+    ["seats", <SeatEditor core={core} client={client} />],
+    ["activities", <ActivityEditor core={core} client={client} />],
+    ["stages", <StageEditor core={core} client={client} />],
+    ["forms", <FormsEditor core={core} client={client} />],
+    ["workflows", <WorkflowEditor core={core} client={client} />],
+    ["policies", <PolicyEditor core={core} client={client} />],
+    ["communications", <CommunicationsEditor core={core} client={client} />],
+    ["injects", <InjectEditor core={core} scenario={scenario} client={client} />],
+    ["content-library", <ContentLibraryEditor projectId={projectId} core={core} client={client} />],
+    ["advanced-logic", <AdvancedLogicEditor core={core} scenario={scenario} client={client} />],
+    ["adjudication", <AdjudicationEditor core={core} scenario={scenario} client={client} />],
+    ["polls", <PollEditor core={core} client={client} />],
+    ["voice", <VoiceEditor core={core} client={client} />],
+    ["plugins", <PluginCatalogEditor projectId={projectId} core={core} client={client} />],
+    ["compositions", <CompositionEditor projectId={projectId} core={core} client={client} />],
+    ["interfaces", <InterfaceEditor core={core} client={client} />],
+    ["research", <ResearchEditor core={core} client={client} />],
+    ["measurements-reports", <MeasurementReportEditor core={core} client={client} />],
+    ["access", <AccessEditor core={core} client={client} />],
+    ["preview", <RolePreview projectId={projectId} core={core} />],
+    ["test-validate", <Rehearsal projectId={projectId} />],
+    ["review-publish", reviewWorkspace],
+    ["live-changes", liveChangesWorkspace]
+  ];
+
   return <div className="visual-editor" data-contract-id={STUDIO_FOUNDATION_EDITOR_CONTRACT_ID}>
-    <nav className="editor-nav" aria-label="Core Design editor sections"><h2>Design workspaces</h2><button className="btn-secondary compact" type="button" onClick={() => client.undo()}>Undo last change</button><ul>{SECTIONS.map(([id, label]) => <li key={id}><a href={`#${id}`}>{label}</a></li>)}</ul></nav>
-    <div className="editor-canvas">
-      <ScenarioEditor core={core} scenario={scenario} client={client} />
-      <MethodologyEditor core={core} client={client} />
-      <TeamEditor core={core} client={client} />
-      <RoleEditor core={core} client={client} />
-      <SeatEditor core={core} client={client} />
-      <ActivityEditor core={core} client={client} />
-      <StageEditor core={core} client={client} />
-      <FormsEditor core={core} client={client} />
-      <WorkflowEditor core={core} client={client} />
-      <PolicyEditor core={core} client={client} />
-      <CommunicationsEditor core={core} client={client} />
-      <InjectEditor core={core} scenario={scenario} client={client} />
-      <ContentLibraryEditor projectId={projectId} core={core} client={client} />
-      <AdvancedLogicEditor core={core} scenario={scenario} client={client} />
-      <AdjudicationEditor core={core} scenario={scenario} client={client} />
-      <PollEditor core={core} client={client} />
-      <VoiceEditor core={core} client={client} />
-      <PluginCatalogEditor projectId={projectId} core={core} client={client} />
-      <CompositionEditor projectId={projectId} core={core} client={client} />
-      <InterfaceEditor core={core} client={client} />
-      <ResearchEditor core={core} client={client} />
-      <MeasurementReportEditor core={core} client={client} />
-      <AccessEditor core={core} client={client} />
-      <RolePreview projectId={projectId} core={core} />
-      <Rehearsal projectId={projectId} />
+    <div className="editor-mobile-picker field">
+      <label htmlFor="studio-workspace-picker">Design workspace</label>
+      <select id="studio-workspace-picker" value={activeSection} onChange={(event) => activateSection(event.target.value as EditorSectionId)}>
+        {INTERNAL_SECTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
     </div>
+    <nav className="editor-nav" aria-label="Design workspaces">
+      <div className="editor-nav-heading"><h2>Draft map</h2><button className="btn-secondary compact" type="button" onClick={() => client.undo()}>Undo last change</button></div>
+      {SECTION_GROUPS.map((group) => <section className="editor-nav-group" aria-labelledby={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`} key={group.label}>
+        <h3 id={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}>{group.label}</h3>
+        <ul>{group.sections.map(([id, label]) => <li key={id}><a href={`#${id}`} aria-current={id === activeSection ? "page" : undefined}
+          onClick={(event) => {
+            if (!isEditorSectionId(id)) return;
+            event.preventDefault();
+            activateSection(id);
+          }}>{label}</a></li>)}</ul>
+      </section>)}
+    </nav>
+    <div className="editor-canvas" aria-label={`${editorSectionLabel(activeSection)} workspace`}>
+      <div className="active-workspace-path" aria-live="polite"><span>Core Design</span><strong>{editorSectionLabel(activeSection)}</strong></div>
+      {workspaces.map(([id, workspace]) => <div className="editor-workspace-slot" hidden={id !== activeSection} key={id}>{workspace}</div>)}
+    </div>
+    <aside className="editor-inspector" aria-label="Draft guidance">{inspector}</aside>
   </div>;
 }

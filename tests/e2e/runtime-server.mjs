@@ -182,15 +182,15 @@ const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
-const webIndex = await readFile(join(webRoot, "index.html"), "utf8");
-const stylesheet = webIndex.match(/href="([^"]+\.css)"/u)?.[1];
-if (stylesheet === undefined) throw new Error("Runtime web stylesheet was not found");
 
 function safeReturnTo(value) {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
 }
 
-function personaPage(returnTo, error = "") {
+async function personaPage(returnTo, error = "") {
+  const webIndex = await readFile(join(webRoot, "index.html"), "utf8");
+  const stylesheet = webIndex.match(/href="([^"]+\.css)"/u)?.[1];
+  if (stylesheet === undefined) throw new Error("Runtime web stylesheet was not found");
   const choices = Object.entries(localPersonas).map(([value, persona]) => `<label class="choice">
     <input type="radio" name="persona" value="${value}" required>
     <span class="persona-choice-copy"><strong>${persona.label}</strong><span>${persona.description}</span></span>
@@ -221,7 +221,7 @@ const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? "/", "http://localhost");
   if (localUserTest && request.method === "GET" && ["/auth/login", "/__test__/personas"].includes(requestUrl.pathname)) {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end(personaPage(safeReturnTo(requestUrl.searchParams.get("returnTo"))));
+    response.end(await personaPage(safeReturnTo(requestUrl.searchParams.get("returnTo"))));
     return;
   }
   if (localUserTest && request.method === "POST" && requestUrl.pathname === "/__test__/identity") {
@@ -229,7 +229,7 @@ const server = createServer(async (request, response) => {
     const persona = (await formBody(request)).get("persona");
     if (persona === null || !Object.hasOwn(localPersonas, persona)) {
       response.writeHead(422, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      response.end(personaPage(returnTo, "Choose one of the available synthetic personas."));
+      response.end(await personaPage(returnTo, "Choose one of the available synthetic personas."));
       return;
     }
     response.writeHead(303, { location: returnTo,

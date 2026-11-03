@@ -131,7 +131,8 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
       });
       const receipt: unknown = await activationResponse.json();
       if (!activationResponse.ok) throw new Error(message(receipt, "Release activation failed."));
-      setStatus(`Release ${impact.candidateReleaseId} is active for new work. Existing work remains pinned.`);
+      const candidateLabel = releaseOptions.find((release) => release.id === impact.candidateReleaseId)?.label ?? "The candidate Release";
+      setStatus(`${candidateLabel} is active for new work. Existing work remains pinned.`);
       setImpact(null);
       setConfirmed(false);
     } catch (error) {
@@ -142,7 +143,7 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
   }
 
   return <section id="live-changes" className="card live-changes" aria-labelledby="live-changes-title">
-    <div className="card-heading"><div><p className="eyebrow">Live Changes</p><h2 id="live-changes-title">Activate a Release</h2></div>{impact === null ? null : <span className="badge badge-info">{impact.report.classification.replaceAll("_", " ")}</span>}</div>
+    <div className="card-heading"><h2 id="live-changes-title" tabIndex={-1}>Activate a Release</h2>{impact === null ? null : <span className="badge badge-info">{impact.report.classification.replaceAll("_", " ")}</span>}</div>
     <p className="hint">Activation applies the candidate Release to new work only. Existing workflow instances, open Polls, and in-flight Model Compositions keep their governing Release.</p>
     <p role="status" aria-live="polite">{status}</p>
     <form className="live-change-form" onSubmit={(event) => void preview(event)}>
@@ -159,9 +160,16 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
       </dl>
       <h3>Classified changes</h3>
       {impact.report.changes.length === 0 ? <p>No definition changes were detected.</p> : <ul className="issue-list">{impact.report.changes.map((change) =>
-        <li key={`${change.path}:${change.kind}`}><strong>{change.path}</strong><span>{change.kind}; {change.classification.replaceAll("_", " ")}</span></li>)}</ul>}
+        <li key={`${change.path}:${change.kind}`}><strong>{change.kind.replaceAll("_", " ")}</strong><span>{change.classification.replaceAll("_", " ")}</span><details className="issue-technical"><summary>Technical location</summary><code>{change.path}</code></details></li>)}</ul>}
       {impact.report.blockedReasons.length === 0 ? null : <div className="status-error" role="alert"><strong>Activation blocked</strong><ul>{impact.report.blockedReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
       {impact.approvedImpactReviewId === null ? <p>No current approval is recorded for this exact impact.</p> : <p><strong>Current approval:</strong> {impact.approvedBy}</p>}
+      <details className="technical-details"><summary>Technical provenance</summary><dl>
+        <div><dt>Session reference</dt><dd><code>{sessionId}</code></dd></div>
+        <div><dt>Current Release reference</dt><dd><code>{impact.currentReleaseId}</code></dd></div>
+        <div><dt>Candidate Release reference</dt><dd><code>{impact.candidateReleaseId}</code></dd></div>
+        <div><dt>Impact report digest</dt><dd><code>{impact.reportDigest}</code></dd></div>
+        {impact.approvedImpactReviewId === null ? null : <div><dt>Approval reference</dt><dd><code>{impact.approvedImpactReviewId}</code></dd></div>}
+      </dl></details>
       <label className="choice"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />I reviewed this exact impact and approve keeping all existing instances on their current Release.</label>
       <button className="btn-primary" type="button" disabled={busy || !confirmed || impact.report.blockedReasons.length > 0} onClick={() => void activate()}>{busy ? "Working…" : impact.report.classification === "consequential" && impact.approvedImpactReviewId === null ? "Record fresh Reviewer approval" : "Activate for new work"}</button>
     </div>}

@@ -11,6 +11,7 @@ All components consume `packages/design-system/src/tokens.css`; reusable raw col
 | Account Branch | loading, ready, sign-out pending/error | standard | definition list; server-returned context only |
 | State panel | loading, empty, error, unauthorized, offline | focus | heading, plain-language recovery, alert/status semantics |
 | Button/link action | default, hover, focus-visible, active, disabled | inherited | semantic element, 44px minimum in focus density, visible focus |
+| Access context sheet | desktop rail, short-height/tablet sheet, mobile sheet, closed | standard | labeled disclosure; opening focuses the context; internal close returns focus; Sign out remains available; forced-colors boundary |
 
 Operations density is reserved for later expert monitoring screens; the entry shell never defaults to it.
 

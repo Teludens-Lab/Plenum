@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T06:34:21.3758168Z",
+  "title": "Design System: Plenum",
+  "extensions": {
+    "colorMeta": {
+      "mineral-sage": { "role": "primary", "displayName": "Mineral Sage", "canonical": "#455f4b" },
+      "mineral-sage-strong": { "role": "primary", "displayName": "Deep Mineral Sage", "canonical": "#344d3b" },
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#f5f7f4" },
+      "workspace": { "role": "neutral", "displayName": "Workspace Paper", "canonical": "#fafbf9" },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#ffffff" },
+      "graphite": { "role": "neutral", "displayName": "Graphite", "canonical": "#1c241f" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Workspace headline", "purpose": "Names the active work view." },
+      "title": { "displayName": "Portal title", "purpose": "Names an informative sub-view only when it adds context." },
+      "body": { "displayName": "Body", "purpose": "Actions, consequences, and concise guidance." },
+      "label": { "displayName": "Annotation", "purpose": "Short metadata and sectional orientation." }
+    },
+    "shadows": [
+      { "name": "temporary-layer", "value": "0 1px 3px rgb(28 36 31 / 12%)", "purpose": "Dialog sheets and temporary raised layers only." }
+    ],
+    "motion": [
+      { "name": "press", "value": "80ms", "purpose": "Immediate input acknowledgement." },
+      { "name": "hover", "value": "110ms", "purpose": "Hover/focus surface response." },
+      { "name": "selection", "value": "140ms", "purpose": "Selection and current-location continuity." },
+      { "name": "panel", "value": "220ms", "purpose": "Inspector, dialog, and disclosure origin/exit." },
+      { "name": "standard-easing", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Interruptible state transitions." }
+    ],
+    "breakpoints": [
+      { "name": "single-column", "value": "52rem" },
+      { "name": "compact-inspector", "value": "70rem" },
+      { "name": "short-workstation", "value": "44rem height" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single valid next action in a decision region.",
+      "html": "<button class=\"ds-btn-primary\">CONTINUE</button>",
+      "css": ".ds-btn-primary { background: var(--signal-decision); color: var(--text-inverse); border: 1px solid var(--signal-decision); border-radius: var(--radius-md); padding: var(--space-2) var(--space-5); font: inherit; font-weight: var(--weight-medium); transition: background var(--motion-hover) var(--easing-default), transform var(--motion-press) var(--easing-default); } .ds-btn-primary:hover { background: var(--signal-decision-strong); } .ds-btn-primary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; } .ds-btn-primary:active { transform: scale(.98); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A supporting or reversible action.",
+      "html": "<button class=\"ds-btn-secondary\">CANCEL</button>",
+      "css": ".ds-btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--boundary-standard); border-radius: var(--radius-md); padding: var(--space-2) var(--space-5); font: inherit; font-weight: var(--weight-medium); } .ds-btn-secondary:hover { background: var(--material-surface-recessed); border-color: var(--focus-ring); } .ds-btn-secondary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }"
+    },
+    {
+      "name": "Labeled Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A visible label and contained operational input.",
+      "html": "<label class=\"ds-field\">Search Projects<input type=\"search\"></label>",
+      "css": ".ds-field { display: grid; gap: var(--space-2); color: var(--text-primary); font-weight: var(--weight-medium); } .ds-field input { min-height: var(--control-height); padding: var(--space-3); border: 1px solid var(--boundary-standard); border-radius: var(--radius-md); background: var(--material-control); color: var(--text-primary); font: inherit; } .ds-field input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }"
+    },
+    {
+      "name": "Current Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-current",
+      "description": "Goal-oriented navigation with explicit current location.",
+      "html": "<a class=\"ds-nav-current\" aria-current=\"page\" href=\"#\">Releases and Sessions</a>",
+      "css": ".ds-nav-current { display: flex; align-items: center; min-height: var(--control-height); padding: var(--space-3); border-inline-start: 2px solid var(--signal-decision); background: var(--material-selection); color: var(--text-primary); text-decoration: none; font-weight: var(--weight-semibold); } .ds-nav-current:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }"
+    },
+    {
+      "name": "Catalog Row",
+      "kind": "custom",
+      "refersTo": "catalog-row",
+      "description": "Continuous object identity, state, scan facts, and one next action.",
+      "html": "<article class=\"ds-catalog-row\"><div><strong>PS-780 Operator Control Exercise</strong><p>Open · 11/11 readiness · 1 participant</p></div><button class=\"ds-row-action\">START SESSION</button></article>",
+      "css": ".ds-catalog-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-4); align-items: center; padding: var(--space-4); border-block-end: 1px solid var(--boundary-subtle); background: var(--material-surface); color: var(--text-primary); } .ds-catalog-row p { margin: var(--space-1) 0 0; color: var(--text-secondary); } .ds-row-action { min-height: var(--control-height); padding: var(--space-2) var(--space-5); border: 1px solid var(--signal-decision); border-radius: var(--radius-md); background: var(--signal-decision); color: var(--text-inverse); font: inherit; font-weight: var(--weight-medium); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Composed Capability",
+    "overview": "A contained professional instrument with editorial reading order, a dominant work region, and conscientious continuity through every state change.",
+    "keyCharacteristics": ["Contained", "Role-aware", "Flat by default", "Decision-led", "Motion with causality"],
+    "rules": [
+      { "name": "Decision Accent", "body": "Mineral Sage marks selection, focus, and the single primary action; it is not decoration.", "section": "colors" },
+      { "name": "Subject Before Annotation", "body": "Object and action lead; supporting prose remains optional or secondary.", "section": "typography" },
+      { "name": "Temporary Elevation", "body": "Persistent regions use boundaries; temporary regions use elevation.", "section": "elevation" }
+    ],
+    "dos": ["Use Teludens tokens.", "Keep evidence beside the decision it affects.", "Preserve focus, selection, and task order."],
+    "donts": ["Do not copy reference-product chrome.", "Do not create card mosaics or decorative surfaces.", "Do not animate routine reading or imply false completion."]
+  }
+}

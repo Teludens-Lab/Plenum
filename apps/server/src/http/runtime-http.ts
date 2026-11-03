@@ -322,8 +322,13 @@ async function getProductShellContext(pool: Pool, principal: AuthenticatedPrinci
       throw authorizationError("PERMISSION_DENIED", "Current Organization or Session access is required.", correlationId);
     }
     const destinations: Array<"home" | "studio" | "runtime" | "operations"> = ["home", "runtime"];
-    if (principal.organizationRoles.length > 0) destinations.splice(1, 0, "studio");
-    if (principal.organizationRoles.some((role) => role === "operator" || role === "admin")) destinations.push("operations");
+    if (principal.organizationRoles.some((role) =>
+      role === "designer" || role === "reviewer" || role === "publisher" || role === "admin")) {
+      destinations.splice(1, 0, "studio");
+    }
+    if (principal.organizationRoles.some((role) => role === "publisher" || role === "operator" || role === "admin")) {
+      destinations.push("operations");
+    }
     return {
       contractId: PRODUCT_SHELL_CONTRACT_ID,
       principal: { id: principal.principalId, displayName: row.display_name },

@@ -34,6 +34,7 @@ variables {
   application_hostname   = "staging.plenum.example"
   identity_hostname      = "identity.staging.plenum.example"
   media_hostname         = "media.staging.plenum.example"
+  notifications_hostname = "notifications.staging.plenum.example"
   application_contract = {
     deployment_id                = "plenum-staging"
     retention_actor_person_id    = "00000000-0000-4000-8000-000000000001"

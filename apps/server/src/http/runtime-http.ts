@@ -143,6 +143,10 @@ import {
   type UpdatePlatformOrganizationInput
 } from "../platform/provisioning.js";
 import {
+  parseGovernedInvitationMessage,
+  type PostmarkInvitationAdapter
+} from "../platform/postmark-invitation-adapter.js";
+import {
   decidePlatformAdministratorChange,
   listPlatformAdministratorWorkforce,
   proposePlatformAdministratorChange,
@@ -165,9 +169,33 @@ export interface RuntimeHttpOptions {
   contentScanner?: ContentScanner;
   domainVerificationResolver?: DomainVerificationResolver;
   firstAdminInvitationDelivery?: FirstAdminInvitationDelivery;
+  invitationDeliveryBearerToken?: string;
   invitationDeliveryWebhookToken?: string;
+  notificationsHostname?: string;
+  postmarkInvitationAdapter?: PostmarkInvitationAdapter;
   publicBaseUrl?: string;
   identityMetadataFetcher?: IdentityMetadataFetcher;
+}
+
+function bearerAuthorized(authorization: string | undefined, expected: string | undefined): boolean {
+  if (expected === undefined || expected.length === 0 || authorization === undefined || !authorization.startsWith("Bearer ")) {
+    return false;
+  }
+  const presented = authorization.slice("Bearer ".length);
+  if (presented.length === 0) return false;
+  const presentedDigest = createHash("sha256").update(presented).digest();
+  const configuredDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(presentedDigest, configuredDigest);
+}
+
+function requestHostname(request: IncomingMessage): string {
+  const value = request.headers.host?.trim().toLowerCase();
+  if (!value) return "";
+  try {
+    return new URL(`http://${value}`).hostname;
+  } catch {
+    return "";
+  }
 }
 
 function provisioningSource(request: IncomingMessage): ProvisioningOperationSource {
@@ -578,6 +606,58 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       scimRequest = url.pathname.startsWith("/scim/v2/");
       if (!url.pathname.startsWith("/v1/") && !scimRequest) return false;
       let match: RegExpMatchArray | null;
+      const notificationRoute = url.pathname === "/v1/messages" || url.pathname === "/v1/events/postmark";
+      if (notificationRoute) {
+        if (options.notificationsHostname === undefined ||
+            requestHostname(request) !== options.notificationsHostname.toLowerCase()) {
+          send(response, 404, createErrorEnvelope("NOT_FOUND", "The endpoint was not found.", correlationId));
+          return true;
+        }
+        if (options.postmarkInvitationAdapter === undefined) {
+          throw authorizationError("CAPABILITY_UNAVAILABLE", "Invitation delivery is not configured.", correlationId);
+        }
+        if (request.method === "POST" && url.pathname === "/v1/messages") {
+          if (!bearerAuthorized(typeof request.headers.authorization === "string" ? request.headers.authorization : undefined,
+            options.invitationDeliveryBearerToken)) {
+            throw authorizationError("UNAUTHENTICATED", "A valid invitation delivery credential is required.", correlationId);
+          }
+          const body = await readBody(request, correlationId);
+          let message;
+          try {
+            message = parseGovernedInvitationMessage(body);
+          } catch {
+            throw authorizationError("VALIDATION_FAILED", "The invitation message is invalid.", correlationId);
+          }
+          try {
+            send(response, 202, await options.postmarkInvitationAdapter.send(message));
+          } catch {
+            throw authorizationError("AUTHORITY_UNAVAILABLE", "The invitation delivery provider is unavailable.", correlationId);
+          }
+          return true;
+        }
+        if (request.method === "POST" && url.pathname === "/v1/events/postmark") {
+          if (!options.postmarkInvitationAdapter.webhookAuthorized(
+            typeof request.headers.authorization === "string" ? request.headers.authorization : undefined)) {
+            throw authorizationError("UNAUTHENTICATED", "A valid Postmark webhook credential is required.", correlationId);
+          }
+          const body = await readBody(request, correlationId);
+          let event;
+          try {
+            const trace = request.headers["x-pm-webhook-trace-id"];
+            event = options.postmarkInvitationAdapter.normalizeWebhook(body, Array.isArray(trace) ? trace[0] : trace);
+          } catch {
+            throw authorizationError("VALIDATION_FAILED", "The Postmark delivery event is invalid.", correlationId);
+          }
+          if (event === null) {
+            send(response, 202, { accepted: true, ignored: true });
+            return true;
+          }
+          send(response, 202, await recordInvitationDeliveryEvent(options.pool, event, correlationId));
+          return true;
+        }
+        send(response, 404, createErrorEnvelope("NOT_FOUND", "The endpoint was not found.", correlationId));
+        return true;
+      }
       if (scimRequest) {
         const context = await authenticateScimCredential(options.pool,
           typeof request.headers.authorization === "string" ? request.headers.authorization : undefined, correlationId);
@@ -658,13 +738,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           body.displayName, correlationId)); return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/invitation-deliveries/events") {
-        const configured = options.invitationDeliveryWebhookToken;
-        const presented = typeof request.headers.authorization === "string" && request.headers.authorization.startsWith("Bearer ")
-          ? request.headers.authorization.slice("Bearer ".length) : "";
-        const presentedDigest = createHash("sha256").update(presented).digest();
-        const configuredDigest = createHash("sha256").update(configured ?? "").digest();
-        if (configured === undefined || presented.length === 0 ||
-            !timingSafeEqual(presentedDigest, configuredDigest)) {
+        if (!bearerAuthorized(typeof request.headers.authorization === "string" ? request.headers.authorization : undefined,
+          options.invitationDeliveryWebhookToken)) {
           throw authorizationError("UNAUTHENTICATED", "A valid invitation delivery webhook credential is required.", correlationId);
         }
         const body = await readBody(request, correlationId);

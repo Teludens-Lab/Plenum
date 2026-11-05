@@ -21,7 +21,7 @@ Functional-free preserves application behavior and release artifacts, not servic
 
 ## Commands
 
-Prerequisites are PowerShell 7+, Terraform 1.17.x, OCI CLI profile authentication, Node 24+, Docker Buildx authenticated to `ghcr.io`, three DNS names, the private multi-platform image, and the OCI Vault image-pull secret described below. Copy an example to an ignored local path such as `deploy/oci/local/functional-free.tfvars`, replace every `REPLACE` value, then run:
+Prerequisites are PowerShell 7+, Terraform 1.17.x, OCI CLI profile authentication, Node 24+, Docker Buildx authenticated to `ghcr.io`, four DNS names (application, identity, media, and notifications), the private multi-platform image, and the OCI Vault image-pull secret described below. Copy an example to an ignored local path such as `deploy/oci/local/functional-free.tfvars`, replace every `REPLACE` value, then run:
 
 ```powershell
 ./deploy/oci/scripts/init.ps1
@@ -53,6 +53,18 @@ Both profiles supply exactly these eight non-empty JSON string fields to the ima
 ```
 
 Unknown or missing keys fail startup. Functional-free reads `/etc/plenum/secrets/application.json`; production parity reads the current OCI Vault secret version named by `PLENUM_SECRET_BUNDLE_OCID`. Secret content must never appear in `.tfvars`, Terraform state, the OCI Container Instance environment map, logs, or source control.
+
+Functional-free notification delivery additionally requires this all-or-none provider group in `application.json`:
+
+```json
+{
+  "POSTMARK_FROM": "Plenum <verified-sender@example.invalid>",
+  "POSTMARK_SERVER_TOKEN": "<secret>",
+  "POSTMARK_WEBHOOK_PASSWORD": "<independent-secret>"
+}
+```
+
+The Postmark templates must use aliases `platform-first-admin-v1`, `platform-administrator-v1`, and `organization-workforce-v1` with `organizationName`, `invitationUrl`, and `expiresAt` model fields. Configure delivery and bounce callbacks to `https://<notifications-host>/v1/events/postmark` using username `plenum-postmark` and the webhook password. Postmark recipient fields are not copied into Plenum delivery-event records.
 
 ## Private GHCR image-pull contract
 

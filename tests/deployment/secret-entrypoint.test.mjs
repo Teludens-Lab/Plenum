@@ -3,7 +3,12 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { parseSecretBundle, readSecretBundle, SECRET_KEYS } from "../../deploy/compose/secret-entrypoint.mjs";
+import {
+  OPTIONAL_SECRET_GROUPS,
+  parseSecretBundle,
+  readSecretBundle,
+  SECRET_KEYS
+} from "../../deploy/compose/secret-entrypoint.mjs";
 
 const valid = Object.fromEntries(SECRET_KEYS.map((key) => [key, `${key.toLowerCase()}-test-value`]));
 
@@ -13,6 +18,14 @@ test("secret bundle accepts only the complete allowlisted contract", () => {
   const incomplete = { ...valid };
   delete incomplete.DATABASE_URL;
   assert.throws(() => parseSecretBundle(JSON.stringify(incomplete)), /Missing Plenum secret keys: DATABASE_URL/u);
+});
+
+test("Postmark credentials are optional as a group and never accepted partially", () => {
+  const postmark = Object.fromEntries(OPTIONAL_SECRET_GROUPS[0].map((key) => [key, `${key.toLowerCase()}-test-value`]));
+  assert.deepEqual(parseSecretBundle(JSON.stringify({ ...valid, ...postmark })), { ...valid, ...postmark });
+  const incomplete = { ...valid, ...postmark };
+  delete incomplete.POSTMARK_WEBHOOK_PASSWORD;
+  assert.throws(() => parseSecretBundle(JSON.stringify(incomplete)), /Incomplete Plenum secret group/u);
 });
 
 test("file secret source is loaded without exposing a second source", async () => {

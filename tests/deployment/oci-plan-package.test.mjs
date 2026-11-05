@@ -88,6 +88,18 @@ test("networking exposes HTTPS, restricted SSH, and no public production data pl
   assert.match(production, /protocols\s+=\s+\["TLSv1\.2"\]/u);
 });
 
+test("functional-free routes only governed notification paths on the dedicated hostname", async () => {
+  const [variables, free, caddy] = await Promise.all([
+    read("deploy/oci/variables.tf"),
+    read("deploy/oci/functional-free.tf"),
+    read("deploy/oci/runtime/Caddyfile.tftpl")
+  ]);
+  assert.match(variables, /variable "notifications_hostname"/u);
+  assert.match(variables, /invitation_delivery_endpoint must use notifications_hostname/u);
+  assert.match(free, /notifications_hostname\s+=\s+var\.notifications_hostname/u);
+  assert.match(caddy, /\$\{notifications_hostname\}[\s\S]*handle \/v1\/messages[\s\S]*handle \/v1\/events\/postmark[\s\S]*respond "Not Found" 404/u);
+});
+
 test("secret content remains outside Terraform and committed examples", async () => {
   const files = await Promise.all([
     "deploy/oci/variables.tf",

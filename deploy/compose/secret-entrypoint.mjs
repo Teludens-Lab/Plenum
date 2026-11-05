@@ -11,6 +11,9 @@ export const SECRET_KEYS = Object.freeze([
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY"
 ]);
+export const OPTIONAL_SECRET_GROUPS = Object.freeze([
+  Object.freeze(["POSTMARK_FROM", "POSTMARK_SERVER_TOKEN", "POSTMARK_WEBHOOK_PASSWORD"])
+]);
 
 export function parseSecretBundle(raw) {
   let value;
@@ -22,11 +25,19 @@ export function parseSecretBundle(raw) {
   if (!value || Array.isArray(value) || typeof value !== "object") {
     throw new Error("The Plenum secret bundle must be a JSON object.");
   }
-  const unknown = Object.keys(value).filter((key) => !SECRET_KEYS.includes(key));
+  const optionalKeys = OPTIONAL_SECRET_GROUPS.flat();
+  const unknown = Object.keys(value).filter((key) => !SECRET_KEYS.includes(key) && !optionalKeys.includes(key));
   if (unknown.length > 0) throw new Error(`Unknown Plenum secret keys: ${unknown.sort().join(", ")}`);
   const missing = SECRET_KEYS.filter((key) => typeof value[key] !== "string" || value[key].trim() === "");
   if (missing.length > 0) throw new Error(`Missing Plenum secret keys: ${missing.join(", ")}`);
-  return Object.fromEntries(SECRET_KEYS.map((key) => [key, value[key]]));
+  for (const group of OPTIONAL_SECRET_GROUPS) {
+    const present = group.filter((key) => typeof value[key] === "string" && value[key].trim() !== "");
+    if (present.length > 0 && present.length !== group.length) {
+      throw new Error(`Incomplete Plenum secret group: ${group.join(", ")}`);
+    }
+  }
+  const configuredOptionalKeys = optionalKeys.filter((key) => typeof value[key] === "string" && value[key].trim() !== "");
+  return Object.fromEntries([...SECRET_KEYS, ...configuredOptionalKeys].map((key) => [key, value[key]]));
 }
 
 export async function readSecretBundle(environment = process.env) {

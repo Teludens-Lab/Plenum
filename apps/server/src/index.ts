@@ -21,6 +21,7 @@ export * from "./runtime/operator-control.js";
 export * from "./operations/administration.js";
 export * from "./platform/provisioning.js";
 export * from "./platform/invitation-delivery.js";
+export * from "./platform/postmark-invitation-adapter.js";
 export * from "./platform/workforce.js";
 export * from "./runtime/state/world-state.js";
 export * from "./runtime/release-activation.js";

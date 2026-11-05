@@ -7,7 +7,7 @@ import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
   authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
-  WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
+  PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
@@ -25,7 +25,9 @@ const oidcIssuer = required("OIDC_ISSUER").replace(/\/$/u, "");
 const mediaUrl = required("MEDIA_URL");
 const publicBaseUrl = required("PLENUM_PUBLIC_BASE_URL");
 const invitationDeliveryEndpoint = required("INVITATION_DELIVERY_ENDPOINT");
+const invitationDeliveryBearerToken = required("INVITATION_DELIVERY_BEARER_TOKEN");
 const invitationDeliveryWebhookToken = required("INVITATION_DELIVERY_WEBHOOK_TOKEN");
+const notificationsHostname = process.env.NOTIFICATIONS_HOSTNAME?.trim();
 const deploymentId = required("PLENUM_DEPLOYMENT_ID");
 const retentionActorPersonId = required("PLENUM_RETENTION_ACTOR_PERSON_ID");
 const trustedProxy = process.env.PLENUM_TRUST_PROXY === "1";
@@ -79,11 +81,18 @@ const authenticate = async (request, correlationId) => {
 const mediaAdapter = media;
 const firstAdminInvitationDelivery = new WebhookFirstAdminInvitationDelivery({
   endpoint: invitationDeliveryEndpoint,
-  bearerToken: required("INVITATION_DELIVERY_BEARER_TOKEN")
+  bearerToken: invitationDeliveryBearerToken
 });
+const postmarkInvitationAdapter = notificationsHostname ? new PostmarkInvitationAdapter({
+  serverToken: required("POSTMARK_SERVER_TOKEN"),
+  from: required("POSTMARK_FROM"),
+  webhookPassword: required("POSTMARK_WEBHOOK_PASSWORD"),
+  messageStream: process.env.POSTMARK_MESSAGE_STREAM ?? "outbound"
+}) : undefined;
 const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
   objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET"),
-  firstAdminInvitationDelivery, invitationDeliveryWebhookToken, publicBaseUrl,
+  firstAdminInvitationDelivery, invitationDeliveryBearerToken, invitationDeliveryWebhookToken,
+  ...(notificationsHostname && postmarkInvitationAdapter ? { notificationsHostname, postmarkInvitationAdapter } : {}), publicBaseUrl,
   identityMetadataFetcher: createSystemIdentityMetadataFetcher({ allowPrivateNetworks: profile !== "cloud" }) });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));

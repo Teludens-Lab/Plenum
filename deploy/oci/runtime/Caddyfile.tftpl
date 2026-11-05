@@ -22,3 +22,15 @@ ${media_hostname} {
   header Strict-Transport-Security "max-age=31536000; includeSubDomains"
   reverse_proxy media:7880
 }
+
+${notifications_hostname} {
+  encode zstd gzip
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  handle /v1/messages {
+    reverse_proxy application:8080
+  }
+  handle /v1/events/postmark {
+    reverse_proxy application:8080
+  }
+  respond "Not Found" 404
+}

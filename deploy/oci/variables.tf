@@ -108,6 +108,15 @@ variable "media_hostname" {
   }
 }
 
+variable "notifications_hostname" {
+  description = "HTTPS hostname for the governed invitation-delivery adapter."
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$", var.notifications_hostname))
+    error_message = "notifications_hostname must be a fully-qualified DNS hostname."
+  }
+}
+
 variable "oidc_issuer" {
   description = "Production OIDC issuer. Leave null for functional-free, where it is derived from identity_hostname."
   type        = string
@@ -144,6 +153,10 @@ variable "application_contract" {
   validation {
     condition     = can(regex("^https://", var.application_contract.invitation_delivery_endpoint))
     error_message = "invitation_delivery_endpoint must use HTTPS."
+  }
+  validation {
+    condition     = startswith(var.application_contract.invitation_delivery_endpoint, "https://${var.notifications_hostname}/")
+    error_message = "invitation_delivery_endpoint must use notifications_hostname."
   }
 }
 

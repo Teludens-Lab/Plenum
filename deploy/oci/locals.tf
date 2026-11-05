@@ -32,6 +32,7 @@ locals {
     MEDIA_ADAPTER_DIGEST             = var.application_contract.media_adapter_digest
     PLENUM_PUBLIC_BASE_URL           = "https://${var.application_hostname}"
     INVITATION_DELIVERY_ENDPOINT     = var.application_contract.invitation_delivery_endpoint
+    NOTIFICATIONS_HOSTNAME           = local.is_functional_free ? var.notifications_hostname : ""
   }
 }
 

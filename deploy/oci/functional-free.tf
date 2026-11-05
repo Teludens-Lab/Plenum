@@ -24,9 +24,10 @@ locals {
     test_username        = var.functional_test_username
   })
   free_caddyfile = templatefile("${path.module}/runtime/Caddyfile.tftpl", {
-    application_hostname = var.application_hostname
-    identity_hostname    = var.identity_hostname
-    media_hostname       = var.media_hostname
+    application_hostname   = var.application_hostname
+    identity_hostname      = var.identity_hostname
+    media_hostname         = var.media_hostname
+    notifications_hostname = var.notifications_hostname
   })
   free_realm = templatefile("${path.module}/runtime/realm-plenum.json.tftpl", {
     application_hostname = var.application_hostname

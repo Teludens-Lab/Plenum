@@ -37,8 +37,7 @@ Observed source evidence:
 - references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md
 - references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md
 - references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json
-- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png
-- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png
+- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png
 
 Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
@@ -148,7 +147,7 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Synthetic data is clearly labeled
 - UAT evidence does not expose personal or sensitive information
 - Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant
-- Only the catalog Plenum dark/light wordmarks are used as platform branding; simulation content cannot replace platform identity
+- Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity
 
 The approval gate is: Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.. A task may be implementation-complete without being release-approved.
 

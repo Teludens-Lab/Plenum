@@ -8,6 +8,7 @@ import {
   type SessionCatalogV1,
   type SessionSummaryV1
 } from "@plenum/event-contracts";
+import { navigateWithLoader, PlenumLoader } from "../PlenumLoader.js";
 
 class LifecycleError extends Error {
   constructor(readonly status: number, readonly envelope: ErrorEnvelopeV1) {
@@ -213,7 +214,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
         method: "POST", body: JSON.stringify(command)
       });
       creationRef.current = null; setMessage(created.replayed ? "The original Session creation result was recovered." : "Session created and configured.");
-      window.location.assign(created.detailUrl);
+      navigateWithLoader(created.detailUrl);
     } catch (cause) {
       setNoticeKind("error");
       setMessage(`Session was not created. ${cause instanceof Error ? cause.message : "Review the form and try again."} Your entries are preserved.`);
@@ -275,9 +276,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  if (state === "loading" && releases === null && sessions === null) return <section id="lifecycle" className="card portal-state teludens-state" aria-busy="true">
-    <h2>Loading Releases and Sessions</h2><p>Checking current Organization authority and immutable Release state.</p>
-  </section>;
+  if (state === "loading" && releases === null && sessions === null) return <PlenumLoader label="Loading Releases and Sessions" />;
   if (state === "denied") return <section id="lifecycle" className="card portal-state teludens-state" data-state="unauthorized">
     <h2>Release and Session access unavailable</h2><p>Publisher or Operator authority is required. Protected catalog data was not loaded.</p>
   </section>;
@@ -304,7 +303,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
         <div><dt>Schema version</dt><dd>{selectedRelease.packageSchemaVersion}</dd></div><div><dt>Compiler version</dt><dd>{selectedRelease.compilerVersion}</dd></div>
         <div className="provenance-digest"><dt>Package digest</dt><dd><code>{selectedRelease.packageDigest}</code></dd></div></dl>
         <button className="btn-secondary" type="button" onClick={() => void copyPackageDigest(selectedRelease.packageDigest, selectedRelease.label)}>Copy package digest</button></details>
-      {releases?.permissions.canExportPackage ? <a className="btn-secondary link-button" href={selectedRelease.packageUrl}>Export verified Package</a> : null}
+      {releases?.permissions.canExportPackage ? <a className="btn-secondary link-button" href={selectedRelease.packageUrl} data-no-page-transition>Export verified Package</a> : null}
     </article>}
     {selectedSession === null ? null : <article className="card lifecycle-detail" aria-labelledby="session-detail-title">
       <nav aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/#session-catalog">Sessions</a></nav>
@@ -338,7 +337,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
             <div><dt>Compiler version</dt><dd>{release.compilerVersion}</dd></div><div className="provenance-digest"><dt>Package digest</dt><dd><code>{release.packageDigest}</code></dd></div></dl>
             <button className="btn-secondary" type="button" onClick={() => void copyPackageDigest(release.packageDigest, release.label)}>Copy package digest</button></details></div>
           <div className="project-actions catalog-row-actions">
-            {releases.permissions.canExportPackage ? <a className={`${releases.permissions.canCreateSession ? "btn-secondary" : "btn-primary catalog-primary-action"} link-button`} href={release.packageUrl}>Export verified Package</a> : null}
+            {releases.permissions.canExportPackage ? <a className={`${releases.permissions.canCreateSession ? "btn-secondary" : "btn-primary catalog-primary-action"} link-button`} href={release.packageUrl} data-no-page-transition>Export verified Package</a> : null}
             {releases.permissions.canCreateSession ? <button className="btn-primary catalog-primary-action" type="button" disabled={pending} aria-expanded={creatingFrom === release.id}
               aria-controls={`session-create-${release.id}`} onClick={(event) => openSessionCreation(release.id, event.currentTarget)}>Create Session from this Release</button> : releases.permissions.canExportPackage ? null : <a className="btn-primary link-button catalog-primary-action" href={release.detailUrl}>Review Release</a>}</div>
           {creatingFrom === release.id ? <form id={`session-create-${release.id}`} className="session-create" onSubmit={(event) => void createSession(event, release)}>

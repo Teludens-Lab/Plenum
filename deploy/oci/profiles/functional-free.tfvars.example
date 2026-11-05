@@ -18,13 +18,14 @@ admin_cidr           = "203.0.113.10/32"
 ssh_authorized_key   = "ssh-ed25519 REPLACE_WITH_PUBLIC_KEY_ONLY"
 
 application_contract = {
-  deployment_id             = "plenum-staging"
-  retention_actor_person_id = "00000000-0000-4000-8000-000000000001"
-  oidc_provider_key         = "plenum-staging"
-  oidc_organization_id      = "00000000-0000-4000-8000-000000000002"
-  oidc_client_id            = "plenum"
-  s3_region                 = "us-ashburn-1"
-  media_adapter_digest      = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+  deployment_id                 = "plenum-staging"
+  retention_actor_person_id     = "00000000-0000-4000-8000-000000000001"
+  oidc_provider_key             = "plenum-staging"
+  oidc_organization_id          = "00000000-0000-4000-8000-000000000002"
+  oidc_client_id                = "plenum"
+  s3_region                     = "us-ashburn-1"
+  media_adapter_digest          = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+  invitation_delivery_endpoint = "https://notifications.plenum.lan/v1/messages"
 }
 
 # These defaults are deliberate hard ceilings for this tenancy's free staging profile.

@@ -6,19 +6,21 @@ import {
   STUDIO_REHEARSAL_CONTRACT_ID,
   PUBLICATION_REVIEW_CONTRACT_ID,
   ROLE_PREVIEW_CONTRACT_ID,
+  PROJECT_DEMO_CONTRACT_ID,
   canonicalizeJson,
   type JsonObject,
   type JsonValue,
   type StudioCrdtV1,
   type StudioPublishV1,
   type RolePreviewV1,
+  type ProjectDemoV1,
   type StudioRehearsalV1,
   type PublicationReviewV1,
   type StudioValidationReportV1
 } from "@plenum/event-contracts";
 import { validateStudioDraft, type StudioMaterialization } from "@plenum/validation-engine";
 import type { Pool, PoolClient } from "pg";
-import { audienceAllows } from "@plenum/policy-engine";
+import { audienceAllows, type OrganizationRole } from "@plenum/policy-engine";
 import * as Y from "yjs";
 
 import { withOrganizationTransaction } from "../../database.js";
@@ -81,6 +83,11 @@ export interface RolePreviewInput {
   teamId?: string;
 }
 
+interface ProjectDemoAccessRow {
+  roles: Array<"admin" | "designer" | "publisher" | "reviewer" | "operator" | "research_analyst">;
+  reviewer_scope: boolean;
+}
+
 const PUBLICATION_POLICY_VERSION = "OPEN-013.v1";
 
 function sha256(value: Uint8Array | string): string {
@@ -138,7 +145,7 @@ function decodeUpdate(value: string, correlationId: string): Uint8Array {
 async function requireStudioAccess(
   client: PoolClient,
   principal: AuthenticatedPrincipal,
-  roles: readonly ("designer" | "publisher" | "reviewer")[],
+  roles: readonly OrganizationRole[],
   correlationId: string
 ): Promise<void> {
   if (principal.expiresAt <= new Date()) throw authorizationError("AUTH_EXPIRED", "The Authentication Session has expired.", correlationId);
@@ -154,6 +161,38 @@ async function requireStudioAccess(
     [principal.organizationId, principal.authenticationSessionId, principal.principalId, roles]
   );
   if (access.rowCount !== 1) throw authorizationError("ACCESS_REVOKED", "Studio access is no longer active.", correlationId);
+}
+
+async function requireProjectDemoAccess(
+  client: PoolClient,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  correlationId: string
+): Promise<void> {
+  if (principal.expiresAt <= new Date()) throw authorizationError("AUTH_EXPIRED", "The Authentication Session has expired.", correlationId);
+  const access = await client.query<ProjectDemoAccessRow>(
+    `SELECT array_agg(DISTINCT membership.organization_role ORDER BY membership.organization_role)::text[] AS roles,
+            EXISTS (
+              SELECT 1 FROM studio.project_collaborators collaborator
+               WHERE collaborator.organization_id=session.organization_id
+                 AND collaborator.project_id=$4
+                 AND collaborator.person_id=session.person_id
+                 AND collaborator.project_role='reviewer'
+            ) AS reviewer_scope
+       FROM identity.authentication_sessions session
+       JOIN identity.memberships membership
+         ON membership.organization_id=session.organization_id AND membership.person_id=session.person_id
+      WHERE session.organization_id=$1 AND session.id=$2 AND session.person_id=$3
+        AND session.revoked_at IS NULL AND session.expires_at>transaction_timestamp()
+      GROUP BY session.organization_id,session.person_id`,
+    [principal.organizationId, principal.authenticationSessionId, principal.principalId, projectId]
+  );
+  const row = access.rows[0];
+  const organizationAccess = row?.roles.some((role) => role === "admin" || role === "designer") === true;
+  const assignedReviewerAccess = row?.roles.includes("reviewer") === true && row.reviewer_scope;
+  if (!organizationAccess && !assignedReviewerAccess) {
+    throw authorizationError("ACCESS_REVOKED", "Project QA demo access is not available for this Project.", correlationId);
+  }
 }
 
 async function ensureDocument(
@@ -222,7 +261,7 @@ export async function assertStudioSyncAccess(
   correlationId: string
 ): Promise<void> {
   await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireStudioAccess(client, principal, ["designer"], correlationId);
+    await requireStudioAccess(client, principal, ["admin", "designer", "publisher", "reviewer", "operator"], correlationId);
     const project = await client.query("SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2", [principal.organizationId, projectId]);
     if (project.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Simulation Project was not found.", correlationId);
   });
@@ -235,7 +274,7 @@ export async function getCollaborativeDraft(
   correlationId: string
 ): Promise<CollaborativeDraftState> {
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireStudioAccess(client, principal, ["designer", "publisher", "reviewer"], correlationId);
+    await requireStudioAccess(client, principal, ["admin", "designer", "publisher", "reviewer", "operator"], correlationId);
     const { row, projectTitle } = await ensureDocument(client, principal, projectId, correlationId);
     return stateFrom(projectId, projectTitle, row);
   });
@@ -291,6 +330,39 @@ export async function getRolePreview(
     modules: profile.modules,
     content
   };
+}
+
+export async function getProjectDemo(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  correlationId: string
+): Promise<ProjectDemoV1> {
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireProjectDemoAccess(client, principal, projectId, correlationId);
+    const result = await client.query<{ title: string; materialization: JsonObject }>(
+      `SELECT project.title,COALESCE(document.materialized_document,draft.document) AS materialization
+         FROM studio.simulation_projects project
+         JOIN studio.drafts draft
+           ON draft.organization_id=project.organization_id AND draft.project_id=project.id
+         LEFT JOIN studio.collaborative_documents document
+           ON document.organization_id=project.organization_id AND document.project_id=project.id
+          AND document.branch_key='main' AND document.document_key='draft'
+        WHERE project.organization_id=$1 AND project.id=$2`,
+      [principal.organizationId, projectId]
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw authorizationError("NOT_FOUND", "The Simulation Project Draft was not found.", correlationId);
+    return {
+      contractId: PROJECT_DEMO_CONTRACT_ID,
+      projectId,
+      projectTitle: row.title,
+      demoSessionId: randomUUID(),
+      demoMode: true,
+      materialization: row.materialization,
+      validation: validateStudioDraft(row.materialization)
+    };
+  });
 }
 
 export async function applyStudioUpdate(

@@ -14,6 +14,7 @@ import { PluginCatalogEditor } from "../plugins/PluginCatalogEditor.js";
 import { CompositionEditor } from "../compositions/CompositionEditor.js";
 import { AdvancedLogicEditor } from "../advanced-logic/AdvancedLogicEditor.js";
 import { AdjudicationEditor } from "../adjudication/AdjudicationEditor.js";
+import { PlenumLoader } from "../PlenumLoader.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, dec42Workflow, defaultGrant, identifier
@@ -653,13 +654,131 @@ function ContentLibraryEditor({ projectId, core, client }: { projectId: string; 
   </Workspace>;
 }
 
-function InterfaceEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
+type DesignResource = NonNullable<CoreDesignV1["resources"]>[number];
+
+const ROLE_RESOURCE_KINDS = [
+  { value: "slide_deck", label: "Slide deck" },
+  { value: "map", label: "Map" },
+  { value: "notes", label: "Notes" },
+  { value: "reference", label: "Reference" }
+] as const;
+
+function isRoleResource(resource: DesignResource): boolean {
+  return ROLE_RESOURCE_KINDS.some(({ value }) => value === resource.type) ||
+    resource.usage.some((value) => ["role_resource", "session_resource"].includes(value));
+}
+
+function roleResourceMediaType(file: File): string | null {
+  if (["text/plain", "text/markdown", "application/pdf", "image/png", "image/jpeg"].includes(file.type)) return file.type;
+  const extension = file.name.toLocaleLowerCase().split(".").at(-1);
+  return extension === "txt" ? "text/plain" : extension === "md" ? "text/markdown" :
+    extension === "pdf" ? "application/pdf" : extension === "png" ? "image/png" :
+      extension === "jpg" || extension === "jpeg" ? "image/jpeg" : null;
+}
+
+function RoleResourceEditor({ projectId, core, client }: {
+  projectId: string; core: CoreDesignV1; client: StudioCollaborationClient;
+}) {
+  const resources = (core.resources ?? []).filter(isRoleResource);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<(typeof ROLE_RESOURCE_KINDS)[number]["value"]>("slide_deck");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [message, setMessage] = useState(resources.length === 0
+    ? "No role resources have been added." : `${resources.length} role resource${resources.length === 1 ? " is" : "s are"} available.`);
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const referencedBy = (resourceId: string) => coreArray(core, "interfaces").flatMap((profile) =>
+    profile.layout.regions.flatMap((region) => region.modules
+      .filter((module) => module.configuration.releaseResourceId === resourceId ||
+        (Array.isArray(module.configuration.resourceIds) && module.configuration.resourceIds.includes(resourceId)))
+      .map(() => profile.name)));
+  const upload = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (file === null || name.trim() === "" || description.trim() === "") return;
+    const mediaType = roleResourceMediaType(file);
+    if (mediaType === null) {
+      setMessage("Choose a PDF, PNG, JPEG, Markdown, or plain-text file.");
+      return;
+    }
+    if (file.size === 0 || file.size > 512 * 1024) {
+      setMessage("Choose a file between 1 byte and 512 KiB.");
+      return;
+    }
+    setBusy(true);
+    setMessage("Uploading to quarantine and scanning the role resource.");
+    try {
+      const contentBase64 = await fileAsBase64(file);
+      const response = await fetch(`/v1/projects/${projectId}/content-library/uploads`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), title: name.trim(), fileName: file.name,
+          mediaType, contentBase64 })
+      });
+      const body = await response.json() as UploadQuarantineV1 | { error?: { message?: string } };
+      if (!response.ok || !("contractId" in body)) {
+        throw new Error((body as { error?: { message?: string } }).error?.message ?? "Role resource upload failed.");
+      }
+      const version = body.contentItem.versions[0];
+      if (version?.scanStatus !== "clean") throw new Error(version?.scanDetail ?? "The role resource did not pass the security scan.");
+      client.appendAtPath(["coreDesign", "resources"], {
+        id: identifier(), name: name.trim(), type: kind, mediaType, usage: ["role_resource"],
+        altText: description.trim(), dataUri: `data:${mediaType};base64,${contentBase64}`, contentDigest: version.sha256
+      } satisfies DesignResource);
+      setName(""); setDescription(""); setFile(null);
+      if (input.current !== null) input.current.value = "";
+      setMessage(`${name.trim()} is ready to assign to a role interface.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Role resource upload failed safely.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = (resource: DesignResource) => {
+    const assignments = referencedBy(resource.id);
+    if (assignments.length > 0) {
+      setMessage(`${resource.name} is assigned to ${[...new Set(assignments)].join(", ")}. Remove those assignments first.`);
+      return;
+    }
+    const resourceIndex = core.resources?.findIndex(({ id }) => id === resource.id) ?? -1;
+    if (resourceIndex !== -1) client.removeAtPath(["coreDesign", "resources"], resourceIndex);
+    setMessage(`${resource.name} was removed from this Draft.`);
+  };
+  return <section className="role-resource-manager" aria-labelledby="role-resources-title">
+    <div className="section-heading"><div><h3 id="role-resources-title">Role resources</h3>
+      <p>Upload a governed file once, then assign it to any participant or control-role interface below.</p></div></div>
+    <p role="status" aria-live="polite">{message}</p>
+    <form className="content-upload" onSubmit={(event) => void upload(event)}>
+      <div className="grid-fields">
+        <div className="field"><label htmlFor="role-resource-name">Resource name</label><input id="role-resource-name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></div>
+        <div className="field"><label htmlFor="role-resource-kind">Resource kind</label><select id="role-resource-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>{ROLE_RESOURCE_KINDS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></div>
+        <div className="field"><label htmlFor="role-resource-file">File (maximum 512 KiB)</label><input ref={input} id="role-resource-file" required type="file" accept=".txt,.md,.pdf,.png,.jpg,.jpeg,text/plain,text/markdown,application/pdf,image/png,image/jpeg" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div>
+        <div className="field"><label htmlFor="role-resource-description">Participant description</label><input id="role-resource-description" required maxLength={300} value={description} onChange={(event) => setDescription(event.target.value)} aria-describedby="role-resource-description-hint" /><p className="hint" id="role-resource-description-hint">Describe what the resource contains. This also provides alternative text for image resources.</p></div>
+      </div>
+      <button className="btn-primary" type="submit" disabled={busy || file === null || name.trim() === "" || description.trim() === ""}>{busy ? "Scanning…" : "Upload role resource"}</button>
+    </form>
+    {resources.length === 0 ? <p className="empty-state">Add a presentation deck, notes, a map, or another governed reference to make it assignable.</p>
+      : <div className="plugin-catalog">{resources.map((resource) => {
+        const assignments = [...new Set(referencedBy(resource.id))];
+        return <article className="catalog-card" key={resource.id}><h4>{resource.name}</h4>
+          <p>{ROLE_RESOURCE_KINDS.find(({ value }) => value === resource.type)?.label ?? resource.type.replaceAll("_", " ")} · {resource.mediaType}</p>
+          <p>{resource.altText ?? "No participant description."}</p>
+          <p className="hint">{assignments.length === 0 ? "Not assigned to an interface." : `Assigned to ${assignments.join(", ")}.`}</p>
+          <button className="btn-danger compact" type="button" disabled={assignments.length > 0} onClick={() => remove(resource)}>Remove resource</button>
+        </article>;
+      })}</div>}
+  </section>;
+}
+
+function InterfaceEditor({ projectId, core, client }: { projectId: string; core: CoreDesignV1; client: StudioCollaborationClient }) {
   const profiles = coreArray(core, "interfaces");
   const roles = coreArray(core, "sessionRoles");
   const stages = coreArray(core, "stages");
   const teams = coreArray(core, "teams");
   const policies = coreArray(core, "informationPolicies");
-  return <Workspace id="interfaces" title="Interfaces" intro="Choose curated modules and a responsive layout template. Arbitrary pixel positioning is not available.">
+  const roleResources = (core.resources ?? []).filter(isRoleResource);
+  const slideDecks = roleResources.filter((resource) => resource.type === "slide_deck");
+  return <Workspace id="interfaces" title="Interfaces" intro="Choose what each role can see and use. Resources are governed by the published Release and the selected role interface.">
+    <RoleResourceEditor projectId={projectId} core={core} client={client} />
     <div className="editor-list">{profiles.map((profile, index) => <details className="editor-item" id={`interfaces-${profile.id}`} key={profile.id}><summary><span>{profile.name}</span><span className="badge badge-muted">{profile.layout.template.replaceAll("_", " ")}</span></summary><div className="item-body">
       <TextField id={`interface-name-${profile.id}`} label="Interface Profile name" value={profile.name} path={["coreDesign", "interfaces", index, "name"]} client={client} />
       <SelectField id={`interface-layout-${profile.id}`} label="Layout template" value={profile.layout.template} options={["single_column", "main_sidebar", "dashboard", "workspace"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "template"]} client={client} />
@@ -671,6 +790,8 @@ function InterfaceEditor({ core, client }: { core: CoreDesignV1; client: StudioC
           <TextField id={`module-title-${module.id}`} label="Module title" value={module.title ?? ""} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "title"]} client={client} />
           <SelectField id={`module-type-${module.id}`} label="Module" value={module.moduleType} options={MODULE_TYPES.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "moduleType"]} client={client} />
           <SelectField id={`module-policy-${module.id}`} label="Information Policy" value={typeof module.configuration.informationPolicyId === "string" ? module.configuration.informationPolicyId : ""} options={[{ value: "", label: "No additional policy" }, ...policies.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "informationPolicyId"]} client={client} emptyDeletes />
+          {module.moduleType === "slide_deck" && <SelectField id={`module-deck-${module.id}`} label="Slide deck resource" value={typeof module.configuration.releaseResourceId === "string" ? module.configuration.releaseResourceId : ""} options={[{ value: "", label: slideDecks.length === 0 ? "Add a slide deck above" : "Select a slide deck" }, ...slideDecks.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "releaseResourceId"]} client={client} emptyDeletes />}
+          {module.moduleType === "resource_library" && <MultiCheck legend="Resources available in this role workspace" values={Array.isArray(module.configuration.resourceIds) ? module.configuration.resourceIds.filter((id): id is string => typeof id === "string") : []} options={roleResources.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "resourceIds"]} client={client} />}
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], moduleIndex)}>Remove module</button>
         </div>)}
         <AddButton label="Add module" onClick={() => client.appendAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], { id: identifier(), moduleType: "session_status", title: "Session status", configuration: { mode: "read", emptyStateText: "Nothing is available." } })} />
@@ -785,7 +906,122 @@ function MeasurementReportEditor({ core, client }: { core: CoreDesignV1; client:
   </Workspace>;
 }
 
-function ScenarioEditor({ core, scenario, client }: { core: CoreDesignV1; scenario: ScenarioV1; client: StudioCollaborationClient }) {
+type BrandResource = DesignResource;
+
+function selectedBrandResource(core: CoreDesignV1, kind: "developer-logo" | "simulation-image"): BrandResource | undefined {
+  const resourceId = kind === "developer-logo" ? core.identity?.developerLogoResourceId :
+    typeof core.presentation?.login === "object" && core.presentation.login !== null &&
+      "imageResourceId" in core.presentation.login && typeof core.presentation.login.imageResourceId === "string"
+      ? core.presentation.login.imageResourceId : undefined;
+  return core.resources?.find((resource) => resource.id === resourceId) ??
+    (kind === "simulation-image" ? core.resources?.find((resource) => resource.usage.includes("login")) : undefined);
+}
+
+function BrandingAssetEditor({ projectId, core, client, kind }: {
+  projectId: string; core: CoreDesignV1; client: StudioCollaborationClient; kind: "developer-logo" | "simulation-image";
+}) {
+  const developerLogo = kind === "developer-logo";
+  const label = developerLogo ? "Developer logo" : "Participant login image";
+  const resourceId = developerLogo ? "project-developer-logo" : "project-participant-login-image";
+  const existing = selectedBrandResource(core, kind);
+  const [file, setFile] = useState<File | null>(null);
+  const [altText, setAltText] = useState(existing?.altText ?? (developerLogo ? "" : `${core.identity?.title ?? "Simulation"} participant login image`));
+  const [message, setMessage] = useState(existing === undefined ? `No ${label.toLocaleLowerCase()} has been added.` : `${label} is included in this Draft.`);
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  const upload = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (file === null) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setMessage("Choose a PNG or JPEG image.");
+      return;
+    }
+    if (file.size === 0 || file.size > 512 * 1024) {
+      setMessage("Choose an image between 1 byte and 512 KiB.");
+      return;
+    }
+    if (!developerLogo && altText.trim() === "") {
+      setMessage("Describe the participant login image.");
+      return;
+    }
+    setBusy(true);
+    setMessage(`Uploading and scanning the ${label.toLocaleLowerCase()}.`);
+    try {
+      const contentBase64 = await fileAsBase64(file);
+      const response = await fetch(`/v1/projects/${projectId}/content-library/uploads`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ requestId: crypto.randomUUID(), title: label, fileName: file.name,
+          mediaType: file.type, contentBase64 })
+      });
+      const body = await response.json() as UploadQuarantineV1 | { error?: { message?: string } };
+      if (!response.ok || !("contractId" in body)) {
+        throw new Error((body as { error?: { message?: string } }).error?.message ?? `${label} upload failed.`);
+      }
+      const version = body.contentItem.versions[0];
+      if (version?.scanStatus !== "clean") {
+        throw new Error(version?.scanDetail ?? `${label} did not pass the security scan.`);
+      }
+      const resource: BrandResource = {
+        id: resourceId,
+        name: label,
+        type: "image",
+        mediaType: file.type,
+        usage: [developerLogo ? "developer_branding" : "login"],
+        altText: developerLogo ? `${core.identity?.developer || "Simulation developer"} logo` : altText.trim(),
+        dataUri: `data:${file.type};base64,${contentBase64}`,
+        contentDigest: version.sha256
+      };
+      const index = core.resources?.findIndex((candidate) => candidate.id === resourceId) ?? -1;
+      if (index === -1) client.appendAtPath(["coreDesign", "resources"], resource);
+      else client.replaceArrayItemAtPath(["coreDesign", "resources"], index, resource);
+      if (developerLogo) client.setAtPath(["coreDesign", "identity", "developerLogoResourceId"], resourceId);
+      else client.setAtPath(["coreDesign", "presentation", "login", "imageResourceId"], resourceId);
+      setFile(null);
+      if (input.current !== null) input.current.value = "";
+      setMessage(`${label} added to this Draft.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `${label} upload failed safely.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = () => {
+    if (existing === undefined || core.resources === undefined) return;
+    if (developerLogo) client.deleteAtPath(["coreDesign", "identity", "developerLogoResourceId"]);
+    else if (typeof core.presentation?.login === "object" && core.presentation.login !== null && "imageResourceId" in core.presentation.login) {
+      client.deleteAtPath(["coreDesign", "presentation", "login", "imageResourceId"]);
+    }
+    const index = core.resources.findIndex((resource) => resource.id === existing.id);
+    if (index !== -1) client.removeAtPath(["coreDesign", "resources"], index);
+    setMessage(`${label} removed from this Draft.`);
+  };
+
+  const inputId = developerLogo ? "developer-logo-file" : "participant-login-image-file";
+  return <fieldset className="branding-asset-editor"><legend>{label}</legend>
+    <div className={`branding-asset-preview${developerLogo ? " is-logo" : ""}`}>
+      {existing?.dataUri === undefined ? <p>{existing === undefined ? "No image selected" : existing.name}</p> :
+        <img src={existing.dataUri} alt={developerLogo ? "" : existing.altText ?? ""} />}
+    </div>
+    <form onSubmit={(event) => void upload(event)}>
+      <div className="field"><label htmlFor={inputId}>{label} file (PNG or JPEG, maximum 512 KiB)</label>
+        <input ref={input} id={inputId} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div>
+      {developerLogo ? <p className="hint">Shown with the developer or owner name on participant entry.</p> :
+        <div className="field"><label htmlFor="participant-login-image-description">Image description</label>
+          <input id="participant-login-image-description" required maxLength={200} value={altText}
+            onChange={(event) => setAltText(event.target.value)} /></div>}
+      <p className="branding-asset-status" role="status" aria-live="polite">{message}</p>
+      <div className="branding-asset-actions"><button className="btn-primary" type="submit" disabled={busy || file === null}>
+        {busy ? "Scanning…" : `Upload ${label.toLocaleLowerCase()}`}</button>
+        {existing === undefined ? null : <button className="btn-secondary" type="button" onClick={remove}>Remove {label.toLocaleLowerCase()}</button>}
+      </div>
+    </form>
+  </fieldset>;
+}
+
+function ScenarioEditor({ projectId, core, scenario, client }: { projectId: string; core: CoreDesignV1; scenario: ScenarioV1; client: StudioCollaborationClient }) {
   const content = scenario.content ?? [];
   const objectives = coreArray(core, "objectives");
   const identity = core.identity;
@@ -798,6 +1034,12 @@ function ScenarioEditor({ core, scenario, client }: { core: CoreDesignV1; scenar
       <TextField id="identity-purpose" label="Purpose" value={identity?.purpose ?? ""} path={["coreDesign", "identity", "purpose"]} client={client} multiline />
       <TextField id="identity-audience" label="Intended audience" value={identity?.audience ?? ""} path={["coreDesign", "identity", "audience"]} client={client} />
       <TextField id="identity-duration" label="Estimated duration (minutes)" value={identity?.estimatedDurationMinutes ?? 0} path={["coreDesign", "identity", "estimatedDurationMinutes"]} client={client} type="number" />
+    </div>
+    <h3>Participant sign-in branding</h3>
+    <p className="hint">Add the developer identity and simulation artwork shown before a participant enters a Session. Images are type-checked, scanned, and included in the next published Release.</p>
+    <div className="participant-branding-fields">
+      <BrandingAssetEditor projectId={projectId} core={core} client={client} kind="developer-logo" />
+      <BrandingAssetEditor projectId={projectId} core={core} client={client} kind="simulation-image" />
     </div>
     <h3>Learning objectives</h3><div className="editor-list compact-list">{objectives.map((objective, index) => <details className="editor-item" id={`objectives-${objective.id}`} key={objective.id}>
       <summary>{objective.name || "Untitled objective"}</summary><div className="item-body grid-fields">
@@ -886,7 +1128,8 @@ function RolePreview({ projectId, core }: { projectId: string; core: CoreDesignV
       setPreview(body); setMessage("Preview updated.");
     } catch (error) { setPreview(null); setMessage(error instanceof Error ? error.message : "Preview failed."); }
   }
-  return <Workspace id="preview" title="Role & Stage preview" intro="This calls the same server projection resolver used by Runtime and returns only policy-authorized content.">
+  return <Workspace id="preview" title="Role & Stage preview" intro="Check one resolved view here, or open the full isolated QA demo to switch roles and exercise artifact workflows across the participant experience.">
+    <div className="actions"><a className="btn-primary link-button" href={`/projects/${projectId}/demo`}>Open full QA demo</a></div>
     <div className="preview-controls">
       <label>Session Role<select value={sessionRoleId} onChange={(event) => setSessionRoleId(event.target.value)}>{roles.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
       <label>Stage<select value={stageId} onChange={(event) => setStageId(event.target.value)}>{stages.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
@@ -934,12 +1177,17 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
   reviewWorkspace: React.ReactNode; liveChangesWorkspace: React.ReactNode;
 }) {
   const [activeSection, setActiveSection] = useState<EditorSectionId>(() => editorSectionIdForTarget(location.hash.slice(1)));
+  const [sectionTransitioning, setSectionTransitioning] = useState(false);
   const focusActiveHeading = useRef(false);
+  const sectionTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const handleHashChange = () => setActiveSection(editorSectionIdForTarget(location.hash.slice(1)));
     window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      if (sectionTransitionTimer.current !== null) window.clearTimeout(sectionTransitionTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -949,13 +1197,24 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
   }, [activeSection]);
 
   function activateSection(id: EditorSectionId): void {
+    if (id === activeSection) return;
     focusActiveHeading.current = true;
-    setActiveSection(id);
-    location.hash = id;
+    const commit = () => {
+      setActiveSection(id);
+      location.hash = id;
+      requestAnimationFrame(() => setSectionTransitioning(false));
+    };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      commit();
+      return;
+    }
+    if (sectionTransitionTimer.current !== null) window.clearTimeout(sectionTransitionTimer.current);
+    setSectionTransitioning(true);
+    sectionTransitionTimer.current = window.setTimeout(commit, 160);
   }
 
   const workspaces: readonly (readonly [EditorSectionId, React.ReactNode])[] = [
-    ["overview", <ScenarioEditor core={core} scenario={scenario} client={client} />],
+    ["overview", <ScenarioEditor projectId={projectId} core={core} scenario={scenario} client={client} />],
     ["methodology", <MethodologyEditor core={core} client={client} />],
     ["teams", <TeamEditor core={core} client={client} />],
     ["roles", <RoleEditor core={core} client={client} />],
@@ -974,7 +1233,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
     ["voice", <VoiceEditor core={core} client={client} />],
     ["plugins", <PluginCatalogEditor projectId={projectId} core={core} client={client} />],
     ["compositions", <CompositionEditor projectId={projectId} core={core} client={client} />],
-    ["interfaces", <InterfaceEditor core={core} client={client} />],
+    ["interfaces", <InterfaceEditor projectId={projectId} core={core} client={client} />],
     ["research", <ResearchEditor core={core} client={client} />],
     ["measurements-reports", <MeasurementReportEditor core={core} client={client} />],
     ["access", <AccessEditor core={core} client={client} />],
@@ -1008,5 +1267,6 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
       {workspaces.map(([id, workspace]) => <div className="editor-workspace-slot" hidden={id !== activeSection} key={id}>{workspace}</div>)}
     </div>
     <aside className="editor-inspector" aria-label="Draft guidance">{inspector}</aside>
+    <PlenumLoader label="Loading design workspace" overlay visible={sectionTransitioning} />
   </div>;
 }

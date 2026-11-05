@@ -9,7 +9,7 @@ export function AdjudicationReview({ adjudications, disabled, send }: {
 }) {
   if (adjudications.length === 0) return null;
   return <section aria-labelledby="adjudications-title">
-    <div className="section-heading"><p className="eyebrow">Explainable decision workflow</p><h2 id="adjudications-title">Adjudications</h2></div>
+    <div className="section-heading"><h2 id="adjudications-title">Adjudications</h2></div>
     <p className="hint">Reviewer inputs remain distinct. Only the lead synthesis can be published, and publication applies approved effects atomically.</p>
     <div className="card-grid">{adjudications.map((request) => <AdjudicationCard key={request.id}
       request={request} disabled={disabled} send={send} />)}</div>
@@ -46,8 +46,8 @@ function AdjudicationCard({ request, disabled, send }: {
       effects: [], facts: {}, rubricScores: {}, pluginProposalIds: [] });
   };
   return <article className="card adjudication" aria-labelledby={`adjudication-${request.id}`}>
-    <div className="card-heading"><div><p className="eyebrow">{request.mechanism} model</p>
-      <h3 id={`adjudication-${request.id}`}>{request.modelName}</h3></div>
+    <div className="card-heading"><div><h3 id={`adjudication-${request.id}`}>{request.modelName}</h3>
+      <p className="hint">{request.mechanism} model</p></div>
       <span className="badge badge-state">{request.status.replaceAll("_", " ")}</span></div>
     <dl className="metadata"><div><dt>Actions</dt><dd>{request.actionSnapshots.length}</dd></div>
       <div><dt>Version</dt><dd>{request.version}</dd></div></dl>

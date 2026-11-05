@@ -28,6 +28,8 @@ Filters precede results; generation moves focus to a results heading only after 
 
 ## State, viewport and evidence
 
+The normal family implementation and focused cross-family evidence are closed in `../impeccable/reporting-research/family-closeout.md`; remaining human, device and task-level state gates are explicitly NOT RUN.
+
 All Reports states apply: no eligible data, purpose/consent exclusion, generation pending, stale source, partial page/delivery, reconciliation mismatch, export expired and revoked research grant. Verify dense tables, multipage documents and long questions at every risk viewport. Planned evidence key: `reporting-research`; no PS-800 PASS evidence exists yet.
 
 Tier behavior: 1920/1440 show filters, results and provenance; 1280x720/600 keep results primary and collapse provenance; 1024x768 makes filters/provenance sheets; 768x1024 and 390x844 serialize summary, results and disclosures while retaining table alternatives. At 200%/320px, report pages reflow or provide an accessible zoomed document mode without two-dimensional page scrolling.

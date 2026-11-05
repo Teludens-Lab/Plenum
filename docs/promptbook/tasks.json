@@ -6002,21 +6002,27 @@
       "references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md",
       "references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md",
       "references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
+      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png"
     ],
     "depends_on_unratified": [],
-    "prerequisites_verified": false,
+    "prerequisites_verified": true,
     "ready_to_execute": false,
     "migration_ids": [],
     "api_contract_ids": [
       "design-system-v1",
       "visual-qa-matrix-v1"
     ],
-    "evidence": [],
+    "evidence": [
+      "docs/design/state-inventory.md",
+      "docs/design/user-test/PS-800-script.md",
+      "output/playwright/ps-800/after/",
+      "npm run test:visual — PASS 4/4 and 25 required captures",
+      "npm run test:e2e:product — PASS 34/34",
+      "npm run test:a11y — PASS 11/11"
+    ],
     "risk": "high",
     "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
-    "implementation_state": "planned",
+    "implementation_state": "verified",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
@@ -6123,7 +6129,7 @@
       "Reduced motion and forced colors retain meaning",
       "Responsive changes preserve authorization and domain behavior",
       "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",
-      "Only the catalog Plenum dark/light wordmarks are used as platform branding; simulation content cannot replace platform identity"
+      "Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity"
     ],
     "commit_subject": "feat(ui): complete cohesive product experience",
     "commit_body": "Why:\n- Replace proof-oriented long-scroll screens with a coherent professional workstation and verify every supported viewport, input and state.\nWhat:\n- Users can understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.\nVerification:\n- Run the listed automated gates and the task user-test script.\nCompatibility / migrations:\n- Preserve existing Releases and Sessions; use the named additive migration when required.\nRisks / follow-up:\n- Any unverified or inaccessible workflow remains a blocker.\nRefs: PS-800, REQ-009, REQ-063, REQ-064",
@@ -6142,8 +6148,8 @@
       "apps/server/src/http/runtime-http.ts"
     ],
     "depends_on_unratified": [],
-    "prerequisites_verified": false,
-    "ready_to_execute": false,
+    "prerequisites_verified": true,
+    "ready_to_execute": true,
     "migration_ids": [
       "033_observability_security_events"
     ],
@@ -6264,6 +6270,169 @@
   {
     "primary_owner": "Epic J",
     "source_refs": [
+      "02 Platform sections 8, 9, 20, 21 and 22",
+      "06 Data sections 5 through 9 and 16 through 19",
+      "07 Roadmap sections 13 and 15",
+      "ADR-012",
+      "ADR-015"
+    ],
+    "source_evidence": [
+      "apps/server/src/identity/organization-providers.ts",
+      "apps/server/src/identity/organization-workforce.ts",
+      "apps/server/src/platform/",
+      "apps/server/contracts/openapi.yaml",
+      "apps/runtime-web/src/product/PlatformAdministratorsPortal.tsx",
+      "apps/runtime-web/src/product/PlatformOrganizationsPortal.tsx",
+      "apps/runtime-web/src/product/AdministrationPortal.tsx",
+      "scripts/test-provider-interoperability.mjs",
+      "scripts/test-workforce-migration.mjs",
+      "docs/operations/DEPLOYMENT.md"
+    ],
+    "depends_on_unratified": [],
+    "prerequisites_verified": false,
+    "ready_to_execute": false,
+    "migration_ids": [],
+    "api_contract_ids": [
+      "platform-control-plane-v1",
+      "organization-workforce-v1"
+    ],
+    "evidence": [],
+    "risk": "high",
+    "approval_gate": "PS-815 passes only when the required Entra ID, Okta, invitation, recovery, device and assistive-technology evidence is PASS; any FAIL or NOT RUN blocks PS-820, while final platform production approval remains PS-850.",
+    "implementation_state": "planned",
+    "authorization_privacy": [
+      "Use isolated staging tenants, synthetic identities and controlled mailboxes; never copy provider secrets, assertions, access tokens or personal information into evidence",
+      "Prove authentication alone never grants Organization access and IdP groups cannot grant Platform Administrator authority",
+      "Verify Organization scoping, least privilege, final-Administrator protection, session termination and server-side denial across every joiner, mover and leaver transition"
+    ],
+    "concurrency_idempotency_versions": [
+      "Bind all evidence to one immutable release-candidate source, image, lockfile, migration and configuration digest set",
+      "Prove duplicate delivery events, repeated SCIM operations, retries and reconciliation remain idempotent and cannot silently remove access",
+      "Preserve the active known-good provider revision until a separately approved candidate passes discovery, metadata, signing-key and test-authentication preflight"
+    ],
+    "docs_continuity": [
+      "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md with the exact subsystem acceptance result",
+      "Index sanitized provider logs, request and operation identifiers, invitation receipts, recovery evidence and human test records by release-candidate digest",
+      "Record every defect, waiver and approval owner; leave FAIL and NOT RUN gates explicit for PS-820 and PS-850"
+    ],
+    "revisit_triggers": [
+      "Entra ID, Okta, the mail provider or the supported authentication broker changes its contract",
+      "The Organization Role, entitlement, invitation or SCIM lifecycle changes",
+      "The supported browser, device or assistive-technology matrix changes"
+    ],
+    "id": "PS-815",
+    "slug": "prove-platform-control-plane-identity-workforce-production-acceptance",
+    "phase": "P10",
+    "title": "Prove Platform Control Plane identity and workforce production acceptance",
+    "category": "production acceptance",
+    "goal": "Close the real-provider, delivery, recovery and human acceptance gates for governed Organization identity and workforce operations.",
+    "user_outcome": "Organizations can authenticate and provision their workforce through supported identity providers while operators can detect, retry, reconcile and recover failures without database intervention or silent access changes.",
+    "product_requirements": [
+      "REQ-045",
+      "REQ-047",
+      "REQ-051",
+      "REQ-052",
+      "REQ-064",
+      "REQ-066",
+      "REQ-067",
+      "INV-001",
+      "INV-002",
+      "INV-015",
+      "INV-019"
+    ],
+    "prerequisites": [
+      "PS-810"
+    ],
+    "inspect": [
+      "Platform Administrator and Organization provisioning evidence from Control Plane Build Steps 1 through 6",
+      "Organization IdP revision, approval, rollback, emergency-access and signing-key rotation paths",
+      "SCIM credentials, group mappings, provisioning telemetry, retry, reconciliation and session-revocation behavior",
+      "Invitation delivery receipts, bounce handling, revocation, reissue and expiry",
+      "Supported staging tenants, mail provider, devices, browsers and assistive technologies"
+    ],
+    "scope": [
+      "Real Microsoft Entra ID and Okta OIDC, supported brokered SAML and SCIM 2.0 interoperability in staging",
+      "Joiner, mover, leaver, reactivation, group mapping, entitlement and final-Administrator protection journeys",
+      "Invitation delivery, bounce, duplicate receipt, revocation, reissue and expiry through the configured provider",
+      "Visible provisioning failure, bounded retry, reconciliation, credential rotation, provider rollback and emergency access",
+      "Representative workforce migration rehearsal and task-based device and assistive-technology acceptance",
+      "Consolidated sanitized evidence and accountable identity/workforce subsystem go or no-go decision"
+    ],
+    "expected_paths": [
+      "apps/server/src/identity/",
+      "apps/server/src/platform/",
+      "apps/runtime-web/src/product/",
+      "scripts/test-provider-interoperability.mjs",
+      "scripts/test-workforce-migration.mjs",
+      "docs/operations/",
+      "docs/release-evidence/",
+      "test-results/identity-provider/",
+      "test-results/migration/"
+    ],
+    "non_goals": [
+      "Do not test with production tenants, production workforce data or uncontrolled email addresses",
+      "Do not implement SAML directly in Plenum when the approved deployment profile delegates federation to Keycloak or another supported broker",
+      "Do not count mocked provider, local inbox or automated axe evidence as the required real-provider and human acceptance",
+      "Do not approve production, waive a blocking gate or repair staging by manual database mutation"
+    ],
+    "implementation": [
+      "Freeze one staging release candidate and record source, image, lockfile, migration and configuration digests before external testing",
+      "Configure separately approved Entra ID and Okta provider revisions and execute OIDC, supported brokered SAML and SCIM preflight without displacing the known-good revision",
+      "Run joiner, mover, leaver, reactivation, group, entitlement, denial and active-session termination journeys with synthetic identities",
+      "Exercise real invitation delivery, bounce, duplicate callback, revocation, reissue and expiry through controlled inboxes",
+      "Force safe partial failures and prove telemetry, bounded retry, reconciliation, provider rollback, SCIM credential rotation and emergency Platform Administrator access",
+      "Rehearse the workforce migration against representative existing Organization data and verify the documented recovery procedure",
+      "Run the supported Windows, macOS, iOS and Android task matrix with keyboard, touch, zoom, forced colors, reduced motion and named screen readers",
+      "Close defects, consolidate sanitized evidence and obtain named engineering, security, accessibility, operations and product approval for the identity/workforce subsystem"
+    ],
+    "deliverables": [
+      "Entra ID and Okta authentication and SCIM interoperability evidence",
+      "Invitation delivery and bounce evidence",
+      "Provisioning retry, reconciliation, rollback and recovery evidence",
+      "Representative migration and restore evidence",
+      "Device and assistive-technology acceptance report",
+      "Identity and workforce subsystem go or no-go record"
+    ],
+    "test_ids": [
+      "PS-815-T01",
+      "PS-815-T02"
+    ],
+    "validation_command_refs": [
+      "CMD-PLATFORM-TEST",
+      "CMD-PLATFORM-INTEGRATION",
+      "CMD-PRODUCT-E2E",
+      "CMD-PLATFORM-A11Y",
+      "CMD-WORKFORCE-MIGRATION",
+      "CMD-IDENTITY-PROVIDER-STAGING",
+      "CMD-SECURITY",
+      "CMD-DEPLOYMENT-SMOKE",
+      "CMD-GAP-AUDIT"
+    ],
+    "acceptance_criteria": [
+      "Entra ID and Okta each complete the approved OIDC, supported brokered SAML and SCIM joiner, mover, leaver and reactivation journeys against the same staging release candidate",
+      "Authentication without an active governed workforce assignment grants no access and no IdP group can grant Platform Administrator authority",
+      "Failed or partial synchronization is visible, retryable and reconcilable without silent deletion, privilege escalation or manual database intervention",
+      "Real invitations are delivered, bounced, revoked, reissued and expired with duplicate provider events handled idempotently",
+      "Suspension and deprovisioning terminate active sessions and future entry while preserving governed and immutable audit records",
+      "Provider rollback, emergency Platform Administrator access, SCIM credential rotation and representative migration recovery succeed",
+      "Authorized human testers complete the control-plane workflows on the supported device and assistive-technology matrix with no unresolved task-blocking defect",
+      "Every required gate is PASS and named accountable approvers bind the subsystem decision to the exact tested artifacts"
+    ],
+    "regression_quality_gates": [
+      "Provider configuration cannot replace a working revision before successful preflight and separate approval",
+      "Authentication, provisioning and authorization remain separate authorities and fail closed",
+      "Reconciliation cannot silently apply destructive removals and retries cannot duplicate side effects",
+      "Emergency Platform Administrator access remains independent of customer identity systems",
+      "Evidence contains correlation identifiers and outcomes without secrets, tokens, assertions or personal data",
+      "FAIL and NOT RUN are never translated into PASS or production approval"
+    ],
+    "commit_subject": "test(identity): prove control-plane production acceptance",
+    "commit_body": "Why:\n- Close the external provider, delivery, recovery and human acceptance gap before whole-platform release testing.\nWhat:\n- Prove governed Entra ID, Okta, SCIM, invitation, recovery and accessible workforce operations against one staging release candidate.\nVerification:\n- Run the listed automated gates, real-provider harnesses and authorized human acceptance matrix.\nCompatibility / migrations:\n- Rehearse migrations 037 and 038 against representative data; use restore or forward-fix rather than destructive schema rollback.\nRisks / follow-up:\n- Any missing provider, delivery, recovery, device or assistive-technology evidence blocks PS-820.\nRefs: PS-815, REQ-045, REQ-051, REQ-064",
+    "pr_description": "Summary: Prove that activated Organizations can authenticate and provision their workforce through real Entra ID and Okta integrations and recover safely from delivery, synchronization and provider failures. Risks: high identity, authorization, tenant-isolation and session-revocation exposure. Migration: no new schema; rehearse migrations 037 and 038 with representative data. Evidence: automated regression, real-provider logs, delivery receipts, recovery exercises and authorized device and assistive-technology acceptance. Rollback: retain the known-good provider revision, revoke test credentials, restore isolated staging data when required and forward-fix additive migrations."
+  },
+  {
+    "primary_owner": "Epic J",
+    "source_refs": [
       "02 Platform section 5",
       "06 Data sections 17 and 18",
       "07 Roadmap section 15",
@@ -6328,7 +6497,7 @@
       "INV-028"
     ],
     "prerequisites": [
-      "PS-810"
+      "PS-815"
     ],
     "inspect": [
       "Three deployment profiles and offline bundle",
@@ -6420,8 +6589,7 @@
       "references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md",
       "references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md",
       "references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
+      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png"
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": false,
@@ -6539,7 +6707,7 @@
       "The Runtime contains no simulation-name branches",
       "Every encountered defect is fixed and rerun from the nearest durable checkpoint",
       "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",
-      "Only the catalog Plenum dark/light wordmarks are used as platform branding; simulation content cannot replace platform identity"
+      "Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity"
     ],
     "commit_subject": "test(product): prove blank-install golden journey",
     "commit_body": "Why:\n- Demonstrate the complete platform promise from a blank installation through a finished Fractured Order-derived Session using only product interfaces.\nWhat:\n- A target user can create, author, review, publish, staff, run, adjudicate, report, replay and archive a complete simulation without fixture seeding, raw JSON, SQL or source changes.\nVerification:\n- Run the listed automated gates and the task user-test script.\nCompatibility / migrations:\n- Preserve existing Releases and Sessions; use the named additive migration when required.\nRisks / follow-up:\n- Any unverified or inaccessible workflow remains a blocker.\nRefs: PS-830, REQ-009, REQ-020, REQ-024",
@@ -6567,8 +6735,7 @@
       "references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md",
       "references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md",
       "references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
+      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png"
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": false,
@@ -6801,7 +6968,7 @@
       "Synthetic data is clearly labeled",
       "UAT evidence does not expose personal or sensitive information",
       "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",
-      "Only the catalog Plenum dark/light wordmarks are used as platform branding; simulation content cannot replace platform identity"
+      "Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity"
     ],
     "commit_subject": "test(product): close complete platform acceptance",
     "commit_body": "Why:\n- Prove that platform completeness generalizes beyond Fractured Order and that no specified feature, function, UI state or operational obligation is missing.\nWhat:\n- Real target users can build and run materially different simulations, and the release packet contains no unknown, fixture-only, inaccessible or untested product behavior.\nVerification:\n- Run the listed automated gates and the task user-test script.\nCompatibility / migrations:\n- Preserve existing Releases and Sessions; use the named additive migration when required.\nRisks / follow-up:\n- Any unverified or inaccessible workflow remains a blocker.\nRefs: PS-840, REQ-001, REQ-002, REQ-003",

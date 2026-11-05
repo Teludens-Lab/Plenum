@@ -4,10 +4,10 @@
 
 - ID: `PS-800`
 - Title: Complete Teludens conformance and every UI state
-- Goal: Replace proof-oriented long-scroll screens with a coherent, cohesive, intuitive professional workstation and verify every supported viewport, input and state. Use the impecable skill.
-- User outcome: Users can easily understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.
+- Goal: Replace proof-oriented long-scroll screens with a coherent professional workstation and verify every supported viewport, input and state.
+- User outcome: Users can understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 
@@ -36,8 +36,7 @@ Observed source evidence:
 - references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md
 - references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md
 - references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json
-- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png
-- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png
+- references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png
 
 Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
@@ -151,7 +150,7 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Reduced motion and forced colors retain meaning
 - Responsive changes preserve authorization and domain behavior
 - Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant
-- Only the catalog Plenum dark/light wordmarks are used as platform branding; simulation content cannot replace platform identity
+- Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity
 
 The approval gate is: Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.. A task may be implementation-complete without being release-approved.
 
@@ -188,7 +187,7 @@ Refs: PS-800, REQ-009, REQ-063, REQ-064
 
 Proposed PR description:
 
-Summary: Users can intuitively understand, navigate and complete complex work efficiently on aesthetically pleasing, professional and intuitive desktop and constrained displays with keyboard, pointer, touch and assistive technology. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
+Summary: Users can understand, navigate and complete complex work efficiently on desktop and constrained displays with keyboard, pointer, touch and assistive technology. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

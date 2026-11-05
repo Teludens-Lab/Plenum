@@ -16,7 +16,9 @@ const migrations = [
     "015_collaboration_runtime", "016_voice_consent_assets", "017_session_access", "018_identity_roles_and_governance", "019_world_state_automation",
     "020_adjudication_records", "021_live_release_activation", "022_offline_devices", "023_evidence_checkpoints", "024_reporting_research",
     "025_security_retention_enforcement", "026_product_portal", "027_release_session_catalog", "028_content_library",
-    "030_template_review_governance", "032_operations_administration"]
+    "030_template_review_governance", "032_operations_administration", "033_platform_control_plane",
+    "034_platform_onboarding_operations", "035_platform_administrator_workforce",
+    "036_organization_identity_providers", "037_organization_workforce", "038_identity_workforce_operations"]
     .map((name) => `apps/server/migrations/${name}.sql`)
 ];
 const ids = {

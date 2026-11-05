@@ -29,6 +29,12 @@ Installed command list: `craft` (deprecated), `shape`, `init`, `document`, `extr
 | `critique` + `audit` + `polish` method | Platform lifecycle build step 7 | dual-agent after-review; native modal and forced-colors blockers fixed; current screenshots reviewed; detector clean; evidence and remaining gates consolidated | `docs/design/impeccable/platform-lifecycle/after-critique.md`, `after-audit.md`, `review.md`, `family-closeout.md` |
 | `layout` method | Studio authoring build step 1 | twenty-five authoring capabilities composed into one URL-restorable bounded workstation with a task-grouped Draft map, responsive picker and persistent Draft checks | `docs/design/impeccable/studio-authoring/build-step-1-review.md` |
 | `layout` + `distill` + `clarify` methods | Studio authoring build step 2 | Review & publish and Live Changes moved into the selected-workspace contract; technical identifiers and digests moved behind labeled provenance disclosures | `docs/design/impeccable/studio-authoring/build-step-2-review.md` |
+| `typeset` method | Studio authoring build step 3 | Teludens semantic type hierarchy verified across the Draft map, selected canvas, guidance inspector and empty state | `docs/design/impeccable/studio-authoring/build-step-3-review.md` |
+| `clarify` method | Studio authoring build step 4 | authoring, validation, review, publication and live-change copy/provenance hierarchy closed | `docs/design/impeccable/studio-authoring/build-step-4-review.md` |
+| `harden` method | Studio authoring build step 5 | Draft checks and governed publication/activation states retain one eligible next action | `docs/design/impeccable/studio-authoring/build-step-5-review.md` |
+| `adapt` method | Studio authoring build step 6 | bounded desktop, tablet picker, serialized mobile, short-height, 320px/200%, coarse pointer, reduced motion and forced colors reviewed | `docs/design/impeccable/studio-authoring/build-step-6-review.md` |
+| `critique` + `audit` + `polish` method | Studio authoring build step 7 | rendered review, focused cross-family test and explicit human/device gates consolidated | `docs/design/impeccable/studio-authoring/build-step-7-review.md`, `after-critique.md`, `after-audit.md`, `family-closeout.md` |
+| `layout` + `typeset` + `clarify` + `harden` + `adapt` + `polish` methods | remaining five view families | full-width bounded workspaces, continuous Participant rows, contextual inspectors, state-valid actions, progressive technical provenance and responsive task order implemented | family `family-closeout.md` files under `participant-runtime`, `operator-control`, `organization-administration`, `reporting-research`, and `replay-archive` |
 
 ## Command mapping
 
@@ -36,5 +42,5 @@ The prompt's `arrange` intent maps to Impeccable `layout`. The prompt's `normali
 
 ## Checkpoint A output
 
-Each family folder contains a `before-shape.md` planning record that links to the governing brief. Baseline screenshots, critique/audit output and after-evidence begin only after continuation approval. `conflicts.md` records any recommendation that would contradict Teludens or approved product behavior.
+Each family folder retains its `before-shape.md` planning record and now links to implementation close-out evidence. `conflicts.md` records any recommendation that would contradict Teludens or approved product behavior. Full route × state artifacts and human/device acceptance remain separate NOT RUN gates.
 

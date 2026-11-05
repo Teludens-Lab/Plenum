@@ -91,12 +91,22 @@ async function actor(browser, token, options = {}) {
   return { context, page: await context.newPage() };
 }
 
-async function openStudioWorkspace(page, name, regionName = name) {
-  const picker = page.getByLabel("Design workspace", { exact: true });
-  if (await picker.isVisible()) await picker.selectOption({ label: name });
-  else await page.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name, exact: true }).click();
-  const workspace = page.getByRole("region", { name: regionName });
-  await expect(workspace).toBeVisible();
+async function openStudioWorkspace(page, name) {
+  const canvas = page.locator(`.editor-canvas[aria-label="${name} workspace"]`);
+  const workspace = page.locator(".editor-workspace-slot:not([hidden])");
+  const picker = page.locator("#studio-workspace-picker");
+  const navigation = page.locator(".editor-nav");
+  await expect.poll(async () => {
+    if (await canvas.isVisible()) return "canvas";
+    if (await picker.isVisible()) return "picker";
+    if (await navigation.isVisible()) return "navigation";
+    return "loading";
+  }, { timeout: 40_000 }).not.toBe("loading");
+  if (await canvas.isVisible()) return workspace;
+  if (await picker.isVisible()) await picker.selectOption({ label: name }, { timeout: 20_000 });
+  else await navigation.getByRole("link", { name, exact: true }).click({ timeout: 20_000 });
+  await expect(canvas).toBeVisible({ timeout: 20_000 });
+  await expect(workspace).toBeVisible({ timeout: 20_000 });
   return workspace;
 }
 
@@ -199,7 +209,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
   test("@a11y AC-04 REQ-064 renders a keyboard and screen-reader operable empty workspace", async ({ browser }) => {
     const { context, page } = await actor(browser, fixture.tokens.author, { viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
     await page.goto(runtimeUrl());
-    await expect(page.getByRole("heading", { level: 1, name: "Blue Scribe workspace" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "PS-150 S1 proof Session" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No Artifacts have been created yet.")).toBeVisible();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
@@ -226,7 +236,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       viewport: { width: 1280, height: 720 }, reducedMotion: "reduce"
     });
     await page.goto(runtimeUrl());
-    await expect(page.getByRole("heading", { level: 1, name: "Blue Scribe workspace" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "PS-150 S1 proof Session" })).toBeVisible({ timeout: 15_000 });
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     const create = await fillBlueOrientation(page, uniqueDraft);
@@ -816,7 +826,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     expect(participantProjection.status()).toBe(403);
     expect((await participantProjection.json()).error.code).toBe("NOT_A_PARTICIPANT");
     await operator.page.goto(operatorUrl());
-    await expect(operator.page.getByRole("heading", { level: 1, name: "Session control view" })).toBeVisible();
+    await expect(operator.page.getByRole("heading", { level: 1, name: "Session control" })).toBeVisible();
     await expect(operator.page.getByRole("heading", { level: 2, name: "Session staffing" })).toBeVisible();
     await expect(operator.page.getByText("No ambiguous roster rows.")).toBeVisible();
     await expect(operator.page.getByRole("heading", { level: 2, name: "Operator readiness" })).toBeVisible();
@@ -1177,7 +1187,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await participant.page.goto(runtimeUrl());
     await expect(participant.page.getByText("Reconnect parity broadcast.", { exact: true })).toHaveCount(1, { timeout: 15_000 });
     await participant.context.setOffline(true);
-    await expect(participant.page.getByLabel("Connection status: Offline")).toBeVisible();
+    await expect(participant.page.getByLabel("Plenum status: Offline")).toBeVisible();
     await participant.context.setOffline(false);
     await expect(participant.page.getByLabel("Plenum status: Connected")).toBeVisible({ timeout: 15_000 });
     await expect(participant.page.getByText("Reconnect parity broadcast.", { exact: true })).toHaveCount(1);
@@ -1359,13 +1369,13 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await loading.page.goto(runtimeUrl());
     await expect(loading.page.getByRole("heading", { name: "Loading Runtime" })).toBeVisible();
     releaseProjection();
-    await expect(loading.page.getByRole("heading", { name: "Blue Facilitator workspace" })).toBeVisible({ timeout: 15_000 });
+    await expect(loading.page.getByRole("heading", { level: 1, name: "PS-150 S1 proof Session" })).toBeVisible({ timeout: 15_000 });
     await loading.page.unroute("**/v1/sessions/*/runtime-projection");
     await loading.context.setOffline(true);
     await loading.page.getByRole("button", { name: "Refresh authoritative state" }).click();
-    await expect(loading.page.getByText("Offline", { exact: true })).toBeVisible();
+    await expect(loading.page.getByLabel("Plenum status: Offline")).toBeVisible();
     await loading.context.setOffline(false);
-    await expect(loading.page.getByText("Connected", { exact: true })).toBeVisible();
+    await expect(loading.page.getByLabel("Plenum status: Connected")).toBeVisible();
 
     const denied = await browser.newPage();
     await denied.goto(operatorUrl());
@@ -1385,7 +1395,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await Promise.all([first.page.goto(studioUrl()), second.page.goto(studioUrl())]);
     await expect(first.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
     await expect(second.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 120_000 });
-    await expect(first.page.locator(".studio-context h1")).toBeVisible();
+    await expect(first.page.locator(".studio-app-header .product-header-title")).toBeVisible();
 
     const teams = await openStudioWorkspace(first.page, "Teams");
     await teams.getByRole("button", { name: "Add Team" }).click();
@@ -1434,9 +1444,9 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(voice.getByRole("table", { name: "Effective configured permissions. Public access, when selected, applies to every row." })).toBeVisible();
 
     const preview = await openStudioWorkspace(first.page, "Role walkthrough", "Role & Stage preview");
-    await preview.getByLabel("Session Role").selectOption("scribe");
-    await preview.getByLabel("Stage").selectOption("orientation");
-    await preview.getByLabel("Team").selectOption("blue");
+    await preview.getByRole("combobox", { name: "Session Role", exact: true }).selectOption("scribe");
+    await preview.getByRole("combobox", { name: "Stage", exact: true }).selectOption("orientation");
+    await preview.getByRole("combobox", { name: "Team", exact: true }).selectOption("blue");
     await preview.getByRole("button", { name: "Preview interface" }).click();
     await expect(preview.getByText("Preview updated.")).toBeVisible({ timeout: serverTimeout });
     await expect(preview.getByLabel("Scribe interface preview")).toBeVisible({ timeout: serverTimeout });
@@ -1699,7 +1709,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
       await reviewChanges.getByLabel("Candidate Release").selectOption(fixture.activationReleaseId);
       await reviewChanges.getByRole("button", { name: "Preview impact" }).click();
       await expect(reviewChanges.getByText("Impact preview is ready for explicit review.")).toBeVisible({ timeout: 20_000 });
-      await expect(reviewChanges.getByText("consequential", { exact: true })).toBeVisible();
+      await expect(reviewChanges.locator(".badge-info").getByText("consequential", { exact: true })).toBeVisible();
       await expect(reviewChanges.locator(".impact-counts > div").filter({ hasText: "Open Polls" })).toContainText("1");
       await expect(reviewChanges.locator(".impact-counts > div").filter({ hasText: "In-flight compositions" })).toContainText("1");
       expect((await new AxeBuilder({ page: reviewer.page }).include(".live-changes").analyze()).violations).toEqual([]);

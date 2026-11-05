@@ -227,6 +227,32 @@ test("PARITY-SCENARIO-01 packages hashed scenario media for only its configured 
   assert.equal(JSON.stringify(compileRelease(source).release).includes("https://"), false);
 });
 
+test("ROLE-RESOURCE-01 validates governed role resource libraries", () => {
+  const configured = structuredClone(source);
+  const author = configured.materialization.coreDesign.interfaces.find(({ id }) => id === "participant-author");
+  author.layout.regions[0].modules.push({
+    id: "author-role-resources",
+    moduleType: "resource_library",
+    title: "Role resources",
+    configuration: {
+      mode: "read",
+      emptyStateText: "No role resources are available.",
+      resourceIds: ["fractured-order-session-deck"]
+    }
+  });
+  assert.doesNotThrow(() => compileRelease(configured));
+
+  const missingSelection = structuredClone(configured);
+  missingSelection.materialization.coreDesign.interfaces.find(({ id }) => id === "participant-author")
+    .layout.regions[0].modules.find(({ id }) => id === "author-role-resources").configuration.resourceIds = [];
+  assert.throws(() => compileRelease(missingSelection), /no valid role Resources/u);
+
+  const missingResource = structuredClone(configured);
+  missingResource.materialization.coreDesign.interfaces.find(({ id }) => id === "participant-author")
+    .layout.regions[0].modules.find(({ id }) => id === "author-role-resources").configuration.resourceIds = ["missing-resource"];
+  assert.throws(() => compileRelease(missingResource), /missing identifier|missing Resource/u);
+});
+
 test("PS-200-T01 preserves the reference RFI category contract", () => {
   const form = authoringSource.materialization.coreDesign.forms.find(({ id }) => id === "form-rfi");
   const categories = form.sections.flatMap(({ fields }) => fields).find(({ key }) => key === "categories");

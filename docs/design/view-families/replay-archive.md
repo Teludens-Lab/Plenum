@@ -28,6 +28,8 @@ Timeline steps use buttons/list semantics and expose previous/next without requi
 
 ## State, viewport and evidence
 
+The normal family implementation and focused cross-family evidence are closed in `../impeccable/replay-archive/family-closeout.md`; remaining human, device and task-level state gates are explicitly NOT RUN.
+
 All Replay/archive states apply except local pending for read-only replay. Required conditions include no capture, reconstruction pending, integrity verified/failed, divergence, legal hold, archive prepared, partial export, import incompatibility and revoked access. Planned evidence key: `replay-archive`; no PS-800 PASS evidence exists yet.
 
 Tier behavior: 1920/1440 show timeline, replay surface and evidence; 1280x720/600 collapse evidence while retaining time/source/integrity; 1024x768 stacks timeline and surface; 768x1024 and 390x844 use previous/next event navigation plus evidence sheets. At 200%/320px, replay meaning remains available as structured text without relying on spatial animation.

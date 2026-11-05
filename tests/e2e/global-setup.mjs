@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { Pool } from "pg";
@@ -41,7 +41,13 @@ const migrations = [
   "apps/server/migrations/027_release_session_catalog.sql",
   "apps/server/migrations/028_content_library.sql",
   "apps/server/migrations/030_template_review_governance.sql",
-  "apps/server/migrations/032_operations_administration.sql"
+  "apps/server/migrations/032_operations_administration.sql",
+  "apps/server/migrations/033_platform_control_plane.sql",
+  "apps/server/migrations/034_platform_onboarding_operations.sql",
+  "apps/server/migrations/035_platform_administrator_workforce.sql",
+  "apps/server/migrations/036_organization_identity_providers.sql",
+  "apps/server/migrations/037_organization_workforce.sql",
+  "apps/server/migrations/038_identity_workforce_operations.sql"
 ];
 
 export default async function globalSetup() {
@@ -65,7 +71,7 @@ export default async function globalSetup() {
       resultVisibilityPolicyId: "policy-public", certificationPolicy: { certifierSessionRoleIds: ["white_cell"] }
     }] }, scenario: release.scenario };
     const releaseDefinition = structuredClone(definition);
-    releaseDefinition.coreDesign.accessPolicy.joinMethods = ["invitation", "open_seat_selection", "operator_assignment"];
+    releaseDefinition.coreDesign.accessPolicy.joinMethods = ["invitation", "code_and_verified_email", "open_seat_selection", "operator_assignment"];
     for (const seat of releaseDefinition.coreDesign.seats.slice(0, 2)) seat.joinMode = "open_selection";
     const consentChannel = releaseDefinition.coreDesign.communications.voiceChannels.find(({ id }) => id === "team-open-room");
     consentChannel.transcriptionPolicy = "with_consent";
@@ -93,13 +99,14 @@ export default async function globalSetup() {
        ($1,'Synthetic Blue author'),($2,'Synthetic Blue reviewer'),($3,'Synthetic final reviewer'),($4,'Synthetic operator'),
        ($5,'Synthetic Red author'),($6,'Synthetic Green reviewer'),($7,'Synthetic Red reviewer'),
        ($8,'Synthetic Designer A'),($9,'Synthetic Designer B'),($10,'Synthetic Publisher'),($11,'Synthetic Blue notetaker'),
-       ($12,'Synthetic portal operator'),($13,'Synthetic invited participant')`,
+       ($12,'Synthetic portal operator'),($13,'Synthetic invited participant'),($14,'Synthetic code participant')`,
       people
     );
     await owner.query(
       "INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($1,$2,'admin')",
       [fixture.organizationId, fixture.people.operator]
     );
+    await owner.query("SELECT identity.bootstrap_platform_administrator($1,gen_random_uuid())", [fixture.people.operator]);
     await owner.query(
       `INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES
        ($1,$2,'designer'),($1,$3,'designer'),($1,$3,'research_analyst'),($1,$4,'designer'),($1,$4,'publisher'),($1,$4,'reviewer')`,
@@ -207,9 +214,10 @@ export default async function globalSetup() {
     );
     await owner.query(
       `INSERT INTO runtime.session_access_configs
-       (organization_id,session_id,governing_release_id,access_policy,assignment_version,configured_by)
-       VALUES ($1,$2,$3,$4::jsonb,1,$5)`,
-      [fixture.organizationId, fixture.sessionId, fixture.releaseId, JSON.stringify(releaseDefinition.coreDesign.accessPolicy), fixture.people.operator]
+       (organization_id,session_id,governing_release_id,access_policy,session_code_sha256,assignment_version,configured_by)
+       VALUES ($1,$2,$3,$4::jsonb,$5,1,$6)`,
+      [fixture.organizationId, fixture.sessionId, fixture.releaseId, JSON.stringify(releaseDefinition.coreDesign.accessPolicy),
+        createHash("sha256").update(fixture.sessionCode).digest("hex"), fixture.people.operator]
     );
     await owner.query(
       `INSERT INTO identity.session_invitations

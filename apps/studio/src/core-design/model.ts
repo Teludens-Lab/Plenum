@@ -26,7 +26,7 @@ export const METHODOLOGY_CONCEPTS: readonly MethodologyConceptV1[] = [
 ];
 
 export const FIELD_TYPES = ["short_text", "long_text", "number", "single_select", "multi_select", "artifact_reference"] as const;
-export const MODULE_TYPES = ["session_status", "artifact_form", "task_list", "artifact_presentation", "slide_deck", "message_inbox", "proposal_thread", "inject_inbox"] as const;
+export const MODULE_TYPES = ["session_status", "artifact_form", "task_list", "artifact_presentation", "slide_deck", "resource_library", "message_inbox", "proposal_thread", "inject_inbox"] as const;
 
 export function identifier(): string {
   return crypto.randomUUID();

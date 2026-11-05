@@ -19,6 +19,8 @@ export interface OidcProviderConfiguration {
   tokenEndpoint: string;
   jwks?: JSONWebKeySet;
   jwksUri?: string;
+  /** Governed Organization provider revision. Omitted only for recovery/bootstrap identity. */
+  identityProviderId?: string;
 }
 
 export interface PendingOidcLogin {
@@ -33,10 +35,16 @@ export interface OidcAuthorizationRequest {
   pending: PendingOidcLogin;
 }
 
+export interface OidcAuthorizationOptions {
+  stepUp?: boolean;
+}
+
 export interface VerifiedOidcIdentity {
   organizationId: string;
   issuer: string;
   subject: string;
+  email: string | null;
+  emailVerified: boolean;
   authenticationStrength: string;
   expiresAt: Date;
 }
@@ -71,7 +79,8 @@ function verificationKeySet(configuration: OidcProviderConfiguration) {
 
 export function createOidcAuthorizationRequest(
   configuration: OidcProviderConfiguration,
-  now = new Date()
+  now = new Date(),
+  options: OidcAuthorizationOptions = {}
 ): OidcAuthorizationRequest {
   requireHttps(configuration.authorizationEndpoint, "authorizationEndpoint");
   requireHttps(configuration.tokenEndpoint, "tokenEndpoint");
@@ -85,12 +94,16 @@ export function createOidcAuthorizationRequest(
     client_id: configuration.clientId,
     redirect_uri: configuration.redirectUri,
     response_type: "code",
-    scope: "openid",
+    scope: "openid email",
     state,
     nonce,
     code_challenge: codeChallenge,
     code_challenge_method: "S256"
   }).toString();
+  if (options.stepUp === true) {
+    url.searchParams.set("prompt", "login");
+    url.searchParams.set("acr_values", "mfa");
+  }
 
   return {
     authorizationUrl: url.toString(),
@@ -159,6 +172,8 @@ export async function verifyOidcIdToken(
       organizationId: configuration.organizationId,
       issuer: configuration.issuer,
       subject: result.payload.sub,
+      email: typeof result.payload.email === "string" ? result.payload.email.trim().toLowerCase() : null,
+      emailVerified: result.payload.email_verified === true,
       authenticationStrength,
       expiresAt: new Date(expiration * 1000)
     };

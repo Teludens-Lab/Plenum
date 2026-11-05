@@ -17,11 +17,19 @@ const operatorEvidenceRoot = "output/playwright/ps-780";
 const operationsEvidenceRoot = "output/playwright/ps-790";
 const platformLifecycleEvidenceRoot = "output/playwright/ps-800/after/platform-lifecycle";
 const studioAuthoringEvidenceRoot = "output/playwright/ps-800/after/studio-authoring";
+const familyEvidenceRoot = "output/playwright/ps-800/after/view-families";
+const controlPlaneEvidenceRoot = "output/playwright/platform-control-plane";
 const headers = (token) => ({ Authorization: `Bearer ${token}` });
 
 async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
   const context = await browser.newContext({ viewport, extraHTTPHeaders: headers(token) });
   return { context, page: await context.newPage() };
+}
+
+async function expectCompactWorkWordmark(page) {
+  const wordmark = page.locator(".app-header .brand-wordmark img:visible");
+  await expect(wordmark).toHaveCount(1);
+  expect(Math.round(await wordmark.evaluate((image) => image.getBoundingClientRect().width))).toBeLessThanOrEqual(92);
 }
 
 async function openStudioWorkspace(page, name, regionName = name) {
@@ -44,36 +52,220 @@ test.beforeAll(async () => {
   await mkdir(participantEvidenceRoot, { recursive: true });
   await mkdir(operatorEvidenceRoot, { recursive: true });
   await mkdir(operationsEvidenceRoot, { recursive: true });
+  await mkdir(familyEvidenceRoot, { recursive: true });
   await mkdir(platformLifecycleEvidenceRoot, { recursive: true });
   await mkdir(studioAuthoringEvidenceRoot, { recursive: true });
+  await mkdir(controlPlaneEvidenceRoot, { recursive: true });
+});
+
+test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation without Organization-role substitution @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.operator, { width: 1440, height: 900 });
+  await page.goto("/platform/organizations");
+  await expect(page.getByRole("heading", { name: "Organization provisioning" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Platform control plane/u })).toHaveAttribute("aria-current", "page");
+  await page.locator("summary", { hasText: "Provision Organization" }).click();
+  await page.getByLabel("Organization name").fill("Synthetic Control Plane Organization");
+  await page.getByLabel("Legal name").fill("Synthetic Control Plane Organization Ltd");
+  await page.getByLabel("Workspace address").fill("synthetic-control-plane");
+  await page.getByLabel("Support contact").fill("support@synthetic-control.example");
+  await page.getByRole("button", { name: "Create pending Organization" }).click();
+  await expect(page).toHaveURL(/\/platform\/organizations\/[0-9a-f-]{36}$/iu);
+  await expect(page.getByRole("heading", { name: "Synthetic Control Plane Organization" })).toBeVisible();
+  await expect(page.getByText("2 of 4 prerequisites complete")).toBeVisible();
+
+  await page.getByLabel("Add domain").fill("synthetic-control.example");
+  await page.getByRole("button", { name: "Add domain" }).click();
+  await expect(page.getByText("_plenum-verification.synthetic-control.example")).toBeVisible();
+  await page.getByRole("button", { name: "Check DNS" }).click();
+  await page.getByLabel("Admin email").fill("admin@synthetic-control.example");
+  await page.getByRole("button", { name: "Create invitation" }).click();
+  const invitationUrl = await page.getByLabel("One-time invitation link").inputValue();
+  expect(invitationUrl).toMatch(/\/platform\/invitations\/[A-Za-z0-9_-]{43}$/u);
+
+  const invitationContext = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const invitationPage = await invitationContext.newPage();
+  await invitationPage.goto(invitationUrl);
+  await expect(invitationPage.getByRole("heading", { name: "Accept Organization Admin access" })).toBeVisible();
+  await invitationPage.getByLabel("Display name").fill("Synthetic First Admin");
+  await invitationPage.getByRole("button", { name: "Accept Admin invitation" }).click();
+  await expect(invitationPage.getByRole("heading", { name: "Admin access accepted" })).toBeVisible();
+  expect((await new AxeBuilder({ page: invitationPage }).analyze()).violations).toEqual([]);
+  await invitationContext.close();
+
+  await page.reload();
+  await expect(page.getByText("4 of 4 prerequisites complete")).toBeVisible();
+  await page.getByLabel("Reason", { exact: true }).fill("Synthetic activation evidence complete");
+  await page.getByRole("button", { name: "Activate Organization" }).click();
+  await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${controlPlaneEvidenceRoot}/organization-active-1440x900.png`, fullPage: true });
+  const activeUrl = page.url();
+
+  const denied = await context.request.get("/v1/platform/organizations", { headers: headers(fixture.tokens.portalOperator) });
+  expect(denied.status()).toBe(403);
+  await context.close();
+
+  const narrow = await actor(browser, fixture.tokens.operator, { width: 390, height: 844 });
+  await narrow.page.goto(activeUrl);
+  await expect(narrow.page.getByRole("heading", { name: "Synthetic Control Plane Organization" })).toBeVisible();
+  expect(await narrow.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await narrow.page.screenshot({ path: `${controlPlaneEvidenceRoot}/organization-active-390x844.png`, fullPage: true });
+  await narrow.context.close();
+});
+
+test("CONTROL-PLANE-E2E Platform Administrator workforce exposes step-up, dual approval, and final-admin gates @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.operator, { width: 1440, height: 900 });
+  await page.goto("/platform/administrators");
+  await expect(page.getByRole("heading", { name: "Platform administrators" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Platform control plane" })
+    .getByRole("link", { name: "Platform administrators" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText(/Multifactor verification is current/u)).toBeVisible();
+  await expect(page.getByText(/final active administrator cannot be removed/iu)).toBeVisible();
+
+  await page.getByLabel("Display name").fill("Synthetic Platform Administrator");
+  await page.getByLabel("Verified work email").fill("platform-admin@example.test");
+  await page.getByLabel("Operational reason").fill("Provide a second accountable control-plane approver");
+  await page.getByRole("button", { name: "Request invitation" }).click();
+  await expect(page.getByText(/different Platform Administrator must approve/iu).first()).toBeVisible();
+  await expect(page.getByText(/Requesters cannot approve their own privilege changes/iu)).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${controlPlaneEvidenceRoot}/platform-administrators-1440x900.png`, fullPage: true });
+  await context.close();
+
+  const narrow = await actor(browser, fixture.tokens.operator, { width: 390, height: 844 });
+  await narrow.page.goto("/platform/administrators");
+  await expect(narrow.page.getByRole("heading", { name: "Platform administrators" })).toBeVisible();
+  expect(await narrow.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await narrow.page.screenshot({ path: `${controlPlaneEvidenceRoot}/platform-administrators-390x844.png`, fullPage: true });
+  await narrow.context.close();
+
+  const invitationContext = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const invitationPage = await invitationContext.newPage();
+  await invitationPage.goto(`/platform/administrator-invitations/${"a".repeat(43)}`);
+  await expect(invitationPage.getByRole("heading", { name: "Join Plenum platform operations" })).toBeVisible();
+  await expect(invitationPage.getByRole("link", { name: "Verify identity and continue" })).toHaveAttribute("href", /platformAdminInvitation=/u);
+  expect((await new AxeBuilder({ page: invitationPage }).analyze()).violations).toEqual([]);
+  await invitationContext.close();
 });
 
 test("PS-700 local user-test sign-in and sign-out use only the synthetic loopback identity", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/");
-  await page.getByRole("link", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Choose a synthetic persona" })).toBeVisible();
-  await page.getByLabel(/Publisher/u).check();
-  await page.getByRole("button", { name: "Continue as selected persona" }).click();
-  await expect(page).toHaveURL("http://127.0.0.1:4173/");
-  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
+  const entryActions = page.locator(".entry-header-actions").locator("a, button");
+  await expect(entryActions).toHaveCount(3);
+  await expect(entryActions.nth(0)).toHaveText("About");
+  await expect(entryActions.nth(0)).toHaveAttribute("href", "#about");
+  await expect(entryActions.nth(1)).toHaveText("Sign In");
+  await expect(entryActions.nth(2)).toHaveAttribute("aria-label", /^Theme:/u);
+  await page.getByRole("link", { name: "Sign in" }).click({ noWaitAfter: true });
+  await expect(page.locator(".plenum-loader-overlay.is-visible")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose a test role" })).toBeVisible();
+  await expect(page.locator(".entry-auth-diagram")).toHaveCount(0);
+  await expect(page.locator(".entry-branch-diagram")).toHaveCount(0);
+  const authCanvas = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = "var(--material-canvas)";
+    document.body.append(probe);
+    const result = {
+      actual: getComputedStyle(document.body).backgroundColor,
+      expected: getComputedStyle(probe).backgroundColor,
+      image: getComputedStyle(document.body).backgroundImage
+    };
+    probe.remove();
+    return result;
+  });
+  expect(authCanvas).toEqual({ actual: authCanvas.expected, expected: authCanvas.expected, image: "none" });
+  await page.getByRole("combobox", { name: "Test role", exact: true }).selectOption("publisher");
+  await page.getByRole("button", { name: "Continue" }).click({ noWaitAfter: true });
+  await expect(page.locator(".plenum-loader-overlay.is-visible")).toBeVisible();
+  await expect(page.getByRole("status", { name: "Resolving next state" })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/u);
+  await expect(page.locator(".product-header-organization")).toHaveText("PS-150 synthetic organization");
   await page.goto("/__test__/offline");
   await expect(page.getByRole("heading", { name: "Account context is unavailable" })).toBeVisible();
   await expect(page.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await page.goto("/__test__/online");
-  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(page.locator(".product-header-organization")).toHaveText("PS-150 synthetic organization");
+  await page.getByRole("button", { name: /Open account menu/ }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
-  await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What happens next?" })).toBeVisible();
+  await expect(page.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await expect(page.getByText("Connection error", { exact: true })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
-  await expect(page.getByLabel("Plenum status: Sign-in required")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What happens next?" })).toBeVisible();
+  await expect(page.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await page.getByRole("link", { name: "Sign in" }).click();
-  await page.getByLabel(/Publisher/u).check();
-  await page.getByRole("button", { name: "Continue as selected persona" }).click();
+  await page.getByRole("combobox", { name: "Test role", exact: true }).selectOption("publisher");
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
+  await context.close();
+});
+
+test("PS-700 theme preference persists across Runtime, Studio, sign-in, and open tabs", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  const sibling = await context.newPage();
+  await Promise.all([page.goto("/"), sibling.goto("/")]);
+
+  await page.getByRole("button", { name: /Use dark theme/u }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(sibling.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: /Use light theme/u })).toBeVisible();
+  await page.goto("/auth/login?returnTo=%2F");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await page.getByRole("button", { name: /Use light theme/u }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(sibling.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.goto("/auth/login?returnTo=%2F");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  await context.close();
+});
+
+test("PS-700 Plenum loader governs initial, page, section, and Studio workspace transitions @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  let releaseContext;
+  const contextGate = new Promise((resolve) => { releaseContext = resolve; });
+  await page.route("**/v1/product-context", async (route) => { await contextGate; await route.continue(); });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const initialLoader = page.getByRole("status", { name: "Resolving next state" });
+  await expect(initialLoader).toBeVisible();
+  await expect(initialLoader.locator(".plenum-loader__petal")).toHaveCount(8);
+  expect((await new AxeBuilder({ page }).include(".plenum-loader-overlay.is-visible").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${evidenceRoot}/platform-loader-light.png` });
+  releaseContext();
+  await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
+  await page.unroute("**/v1/product-context");
+
+  let releaseProjects;
+  const projectsGate = new Promise((resolve) => { releaseProjects = resolve; });
+  await page.route("**/v1/projects?**", async (route) => { await projectsGate; await route.continue(); });
+  await page.goto("/?workspace=projects", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("status", { name: "Loading recent Project work" })).toBeVisible();
+  releaseProjects();
+  await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
+  await page.unroute("**/v1/projects?**");
+
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await expect(page.getByRole("navigation", { name: "Design workspaces" })).toBeVisible();
+  await Promise.all([
+    expect(page.getByRole("status", { name: "Loading design workspace" })).toBeVisible(),
+    page.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name: "Teams", exact: true }).click()
+  ]);
+  await expect(page.getByRole("region", { name: "Teams" })).toBeVisible();
+
+  await Promise.all([
+    expect(page.getByRole("status", { name: "Loading next page" })).toBeVisible(),
+    page.locator(".studio-app-header .product-header-organization").click({ noWaitAfter: true })
+  ]);
+  await expect(page).toHaveURL(/\?workspace=projects$/u);
   await context.close();
 });
 
@@ -82,17 +274,18 @@ test("PS-710 local user-test persona chooser is accessible without authorization
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/__test__/personas");
+  await expect(page.getByRole("img", { name: "Plenum" })).toHaveAttribute("src", "/branding/plenum-wordmark-primary.png");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${portalEvidenceRoot}/persona-chooser.png`, fullPage: true });
   await context.close();
 });
 
 const localUserTestPersonas = [
-  { label: /^Designer Create,/u, displayName: "Synthetic Designer A", heading: "Create a Project" },
-  { label: /^Designer B Collaborate/u, displayName: "Synthetic Designer B", heading: "Create a Project" },
-  { label: /^Admin\b/u, displayName: "Synthetic operator", heading: "Create a Project" },
-  { label: /^Reviewer\b/u, displayName: "Synthetic final reviewer", heading: "Review access", project: "PS-150 S1 proof" },
-  { label: /^Operator only\b/u, displayName: "Synthetic portal operator", heading: "Simulation Releases" }
+  { value: "designerA", displayName: "Synthetic Designer A", heading: "Create a Project" },
+  { value: "designerB", displayName: "Synthetic Designer B", heading: "Create a Project" },
+  { value: "operator", displayName: "Synthetic operator", heading: "Create a Project" },
+  { value: "finalReviewer", displayName: "Synthetic final reviewer", heading: "Review access", project: "PS-150 S1 proof" },
+  { value: "portalOperator", displayName: "Synthetic portal operator", heading: "Simulation Releases" }
 ];
 
 for (const persona of localUserTestPersonas) {
@@ -100,18 +293,18 @@ for (const persona of localUserTestPersonas) {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto("/__test__/personas");
-    await expect(page.getByRole("heading", { name: "Choose a synthetic persona" })).toBeVisible();
-    await page.getByRole("radio", { name: persona.label }).check();
-    await page.getByRole("button", { name: "Continue as selected persona" }).click();
+    await expect(page.getByRole("heading", { name: "Choose a test role" })).toBeVisible();
+    await page.getByRole("combobox", { name: "Test role", exact: true }).selectOption(persona.value);
+    await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL("http://127.0.0.1:4173/");
-    await expect(page.getByRole("complementary").getByText(persona.displayName)).toBeVisible();
+    await expect(page.getByRole("button", { name: `Open account menu for ${persona.displayName}` })).toBeVisible();
     await expect(page.getByRole("heading", { name: persona.heading })).toBeVisible();
     if (persona.project !== undefined) await expect(page.getByText(persona.project)).toBeVisible();
     if (persona.displayName === "Synthetic Designer A") {
       await page.getByLabel("Project name").fill("PS-710 cookie-only Designer Draft");
       await page.getByRole("button", { name: "Create Project and open Draft" }).click();
       await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
-      await expect(page.locator(".studio-context h1")).toBeVisible();
+      await expect(page.locator(".studio-app-header .product-header-title")).toBeVisible();
       await expect(page.getByText("Connected", { exact: true })).toBeVisible();
     }
     await context.close();
@@ -122,8 +315,10 @@ test("PS-700-T01 authenticated root is useful, branded, responsive, and accessib
   const { context, page } = await actor(browser, fixture.tokens.operator);
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Projects" })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Plenum" })).toBeVisible();
-  await expect(page.getByRole("complementary").getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Plenum" })).toHaveAttribute("src", "/branding/plenum-wordmark-primary.png");
+  await expect(page.locator(".product-header-organization")).toHaveText("PS-150 synthetic organization");
+  await expect(page.locator(".workspace-context-header")).toHaveCount(0);
+  await expect(page.locator(".shell-grid > .account-context")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Workspaces" }).getByRole("link", { name: /^Project editor/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Releases and Sessions/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
@@ -135,26 +330,40 @@ test("PS-700-T01 authenticated root is useful, branded, responsive, and accessib
     const headerBounds = header.getBoundingClientRect();
     const wordmarkBounds = wordmark.getBoundingClientRect();
     const actionBounds = actions.getBoundingClientRect();
-    return { wordmarkWidth: Math.round(wordmarkBounds.width), leftInset: Math.round(wordmarkBounds.left - headerBounds.left),
-      rightInset: Math.round(headerBounds.right - actionBounds.right), shellNotices: document.querySelectorAll(".shell-notice").length };
+    return { headerHeight: Math.round(headerBounds.height), wordmarkWidth: Math.round(wordmarkBounds.width),
+      leftInset: Math.round(wordmarkBounds.left - headerBounds.left), rightInset: Math.round(headerBounds.right - actionBounds.right),
+      shellNotices: document.querySelectorAll(".shell-notice").length };
   });
-  expect(headerGeometry.wordmarkWidth).toBeLessThanOrEqual(128);
+  expect(headerGeometry.headerHeight).toBeLessThanOrEqual(64);
+  expect(headerGeometry.wordmarkWidth).toBeLessThanOrEqual(92);
   expect(headerGeometry.leftInset).toBe(20);
   expect(headerGeometry.rightInset).toBe(20);
   expect(headerGeometry.shellNotices).toBe(0);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+  await page.screenshot({ path: `${evidenceRoot}/root-light-desktop.png`, fullPage: true });
+  const accountToggle = page.getByRole("button", { name: "Open account menu for Synthetic operator" });
+  await accountToggle.click();
+  const accountMenu = page.getByRole("dialog", { name: "Synthetic operator" });
+  await expect(accountMenu).toBeFocused();
+  await expect(accountMenu.getByText("PS-150 synthetic organization")).toBeVisible();
+  await expect(accountMenu.getByText("Connected", { exact: true })).toBeVisible();
+  await accountMenu.evaluate((menu) => Promise.all(menu.getAnimations().map((animation) => animation.finished)));
+  await page.screenshot({ path: `${evidenceRoot}/root-account-menu-open.png`, fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(accountMenu).toBeHidden();
+  await expect(accountToggle).toBeFocused();
   const shell = await context.request.get("/v1/product-context");
   expect(shell.status()).toBe(200);
   const body = await shell.json();
   expect(body.contractId).toBe("product-shell-v1");
   expect(JSON.stringify(body)).not.toContain(fixture.sessionId);
-  expect(Object.keys(body).sort()).toEqual(["contractId", "destinations", "organization", "principal"]);
+  expect(Object.keys(body).sort()).toEqual(["contractId", "destinations", "organization", "platformRoles", "principal"]);
   const hostileTenant = await context.request.get("/v1/product-context?organizationId=ffffffff-ffff-4fff-8fff-ffffffffffff");
   expect((await hostileTenant.json()).organization.id).toBe(fixture.organizationId);
   const violations = await new AxeBuilder({ page }).analyze();
   expect(violations.violations).toEqual([]);
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
-  await page.screenshot({ path: `${evidenceRoot}/root-light-desktop.png`, fullPage: true });
 
   await page.getByRole("button", { name: /Use dark theme/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -162,8 +371,9 @@ test("PS-700-T01 authenticated root is useful, branded, responsive, and accessib
   const darkViolations = await new AxeBuilder({ page }).analyze();
   expect(darkViolations.violations).toEqual([]);
   await page.screenshot({ path: `${evidenceRoot}/root-dark-desktop.png`, fullPage: true });
+  await page.getByRole("button", { name: "Open account menu for Synthetic operator" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What happens next?" })).toBeVisible();
   await expect(page.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await context.close();
 });
@@ -172,9 +382,11 @@ test("PS-700-T02 clean, unauthorized, offline, narrow, and 200-percent-text stat
   const clean = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const cleanPage = await clean.newPage();
   await cleanPage.goto("/");
-  await expect(cleanPage.getByRole("heading", { name: "Continue to Plenum" })).toBeVisible();
-  await expect(cleanPage.getByLabel("Plenum status: Sign-in required")).toBeVisible();
+  await expect(cleanPage.getByRole("heading", { name: "What happens next?" })).toBeVisible();
+  await expect(cleanPage.getByText("Design, deliver and audit governed simulations.")).toBeVisible();
+  await expect(cleanPage.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await expect(cleanPage.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/auth/login?returnTo=%2F");
+  await expect(cleanPage.locator(".entry-branch-diagram")).toHaveCount(0);
   await expect(cleanPage.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await cleanPage.screenshot({ path: `${evidenceRoot}/root-unauthorized-narrow.png`, fullPage: true });
   const denied = await clean.request.get("/v1/product-context");
@@ -183,7 +395,12 @@ test("PS-700-T02 clean, unauthorized, offline, narrow, and 200-percent-text stat
 
   const { context, page } = await actor(browser, fixture.tokens.designerA, { width: 390, height: 844 });
   await page.goto("/");
-  await expect(page.getByText("PS-150 synthetic organization").first()).toBeVisible();
+  await expect(page.locator(".product-header-organization")).toBeHidden();
+  const accountToggle = page.getByRole("button", { name: "Open account menu for Synthetic Designer A" });
+  await accountToggle.click();
+  await expect(page.getByRole("dialog", { name: "Synthetic Designer A" }).getByText("PS-150 synthetic organization")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(accountToggle).toBeFocused();
   await expect(page.getByRole("link", { name: /Releases and Sessions/ })).toHaveCount(0);
   await page.screenshot({ path: `${evidenceRoot}/root-authenticated-narrow.png`, fullPage: true });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
@@ -217,6 +434,7 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
   expect(await desktop.page.locator(".product-shell").evaluate((shell) => Math.round(shell.getBoundingClientRect().width))).toBe(1920);
   await desktop.page.setViewportSize({ width: 1440, height: 900 });
   await expect(desktop.page.getByRole("heading", { level: 1, name: "Projects" })).toBeVisible();
+  await expect(desktop.page.locator(".portal-toolbar")).toHaveCount(0);
   await expect(desktop.page.getByRole("navigation", { name: "Workspaces" }).getByRole("link", { name: /^Projects/ })).toHaveAttribute("aria-current", "page");
   await expect(desktop.page.locator(".project-list > .catalog-row").first()).toBeVisible();
   await expect(desktop.page.locator(".project-list > .card")).toHaveCount(0);
@@ -230,6 +448,7 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
   await desktop.page.getByLabel("Search Projects").fill("PS-800 no matching Project");
   await desktop.page.getByRole("button", { name: "Search Projects" }).click();
   await expect(desktop.page.getByRole("heading", { name: "No matching Projects" })).toBeVisible();
+  await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/projects-empty-no-results-1440x900.png` });
   await desktop.page.getByRole("button", { name: "Clear Project filters" }).click();
   await expect(desktop.page.locator(".project-list > .catalog-row").first()).toBeVisible();
   const typeRoles = await desktop.page.evaluate(() => {
@@ -244,12 +463,12 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
     const size = (selector) => getComputedStyle(document.querySelector(selector)).fontSize;
     return {
       actual: {
-        workspace: size(".workspace-context-header h1"), portal: size(".portal-toolbar h2"),
+        workspace: size(".product-header-title"),
         section: size(".section-heading h3"), object: size(".catalog-row h4"),
         detail: size(".catalog-row dd"), label: size(".catalog-row dt")
       },
       expected: {
-        workspace: resolveSize("--text-2xl"), portal: resolveSize("--text-xl"),
+        workspace: resolveSize("--text-md"),
         section: resolveSize("--text-lg"), object: resolveSize("--text-md"),
         detail: resolveSize("--text-sm"), label: resolveSize("--text-xs")
       }
@@ -270,6 +489,7 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
   await desktop.page.getByLabel("Search Releases").fill("PS-800 no matching Release");
   await desktop.page.getByRole("button", { name: "Search Releases" }).click();
   await expect(desktop.page.getByRole("heading", { name: "No matching Releases" })).toBeVisible();
+  await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/releases-empty-no-results-1440x900.png` });
   await desktop.page.getByRole("button", { name: "Show all Releases" }).click();
   await expect(desktop.page.locator("#release-catalog .catalog-row").first()).toBeVisible();
   const releaseRows = desktop.page.locator("#release-catalog .catalog-row");
@@ -278,6 +498,7 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
   await desktop.page.getByLabel("Search Sessions").fill("PS-800 no matching Session");
   await desktop.page.getByRole("button", { name: "Search Sessions" }).click();
   await expect(desktop.page.getByRole("heading", { name: "No matching Sessions" })).toBeVisible();
+  await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/sessions-empty-no-results-1440x900.png` });
   await desktop.page.getByRole("button", { name: "Show all Sessions" }).click();
   await expect(desktop.page.locator("#session-catalog .catalog-row").first()).toBeVisible();
   const sessionRows = desktop.page.locator("#session-catalog .catalog-row");
@@ -292,9 +513,13 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
   }));
   await desktop.page.getByRole("button", { name: "Search Sessions" }).click();
   await expect(desktop.page.getByRole("alert")).toContainText("Sessions could not be loaded. Releases remain available");
+  await desktop.page.getByRole("alert").scrollIntoViewIfNeeded();
+  await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/sessions-error-recoverable-partial-failure-1440x900.png` });
   await desktop.page.unroute("**/v1/sessions?**");
   await desktop.page.getByRole("button", { name: "Retry loading Sessions" }).click();
   await expect(desktop.page.locator("#session-catalog .catalog-row").first()).toBeVisible();
+  await desktop.page.locator("#session-catalog .catalog-row").first().scrollIntoViewIfNeeded();
+  await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/sessions-success-recovered-1440x900.png` });
   expect((await new AxeBuilder({ page: desktop.page }).analyze()).violations).toEqual([]);
   await desktop.page.locator(".product-workspaces").evaluate((element) => { element.scrollTop = 0; });
   await desktop.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/platform-lifecycle-1440x900.png` });
@@ -317,35 +542,36 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
 
   const constrained = await actor(browser, fixture.tokens.operator, { width: 1280, height: 600 });
   await constrained.page.goto("/?workspace=lifecycle");
-  await expect(constrained.page.getByRole("button", { name: "Open access context" })).toBeVisible();
-  await expect(constrained.page.locator("#account-context-sheet")).toBeHidden();
+  const constrainedToggle = constrained.page.getByRole("button", { name: "Open account menu for Synthetic operator" });
+  await expect(constrainedToggle).toBeVisible();
+  await expect(constrained.page.locator("#account-context-menu")).toBeHidden();
   await expect.poll(() => constrained.page.evaluate(() => document.documentElement.scrollHeight <= document.documentElement.clientHeight + 1)).toBe(true);
   await expect.poll(() => constrained.page.locator(".product-workspaces").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  await constrained.page.getByRole("button", { name: "Open access context" }).click();
-  const constrainedAccount = constrained.page.getByRole("dialog", { name: "Access" });
+  await constrainedToggle.click();
+  const constrainedAccount = constrained.page.getByRole("dialog", { name: "Synthetic operator" });
   await expect(constrainedAccount).toBeVisible();
-  await expect(constrainedAccount).toHaveAttribute("aria-modal", "true");
+  await expect(constrainedAccount).not.toHaveAttribute("aria-modal", "true");
   await expect(constrainedAccount).toBeFocused();
-  await constrained.page.keyboard.press("Tab");
-  expect(await constrainedAccount.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
   await constrained.page.keyboard.press("Escape");
   await expect(constrainedAccount).toBeHidden();
-  await expect(constrained.page.getByRole("button", { name: "Open access context" })).toBeFocused();
+  await expect(constrainedToggle).toBeFocused();
   await constrained.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/platform-lifecycle-1280x600.png` });
   await constrained.context.close();
 
   const tablet = await actor(browser, fixture.tokens.operator, { width: 1024, height: 768 });
   await tablet.page.goto("/?workspace=lifecycle");
   await expect(tablet.page.getByRole("navigation", { name: "Workspaces" })).toBeVisible();
-  await expect(tablet.page.getByRole("button", { name: "Open access context" })).toBeVisible();
-  await expect(tablet.page.locator("#account-context-sheet")).toBeHidden();
+  const tabletToggle = tablet.page.getByRole("button", { name: "Open account menu for Synthetic operator" });
+  await expect(tabletToggle).toBeVisible();
+  await expect(tablet.page.locator("#account-context-menu")).toBeHidden();
   await expect.poll(() => tablet.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await tablet.page.getByRole("button", { name: "Open access context" }).click();
-  const tabletAccount = tablet.page.getByRole("dialog", { name: "Access" });
+  await tabletToggle.click();
+  const tabletAccount = tablet.page.getByRole("dialog", { name: "Synthetic operator" });
   await expect(tabletAccount).toBeFocused();
-  await tablet.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/platform-lifecycle-1024x768-access-sheet.png` });
-  await tabletAccount.getByRole("button", { name: "Close access context" }).click();
-  await expect(tablet.page.getByRole("button", { name: "Open access context" })).toBeFocused();
+  await tabletAccount.evaluate((menu) => Promise.all(menu.getAnimations().map((animation) => animation.finished)));
+  await tablet.page.screenshot({ path: `${platformLifecycleEvidenceRoot}/platform-lifecycle-1024x768-account-menu.png` });
+  await tablet.page.keyboard.press("Escape");
+  await expect(tabletToggle).toBeFocused();
   await tablet.context.close();
 
   const portrait = await actor(browser, fixture.tokens.operator, { width: 768, height: 1024 });
@@ -353,11 +579,11 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
   await expect(portrait.page.getByRole("navigation", { name: "Workspaces" })).toBeHidden();
   await portrait.page.getByRole("button", { name: "Open workspaces" }).click();
   await expect(portrait.page.getByRole("navigation", { name: "Workspaces" })).toBeVisible();
-  await portrait.page.getByRole("button", { name: "Open access context" }).click();
+  await portrait.page.getByRole("button", { name: "Open account menu for Synthetic operator" }).click();
   await expect(portrait.page.getByRole("navigation", { name: "Workspaces" })).toBeHidden();
-  await expect(portrait.page.locator("#account-context-sheet")).toBeFocused();
+  await expect(portrait.page.locator("#account-context-menu")).toBeFocused();
   expect(await portrait.page.evaluate(() => {
-    const account = document.querySelector("#account-context-sheet")?.getBoundingClientRect();
+    const account = document.querySelector("#account-context-menu")?.getBoundingClientRect();
     return account !== undefined && account.top >= 0 && account.right <= innerWidth && account.bottom <= innerHeight;
   })).toBe(true);
   await expect.poll(() => portrait.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -371,7 +597,7 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
   expect(await zoomed.page.evaluate(() => {
     const workspaces = document.querySelector(".workspace-navigation-toggle")?.getBoundingClientRect();
     const account = document.querySelector(".account-context-toggle")?.getBoundingClientRect();
-    return workspaces !== undefined && account !== undefined && account.top >= workspaces.bottom;
+    return workspaces !== undefined && account !== undefined && account.top === workspaces.top && account.right <= innerWidth;
   })).toBe(true);
   await expect(zoomed.page.locator("#release-catalog .catalog-primary-action").first()).toBeVisible();
   expect(await zoomed.page.locator("#release-catalog .catalog-row").first().evaluate((row) => {
@@ -432,6 +658,93 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
   await forcedContext.close();
 });
 
+test("PS-800-T04 Studio and the five remaining view families preserve bounded workspaces, task order, and progressive provenance @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+
+  const studio = await actor(browser, fixture.tokens.designerA, { width: 1440, height: 900 });
+  await studio.page.goto(`/studio/projects/${fixture.projectId}`);
+  await expectCompactWorkWordmark(studio.page);
+  await expect(studio.page.locator(".studio-app-header .product-header-organization")).toHaveText("PS-150 synthetic organization");
+  await expect(studio.page.locator(".studio-app-header .product-header-title")).toBeVisible();
+  await expect(studio.page.locator(".studio-context")).toHaveCount(0);
+  await expect(studio.page.getByLabel("Plenum status: Connected")).toBeVisible();
+  await expect(studio.page.getByRole("button", { name: /^Theme:/u })).toBeVisible();
+  const studioAccount = studio.page.getByRole("button", { name: "Open account menu for Synthetic Designer A" });
+  await studioAccount.click();
+  await expect(studio.page.getByRole("dialog", { name: "Synthetic Designer A" })).toContainText("Designer");
+  await studio.page.keyboard.press("Escape");
+  await expect(studioAccount).toBeFocused();
+  await expect(studio.page.locator(".visual-editor")).toBeVisible();
+  await expect(studio.page.getByRole("navigation", { name: "Design workspaces" })).toBeVisible();
+  await expect(studio.page.getByRole("complementary", { name: "Draft guidance" })).toBeVisible();
+  await expect.poll(() => studio.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect((await new AxeBuilder({ page: studio.page }).analyze()).violations).toEqual([]);
+  await studio.page.screenshot({ path: `${familyEvidenceRoot}/studio-authoring-1440x900.png` });
+  await studio.context.close();
+
+  const participant = await actor(browser, fixture.tokens.designerA, { width: 1440, height: 900 });
+  await participant.page.goto(runtimeUrl(fixture.tokens.designerA));
+  await expectCompactWorkWordmark(participant.page);
+  await expect(participant.page.locator(".participant-runtime-workspace")).toBeVisible();
+  await expect(participant.page.getByRole("navigation", { name: "Runtime modules" })).toBeVisible();
+  await expect(participant.page.getByText("Session context", { exact: true })).toBeVisible();
+  await expect.poll(() => participant.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+  await participant.page.screenshot({ path: `${familyEvidenceRoot}/participant-runtime-1440x900.png` });
+  await participant.context.close();
+
+  const operator = await actor(browser, fixture.tokens.portalOperator, { width: 1440, height: 900 });
+  await operator.page.goto(`/admin/sessions/${fixture.operatorSessionId}`);
+  await expectCompactWorkWordmark(operator.page);
+  await expect(operator.page.locator(".operator-workspace")).toBeVisible();
+  await expect(operator.page.getByRole("navigation", { name: "Session operations" })).toBeVisible();
+  await expect(operator.page.getByRole("complementary", { name: "Control context" })).toBeVisible();
+  await expect(operator.page.getByLabel("Next valid action")).toBeVisible();
+  expect((await new AxeBuilder({ page: operator.page }).analyze()).violations).toEqual([]);
+  await operator.page.screenshot({ path: `${familyEvidenceRoot}/operator-control-1440x900.png` });
+  await operator.context.close();
+
+  const administration = await actor(browser, fixture.tokens.operator, { width: 1440, height: 900 });
+  await administration.page.goto("/admin/members");
+  await expectCompactWorkWordmark(administration.page);
+  await expect(administration.page.getByRole("heading", { level: 1, name: "Workforce access" })).toBeVisible();
+  await expect(administration.page.getByRole("navigation", { name: "Administration destinations" })).toBeVisible();
+  expect((await new AxeBuilder({ page: administration.page }).analyze()).violations).toEqual([]);
+  await administration.page.screenshot({ path: `${familyEvidenceRoot}/organization-administration-1440x900.png` });
+  await administration.context.close();
+
+  const research = await actor(browser, fixture.tokens.designerB, { width: 1440, height: 900 });
+  await research.page.goto("/research/reports");
+  await expectCompactWorkWordmark(research.page);
+  await expect(research.page.getByRole("heading", { level: 1, name: "Consent-filtered reporting" })).toBeVisible();
+  await expect(research.page.getByRole("heading", { name: "Provenance inspection" })).toBeVisible();
+  await expect(research.page.getByRole("heading", { name: "Your generated exports" })).toBeVisible();
+  expect((await new AxeBuilder({ page: research.page }).analyze()).violations).toEqual([]);
+  await research.page.screenshot({ path: `${familyEvidenceRoot}/reporting-research-1440x900.png` });
+  await research.context.close();
+
+  const replay = await actor(browser, fixture.tokens.portalOperator, { width: 1440, height: 900 });
+  await replay.page.goto(`/admin/sessions/${fixture.operatorSessionId}/replay`);
+  await expectCompactWorkWordmark(replay.page);
+  await expect(replay.page.getByRole("heading", { name: "Replay Session evidence" })).toBeVisible();
+  await expect(replay.page.getByRole("button", { name: "Run replay" })).toBeVisible();
+  await expect(replay.page.getByRole("heading", { level: 2, name: "Session control", exact: true })).toHaveCount(0);
+  expect((await new AxeBuilder({ page: replay.page }).analyze()).violations).toEqual([]);
+  await replay.page.screenshot({ path: `${familyEvidenceRoot}/replay-archive-1440x900.png` });
+  await replay.context.close();
+
+  const constrained = await actor(browser, fixture.tokens.designerA, { width: 320, height: 720 });
+  await constrained.page.goto(runtimeUrl(fixture.tokens.designerA));
+  await constrained.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await expect.poll(() => constrained.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(await constrained.page.evaluate(() => Array.from(document.querySelectorAll("button,a,input,select,textarea,summary"))
+    .filter((element) => element instanceof HTMLElement && element.offsetParent !== null &&
+      (element.getBoundingClientRect().width < 24 || element.getBoundingClientRect().height < 24)).length)).toBe(0);
+  expect((await new AxeBuilder({ page: constrained.page }).analyze()).violations).toEqual([]);
+  await constrained.page.screenshot({ path: `${familyEvidenceRoot}/participant-runtime-320x720-200-percent.png`, fullPage: true });
+  await constrained.context.close();
+});
+
 test("PS-710-T01 Designer creates, archives, reopens, and resumes a blank Project using visible controls @a11y", async ({ browser }) => {
   const { context, page } = await actor(browser, fixture.tokens.designerA);
   const projectName = "PS-710 visible blank Project";
@@ -440,7 +753,7 @@ test("PS-710-T01 Designer creates, archives, reopens, and resumes a blank Projec
   await page.getByLabel("Project name").fill(projectName);
   await page.getByRole("button", { name: "Create Project and open Draft" }).click();
   await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
-  await expect(page.locator(".studio-context h1")).toBeVisible();
+  await expect(page.locator(".studio-app-header .product-header-title")).toBeVisible();
 
   await page.goto("/?workspace=projects");
   const activeProject = page.locator(".project-row").filter({ hasText: projectName });
@@ -525,6 +838,55 @@ test("PS-710-T02 Template defaults, Admin and Reviewer views, and Operator denia
   expect(JSON.stringify(await denied.json())).not.toContain(fixture.projectId);
   await operator.page.screenshot({ path: `${portalEvidenceRoot}/operator-denied.png`, fullPage: true });
   await operator.context.close();
+});
+
+test("PS-800 Project QA demo is role-navigable, interactive, isolated, and least-privilege @a11y", async ({ browser, request }) => {
+  test.setTimeout(120_000);
+  expect((await request.get(`/v1/projects/${fixture.projectId}/demo`, { headers: headers(fixture.tokens.designerA) })).status()).toBe(200);
+  expect((await request.get(`/v1/projects/${fixture.projectId}/demo`, { headers: headers(fixture.tokens.finalReviewer) })).status()).toBe(200);
+  expect((await request.get(`/v1/projects/${fixture.projectId}/demo`, { headers: headers(fixture.tokens.operator) })).status()).toBe(200);
+  expect((await request.get(`/v1/projects/${fixture.projectId}/demo`, { headers: headers(fixture.tokens.portalOperator) })).status()).toBe(403);
+
+  const { context, page } = await actor(browser, fixture.tokens.designerA, { width: 1440, height: 900 });
+  await page.goto("/?workspace=projects");
+  const project = page.locator(".project-row").filter({ hasText: "PS-150 S1 proof" });
+  await expect(project.getByRole("link", { name: "Open QA demo" })).toBeVisible();
+  await project.getByRole("link", { name: "Open QA demo" }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/projects/${fixture.projectId}/demo`);
+  await expect(page.locator(".qa-demo-mode-label")).toContainText("QA Demo Isolated Draft");
+  await expect(page.getByText("Sessions, participants, evidence, reports, and the Project Draft are unchanged.")).toBeVisible();
+  await expectCompactWorkWordmark(page);
+
+  await page.getByLabel("Role", { exact: true }).selectOption("scribe");
+  await page.getByLabel("Team", { exact: true }).selectOption("blue");
+  await page.getByLabel("Stage", { exact: true }).selectOption("orientation");
+  const orientation = page.locator(".qa-demo-create").filter({ has: page.getByRole("heading", { name: "Blue Strategic Orientation" }) });
+  await orientation.getByLabel("Blue strategic orientation").selectOption("pressure");
+  await orientation.getByLabel("Forecast Red orientation").selectOption("stabilization");
+  await orientation.getByLabel("What will Red do first?").fill("Red will consolidate its opening position before applying pressure.");
+  await orientation.getByRole("button", { name: "Create demo artifact" }).click();
+  const artifact = page.locator(".qa-demo-artifact").filter({ has: page.getByRole("heading", { name: "Blue Strategic Orientation" }) });
+  await expect(artifact).toBeVisible();
+  await artifact.getByRole("button", { name: "Submit to Team Facilitator" }).click();
+  await expect(artifact.getByText("With Team Facilitator", { exact: true })).toBeVisible();
+
+  await page.getByLabel("Role", { exact: true }).selectOption("facilitator");
+  await artifact.getByRole("button", { name: "Forward to White Cell" }).click();
+  await expect(artifact.getByText("With White Cell", { exact: true })).toBeVisible();
+  await page.getByLabel("Role", { exact: true }).selectOption("white_cell");
+  await artifact.getByRole("button", { name: "Accept" }).click();
+  await expect(artifact.getByText("Completed", { exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${studioAuthoringEvidenceRoot}/project-qa-demo-1440x900.png`, fullPage: true });
+
+  await page.reload();
+  await expect(page.locator(".qa-demo-artifact")).toHaveCount(0);
+  await expect(page.getByText("Actions and artifacts stay in this browser memory and clear on reload.")).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 720 });
+  await expect(page.locator(".qa-demo-context")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: `${studioAuthoringEvidenceRoot}/project-qa-demo-320x720.png`, fullPage: true });
+  await context.close();
 });
 
 test("PS-720-T01 Publisher finds, exports, verifies, and revisits an immutable Release @a11y", async ({ browser }) => {
@@ -628,7 +990,7 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
 
   const admin = await actor(browser, fixture.tokens.operator);
   await admin.page.goto("/admin/members");
-  await expect(admin.page.getByRole("heading", { name: "Members and Organization Roles" })).toBeVisible();
+  await expect(admin.page.getByRole("heading", { name: "Workforce access" })).toBeVisible();
   await expect(admin.page.getByRole("link", { name: "Plugin operations", exact: true })).toHaveAttribute("href", "/admin/plugins");
   await expect(admin.page.getByRole("link", { name: "Deployment posture", exact: true })).toHaveAttribute("href", "/admin/deployment");
   await expect(admin.page.getByRole("link", { name: "Data policy", exact: true })).toHaveAttribute("href", "/admin/data-policy");
@@ -641,11 +1003,12 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   const second = await actor(browser, fixture.tokens.designerB);
   const studioUrl = `/studio/projects/${fixture.projectId}`;
   await first.page.goto(studioUrl);
-  await expect(first.page.locator(".studio-context h1")).toBeVisible();
+  await expect(first.page.locator(".studio-app-header .product-header-title")).toBeVisible();
   await expect(first.page.getByText("Connected", { exact: true })).toBeVisible();
+  expect(await first.page.locator(".studio-app-header .brand-wordmark img:not([aria-hidden='true'])").evaluate((image) => Math.round(image.getBoundingClientRect().width))).toBeLessThanOrEqual(92);
   await first.page.locator(".visual-editor").waitFor();
   await second.page.goto(studioUrl);
-  await expect(second.page.locator(".studio-context h1")).toBeVisible();
+  await expect(second.page.locator(".studio-app-header .product-header-title")).toBeVisible();
   await expect(second.page.getByText("Connected", { exact: true })).toBeVisible();
   await expect(first.page.locator(".visual-editor")).toHaveAttribute("data-contract-id", "studio-foundation-editor-v1");
 
@@ -704,11 +1067,45 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   await second.context.close();
 });
 
+test("PS-740-T01 Project authoring governs participant sign-in branding @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  await expect(page.locator(".studio-app-header .product-header-title")).toBeVisible();
+
+  const overviewWorkspace = await openStudioWorkspace(page, "Overview & Scenario");
+  const brandingImage = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlUcAAAAASUVORK5CYII=", "base64");
+  await overviewWorkspace.getByLabel("Developer logo file (PNG or JPEG, maximum 512 KiB)").setInputFiles({
+    name: "ps-740-developer-logo.png", mimeType: "image/png", buffer: brandingImage
+  });
+  await overviewWorkspace.getByRole("button", { name: "Upload developer logo" }).click();
+  await expect(overviewWorkspace.getByText("Developer logo added to this Draft.")).toBeVisible();
+  await overviewWorkspace.getByLabel("Participant login image file (PNG or JPEG, maximum 512 KiB)").setInputFiles({
+    name: "ps-740-simulation-image.png", mimeType: "image/png", buffer: brandingImage
+  });
+  await overviewWorkspace.getByLabel("Image description").fill("Synthetic participant login artwork");
+  await overviewWorkspace.getByRole("button", { name: "Upload participant login image" }).click();
+  await expect(overviewWorkspace.getByText("Participant login image added to this Draft.")).toBeVisible();
+  await expect(page.getByText("All changes received by the server")).toBeVisible({ timeout: 240_000 });
+  await expect.poll(async () => {
+    const response = await context.request.get(`/v1/projects/${fixture.projectId}/draft`);
+    const draft = await response.json();
+    const resources = draft.materialization.coreDesign.resources ?? [];
+    return draft.materialization.coreDesign.identity.developerLogoResourceId === "project-developer-logo" &&
+      draft.materialization.coreDesign.presentation?.login?.imageResourceId === "project-participant-login-image" &&
+      resources.some(({ id, dataUri, usage }) => id === "project-developer-logo" && dataUri.startsWith("data:image/png;base64,") && usage.includes("developer_branding")) &&
+      resources.some(({ id, altText, usage }) => id === "project-participant-login-image" && altText === "Synthetic participant login artwork" && usage.includes("login"));
+  }, { timeout: 240_000 }).toBe(true);
+  expect((await new AxeBuilder({ page }).include("#overview").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${authoringEvidenceRoot}/project-participant-branding.png`, fullPage: true });
+  await context.close();
+});
+
 test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, Injects, and quarantined content @a11y", async ({ browser }) => {
   test.setTimeout(360_000);
   const { context, page } = await actor(browser, fixture.tokens.designerA);
   await page.goto(`/studio/projects/${fixture.projectId}`);
-  await expect(page.locator(".studio-context h1")).toBeVisible();
+  await expect(page.locator(".studio-app-header .product-header-title")).toBeVisible();
 
   const formsWorkspace = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
   const firstForm = formsWorkspace.locator("details.editor-item").first();
@@ -737,7 +1134,6 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
     name: "ps-740-safe.txt", mimeType: "text/plain", buffer: Buffer.from("Safe synthetic PS-740 content.")
   });
   await contentWorkspace.getByRole("button", { name: "Upload and scan" }).click();
-  await expect(page.getByText("Malware scan passed. This version is available for reuse.")).toBeVisible();
   const safeCard = page.locator("#content-library .catalog-card").filter({ hasText: "PS-740 safe content" });
   await expect(safeCard.getByText("clean", { exact: true })).toBeVisible();
   await safeCard.getByRole("button", { name: "Use current version in Scenario" }).click();
@@ -899,33 +1295,167 @@ test("PS-760-T02 remaining Studio workspaces rehearse deterministically without 
   await context.close();
 });
 
-test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled Seats, switches role, and recovers offline @a11y", async ({ browser }) => {
+test("PS-770-T00 authenticated participant joins a branded simulation with a Session code @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.codeParticipant);
+  await page.goto("/?workspace=participant");
+  await expect(page.getByRole("heading", { level: 2, name: "Join a simulation" })).toBeVisible();
+  await expect(page.getByText("Synthetic code participant")).toBeVisible();
+  await page.getByLabel("Session code").fill("WRONG00");
+  await page.getByRole("button", { name: "Find session" }).click();
+  await expect(page.locator(".participant-entry-notice")).toContainText("invalid or unavailable");
+  await page.getByLabel("Session code").fill(fixture.sessionCode);
+  await page.getByRole("button", { name: "Find session" }).click();
+  await expect(page.getByRole("heading", { level: 3, name: "Fractured Order" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Available team and role" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).include(".participant-portal").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-code-entry.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-code-entry-mobile.png`, fullPage: true });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await context.close();
+});
+
+test("PS-770-T03 Release-authored profiles govern roles, teams, regions, navigation, and presentation resources", async ({ request, browser }) => {
+  const projectionFor = async (token, role) => {
+    const deviceResponse = await request.post("/v1/devices", { headers: headers(token), data: {} });
+    expect(deviceResponse.status()).toBe(201);
+    const { deviceId } = await deviceResponse.json();
+    const projectionResponse = await request.get(
+      `/v1/sessions/${fixture.sessionId}/runtime-projection?activeSessionRoleId=${encodeURIComponent(role)}`,
+      { headers: { ...headers(token), "x-device-id": deviceId } }
+    );
+    expect(projectionResponse.status()).toBe(200);
+    return { deviceId, projection: await projectionResponse.json() };
+  };
+
+  const blueAuthor = await projectionFor(fixture.tokens.author, "scribe");
+  const redAuthor = await projectionFor(fixture.tokens.redAuthor, "scribe");
+  const facilitator = await projectionFor(fixture.tokens.reviewer, "facilitator");
+  const control = await projectionFor(fixture.tokens.finalReviewer, "white_cell");
+
+  expect(blueAuthor.projection.activeTeamId).toBe("blue");
+  expect(redAuthor.projection.activeTeamId).toBe("red");
+  expect(blueAuthor.projection.interfaceProfileId).toBe("participant-author");
+  expect(blueAuthor.projection.navigation.items.map(({ label }) => label)).toEqual(["Work"]);
+  expect(blueAuthor.projection.regions.map(({ id }) => id)).toEqual(["main", "sidebar"]);
+  expect(blueAuthor.projection.regions[0].moduleIds).toEqual(["artifact-form", "task-list"]);
+  expect(facilitator.projection.interfaceProfileId).toBe("participant-review");
+  expect(facilitator.projection.navigation.defaultItemId).toBe("review");
+  expect(facilitator.projection.navigation.items.map(({ label }) => label)).toEqual(["Review", "Present"]);
+  expect(facilitator.projection.regions.map(({ id }) => id)).toEqual(["main", "presentation"]);
+  expect(facilitator.projection.resources).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "fractured-order-session-deck", name: "Fractured Order Facilitator Deck", mediaType: "text/html" })
+  ]));
+  expect(blueAuthor.projection.resources).toEqual([]);
+  expect(control.projection.interfaceProfileId).toBe("control");
+  expect(control.projection.navigation.items.map(({ label }) => label)).toEqual(["Control"]);
+
+  const deckId = facilitator.projection.modules.find(({ type }) => type === "slide_deck").configuration.releaseResourceId;
+  const facilitatorDeck = await request.get(
+    `/v1/sessions/${fixture.sessionId}/runtime-resources/${deckId}?deviceId=${facilitator.deviceId}&activeSessionRoleId=facilitator`,
+    { headers: headers(fixture.tokens.reviewer) }
+  );
+  expect(facilitatorDeck.status()).toBe(200);
+  expect(facilitatorDeck.headers()["content-type"]).toBe("text/html");
+  expect(facilitatorDeck.headers()["content-security-policy"]).toContain("sandbox");
+  const deniedDeck = await request.get(
+    `/v1/sessions/${fixture.sessionId}/runtime-resources/${deckId}?deviceId=${blueAuthor.deviceId}&activeSessionRoleId=scribe`,
+    { headers: headers(fixture.tokens.author) }
+  );
+  expect(deniedDeck.status()).toBe(403);
+
+  const facilitatorBrowser = await actor(browser, fixture.tokens.reviewer);
+  await facilitatorBrowser.page.goto(`/sessions/${fixture.sessionId}/runtime?role=facilitator`);
+  await expect(facilitatorBrowser.page.getByRole("heading", { level: 1, name: "PS-150 S1 proof Session" })).toBeVisible();
+  await expect(facilitatorBrowser.page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link")).toHaveText(["Review", "Present"]);
+  await expect(facilitatorBrowser.page.getByRole("link", { name: "Review" })).toHaveAttribute("aria-current", "page");
+  await expect(facilitatorBrowser.page.getByTitle("Session slide deck")).toHaveCount(0);
+  await facilitatorBrowser.page.getByRole("link", { name: "Present" }).click();
+  await expect(facilitatorBrowser.page.getByRole("link", { name: "Present" })).toHaveAttribute("aria-current", "page");
+  await expect(facilitatorBrowser.page.getByTitle("Session slide deck")).toBeVisible();
+  await expect(facilitatorBrowser.page.getByTitle("Session slide deck").contentFrame().getByText("Fractured Order", { exact: false }).first()).toBeVisible();
+  await facilitatorBrowser.page.screenshot({ path: `${participantEvidenceRoot}/participant-facilitator-runtime.png`, fullPage: true });
+  await facilitatorBrowser.context.close();
+});
+
+test("PS-770-T04 Designer uploads and assigns a governed resource to a role interface @a11y", async ({ browser }) => {
+  const { context, page } = await actor(browser, fixture.tokens.designerA);
+  await page.goto(`/studio/projects/${fixture.projectId}`);
+  const interfaces = await openStudioWorkspace(page, "Interfaces");
+  await interfaces.getByLabel("Resource name").fill("Participant field notes");
+  await interfaces.getByLabel("Resource kind").selectOption("notes");
+  await interfaces.getByLabel("Participant description").fill("Reference notes for the assigned participant role.");
+  await interfaces.getByLabel("File (maximum 512 KiB)").setInputFiles({
+    name: "participant-field-notes.md", mimeType: "", buffer: Buffer.from("# Field notes\n\nUse during the exercise.")
+  });
+  await interfaces.getByRole("button", { name: "Upload role resource" }).click();
+  await expect(interfaces.getByText("Participant field notes is ready to assign to a role interface.")).toBeVisible();
+
+  const authorProfile = interfaces.locator("details.editor-item").filter({ hasText: "Participant author" });
+  await authorProfile.locator("summary").click();
+  const firstRegion = authorProfile.locator("fieldset.nested-editor").first();
+  await firstRegion.getByRole("button", { name: "Add module" }).click();
+  const resourceModule = firstRegion.locator(".field-row").last();
+  await resourceModule.getByLabel("Module title").fill("Role resources");
+  await resourceModule.getByLabel("Module", { exact: true }).selectOption("resource_library");
+  await resourceModule.getByRole("group", { name: "Resources available in this role workspace" })
+    .getByLabel("Participant field notes").check();
+  await expect(page.getByText("All changes received by the server")).toBeVisible({ timeout: 240_000 });
+  await expect.poll(async () => {
+    const draft = await (await context.request.get(`/v1/projects/${fixture.projectId}/draft`)).json();
+    const resource = draft.materialization.coreDesign.resources.find(({ name }) => name === "Participant field notes");
+    const profile = draft.materialization.coreDesign.interfaces.find(({ id }) => id === "participant-author");
+    const module = profile.layout.regions.flatMap(({ modules }) => modules).find(({ title }) => title === "Role resources");
+    return resource?.mediaType === "text/markdown" && resource.usage.includes("role_resource") &&
+      module?.moduleType === "resource_library" && module.configuration.resourceIds.includes(resource.id);
+  }, { timeout: 240_000 }).toBe(true);
+  expect((await new AxeBuilder({ page }).include("#interfaces").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${authoringEvidenceRoot}/role-resource-assignment.png`, fullPage: true });
+  await context.close();
+});
+
+test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled Seats, switches role, and recovers offline @a11y", async ({ browser, request }) => {
   test.setTimeout(180_000);
   const { context, page } = await actor(browser, fixture.tokens.invitedParticipant);
   await page.goto("/?workspace=participant");
   await expect(page.getByRole("heading", { level: 1, name: "Your Sessions" })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Project editor/u })).toHaveCount(0);
   await expect(page.getByText("Synthetic invited participant")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "Fractured Order" })).toBeVisible();
+  await expect(page.getByText("Statecraft Simulation Group")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Fractured Order — A Seminar Simulation" })).toBeVisible();
+  await expect.poll(() => page.locator(".participant-simulation-image").evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => page.locator(".participant-developer-logo").evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
+  expect((await new AxeBuilder({ page }).include(".participant-portal").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-entry-branded.png`, fullPage: true });
+  const participantBranding = await context.request.get((await page.getByRole("img", { name: "Fractured Order — A Seminar Simulation" }).getAttribute("src")) ?? "");
+  expect(participantBranding.status()).toBe(200);
+  expect(participantBranding.headers()["content-type"]).toBe("image/png");
+  const deniedBranding = await request.get(participantBranding.url(), { headers: headers(fixture.tokens.portalOperator) });
+  expect(deniedBranding.status()).toBe(403);
   const deniedAcceptance = await context.request.post(`/v1/participant-entry/invitations/${fixture.invitationId}/accept`, {
     headers: headers(fixture.tokens.author), data: {}
   });
   expect(deniedAcceptance.status()).toBe(403);
   expect(JSON.stringify(await deniedAcceptance.json())).not.toContain("PS-150 S1 proof Session");
   await page.getByRole("button", { name: "Accept invitation" }).click();
-  await expect(page.getByRole("group", { name: "Choose an eligible Seat" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Available team and role" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("group", { name: "Choose an eligible Seat" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Available team and role" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
-  const choices = page.getByRole("group", { name: "Choose an eligible Seat" }).getByRole("button");
+  const choices = page.getByRole("group", { name: "Available team and role" }).getByRole("button");
   await choices.first().click();
   await expect(page.getByRole("heading", { name: "Enter as" })).toBeVisible();
-  const remainingChoices = page.getByRole("group", { name: "Choose an eligible Seat" }).getByRole("button");
+  const remainingChoices = page.getByRole("group", { name: "Available team and role" }).getByRole("button");
   if (await remainingChoices.count() > 0) await remainingChoices.first().click();
   const entryLinks = page.locator(".role-entry-list a");
   await expect(entryLinks.first()).toBeVisible();
   await entryLinks.first().click();
   await expect(page).toHaveURL(/\/sessions\/[0-9a-f-]{36}\/runtime\?role=[a-z_]+$/u);
-  await expect(page.getByRole("heading", { level: 1, name: /workspace$/u })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Runtime modules" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Exit Session" })).toBeVisible();
   if (await page.getByLabel("Active Role Context").count() > 0) {
@@ -937,6 +1467,15 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   const runtimeLocation = page.url();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const runtimeNavigationToggle = page.getByRole("button", { name: "Open workspace navigation" });
+  await expect(runtimeNavigationToggle).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: "Work" })).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime-mobile.png`, fullPage: true });
+  await runtimeNavigationToggle.click();
+  await expect(page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: "Work" })).toBeVisible();
+  await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime-mobile-navigation-open.png`, fullPage: true });
 
   await page.goto("/__test__/offline");
   await page.goto(runtimeLocation);
@@ -946,7 +1485,7 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   await page.goto("/__test__/online");
   await page.goto(runtimeLocation);
   await expect(page.getByLabel("Plenum status: Connected")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1, name: /workspace$/u })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await context.close();
 });
 
@@ -954,9 +1493,9 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   test.setTimeout(180_000);
   const { context, page } = await actor(browser, fixture.tokens.portalOperator);
   await page.goto(`/admin/sessions/${fixture.operatorSessionId}`);
-  await expect(page.getByRole("heading", { name: "Session control view" })).toBeVisible();
+  await expect(page.locator(".operator-workspace")).toBeVisible();
   await expect(page.getByText("PS-780 Operator Control Exercise")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Session control", exact: true })).toBeVisible();
+  await expect(page.locator("#lifecycle-control-title")).toHaveText("Session control");
   await expect(page.getByRole("heading", { name: "Injects" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Adjudications" })).toBeVisible();
 
@@ -1003,14 +1542,14 @@ test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and a
   const admin = await actor(browser, fixture.tokens.operator);
   const { page } = admin;
   await page.goto("/admin/members");
-  await expect(page.getByRole("heading", { name: "Members and Organization Roles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workforce access" })).toBeVisible();
   const reviewer = page.locator("li.administration-record").filter({ hasText: "Synthetic final reviewer" });
   await reviewer.getByLabel("Operator", { exact: true }).check();
-  await reviewer.getByRole("button", { name: "Save role assignment" }).click();
+  await reviewer.getByRole("button", { name: "Save roles" }).click();
   await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");
   const updatedReviewer = page.locator("li.administration-record").filter({ hasText: "Synthetic final reviewer" });
   await updatedReviewer.getByLabel("Operator", { exact: true }).uncheck();
-  await updatedReviewer.getByRole("button", { name: "Save role assignment" }).click();
+  await updatedReviewer.getByRole("button", { name: "Save roles" }).click();
   await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");
 
   await page.goto("/admin/plugins");

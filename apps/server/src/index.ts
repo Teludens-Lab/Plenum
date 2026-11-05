@@ -3,12 +3,14 @@ import {
 } from "@plenum/event-contracts";
 import { authorizationError } from "./errors.js";
 
-export { createDatabasePool, withOrganizationTransaction } from "./database.js";
+export { createDatabasePool, withOrganizationTransaction, withPlatformTransaction, withRestrictedTransaction } from "./database.js";
 export { AuthorizationError, authorizationError } from "./errors.js";
 export * from "./identity/oidc.js";
 export * from "./identity/login.js";
 export * from "./identity/context.js";
 export * from "./identity/deployment.js";
+export * from "./identity/organization-providers.js";
+export * from "./identity/organization-workforce.js";
 export * from "./access/reassignment.js";
 export * from "./runtime/access/onboarding.js";
 export * from "./runtime/commands/processor.js";
@@ -17,6 +19,9 @@ export * from "./runtime/information-flow.js";
 export * from "./runtime/operator-projection.js";
 export * from "./runtime/operator-control.js";
 export * from "./operations/administration.js";
+export * from "./platform/provisioning.js";
+export * from "./platform/invitation-delivery.js";
+export * from "./platform/workforce.js";
 export * from "./runtime/state/world-state.js";
 export * from "./runtime/release-activation.js";
 export * from "./adjudication/service.js";

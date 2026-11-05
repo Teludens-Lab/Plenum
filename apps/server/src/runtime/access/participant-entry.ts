@@ -1,13 +1,17 @@
 import {
   PARTICIPANT_ENTRY_CONTRACT_ID,
+  type ParticipantBrandAssetV1,
   type ParticipantEntryV1,
   type ParticipantRoleContextV1,
   type ParticipantSeatChoiceV1,
+  type ParticipantSessionBrandingV1,
   type SessionLifecycleStatusV1
 } from "@plenum/event-contracts";
+import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 
 import { withOrganizationTransaction } from "../../database.js";
+import { authorizationError } from "../../errors.js";
 import type { AuthenticatedPrincipal } from "../../identity/login.js";
 
 type EntryRow = {
@@ -38,6 +42,27 @@ type SeatRow = {
 };
 
 type Named = { id: string; name?: string; label?: string };
+type ReleaseResource = {
+  id: string;
+  type?: string;
+  mediaType?: string;
+  usage?: unknown;
+  altText?: string;
+  dataUri?: string;
+  contentDigest?: string;
+};
+
+export type ParticipantBrandingAsset = {
+  contentType: "image/png" | "image/jpeg";
+  bytes: Uint8Array;
+  digest: string;
+};
+
+export type ParticipantRuntimeResource = {
+  contentType: string;
+  bytes: Uint8Array;
+  digest: string;
+};
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -56,6 +81,71 @@ function label(items: Named[], id: string | null, fallback: string): string | nu
   if (id === null) return null;
   const item = items.find((candidate) => candidate.id === id);
   return item?.name ?? item?.label ?? fallback;
+}
+
+function releaseDesign(snapshot: unknown): Record<string, unknown> {
+  const root = record(snapshot) ?? {};
+  return record(root.coreDesign) ?? root;
+}
+
+function imageResource(value: unknown): value is ReleaseResource & { id: string; mediaType: "image/png" | "image/jpeg" } {
+  if (record(value) === null) return false;
+  const resource = value as ReleaseResource;
+  return typeof resource.id === "string" && resource.id.length > 0 &&
+    (resource.mediaType === "image/png" || resource.mediaType === "image/jpeg");
+}
+
+function usage(resource: ReleaseResource, value: string): boolean {
+  return Array.isArray(resource.usage) && resource.usage.includes(value);
+}
+
+function runtimeResourceReferencedByRole(design: Record<string, unknown>, resourceId: string, sessionRoleId: string): boolean {
+  if (!Array.isArray(design.interfaces)) return false;
+  return design.interfaces.filter((candidate) => record(candidate) !== null).some((candidate) => {
+    const profile = candidate as Record<string, unknown>;
+    const selectors = record(profile.selectors);
+    if (!Array.isArray(selectors?.sessionRoleIds) || !selectors.sessionRoleIds.includes(sessionRoleId)) return false;
+    const layout = record(profile.layout);
+    if (!Array.isArray(layout?.regions)) return false;
+    return layout.regions.filter((region) => record(region) !== null).some((region) => {
+      const modules = record(region)?.modules;
+      return Array.isArray(modules) && modules.filter((module) => record(module) !== null).some((module) => {
+        const configuration = record(record(module)?.configuration);
+        return configuration?.releaseResourceId === resourceId ||
+          Array.isArray(configuration?.resourceIds) && configuration.resourceIds.includes(resourceId);
+      });
+    });
+  });
+}
+
+function assetProjection(sessionId: string, releaseId: string, resource: ReleaseResource | undefined): ParticipantBrandAssetV1 | null {
+  if (resource === undefined || !imageResource(resource)) return null;
+  return {
+    url: `/v1/participant-entry/sessions/${sessionId}/releases/${releaseId}/assets/${encodeURIComponent(resource.id)}`,
+    altText: typeof resource.altText === "string" ? resource.altText : "",
+    mediaType: resource.mediaType
+  };
+}
+
+function participantBranding(row: EntryRow): ParticipantSessionBrandingV1 | undefined {
+  const design = releaseDesign(row.snapshot);
+  const identity = record(design.identity);
+  if (identity === null || typeof identity.title !== "string" || typeof identity.developer !== "string") return undefined;
+  const resources = Array.isArray(design.resources) ? design.resources.filter(imageResource) : [];
+  const developerLogoId = typeof identity.developerLogoResourceId === "string" ? identity.developerLogoResourceId : null;
+  const developerLogo = developerLogoId === null ? undefined : resources.find((resource) => resource.id === developerLogoId);
+  const presentation = record(design.presentation);
+  const login = record(presentation?.login);
+  const simulationImageId = typeof login?.imageResourceId === "string" ? login.imageResourceId : null;
+  const simulationImage = (simulationImageId === null ? undefined : resources.find((resource) => resource.id === simulationImageId)) ??
+    resources.find((resource) => usage(resource, "login") && resource.id !== developerLogoId);
+  return {
+    title: identity.title,
+    subtitle: typeof identity.subtitle === "string" ? identity.subtitle : null,
+    developer: identity.developer,
+    developerLogo: assetProjection(row.session_id, row.governing_release_id, developerLogo),
+    simulationImage: assetProjection(row.session_id, row.governing_release_id, simulationImage)
+  };
 }
 
 async function roleContexts(client: PoolClient, row: EntryRow): Promise<ParticipantRoleContextV1[]> {
@@ -139,6 +229,7 @@ export async function getParticipantEntry(pool: Pool, principal: AuthenticatedPr
     );
     const sessions = await Promise.all(result.rows.map(async (row) => {
       const contexts = await roleContexts(client, row);
+      const branding = participantBranding(row);
       return {
         sessionId: row.session_id,
         governingReleaseId: row.governing_release_id,
@@ -150,9 +241,135 @@ export async function getParticipantEntry(pool: Pool, principal: AuthenticatedPr
             : row.participant_id === null || contexts.length === 0 ? "assignment_pending" as const : "ready" as const,
         invitationId: row.invitation_id,
         roleContexts: contexts,
-        eligibleSeats: await eligibleSeats(client, row)
+        eligibleSeats: await eligibleSeats(client, row),
+        ...(branding === undefined ? {} : { branding })
       };
     }));
     return { contractId: PARTICIPANT_ENTRY_CONTRACT_ID, sessions };
+  });
+}
+
+export async function getParticipantBrandingAsset(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  sessionId: string,
+  releaseId: string,
+  resourceId: string,
+  correlationId: string
+): Promise<ParticipantBrandingAsset> {
+  if (resourceId.length === 0 || resourceId.length > 200 || !/^[a-z0-9._-]+$/iu.test(resourceId)) {
+    throw authorizationError("NOT_FOUND", "The participant branding asset was not found.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ snapshot: unknown }>(
+      `SELECT revision.snapshot
+         FROM runtime.sessions session
+         JOIN runtime.session_access_configs config
+           ON config.organization_id=session.organization_id AND config.session_id=session.id
+         JOIN registry.releases release
+           ON release.organization_id=session.organization_id AND release.id=config.governing_release_id
+         JOIN studio.definition_revisions revision
+           ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+        WHERE session.organization_id=$1 AND session.id=$3 AND config.governing_release_id=$4
+          AND (
+            EXISTS (SELECT 1 FROM runtime.participants participant
+              WHERE participant.organization_id=session.organization_id AND participant.session_id=session.id
+                AND participant.person_id=$2)
+            OR EXISTS (SELECT 1 FROM identity.session_invitations invitation
+              WHERE invitation.organization_id=session.organization_id AND invitation.session_id=session.id
+                AND invitation.recipient_person_id=$2 AND invitation.accepted_at IS NULL
+                AND invitation.revoked_at IS NULL AND invitation.expires_at>transaction_timestamp())
+            OR EXISTS (SELECT 1 FROM runtime.join_requests request
+              WHERE request.organization_id=session.organization_id AND request.session_id=session.id
+                AND request.person_id=$2 AND request.status IN ('waiting_room','assignment_pending','admitted'))
+          )`,
+      [principal.organizationId, principal.principalId, sessionId, releaseId]
+    );
+    const snapshot = result.rows[0]?.snapshot;
+    if (snapshot === undefined) {
+      throw authorizationError("PERMISSION_DENIED", "The participant branding asset is unavailable.", correlationId);
+    }
+    const design = releaseDesign(snapshot);
+    const resource = Array.isArray(design.resources)
+      ? design.resources.filter(imageResource).find((candidate) => candidate.id === resourceId &&
+        (usage(candidate, "login") || usage(candidate, "developer_branding")))
+      : undefined;
+    if (resource === undefined || typeof resource.dataUri !== "string" || typeof resource.contentDigest !== "string") {
+      throw authorizationError("NOT_FOUND", "The participant branding asset was not found.", correlationId);
+    }
+    const prefix = `data:${resource.mediaType};base64,`;
+    if (!resource.dataUri.startsWith(prefix)) {
+      throw authorizationError("CONFLICT", "The published branding asset has an invalid media encoding.", correlationId);
+    }
+    const bytes = Buffer.from(resource.dataUri.slice(prefix.length), "base64");
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== resource.contentDigest) {
+      throw authorizationError("CONFLICT", "The published branding asset failed its integrity check.", correlationId);
+    }
+    return { contentType: resource.mediaType, bytes, digest };
+  });
+}
+
+export async function getParticipantRuntimeResource(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  sessionId: string,
+  resourceId: string,
+  deviceId: string,
+  activeSessionRoleId: string,
+  correlationId: string
+): Promise<ParticipantRuntimeResource> {
+  if (resourceId.length === 0 || resourceId.length > 200 || !/^[a-z0-9._-]+$/iu.test(resourceId)) {
+    throw authorizationError("NOT_FOUND", "The Runtime resource was not found.", correlationId);
+  }
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    const result = await client.query<{ snapshot: unknown }>(
+      `SELECT revision.snapshot
+         FROM runtime.sessions session
+         JOIN runtime.session_access_configs config
+           ON config.organization_id=session.organization_id AND config.session_id=session.id
+         JOIN registry.releases release
+           ON release.organization_id=session.organization_id AND release.id=config.governing_release_id
+         JOIN studio.definition_revisions revision
+           ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+         JOIN runtime.participants participant
+           ON participant.organization_id=session.organization_id AND participant.session_id=session.id
+          AND participant.person_id=$2
+         JOIN runtime.seat_assignments assignment
+           ON assignment.organization_id=session.organization_id AND assignment.session_id=session.id
+          AND assignment.participant_id=participant.id AND assignment.session_role_id=$5 AND assignment.valid_to IS NULL
+         JOIN sync.devices device
+           ON device.organization_id=session.organization_id AND device.id=$4
+          AND device.person_id=$2 AND device.revoked_at IS NULL
+        WHERE session.organization_id=$1 AND session.id=$3`,
+      [principal.organizationId, principal.principalId, sessionId, deviceId, activeSessionRoleId]
+    );
+    const snapshot = result.rows[0]?.snapshot;
+    if (snapshot === undefined) {
+      throw authorizationError("PERMISSION_DENIED", "The Runtime resource is unavailable.", correlationId);
+    }
+    const design = releaseDesign(snapshot);
+    if (!runtimeResourceReferencedByRole(design, resourceId, activeSessionRoleId)) {
+      throw authorizationError("PERMISSION_DENIED", "The Runtime resource is unavailable for this Role.", correlationId);
+    }
+    const resource = Array.isArray(design.resources)
+      ? design.resources.filter((candidate) => record(candidate) !== null)
+        .map((candidate) => candidate as ReleaseResource)
+        .find((candidate) => candidate.id === resourceId)
+      : undefined;
+    if (resource === undefined || typeof resource.mediaType !== "string" || typeof resource.dataUri !== "string" ||
+        typeof resource.contentDigest !== "string") {
+      throw authorizationError("NOT_FOUND", "The Runtime resource was not found.", correlationId);
+    }
+    const prefix = `data:${resource.mediaType};base64,`;
+    if (!resource.dataUri.startsWith(prefix)) {
+      throw authorizationError("CONFLICT", "The published Runtime resource has an invalid media encoding.", correlationId);
+    }
+    const bytes = Buffer.from(resource.dataUri.slice(prefix.length), "base64");
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== resource.contentDigest) {
+      throw authorizationError("CONFLICT", "The published Runtime resource failed its integrity check.", correlationId);
+    }
+    return { contentType: resource.mediaType, bytes, digest };
   });
 }

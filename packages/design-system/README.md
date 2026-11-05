@@ -6,4 +6,4 @@ Import `src/tokens.css` before product styles. Components use semantic variables
 
 The shared CSS contracts cover continuous materials, controls, status, the Node/Branch/Path/Gate/State grammar, explicit scroll containers, responsive shell transformation, reduced motion, forced colors, and the official responsive wordmark. Component states are default, hover, focus-visible, active, disabled, loading, empty, error, unauthorized, and offline. Status always pairs color with text or structure.
 
-Brand assets are exact copies of the catalog files. `Plenum. Wordmark Dark.png` appears on light materials and `Plenum. Wordmark Light.png` on dark materials. They must not be recolored, redrawn, stretched, or replaced by simulation artwork.
+The approved brand asset is the exact catalog file `Plenum. Wordmark Primary.png`. It appears unchanged on light materials and through the shared theme-safe monochrome inversion on dark materials. It must not be redrawn, stretched, or replaced by simulation artwork.

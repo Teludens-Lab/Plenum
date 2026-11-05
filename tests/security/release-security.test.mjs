@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -28,9 +28,16 @@ test("PS-550-T01 finds no committed secret material in the current tree or Git h
 
   const currentFindings = [];
   for (const file of files) {
-    const content = await readFile(resolve(root, file));
-    if (content.includes(0)) continue;
-    currentFindings.push(...findings(content.toString("utf8"), file));
+    const path = resolve(root, file);
+    try {
+      if (!(await stat(path)).isFile()) continue;
+      const content = await readFile(path);
+      if (content.includes(0)) continue;
+      currentFindings.push(...findings(content.toString("utf8"), file));
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
   }
   assert.deepEqual(currentFindings, []);
 

@@ -14,7 +14,7 @@
 6. Run `node scripts/validate-promptbook.mjs` and resolve all failures.
 7. Review generated diffs for scope, requirement coverage, dependencies, commands, commit contracts, and status honesty.
 8. Record the regeneration date and source-version delta in the validation report or change log.
-9. For any user-facing task, verify that Teludens source references, official dark/light Plenum wordmarks, route/state/viewport evidence and the task's human user-test script remain present.
+9. For any user-facing task, verify that Teludens source references, the approved primary Plenum wordmark and theme-safe presentation contract, route/state/viewport evidence and the task's human user-test script remain present.
 
 ## Supersession policy
 

@@ -28,6 +28,8 @@ Section navigation is a list of links/buttons with visible current state. Canvas
 
 ## State, viewport and evidence
 
+The normal family implementation and focused cross-family evidence are closed in `../impeccable/studio-authoring/family-closeout.md`; its ledger preserves the remaining human, device and task-level NOT RUN gates.
+
 All canonical states apply. Additional mandatory states: collaborator joined/left, local changes, synchronizing, saved, exact freeze pending/failed/success, validation blocked, preview unavailable and live-change approval conflict. Verify all sections, long terminology, dense graphs, 200%/320px reflow and touch alternatives. Planned evidence key: `studio-authoring`; no PS-800 PASS evidence exists yet.
 
 Tier behavior: 1920/1440 show navigator, canvas and inspector; 1280x720/600 retain navigator/canvas and overlay the inspector; 1024x768 collapses navigator and inspector to labeled sheets; 768x1024 and 390x844 show one region at a time with persistent Project/section/sync context. At 200%/320px, every graph operation has a non-spatial list/form equivalent.

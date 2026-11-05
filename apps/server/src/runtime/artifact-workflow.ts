@@ -8,6 +8,7 @@ import {
   type RuntimeFormV1,
   type RuntimeModuleV1,
   type RuntimeProjectionV1,
+  type RuntimeResourceV1,
   RUNTIME_NAVIGATION_CONTRACT_ID,
   RUNTIME_PROJECTION_CONTRACT_ID
 } from "@plenum/event-contracts";
@@ -117,9 +118,13 @@ interface WorkflowDefinition {
 export interface RuntimeInterfaceProjectionProfile {
   id: string;
   sessionRoleIds: string[];
+  teamIds?: string[];
   stageIds?: string[];
   layout: RuntimeProjectionV1["layout"];
   modules: RuntimeModuleV1[];
+  regions: Array<{ id: string; moduleIds: string[] }>;
+  navigationItems: Array<{ id: string; label: string; order: number; regionId: string; moduleId: string }>;
+  defaultNavigationItemId?: string;
 }
 
 interface RuntimeDefinition {
@@ -186,6 +191,7 @@ interface StageStateRow {
 type ReleasedDefinition = {
   definition: RuntimeDefinition;
   releaseLabel: string;
+  simulationTitle: string;
   initial: {
     initialState?: Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }>;
     initialCapabilities?: Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }>;
@@ -220,34 +226,64 @@ function runtimeDefinition(value: unknown, correlationId: string): RuntimeDefini
   const design = isRecord(value.coreDesign) ? value.coreDesign : value;
   const profiles = Array.isArray(design.interfaces) ? design.interfaces.map((candidate) => {
     const profile = candidate as Record<string, unknown>;
-    const selectors = profile.selectors as Record<string, unknown>;
-    const layout = profile.layout as Record<string, unknown>;
+    const selectors = isRecord(profile.selectors) ? profile.selectors : {};
+    const layout = isRecord(profile.layout) ? profile.layout : {};
     const template = layout.template;
     const layoutName = template === "main_sidebar" ? "main_with_sidebar" :
       template === "dashboard" ? "dashboard_grid" : template === "workspace" ? "workspace_tabs" : "single_column";
-    const regions = layout.regions as Array<{ modules: Array<Record<string, unknown>> }>;
-    return {
-      id: profile.id,
-      sessionRoleIds: selectors.sessionRoleIds,
-      stageIds: selectors.stageIds,
-      layout: layoutName,
-      modules: regions.flatMap((region) => region.modules.map((module) => ({
+    const sourceRegions = Array.isArray(layout.regions) ? layout.regions.filter(isRecord) : [];
+    const modules = sourceRegions.flatMap((region) => Array.isArray(region.modules) ? region.modules.filter(isRecord).map((module) => {
+      const configuration = isRecord(module.configuration) ? module.configuration : {};
+      return {
         id: module.id,
         type: module.moduleType,
         title: module.title ?? module.id,
-        mode: (module.configuration as Record<string, unknown>).mode ?? "read",
-        emptyStateText: (module.configuration as Record<string, unknown>).emptyStateText ?? "Nothing is available.",
-        configuration: module.configuration
-      })))
+        mode: configuration.mode ?? "read",
+        emptyStateText: configuration.emptyStateText ?? "Nothing is available.",
+        configuration
+      };
+    }) : []);
+    const regions = sourceRegions.map((region, index) => ({
+      id: typeof region.id === "string" && region.id.length > 0 ? region.id : `region-${index + 1}`,
+      moduleIds: Array.isArray(region.modules) ? region.modules.filter(isRecord)
+        .flatMap((module) => typeof module.id === "string" ? [module.id] : []) : []
+    }));
+    const navigation = isRecord(profile.navigation) ? profile.navigation : {};
+    const navigationItems = (Array.isArray(navigation.items) ? navigation.items.filter(isRecord) : []).flatMap((item, index) => {
+      const target = isRecord(item.target) ? item.target : {};
+      const regionId = typeof target.regionId === "string" ? target.regionId : regions[0]?.id;
+      const region = regions.find((candidateRegion) => candidateRegion.id === regionId);
+      const moduleId = typeof target.moduleId === "string" ? target.moduleId : region?.moduleIds[0];
+      return typeof item.id === "string" && typeof item.label === "string" && regionId !== undefined && moduleId !== undefined
+        ? [{ id: item.id, label: item.label, order: typeof item.order === "number" ? item.order : index + 1, regionId, moduleId }]
+        : [];
+    }).sort((left, right) => left.order - right.order);
+    return {
+      id: profile.id,
+      sessionRoleIds: selectors.sessionRoleIds,
+      teamIds: selectors.teamIds,
+      stageIds: selectors.stageIds,
+      layout: layoutName,
+      modules,
+      regions,
+      navigationItems: navigationItems.length > 0 ? navigationItems : modules.slice(0, 1).map((module) => ({
+        id: `navigation-${String(module.id)}`, label: String(module.title), order: 1,
+        regionId: regions[0]?.id ?? "main", moduleId: String(module.id)
+      })),
+      defaultNavigationItemId: navigation.defaultItemId
     };
   }) : Array.isArray(design.interfaceProfiles) ? design.interfaceProfiles.map((candidate) => {
     const profile = candidate as Record<string, unknown>;
+    const modules: Array<Record<string, unknown>> = Array.isArray(profile.modules) ? profile.modules.map((candidateModule) => {
+      const module = candidateModule as Record<string, unknown>;
+      return { ...module, configuration: isRecord(module.configuration) ? module.configuration : {} };
+    }) : [];
     return {
       ...profile,
-      modules: Array.isArray(profile.modules) ? profile.modules.map((candidateModule) => {
-        const module = candidateModule as Record<string, unknown>;
-        return { ...module, configuration: isRecord(module.configuration) ? module.configuration : {} };
-      }) : profile.modules
+      modules,
+      regions: [{ id: "main", moduleIds: modules.flatMap((module) => typeof module.id === "string" ? [module.id] : []) }],
+      navigationItems: modules.flatMap((module, index) => typeof module.id === "string" && typeof module.title === "string"
+        ? [{ id: `navigation-${module.id}`, label: module.title, order: index + 1, regionId: "main", moduleId: module.id }] : [])
     };
   }) : design.interfaceProfiles;
   const forms = Array.isArray(design.forms) ? design.forms.map((candidate) => {
@@ -294,9 +330,12 @@ async function readRelease(
     if (row === undefined) throw authorizationError("NOT_FOUND", "The Release was not found.", correlationId);
     const snapshot = row.snapshot as Record<string, unknown>;
     const scenario = isRecord(snapshot.scenario) ? snapshot.scenario : {};
+    const identity = isRecord(snapshot.identity) ? snapshot.identity : {};
     return {
       definition: runtimeDefinition(row.snapshot, correlationId),
       releaseLabel: row.release_label,
+      simulationTitle: typeof identity.title === "string" && identity.title.length > 0 ? identity.title
+        : typeof scenario.name === "string" && scenario.name.length > 0 ? scenario.name : row.release_label,
       initial: {
         ...(Array.isArray(scenario.initialState) ? { initialState: scenario.initialState as Array<{ stateVariableId: string; scopeReference?: string; value: boolean | number | string }> } : {}),
         ...(Array.isArray(scenario.initialCapabilities) ? { initialCapabilities: scenario.initialCapabilities as Array<{ capabilityId: string; scopeReference?: string; state: string; quantity?: number }> } : {}),
@@ -1125,11 +1164,53 @@ export function resolveRuntimeInterfaceProfile(
   value: unknown,
   activeSessionRoleId: string,
   stageId: string | null,
-  correlationId: string
+  correlationId: string,
+  activeTeamId: string | null = null
 ): RuntimeInterfaceProjectionProfile | undefined {
   const definition = runtimeDefinition(value, correlationId);
   return definition.interfaceProfiles.find((profile) => profile.sessionRoleIds.includes(activeSessionRoleId) &&
+    (profile.teamIds === undefined || (activeTeamId !== null && profile.teamIds.includes(activeTeamId))) &&
     (profile.stageIds === undefined || (stageId !== null && profile.stageIds.includes(stageId))));
+}
+
+function profileResourceIds(profile: RuntimeInterfaceProjectionProfile): string[] {
+  return [...new Set(profile.modules.flatMap((module) => {
+    const releaseResourceId = module.configuration.releaseResourceId;
+    const resourceIds = module.configuration.resourceIds;
+    return [
+      ...(typeof releaseResourceId === "string" ? [releaseResourceId] : []),
+      ...(Array.isArray(resourceIds) ? resourceIds.filter((id): id is string => typeof id === "string") : [])
+    ];
+  }))];
+}
+
+async function readRuntimeResourceMetadata(
+  client: PoolClient,
+  organizationId: string,
+  releaseId: string,
+  resourceIds: string[]
+): Promise<RuntimeResourceV1[]> {
+  if (resourceIds.length === 0) return [];
+  const result = await client.query<{ id: string; name: string; type: string; media_type: string; alt_text: string | null }>(
+    `SELECT resource->>'id' AS id,resource->>'name' AS name,resource->>'type' AS type,
+            resource->>'mediaType' AS media_type,resource->>'altText' AS alt_text
+       FROM registry.releases release
+       JOIN studio.definition_revisions revision
+         ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+       CROSS JOIN LATERAL jsonb_array_elements(
+         COALESCE(revision.snapshot #> '{coreDesign,resources}',revision.snapshot->'resources','[]'::jsonb)
+       ) resource
+      WHERE release.organization_id=$1 AND release.id=$2 AND resource->>'id'=ANY($3::text[])
+      ORDER BY resource->>'name',resource->>'id'`,
+    [organizationId, releaseId, resourceIds]
+  );
+  return result.rows.map((resource) => ({
+    id: resource.id,
+    name: resource.name,
+    type: resource.type,
+    mediaType: resource.media_type,
+    ...(resource.alt_text === null ? {} : { altText: resource.alt_text })
+  }));
 }
 
 export interface RuntimeProjectionInput {
@@ -1149,7 +1230,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       correlationId: input.correlationId,
       ...(input.activeSessionRoleId === undefined ? {} : { activeSessionRoleId: input.activeSessionRoleId })
     });
-    const { definition, releaseLabel } = await readRelease(
+    const { definition, releaseLabel, simulationTitle } = await readRelease(
       client, context.organizationId, context.activeReleaseId, input.correlationId
     );
     const actor = actorFor(definition, context);
@@ -1163,10 +1244,15 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
     );
     const stageState = stageStateResult.rows[0];
     const stage = definition.stages.find((candidate) => candidate.id === stageState?.stage_id) ?? definition.stages[0] ?? null;
-    const profile = resolveRuntimeInterfaceProfile(definition, context.activeSessionRoleId, stage?.id ?? null, input.correlationId);
+    const profile = resolveRuntimeInterfaceProfile(
+      definition, context.activeSessionRoleId, stage?.id ?? null, input.correlationId, actor.teamId ?? null
+    );
     if (profile === undefined) {
       throw authorizationError("PERMISSION_DENIED", "No Interface Profile is available for the Active Role Context.", input.correlationId);
     }
+    const resources = await readRuntimeResourceMetadata(
+      client, context.organizationId, context.activeReleaseId, profileResourceIds(profile)
+    );
     const rows = await client.query<ArtifactRow>(
       `SELECT id,artifact_type_key,state,payload,version,governing_release_id,form_version,
               creator_participant_id,visible_role_ids,owner_team_id
@@ -1232,12 +1318,18 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       seatLabel: assignment.seat_id,
       runtimeUrl: `/sessions/${context.sessionId}/runtime?role=${encodeURIComponent(assignment.session_role_id)}`
     }));
+    const sessionIdentity = await client.query<{ title: string }>(
+      "SELECT title FROM runtime.sessions WHERE organization_id=$1 AND id=$2",
+      [context.organizationId, context.sessionId]
+    );
     return {
       contractId: RUNTIME_PROJECTION_CONTRACT_ID,
       sessionId: context.sessionId,
       sessionStatus: context.sessionStatus,
       releaseId: context.activeReleaseId,
       releaseLabel,
+      simulationTitle,
+      sessionTitle: sessionIdentity.rows[0]?.title ?? simulationTitle,
       participantId: context.participantId,
       activeSessionRoleId: context.activeSessionRoleId,
       activeSessionRoleLabel: role.name,
@@ -1264,11 +1356,15 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       layout: profile.layout,
       navigation: {
         contractId: RUNTIME_NAVIGATION_CONTRACT_ID,
-        items: [...profile.modules].sort((left, right) => left.id.localeCompare(right.id))
-          .map((module) => ({ id: `navigation-${module.id}`, label: module.title, moduleId: module.id }))
+        items: profile.navigationItems.map((item) => ({
+          id: item.id, label: item.label, moduleId: item.moduleId, regionId: item.regionId
+        })),
+        ...(profile.defaultNavigationItemId === undefined ? {} : { defaultItemId: profile.defaultNavigationItemId })
       },
+      regions: profile.regions,
       roleContexts,
-      modules: [...profile.modules].sort((left, right) => left.id.localeCompare(right.id)),
+      modules: profile.modules,
+      resources,
       createTasks,
       artifacts,
       ...information,

@@ -1451,6 +1451,11 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   if (runtime.identity?.developerLogoResourceId !== undefined) {
     reference(resources, runtime.identity.developerLogoResourceId, "Release identity developer logo");
   }
+  const loginPresentation = runtime.presentation?.login;
+  if (typeof loginPresentation === "object" && loginPresentation !== null &&
+      "imageResourceId" in loginPresentation && typeof loginPresentation.imageResourceId === "string") {
+    reference(resources, loginPresentation.imageResourceId, "Release participant login image");
+  }
   if (runtime.identity?.estimatedDurationMinutes !== undefined &&
       (!Number.isSafeInteger(runtime.identity.estimatedDurationMinutes) || runtime.identity.estimatedDurationMinutes < 0)) {
     throw new Error("Release identity has an invalid estimated duration");
@@ -1856,8 +1861,18 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     profile.selectors.stageIds?.forEach((id) => reference(stages, id, `Interface Profile ${profile.id}`));
     for (const module of profile.layout.regions.flatMap((region) => region.modules)) {
       const releaseResourceId = module.configuration.releaseResourceId;
-      if (module.moduleType === "slide_deck" && typeof releaseResourceId === "string") {
+      if (module.moduleType === "slide_deck") {
+        if (typeof releaseResourceId !== "string" || releaseResourceId.length === 0) {
+          throw new Error(`Interface Profile ${profile.id} module ${module.id} has no slide deck Resource`);
+        }
         reference(resources, releaseResourceId, `Interface Profile ${profile.id} module ${module.id}`);
+      }
+      if (module.moduleType === "resource_library") {
+        const resourceIds = module.configuration.resourceIds;
+        if (!Array.isArray(resourceIds) || resourceIds.length === 0 || resourceIds.some((id) => typeof id !== "string")) {
+          throw new Error(`Interface Profile ${profile.id} module ${module.id} has no valid role Resources`);
+        }
+        resourceIds.forEach((id) => reference(resources, id as string, `Interface Profile ${profile.id} module ${module.id}`));
       }
       const scoped = module.configuration.scopedModalArtifacts;
       if (Array.isArray(scoped)) {

@@ -4,6 +4,8 @@
 
 Own members/roles, Plugin governance, deployment posture and data policy. Prioritize `J-ADM-01` and `J-ADM-02`.
 
+Plenum Platform Administrator is a separate platform authority, not an Organization Role. Its adjacent control-plane workspace provisions the Organization boundary, verified domains, deployment profile, entitlements and first Admin before activation. Once active, the first Admin owns Organization role administration; Platform Administrator authority does not grant access to that Organization's Projects, Releases, Sessions or evidence.
+
 ## Orientation contract
 
 Persist Organization, Admin role context, selected administrative area and current policy/posture state. Changes distinguish proposed input, validated consequence and committed authoritative state. Sensitive technical provenance is available on demand, not used as the primary label.
@@ -28,7 +30,11 @@ Tables support ordinary link/button navigation before advanced grid behavior. Bu
 
 ## State, viewport and evidence
 
+The normal family implementation and focused cross-family evidence are closed in `../impeccable/organization-administration/family-closeout.md`; remaining human, device and task-level state gates are explicitly NOT RUN.
+
 All Admin states apply, especially no-results, stale membership, final-Admin denial, Plugin incompatibility, unavailable deployment dependency, legal hold conflict, partial export and revoked Admin role. Verify dense rosters and long policy labels across the full matrix. Planned evidence key: `organization-administration`; no PS-800 PASS evidence exists yet.
+
+Control-plane lifecycle states are `pending`, `active`, `suspended` and terminal `offboarded`. Activation requires a deployment profile, at least one entitlement, a verified Organization domain and an accepted first-Admin invitation. Suspension and offboarding revoke active Organization authentication/projection access while retaining governed records; every platform transition produces an immutable platform audit record.
 
 Tier behavior: 1920/1440 show admin navigation, table/form and details; 1280x720/600 collapse detail while preserving selected record/actions; 1024x768 transforms dense tables to bounded labeled rows where needed; 768x1024 and 390x844 use navigation/detail sheets and full-width forms. At 200%/320px, policy summaries precede commit actions and tables never force page-level horizontal scroll.
 

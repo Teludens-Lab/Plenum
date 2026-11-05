@@ -7,7 +7,7 @@
 - Goal: Make every completeness and safety claim reproducible on each change and diagnosable in operation.
 - User outcome: Operators and maintainers can detect failures, trace affected Sessions, respond safely, and prevent unverified builds from becoming releases.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
 
 ## Requirements and invariants
 

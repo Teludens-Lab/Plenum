@@ -30,6 +30,8 @@ locals {
     MEDIA_URL                        = local.resolved_media_url
     MEDIA_API_URL                    = local.is_functional_free ? "http://media:7880" : replace(local.resolved_media_url, "wss://", "https://")
     MEDIA_ADAPTER_DIGEST             = var.application_contract.media_adapter_digest
+    PLENUM_PUBLIC_BASE_URL           = "https://${var.application_hostname}"
+    INVITATION_DELIVERY_ENDPOINT     = var.application_contract.invitation_delivery_endpoint
   }
 }
 

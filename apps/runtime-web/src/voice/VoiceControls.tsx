@@ -123,11 +123,11 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
   };
 
   return <section aria-labelledby="voice-heading">
-    <div className="section-heading"><p className="eyebrow">Live media</p><h2 id="voice-heading">Voice Channels</h2></div>
+    <div className="section-heading"><h2 id="voice-heading">Voice Channels</h2></div>
     <p className="hint">Voice is live-only. Use Join, then explicitly enable the microphone. Push-to-talk: hold Space, Enter, or the Floor button; release it to stop.</p>
     <div ref={audio} className="voice-audio" aria-hidden="true" />
     <div className="card-grid">{projection.voiceChannels.map((channel) => <article className="card voice-card" key={channel.id} aria-labelledby={`voice-${channel.id}`}>
-      <div className="card-heading"><div><p className="eyebrow">{channel.mode.replaceAll("_", " ")}</p><h3 id={`voice-${channel.id}`}>{channel.name}</h3></div>
+      <div className="card-heading"><div><h3 id={`voice-${channel.id}`}>{channel.name}</h3><p className="hint">{channel.mode.replaceAll("_", " ")}</p></div>
         <span className="badge badge-state">{channelId === channel.id ? microphone : channel.microphoneState}</span></div>
       <p>{channel.canTransmit ? "You may listen and transmit." : "Listen-only access."} Text status and controls remain available without audio.</p>
       <div className="voice-privacy" aria-label={`Privacy controls for ${channel.name}`}>

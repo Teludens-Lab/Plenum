@@ -649,8 +649,17 @@ export async function exportOrganizationArchive(
     const data: JsonObject = {
       organization: (await query("SELECT to_jsonb(organization) AS value FROM identity.organizations organization WHERE id=$1"))[0] ?? {},
       persons: await query(`SELECT to_jsonb(person) AS value FROM identity.persons person
-        JOIN identity.memberships membership ON membership.person_id=person.id
-        WHERE membership.organization_id=$1 GROUP BY person.id ORDER BY person.id`),
+        WHERE EXISTS (
+          SELECT 1 FROM identity.memberships membership
+           WHERE membership.organization_id=$1 AND membership.person_id=person.id
+        ) OR EXISTS (
+          SELECT 1 FROM identity.organization_workforce_members workforce
+           WHERE workforce.organization_id=$1 AND workforce.person_id=person.id
+        ) OR EXISTS (
+          SELECT 1 FROM runtime.participants participant
+           WHERE participant.organization_id=$1 AND participant.person_id=person.id
+        )
+        ORDER BY person.id`),
       memberships: await query("SELECT to_jsonb(membership) AS value FROM identity.memberships membership WHERE organization_id=$1 ORDER BY person_id,organization_role"),
       projects: await query("SELECT to_jsonb(project) AS value FROM studio.simulation_projects project WHERE organization_id=$1 ORDER BY id"),
       simulationTemplates: await query("SELECT to_jsonb(template) AS value FROM studio.simulation_templates template WHERE organization_id=$1 ORDER BY published_at,id"),

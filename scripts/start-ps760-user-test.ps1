@@ -5,11 +5,12 @@ $databaseName = "plenum_ps760_user_test"
 
 $existing = docker ps --all --filter "name=^/$containerName$" --format "{{.Names}}"
 if ($existing -eq $containerName) {
-  docker start $containerName | Out-Null
-} else {
-  docker run --detach --name $containerName --publish "127.0.0.1::5432" `
-    --env POSTGRES_PASSWORD=plenum_test --env "POSTGRES_DB=$databaseName" postgres:18.6-alpine | Out-Null
+  # The seed setup intentionally applies non-idempotent migrations. Recreate only this
+  # disposable, explicitly named user-test container so every launch starts cleanly.
+  docker rm --force $containerName | Out-Null
 }
+docker run --detach --name $containerName --publish "127.0.0.1::5432" `
+  --env POSTGRES_PASSWORD=plenum_test --env "POSTGRES_DB=$databaseName" postgres:18.6-alpine | Out-Null
 
 $portBinding = docker port $containerName 5432/tcp
 if ($portBinding -notmatch ':(\d+)$') { throw "The PS-760 PostgreSQL port binding is unavailable." }

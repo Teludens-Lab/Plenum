@@ -6,6 +6,7 @@ import {
   type SimulationTemplateSummaryV1,
   type TemplateLibraryV1
 } from "@plenum/event-contracts";
+import { navigateWithLoader, PlenumLoader } from "../PlenumLoader.js";
 
 class PortalError extends Error {
   constructor(readonly status: number, readonly envelope: ErrorEnvelopeV1) {
@@ -106,7 +107,7 @@ export function ProjectPortal() {
       });
       createRequestIdRef.current = null;
       setMessage("Project created. Opening its Draft.");
-      window.location.assign(result.editorUrl);
+      navigateWithLoader(result.editorUrl);
     } catch (cause) {
       setNoticeKind("error");
       setMessage(`Project was not created. ${cause instanceof Error ? cause.message : "Review the form and try again."} Your entries are preserved.`);
@@ -174,9 +175,7 @@ export function ProjectPortal() {
     requestAnimationFrame(() => titleRef.current?.focus());
   }
 
-  if (state === "loading" && portal === null) return <section className="card portal-state teludens-state" aria-busy="true">
-    <p className="eyebrow">Projects</p><h2>Loading recent work</h2><p>Checking current Organization access and Project status.</p>
-  </section>;
+  if (state === "loading" && portal === null) return <PlenumLoader label="Loading recent Project work" />;
 
   if (state === "denied") return <section className="card portal-state teludens-state" data-state="unauthorized">
     <p className="eyebrow">Projects</p><h2>Project access unavailable</h2>
@@ -192,14 +191,7 @@ export function ProjectPortal() {
   const selectedTemplate = templates?.templates.find(({ id }) => id === selectedTemplateId);
   const nextCursor = portal.nextCursor;
 
-  return <section id="projects" className="portal-workspace" aria-labelledby="projects-title">
-    <div className="card portal-toolbar teludens-gate">
-      <div><p className="eyebrow">Current workspace</p><h2 id="projects-title">Projects</h2></div>
-      <div className="field organization-switcher"><label htmlFor="organization-context">Organization</label>
-        <select id="organization-context" value={portal.organization.id} disabled aria-describedby="organization-context-help">
-          {portal.availableOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
-        </select><p className="hint" id="organization-context-help">Sign out to change to another authenticated Organization context.</p></div>
-    </div>
+  return <section id="projects" className="portal-workspace" aria-label="Projects workspace">
     <p ref={noticeRef} className="live-region portal-notice" role={noticeKind === "error" ? "alert" : "status"} aria-live={noticeKind === "error" ? "assertive" : "polite"}
       aria-atomic="true" tabIndex={-1}>{message}</p>
 
@@ -240,6 +232,7 @@ export function ProjectPortal() {
             {project.collaborators.length > 0 ? <p className="hint">Collaborators: {project.collaborators.map(({ displayName, roles }) => `${displayName} (${roles.join(", ")})`).join("; ")}</p> : null}
           </div>
           <div className="project-actions catalog-row-actions">
+            <a className="btn-secondary link-button" href={`/projects/${project.id}/demo`}>Open QA demo</a>
             {project.lifecycleStatus === "active" ? <a className="btn-primary link-button catalog-primary-action" href={project.editorUrl}>{portal.permissions.canManageProjects ? "Open Project Draft" : "Review Project"}</a> : null}
             {portal.permissions.canManageProjects && project.lifecycleStatus === "active" ? <button className="btn-secondary" type="button" disabled={pending} aria-expanded={confirmArchiveId === project.id}
               aria-controls={`archive-confirmation-${project.id}`} onClick={(event) => openArchive(project.id, event.currentTarget)}>Archive Project</button> : null}

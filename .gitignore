@@ -52,3 +52,28 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Documentation
+docs/*
+!docs/design/
+docs/design/*
+!docs/design/user-test/
+docs/design/user-test/*
+!docs/design/user-test/PS-800-script.md
+!docs/promptbook/
+docs/promptbook/*
+!docs/promptbook/prompts/
+docs/promptbook/prompts/*
+!docs/promptbook/prompts/P10/
+docs/promptbook/prompts/P10/*
+!docs/promptbook/prompts/P10/PS-815-prove-platform-control-plane-identity-workforce-production-acceptance.md
+references/*
+!references/teludens-design-system-catalog/
+!references/teludens-design-system-catalog/assets/
+!references/teludens-design-system-catalog/assets/logos/
+!references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png
+output/
+.codex/
+.impeccable/
+.playwright-cli/
+.playwright-mcp/

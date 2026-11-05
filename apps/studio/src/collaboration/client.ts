@@ -172,6 +172,15 @@ export class StudioCollaborationClient {
     });
   }
 
+  replaceArrayItemAtPath(path: readonly (string | number)[], index: number, value: unknown): void {
+    this.transact(() => {
+      const target = this.resolve(path);
+      if (!(target instanceof Y.Array) || index < 0 || index >= target.length) throw new Error("Studio collection item is invalid");
+      target.delete(index, 1);
+      target.insert(index, [toYValue(value)]);
+    });
+  }
+
   moveAtPath(path: readonly (string | number)[], index: number, direction: -1 | 1): void {
     this.transact(() => {
       const target = this.resolve(path);

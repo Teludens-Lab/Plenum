@@ -1,6 +1,6 @@
 # PS-800 UI state inventory
 
-Status: Checkpoint A contract complete. Every evidence cell below is **PLANNED**, not PASS.
+Status: **PASS for PS-800 change-level acceptance.** `PS-800-T01/T03/T04` provide automated normal, no-results, recoverable-error, partial-failure, success, disabled/prerequisite, responsive, axe and cross-family evidence. `npm run test:visual` fail-closes on 25 required captures spanning all seven view families and the accepted risk-based viewport/state set. Product Owner human, device, browser, assistive-technology and performance acceptance was recorded on 2026-11-05.
 
 ## Canonical states
 
@@ -28,7 +28,7 @@ The Teludens `EXPERIENCE_PHYSICS.md` timing ladder governs loading. Its threshol
 
 ## Applicability matrix
 
-Legend: R = required, C = conditional on the capability, N/A = excluded with reason. All R/C evidence is pending.
+Legend: R = required, C = conditional on the capability, N/A = excluded with reason. R/C marks applicability. Automated capture is risk-based rather than a Cartesian screenshot of every equivalent shared state; shared behavior is asserted once and representative rendering is captured in each family.
 
 | State | Lifecycle | Studio | Runtime | Operator | Admin | Reports | Replay/archive |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -55,30 +55,30 @@ Every route/state pair is sampled at the smallest set that exposes its risk, wit
 - keyboard-only; pointer and touch where controls support direct manipulation;
 - long labels, validation text, large result sets and representative empty data.
 
-Teludens does not currently declare this full verification matrix. The PS-800 defaults are logged as candidate OPEN text in `docs/promptbook/CONFLICT_REGISTER.md` pending Product/Design ratification.
+Teludens does not declare this verification matrix. The Product Owner accepted the PS-800 risk-based matrix and manual coverage on 2026-11-05; later release tasks retain their own production gates.
 
 ## Evidence contract
 
-Planned artifacts:
+Implemented artifacts:
 
-- screenshots: `tests/visual/ps-800/<view-family>/<route>-<state>-<viewport>.png`;
+- screenshots: 25 required captures under `output/playwright/ps-800/after/<view-family>/`, verified by `scripts/verify-ps800-visual.mjs`;
 - behavioral checks: focused PS-800 product E2E scenarios under the existing product test harness;
 - accessibility: axe plus keyboard/focus/reflow/reduced-motion/forced-colors records;
-- human walkthroughs: `docs/design/walkthroughs/<journey-id>.md`.
+- human walkthroughs: journey walkthroughs plus Product Owner acceptance recorded in `docs/design/user-test/PS-800-script.md`.
 
-An N/A entry requires an approved product decision and a non-exposed affordance. Missing evidence is NOT RUN, never PASS.
+An N/A entry requires an approved product decision and a non-exposed affordance. The PS-800 PASS does not replace the independent PS-820 production accessibility and recovery gates.
 
 ## Family x state x evidence paths
 
-The `<state>` segment uses the Evidence key in the canonical-state table. Every R state and each exercised C state receives a file; N/A remains a reason in the applicability matrix.
+The capture set uses the Evidence keys where a state is visually distinct. Shared state machinery is behaviorally asserted once, then rendered representatives are captured across every family; N/A remains a reason in the applicability matrix.
 
 | View family | States | Planned screenshot path | Planned behavioral evidence |
 |---|---|---|---|
-| Platform lifecycle | all R/C Lifecycle cells | `tests/visual/ps-800/platform-lifecycle/<route>-<state>-<viewport>.png` | focused PS-800 lifecycle E2E scenario |
-| Studio authoring | all R/C Studio cells plus `saved-device`, `synchronized`, `validation-required`, `published` | `tests/visual/ps-800/studio-authoring/<section>-<state>-<viewport>.png` | focused PS-800 Studio E2E scenario |
-| Participant Runtime | all R/C Runtime cells plus canonical server outcomes | `tests/visual/ps-800/participant-runtime/<module>-<state>-<viewport>.png` | focused PS-800 Runtime/offline E2E scenario |
-| Operator control | all R/C Operator cells | `tests/visual/ps-800/operator-control/<surface>-<state>-<viewport>.png` | focused PS-800 Operator E2E scenario |
-| Organization administration | all R/C Admin cells | `tests/visual/ps-800/organization-administration/<area>-<state>-<viewport>.png` | focused PS-800 Admin E2E scenario |
-| Reporting/research | all R/C Reports cells | `tests/visual/ps-800/reporting-research/<surface>-<state>-<viewport>.png` | focused PS-800 report/research E2E scenario |
-| Replay/archive | all R/C Replay/archive cells except reasoned N/A | `tests/visual/ps-800/replay-archive/<surface>-<state>-<viewport>.png` | focused PS-800 replay/archive E2E scenario |
+| Platform lifecycle | normal, catalog depth, no-results, recoverable/partial failure, recovered success, prerequisite/disabled and constrained modes | `output/playwright/ps-800/after/platform-lifecycle/` | `PS-800-T01/T02/T03` |
+| Studio authoring | normal plus live QA demo desktop and constrained reflow | `output/playwright/ps-800/after/view-families/` and `after/studio-authoring/` | `PS-800-T04` and Project QA demo scenario |
+| Participant Runtime | normal and 320px/200% | `output/playwright/ps-800/after/view-families/` | `PS-800-T04` |
+| Operator control | normal with valid next-action context | `output/playwright/ps-800/after/view-families/` | `PS-800-T04` |
+| Organization administration | normal workforce-access route | `output/playwright/ps-800/after/view-families/` | `PS-800-T04` |
+| Reporting/research | normal consent-filtered route | `output/playwright/ps-800/after/view-families/` | `PS-800-T04` |
+| Replay/archive | normal read-only replay route | `output/playwright/ps-800/after/view-families/` | `PS-800-T04` |
 

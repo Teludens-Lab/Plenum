@@ -16,6 +16,9 @@ const environment = {
   OIDC_CLIENT_ID: "plenum-web", OIDC_REDIRECT_URI: "https://plenum.plenum.lan/auth/callback",
   MEDIA_URL: "wss://media.plenum.lan", MEDIA_API_KEY: "synthetic", MEDIA_API_SECRET: "synthetic-media-secret",
   MEDIA_ADAPTER_DIGEST: `sha256:${"e".repeat(64)}`, PLENUM_DEPLOYMENT_ID: "53000000-0000-4000-8000-000000000007",
+  PLENUM_PUBLIC_BASE_URL: "https://plenum.plenum.lan", INVITATION_DELIVERY_ENDPOINT: "https://notifications.plenum.lan/v1/messages",
+  INVITATION_DELIVERY_BEARER_TOKEN: "synthetic-delivery-secret",
+  INVITATION_DELIVERY_WEBHOOK_TOKEN: "synthetic-delivery-webhook-secret",
   PLENUM_RETENTION_ACTOR_PERSON_ID: "53000000-0000-4000-8000-000000000002",
   FLOOR_TOKEN_SECRET: "synthetic-floor-token-secret"
 };

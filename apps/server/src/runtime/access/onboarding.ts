@@ -391,6 +391,45 @@ export async function submitJoinRequest(
   }});
 }
 
+export async function submitJoinRequestByCode(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  input: { requestId: string; deviceId: string; sessionCode: string },
+  correlationId: string,
+  deploymentId: string
+): Promise<CommandReceiptV1> {
+  if (!uuid.test(input.requestId) || !uuid.test(input.deviceId) ||
+      input.sessionCode.length < 6 || input.sessionCode.length > 100) {
+    throw authorizationError("VALIDATION_FAILED", "A valid request, registered Device, and 6 to 100 character Session code are required.", correlationId);
+  }
+  const matches = await withOrganizationTransaction(pool, principal.organizationId, async (client) => client.query<{
+    session_id: string; governing_release_id: string;
+  }>(
+    `SELECT session_id,governing_release_id
+       FROM runtime.session_access_configs
+      WHERE organization_id=$1 AND session_code_sha256=$2
+        AND access_policy->'joinMethods' ? 'code_and_verified_email'
+      ORDER BY session_id
+      LIMIT 2`,
+    [principal.organizationId, digest(input.sessionCode)]
+  ));
+  if (matches.rowCount !== 1 || matches.rows[0] === undefined) {
+    throw authorizationError("PERMISSION_DENIED", "The Session code is invalid or unavailable for this account.", correlationId);
+  }
+  const match = matches.rows[0];
+  const context = await resolvePrincipalCommandContext(pool, principal, match.session_id, input.deviceId, correlationId);
+  return submitJoinRequest(pool, context, {
+    commandId: input.requestId,
+    deviceId: input.deviceId,
+    operationType: "join_request.submit",
+    aggregateId: input.requestId,
+    expectedAggregateVersion: 0,
+    governingReleaseId: match.governing_release_id,
+    deviceObservedAt: new Date().toISOString(),
+    payload: { sessionCode: input.sessionCode }
+  }, correlationId, deploymentId);
+}
+
 export async function resolveInvitationSession(
   pool: Pool, principal: AuthenticatedPrincipal, invitationToken: string, correlationId: string
 ): Promise<string> {

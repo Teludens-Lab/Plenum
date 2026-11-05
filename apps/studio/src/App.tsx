@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { ProductShellContextV1, PublicationReviewV1, SimulationTemplateSummaryV1, StudioPublishV1, TemplateLibraryV1 } from "@plenum/event-contracts";
 
 import { StudioCollaborationClient, type StudioClientState } from "./collaboration/client.js";
 import { editorSectionIdForTarget, editorSectionLabel, VisualCoreDesignEditor } from "./core-design/Editor.js";
 import { LiveReleaseActivation } from "./live-changes/LiveReleaseActivation.js";
+import { navigateWithLoader, PlenumLoader } from "./PlenumLoader.js";
 
 const initialState: StudioClientState = { connected: false, generation: 1, saveState: "saved_on_device",
   unsynchronizedChanges: 0, validation: null, message: "Connecting to the collaboration service." };
@@ -59,9 +60,38 @@ function saveStateLabel(saveState: StudioClientState["saveState"]): string {
 
 function BrandWordmark() {
   return <a className="brand-wordmark" href="/" aria-label="Plenum home">
-    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725" />
-    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true" />
+    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-primary.png" alt="Plenum" width="2170" height="725" />
+    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-primary.png" alt="" width="2170" height="725" aria-hidden="true" />
   </a>;
+}
+
+function friendlyReference(value: string, fallback: string): string {
+  if (value.trim() === "") return fallback;
+  return value.replaceAll(/[-_]+/gu, " ").replaceAll(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("plenum.theme", theme); } catch { /* The document theme still applies when storage is unavailable. */ }
+    const synchronizeTheme = (event: StorageEvent) => {
+      if (event.key === "plenum.theme") setTheme(event.newValue === "dark" ? "dark" : "light");
+    };
+    window.addEventListener("storage", synchronizeTheme);
+    return () => window.removeEventListener("storage", synchronizeTheme);
+  }, [theme]);
+  const nextTheme = theme === "light" ? "dark" : "light";
+  return <button className="btn-secondary theme-toggle" type="button"
+    aria-label={`Theme: ${theme}. Use ${nextTheme} theme`} title={`Use ${nextTheme} theme`}
+    onClick={() => setTheme(nextTheme)}>
+    {theme === "light" ? <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
+    </svg> : <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" />
+    </svg>}
+  </button>;
 }
 
 export function App() {
@@ -78,6 +108,9 @@ export function App() {
   const [templateLifecycleRationale, setTemplateLifecycleRationale] = useState("");
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [productContext, setProductContext] = useState<ProductShellContextV1 | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLElement>(null);
+  const accountToggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (client === null) return;
@@ -95,6 +128,43 @@ export function App() {
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || accountMenuRef.current?.contains(event.target) || accountToggleRef.current?.contains(event.target)) return;
+      setAccountOpen(false);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAccountOpen(false);
+      requestAnimationFrame(() => accountToggleRef.current?.focus());
+    };
+    document.addEventListener("pointerdown", dismissOnPointerDown);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOnPointerDown);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [accountOpen]);
+
+  async function signOut(): Promise<void> {
+    try {
+      const response = await fetch("/v1/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!response.ok) throw new Error("Sign out failed.");
+      navigateWithLoader("/");
+    } catch {
+      setAccountOpen(false);
+      setPublishMessage("Sign out failed. Check your connection and try again.");
+    }
+  }
+
+  function toggleAccount(): void {
+    setAccountOpen((open) => {
+      if (!open) requestAnimationFrame(() => accountMenuRef.current?.focus());
+      return !open;
+    });
+  }
 
   async function loadReviewWorkspace(): Promise<void> {
     if (projectId === null) return;
@@ -218,9 +288,12 @@ export function App() {
 
   if (projectId === null || client === null) return <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
-    <header className="app-header"><BrandWordmark /><span className="badge badge-state">Studio</span></header>
+    <header className="app-header studio-app-header"><BrandWordmark />
+      <div className="product-header-context" aria-label="Current workspace context"><h1 className="product-header-title">Studio</h1></div>
+      <div className="header-actions product-header-actions"><ThemeToggle /></div>
+    </header>
     <main id="main-content" className="state-page" tabIndex={-1}><section className="card state-card teludens-state">
-      <p className="eyebrow">Studio</p><h1>No Project selected</h1>
+      <h1>No Project selected</h1>
       <p>Open a saved Project link to continue editing, or return home to choose another Plenum workspace.</p>
       <a className="btn-primary link-button" href="/">Return to Plenum home</a>
     </section></main>
@@ -228,6 +301,8 @@ export function App() {
   const valid = state.validation?.valid === true;
   const materialization = client.materialization();
   const coreDesignTitle = materialization.coreDesign?.identity?.title?.trim() || materialization.scenario?.name?.trim() || "Untitled Core Design";
+  const organizationName = productContext?.organization.name ?? "Projects";
+  const accountRole = friendlyReference(productContext?.organization.roles[0] ?? "", "Designer");
   const validationLabel = state.validation === null ? "Checking" : valid ? "Ready for review" :
     `${state.validation.issues.length} issue${state.validation.issues.length === 1 ? "" : "s"}`;
   const validationPanel = <section id="validation" className="card validation-inspector" aria-labelledby="validation-title">
@@ -298,21 +373,45 @@ export function App() {
 
   return <>
     <a className="skip-link" href="#main-content">Skip to Draft editor</a>
-    <header className="app-header"><BrandWordmark /><nav className="studio-global-nav" aria-label="Studio"><a href="/?workspace=projects">Projects</a></nav><span className={`badge ${state.connected ? "badge-online" : "badge-offline"}`}>{state.connected ? "Connected" : "Offline"}</span></header>
+    <header className="app-header studio-app-header"><BrandWordmark />
+      <div className="product-header-context" aria-label="Current workspace context">
+        <a className="product-header-organization" href="/?workspace=projects" title={`Return to Projects in ${organizationName}`}>{organizationName}</a>
+        <svg className="product-header-separator" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" /></svg>
+        <h1 className="product-header-title" title={coreDesignTitle}>{coreDesignTitle}</h1>
+      </div>
+      <div className="header-actions product-header-actions">
+        <span className={`connection-indicator connection-indicator-${state.connected ? "online" : "offline"}`} role="status" aria-live="polite" aria-label={`Plenum status: ${state.connected ? "Connected" : "Offline"}`}>
+          <span className="visually-hidden">{state.connected ? "Connected" : "Offline"}</span>
+        </span>
+        <ThemeToggle />
+        {productContext === null ? null : <>
+          <button ref={accountToggleRef} className="account-context-toggle" type="button" aria-expanded={accountOpen}
+            aria-haspopup="dialog" aria-controls="studio-account-context-menu"
+            aria-label={`${accountRole}. ${accountOpen ? "Close" : "Open"} account menu for ${productContext.principal.displayName}`} onClick={toggleAccount}>
+            <span className="account-role-label">{accountRole}</span>
+            <svg className="account-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+          </button>
+          {accountOpen ? <section ref={accountMenuRef} id="studio-account-context-menu" className="account-context-menu" role="dialog"
+            aria-labelledby="studio-account-menu-title" tabIndex={-1}>
+            <div className="account-menu-identity"><h2 id="studio-account-menu-title">{productContext.principal.displayName}</h2>
+              <p>{productContext.organization.name}</p><span className="badge badge-state">{productContext.organization.roles.map((role) => friendlyReference(role, "Designer")).join(", ")}</span></div>
+            <p className="account-menu-connection"><span className={`connection-indicator connection-indicator-${state.connected ? "online" : "offline"}`} aria-hidden="true" />{state.connected ? "Connected" : "Offline"}</p>
+            <button className="account-menu-sign-out" type="button" onClick={() => void signOut()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" /></svg>
+              Sign out
+            </button>
+          </section> : null}
+        </>}
+      </div>
+    </header>
     <main id="main-content" className="studio-layout">
-      <header className="studio-context teludens-path">
-        <nav aria-label="Breadcrumb"><ol><li><a href="/?workspace=projects">Projects</a></li><li aria-current="page">Draft</li></ol></nav>
-        <div className="studio-context-main"><div><h1>{coreDesignTitle}</h1><p>Core Design editor · Collaborative Draft{materialization.scenario?.name ? ` · ${materialization.scenario.name}` : ""}</p></div>
-          {productContext === null ? null : <dl className="studio-account-context"><div><dt>Organization</dt><dd>{productContext.organization.name}</dd></div><div><dt>Signed in as</dt><dd>{productContext.principal.displayName}</dd></div><div><dt>Organization roles</dt><dd>{productContext.organization.roles.join(", ").replaceAll("_", " ")}</dd></div></dl>}
-        </div>
-      </header>
       <section className="studio-state-strip" aria-label="Draft status">
         <div><span className={`status-dot ${state.connected ? "is-online" : "is-offline"}`} aria-hidden="true" /><strong>{saveStateLabel(state.saveState)}</strong><span>{state.unsynchronizedChanges === 0 ? "All changes received by the server" : `${state.unsynchronizedChanges} change${state.unsynchronizedChanges === 1 ? "" : "s"} waiting to synchronize`}</span></div>
         <div><strong>{validationLabel}</strong><span>{valid ? "Publication checks passed" : "Publication remains unavailable"}</span></div>
         <details><summary>Sync details</summary><span>Draft generation {state.generation}</span></details>
       </section>
       <p className="live-region" aria-live="polite">{publishMessage ?? state.message}</p>
-      {materialization.coreDesign === undefined || materialization.scenario === undefined ? <section className="card" aria-busy="true"><h2>Loading Draft</h2><p>Waiting for the synchronized Core Design.</p></section> :
+      {materialization.coreDesign === undefined || materialization.scenario === undefined ? <PlenumLoader label="Loading synchronized Core Design Draft" /> :
         <VisualCoreDesignEditor projectId={projectId} client={client} core={materialization.coreDesign} scenario={materialization.scenario} inspector={validationPanel}
           reviewWorkspace={reviewPublishWorkspace} liveChangesWorkspace={<LiveReleaseActivation projectId={projectId} />} />}
     </main>

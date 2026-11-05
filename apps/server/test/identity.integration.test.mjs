@@ -77,6 +77,7 @@ import {
   applyStudioUpdate,
   assertStudioSyncAccess,
   getCollaborativeDraft,
+  getProjectDemo,
   getRolePreview,
   approvePublicationFreeze,
   exportResearchEvidenceIndex,
@@ -131,7 +132,46 @@ import {
   listOrganizationMemberAdministration,
   listPluginOperations,
   listSessionReportArtifacts,
-  replaceOrganizationMemberRoles
+  replaceOrganizationMemberRoles,
+  createPlatformOrganization,
+  addOrganizationDomain,
+  verifyOrganizationDomain,
+  issueFirstAdminInvitation,
+  acceptFirstAdminInvitation,
+  transitionOrganizationLifecycle,
+  listPlatformOrganizations,
+  listPlatformAdministratorWorkforce,
+  proposePlatformAdministratorChange,
+  decidePlatformAdministratorChange,
+  stageOrganizationIdentityProvider,
+  preflightOrganizationIdentityProvider,
+  beginOrganizationIdentityProviderTest,
+  approveOrganizationIdentityProvider,
+  activateOrganizationIdentityProvider,
+  suspendOrganizationIdentityProvider,
+  rollbackOrganizationIdentityProvider,
+  resolveOrganizationIdentityProvider,
+  getOrganizationWorkforce,
+  createOrganizationScimCredential,
+  authenticateScimCredential,
+  createScimUser,
+  patchScimUser,
+  deprovisionScimUser,
+  createOrganizationGroupRoleMapping,
+  patchScimGroup,
+  transitionOrganizationWorkforceMember,
+  startOrganizationAccessReview,
+  decideOrganizationAccessReviewItem,
+  completeOrganizationAccessReview,
+  issueOrganizationWorkforceInvitation,
+  acceptOrganizationWorkforceInvitation,
+  linkOrganizationWorkforceOidcIdentity,
+  beginProvisioningOperation,
+  completeProvisioningOperation,
+  runOrganizationWorkforceReconciliation,
+  scheduleProvisioningOperationRetry,
+  recordInvitationDeliveryEvent,
+  reissueOrganizationWorkforceInvitation
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -146,6 +186,7 @@ const ids = {
   personD: "20000000-0000-4000-8000-000000000004",
   personE: "20000000-0000-4000-8000-000000000005",
   personF: "20000000-0000-4000-8000-000000000006",
+  personG: "20000000-0000-4000-8000-000000000007",
   projectA: "30000000-0000-4000-8000-000000000001",
   projectB: "30000000-0000-4000-8000-000000000002",
   revisionA: "40000000-0000-4000-8000-000000000001",
@@ -276,7 +317,13 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/027_release_session_catalog.sql",
     "apps/server/migrations/028_content_library.sql",
     "apps/server/migrations/030_template_review_governance.sql",
-    "apps/server/migrations/032_operations_administration.sql"
+    "apps/server/migrations/032_operations_administration.sql",
+    "apps/server/migrations/033_platform_control_plane.sql",
+    "apps/server/migrations/034_platform_onboarding_operations.sql",
+    "apps/server/migrations/035_platform_administrator_workforce.sql",
+    "apps/server/migrations/036_organization_identity_providers.sql",
+    "apps/server/migrations/037_organization_workforce.sql",
+    "apps/server/migrations/038_identity_workforce_operations.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -345,7 +392,9 @@ async function seed() {
     await client.query("BEGIN");
     await client.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'Org A'),($2,'Org B')", [ids.orgA, ids.orgB]);
     await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Operator A'),($2,'Operator B'),($3,'Participant C'),($4,'Approver D'),($5,'Designer E'),($6,'Reviewer F')", [ids.personA, ids.personB, ids.personC, ids.personD, ids.personE, ids.personF]);
+    await client.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Recovery Administrator G')", [ids.personG]);
     await client.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'operator'),($3,$4,'operator'),($3,$4,'publisher'),($3,$5,'admin'),($3,$5,'designer'),($3,$6,'admin'),($3,$6,'designer'),($3,$6,'publisher'),($1,$5,'designer'),($1,$5,'research_analyst'),($1,$6,'admin'),($1,$6,'designer'),($1,$6,'publisher'),($1,$7,'designer'),($1,$8,'reviewer')", [ids.orgA, ids.personA, ids.orgB, ids.personB, ids.personC, ids.personD, ids.personE, ids.personF]);
+    await client.query("SELECT identity.bootstrap_platform_administrator($1,gen_random_uuid())", [ids.personD]);
     await client.query("INSERT INTO studio.simulation_projects(id,organization_id,title,created_by) VALUES ($1,$2,'Project A',$3),($4,$5,'Project B',$6)", [ids.projectA, ids.orgA, ids.personA, ids.projectB, ids.orgB, ids.personB]);
     await client.query(
       "INSERT INTO studio.drafts(id,organization_id,project_id,document,updated_by) VALUES (gen_random_uuid(),$1,$2,$3::jsonb,$4)",
@@ -376,6 +425,7 @@ async function seed() {
     await client.query("INSERT INTO sync.devices(id,organization_id,person_id) VALUES ($1,$2,$3),($4,$5,$6)", [ids.deviceA, ids.orgA, ids.personA, ids.deviceC, ids.orgA, ids.personC]);
     await client.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2),($3,$4)", [ids.sessionA, ids.orgA, ids.sessionB, ids.orgB]);
     await client.query("INSERT INTO identity.federated_identities(id,organization_id,person_id,issuer,subject,provider_type) VALUES ('c0000000-0000-4000-8000-000000000001',$1,$2,'https://issuer.example','operator-a','oidc')", [ids.orgA, ids.personA]);
+    await client.query("INSERT INTO identity.federated_identities(id,organization_id,person_id,issuer,subject,provider_type) VALUES ('c0000000-0000-4000-8000-000000000007',$1,$2,'https://issuer.example','recovery-g','oidc')", [ids.orgA, ids.personG]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','participant-c','mfa','2099-01-01T00:00:00.000Z')", [principalC.authenticationSessionId, ids.orgA, ids.personC]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','publisher-d','mfa','2099-01-01T00:00:00.000Z')", [principalD.authenticationSessionId, ids.orgA, ids.personD]);
     await client.query("INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at) VALUES ($1,$2,$3,'https://issuer.example','designer-e','mfa','2099-01-01T00:00:00.000Z')", [principalE.authenticationSessionId, ids.orgA, ids.personE]);
@@ -508,6 +558,588 @@ test("PS-790-T01 administration is tenant-scoped, least-privilege, auditable, an
     (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
 });
 
+test("CONTROL-PLANE-T01 provisions, activates, suspends, and offboards an Organization without crossing tenant authority", async () => {
+  await assert.rejects(listPlatformOrganizations(app, principalE, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+
+  const bootstrapAgain = await owner.query("SELECT identity.bootstrap_platform_administrator($1,gen_random_uuid()) AS bootstrapped", [ids.personD]);
+  assert.equal(bootstrapAgain.rows[0].bootstrapped, false);
+  const existingOrganizations = await listPlatformOrganizations(app, principalD, randomUUID());
+  assert.equal(existingOrganizations.organizations.some(({ id }) => id === ids.orgA), true);
+  assert.equal(existingOrganizations.organizations.find(({ id }) => id === ids.orgA)?.configurationStatus, "needs_reconciliation");
+
+  let detail = await createPlatformOrganization(app, principalD, {
+    name: "Control Plane Test Organization",
+    slug: "control-plane-test",
+    legalName: "Control Plane Test Organization (Pty) Ltd",
+    countryCode: "ZA",
+    timeZone: "Africa/Johannesburg",
+    deploymentProfile: "cloud",
+    dataResidencyRegion: "af-south",
+    entitlements: ["studio_authoring", "session_delivery"],
+    supportContact: "support@control-plane.example"
+  }, randomUUID());
+  const organizationId = detail.organization.id;
+  assert.equal(detail.organization.lifecycleStatus, "pending");
+  assert.deepEqual(detail.organization.gates.map(({ complete }) => complete), [true, true, false, false]);
+  await assert.rejects(
+    transitionOrganizationLifecycle(app, principalD, organizationId, "activate",
+      detail.organization.lifecycleVersion, "Initial activation", randomUUID()),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION"
+  );
+
+  detail = await addOrganizationDomain(app, principalD, organizationId,
+    { domain: "control-plane.example", verificationMethod: "dns_txt" }, randomUUID());
+  const challengeValue = detail.domains[0].challenge?.value;
+  assert.ok(challengeValue);
+  await assert.rejects(
+    verifyOrganizationDomain(app, principalD, organizationId, detail.domains[0].id, randomUUID(),
+      { async resolveTxt() { return ["wrong-value"]; } }),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION"
+  );
+  detail = await verifyOrganizationDomain(app, principalD, organizationId, detail.domains[0].id,
+    randomUUID(), { async resolveTxt() { return [challengeValue]; } });
+  const invitationDelivery = { async deliver(input) {
+    return { providerReference: `test:${input.deliveryId}`, previewUrl: input.invitationUrl };
+  } };
+  const invitation = await issueFirstAdminInvitation(app, principalD, organizationId,
+    "first.admin@control-plane.example", randomUUID(), invitationDelivery, "https://plenum.example");
+  assert.equal(invitation.organization.firstAdminInvitation?.delivery?.status, "sent");
+  assert.ok(invitation.invitationUrl);
+  const token = invitation.invitationUrl.split("/").at(-1);
+  assert.ok(token);
+  const accepted = await acceptFirstAdminInvitation(app, token, "First Organization Admin", randomUUID());
+  assert.equal(accepted.organizationId, organizationId);
+
+  assert.ok((await listPlatformOrganizations(app, principalD, randomUUID())).organizations
+    .some(({ id }) => id === organizationId));
+  detail = await transitionOrganizationLifecycle(app, principalD, organizationId, "activate",
+    invitation.organization.organization.lifecycleVersion, "Provisioning controls complete", randomUUID());
+  assert.equal(detail.organization.lifecycleStatus, "active");
+
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = await exportJWK(publicKey); jwk.kid = "first-admin-key";
+  const customerConfiguration = { providerKey: "customer", organizationId, issuer: "https://customer-issuer.example",
+    audience: "plenum", clientId: "plenum", redirectUri: "https://plenum.example/callback",
+    authorizationEndpoint: "https://customer-issuer.example/authorize", tokenEndpoint: "https://customer-issuer.example/token",
+    jwks: { keys: [jwk] } };
+  const unverifiedLogin = await beginOidcLogin(app, customerConfiguration);
+  let pending = await owner.query(
+    "SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND consumed_at IS NULL", [organizationId]);
+  let now = Math.floor(Date.now() / 1000);
+  const unverifiedToken = await new SignJWT({ nonce: pending.rows[0].nonce, acr: "mfa", email: "first.admin@control-plane.example", email_verified: false })
+    .setProtectedHeader({ alg: "RS256", kid: "first-admin-key" }).setIssuer(customerConfiguration.issuer)
+    .setAudience(customerConfiguration.audience).setSubject("first-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
+  await assert.rejects(completeOidcLogin(app, customerConfiguration,
+    { code: "code", state: unverifiedLogin.state, correlationId: randomUUID() },
+    async () => new Response(JSON.stringify({ id_token: unverifiedToken }), { status: 200 })),
+  (error) => error?.envelope?.error?.code === "UNAUTHENTICATED");
+
+  const login = await beginOidcLogin(app, customerConfiguration);
+  pending = await owner.query(
+    "SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND consumed_at IS NULL", [organizationId]);
+  now = Math.floor(Date.now() / 1000);
+  const idToken = await new SignJWT({ nonce: pending.rows[0].nonce, acr: "mfa", email: "first.admin@control-plane.example", email_verified: true })
+    .setProtectedHeader({ alg: "RS256", kid: "first-admin-key" }).setIssuer(customerConfiguration.issuer)
+    .setAudience(customerConfiguration.audience).setSubject("first-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
+  const firstAdminPrincipal = await completeOidcLogin(app, customerConfiguration,
+    { code: "code", state: login.state, correlationId: randomUUID() },
+    async () => new Response(JSON.stringify({ id_token: idToken }), { status: 200 }));
+  assert.equal(firstAdminPrincipal.principalId, accepted.personId);
+  assert.deepEqual(firstAdminPrincipal.organizationRoles, ["admin"]);
+  const customerSessionId = firstAdminPrincipal.authenticationSessionId;
+  await assert.rejects(
+    listProjectPortal(app, { ...principalD, organizationId }, { status: "all", limit: 10 }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "ACCESS_REVOKED"
+  );
+
+  detail = await transitionOrganizationLifecycle(app, principalD, organizationId, "suspend",
+    detail.organization.lifecycleVersion, "Contract access paused", randomUUID());
+  assert.equal(detail.organization.lifecycleStatus, "suspended");
+  assert.ok((await owner.query("SELECT revoked_at FROM identity.authentication_sessions WHERE id=$1", [customerSessionId])).rows[0].revoked_at);
+
+  detail = await transitionOrganizationLifecycle(app, principalD, organizationId, "offboard",
+    detail.organization.lifecycleVersion, "Contract ended", randomUUID());
+  assert.equal(detail.organization.lifecycleStatus, "offboarded");
+  const audit = await owner.query(
+    "SELECT id,action FROM evidence.platform_audit_records WHERE resource_organization_id=$1 ORDER BY recorded_at", [organizationId]);
+  assert.ok(audit.rowCount >= 7);
+  assert.equal(audit.rows.some(({ action }) => action === "platform.organization_offboarded"), true);
+  await assert.rejects(owner.query("UPDATE evidence.platform_audit_records SET action='tampered' WHERE id=$1", [audit.rows[0].id]),
+    /append-only/iu);
+  await assert.rejects(owner.query("DELETE FROM evidence.platform_audit_records WHERE id=$1", [audit.rows[0].id]),
+    /append-only/iu);
+});
+
+test("CONTROL-PLANE-T02 governs Organization identity-provider preflight, test, approval, activation, suspension, and rollback", async () => {
+  await listPlatformOrganizations(app, principalD, randomUUID());
+  await owner.query("UPDATE identity.authentication_sessions SET created_at=transaction_timestamp() WHERE id=$1", [principalD.authenticationSessionId]);
+  const domainId = randomUUID();
+  await owner.query(`INSERT INTO identity.organization_domains
+    (id,organization_id,domain,verification_method,verified_by,verified_at,created_by)
+    VALUES ($1,$2,'example.test','manual_contract',$3,transaction_timestamp(),$3)
+    ON CONFLICT (domain) DO NOTHING`, [domainId, ids.orgA, ids.personD]);
+  const verifiedDomain = await owner.query("SELECT id FROM identity.organization_domains WHERE organization_id=$1 AND domain='example.test'", [ids.orgA]);
+  const reviewerAdminSessionId = randomUUID();
+  await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'admin') ON CONFLICT DO NOTHING", [ids.orgA, ids.personG]);
+  await owner.query(`INSERT INTO identity.authentication_sessions
+    (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+    VALUES ($1,$2,$3,'https://recovery.example','identity-reviewer','mfa',now()+interval '1 hour')`,
+  [reviewerAdminSessionId, ids.orgA, ids.personG]);
+  await owner.query(`INSERT INTO identity.federated_identities
+    (id,organization_id,person_id,issuer,subject,provider_type,verified_email,last_authenticated_at)
+    VALUES (gen_random_uuid(),$1,$2,'https://recovery.example','identity-reviewer','oidc','identity.admin@example.test',transaction_timestamp())`,
+  [ids.orgA, ids.personG]);
+  const reviewerAdmin = { authenticationSessionId: reviewerAdminSessionId, principalId: ids.personG,
+    organizationId: ids.orgA, organizationRoles: ["admin"], authenticationStrength: "mfa",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1_000) };
+
+  let providers = await stageOrganizationIdentityProvider(app, principalD, ids.orgA, {
+    protocol: "oidc", displayName: "Example workforce identity", discoveryUrl: "https://identity.example.test/.well-known/openid-configuration",
+    clientId: "plenum-example", audience: "plenum-example", domainIds: [verifiedDomain.rows[0].id]
+  }, randomUUID());
+  const providerId = providers[0].id;
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = await exportJWK(publicKey); jwk.kid = "organization-provider-key";
+  const fetcher = { async fetch(url) {
+    if (url.endsWith("openid-configuration")) return { body: JSON.stringify({
+      issuer: "https://identity.example.test", authorization_endpoint: "https://identity.example.test/authorize",
+      token_endpoint: "https://identity.example.test/token", jwks_uri: "https://identity.example.test/jwks"
+    }), contentType: "application/json" };
+    if (url.endsWith("/jwks")) return { body: JSON.stringify({ keys: [jwk] }), contentType: "application/json" };
+    throw new Error("unexpected metadata URL");
+  } };
+  providers = await preflightOrganizationIdentityProvider(app, principalD, ids.orgA, providerId, randomUUID(), fetcher);
+  assert.equal(providers.find(({ id }) => id === providerId)?.status, "preflight_passed");
+
+  const testLogin = await beginOrganizationIdentityProviderTest(app, reviewerAdmin, providerId,
+    "https://plenum.example/auth/callback", "/admin/identity", randomUUID());
+  const pending = await owner.query("SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND identity_provider_id=$2 AND consumed_at IS NULL",
+    [ids.orgA, providerId]);
+  const now = Math.floor(Date.now() / 1000);
+  const testToken = await new SignJWT({ nonce: pending.rows[0].nonce, acr: "mfa", email: "identity.admin@example.test", email_verified: true })
+    .setProtectedHeader({ alg: "RS256", kid: "organization-provider-key" }).setIssuer("https://identity.example.test")
+    .setAudience("plenum-example").setSubject("identity-reviewer-at-provider").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
+  const configuration = { providerKey: (await owner.query("SELECT provider_key FROM identity.organization_identity_provider_revisions WHERE id=$1", [providerId])).rows[0].provider_key,
+    identityProviderId: providerId, organizationId: ids.orgA, issuer: "https://identity.example.test", audience: "plenum-example",
+    clientId: "plenum-example", redirectUri: "https://plenum.example/auth/callback", authorizationEndpoint: "https://identity.example.test/authorize",
+    tokenEndpoint: "https://identity.example.test/token", jwks: { keys: [jwk] } };
+  const testedPrincipal = await completeOidcLogin(app, configuration,
+    { code: "code", state: testLogin.state, correlationId: randomUUID() },
+    async () => new Response(JSON.stringify({ id_token: testToken }), { status: 200 }));
+  assert.equal(testedPrincipal.preserveSession, true);
+  providers = await approveOrganizationIdentityProvider(app, reviewerAdmin, providerId, "Verified exact Admin identity", randomUUID());
+  assert.equal(providers.find(({ id }) => id === providerId)?.status, "approved");
+  providers = await activateOrganizationIdentityProvider(app, principalD, ids.orgA, providerId, "Activate tested provider", randomUUID());
+  assert.equal(providers.find(({ id }) => id === providerId)?.status, "active");
+  assert.equal((await resolveOrganizationIdentityProvider(app, { domain: "example.test" }, "https://plenum.example/auth/callback", randomUUID())).identityProviderId, providerId);
+
+  providers = await stageOrganizationIdentityProvider(app, principalD, ids.orgA, {
+    protocol: "saml", displayName: "Candidate SAML identity", discoveryUrl: "https://broker.example.test/.well-known/openid-configuration",
+    metadataUrl: "https://saml.example.test/metadata", clientId: "plenum-saml", audience: "plenum-saml",
+    domainIds: [verifiedDomain.rows[0].id], replacesProviderId: providerId
+  }, randomUUID());
+  const invalidCandidate = providers.find(({ status }) => status === "draft");
+  await assert.rejects(preflightOrganizationIdentityProvider(app, principalD, ids.orgA, invalidCandidate.id, randomUUID(),
+    { async fetch() { return { body: "not valid metadata", contentType: "text/plain" }; } }),
+  (error) => error?.envelope?.error?.code === "VALIDATION_FAILED");
+  assert.equal((await owner.query("SELECT status FROM identity.organization_identity_provider_revisions WHERE id=$1", [providerId])).rows[0].status, "active");
+
+  providers = await suspendOrganizationIdentityProvider(app, principalD, ids.orgA, providerId, "Exercise incident suspension", randomUUID());
+  assert.equal(providers.find(({ id }) => id === providerId)?.status, "suspended");
+  providers = await rollbackOrganizationIdentityProvider(app, principalD, ids.orgA, providerId, "Restore last approved provider", randomUUID());
+  assert.equal(providers.find(({ id }) => id === providerId)?.status, "active");
+  const audit = await owner.query("SELECT action FROM evidence.platform_audit_records WHERE resource_organization_id=$1 AND action LIKE 'platform.identity_provider_%'", [ids.orgA]);
+  assert.equal(audit.rows.some(({ action }) => action === "platform.identity_provider_preflight_failed"), true);
+  assert.equal(audit.rows.some(({ action }) => action === "platform.identity_provider_rolled_back"), true);
+});
+
+test("CONTROL-PLANE-T03 governs Platform Administrator invitation, dual approval, step-up, revocation, recovery, and last-active protection", async () => {
+  const breakGlass = await owner.query(
+    "SELECT identity.break_glass_recover_platform_administrator($1,$2,$3,$4,$5) AS recovered",
+    [ids.personD, ids.personG, "Establish the required second approver", "INC-CONTROL-001", randomUUID()]
+  );
+  assert.equal(breakGlass.rows[0].recovered, true);
+
+  const recoverySessionId = randomUUID();
+  await owner.query(
+    `INSERT INTO identity.authentication_sessions
+       (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at,created_at)
+     VALUES ($1,$2,$3,'https://issuer.example','recovery-g','mfa',now()+interval '1 hour',now()-interval '20 minutes')`,
+    [recoverySessionId, ids.orgA, ids.personG]
+  );
+  const principalG = { authenticationSessionId: recoverySessionId, principalId: ids.personG,
+    organizationId: ids.orgA, organizationRoles: ["admin"], authenticationStrength: "mfa",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1_000) };
+  assert.equal((await listPlatformAdministratorWorkforce(app, principalG, randomUUID())).stepUp.satisfied, false);
+  await assert.rejects(
+    proposePlatformAdministratorChange(app, principalG,
+      { changeType: "invite", email: "workforce.admin@example.test", displayName: "Workforce Administrator", reason: "Add operational coverage" }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED"
+  );
+  await owner.query("UPDATE identity.authentication_sessions SET created_at=transaction_timestamp() WHERE id=$1", [recoverySessionId]);
+  await owner.query("UPDATE identity.authentication_sessions SET created_at=transaction_timestamp() WHERE id=$1", [principalD.authenticationSessionId]);
+
+  let workforce = await proposePlatformAdministratorChange(app, principalD,
+    { changeType: "invite", email: "workforce.admin@example.test", displayName: "Workforce Administrator", reason: "Add operational coverage" }, randomUUID());
+  const inviteRequest = workforce.changeRequests.find(({ changeType, status }) => changeType === "invite" && status === "pending");
+  assert.ok(inviteRequest);
+  await assert.rejects(
+    decidePlatformAdministratorChange(app, principalD, inviteRequest.id, "approve", "Approve operational coverage", randomUUID(),
+      { async deliver() { throw new Error("must not dispatch"); } }, "https://plenum.example"),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION"
+  );
+  const delivery = { async deliver(input) {
+    assert.equal(input.messageType, "PLATFORM_ADMINISTRATOR_INVITATION");
+    return { providerReference: `test:${input.deliveryId}`, previewUrl: input.invitationUrl };
+  } };
+  const approved = await decidePlatformAdministratorChange(app, principalG, inviteRequest.id, "approve",
+    "Second approver confirmed operational need", randomUUID(), delivery, "https://plenum.example");
+  assert.ok(approved.invitationUrl);
+  const invitationToken = approved.invitationUrl.split("/").at(-1);
+  assert.ok(invitationToken);
+  assert.equal(approved.workforce.changeRequests.find(({ id }) => id === inviteRequest.id)?.invitation?.deliveryStatus, "sent");
+
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = await exportJWK(publicKey); jwk.kid = "workforce-admin-key";
+  const configuration = { providerKey: "platform-workforce", organizationId: ids.orgA, issuer: "https://issuer.example",
+    audience: "plenum", clientId: "plenum", redirectUri: "https://plenum.example/auth/callback",
+    authorizationEndpoint: "https://issuer.example/authorize", tokenEndpoint: "https://issuer.example/token",
+    jwks: { keys: [jwk] } };
+  const invitedLogin = await beginOidcLogin(app, configuration,
+    { platformAdministratorInvitationToken: invitationToken, returnTo: "/platform/administrators" });
+  let pending = await owner.query(
+    "SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND state_sha256=$2",
+    [ids.orgA, createHash("sha256").update(invitedLogin.state).digest("hex")]
+  );
+  let now = Math.floor(Date.now() / 1000);
+  const unverifiedToken = await new SignJWT({ nonce: pending.rows[0].nonce, acr: "mfa",
+    email: "workforce.admin@example.test", email_verified: false })
+    .setProtectedHeader({ alg: "RS256", kid: "workforce-admin-key" }).setIssuer(configuration.issuer)
+    .setAudience(configuration.audience).setSubject("workforce-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
+  await assert.rejects(completeOidcLogin(app, configuration,
+    { code: "code", state: invitedLogin.state, correlationId: randomUUID() },
+    async () => new Response(JSON.stringify({ id_token: unverifiedToken }), { status: 200 })),
+  (error) => error?.envelope?.error?.code === "UNAUTHENTICATED");
+
+  const verifiedLogin = await beginOidcLogin(app, configuration,
+    { platformAdministratorInvitationToken: invitationToken, returnTo: "/platform/administrators" });
+  pending = await owner.query(
+    "SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND state_sha256=$2",
+    [ids.orgA, createHash("sha256").update(verifiedLogin.state).digest("hex")]
+  );
+  now = Math.floor(Date.now() / 1000);
+  const verifiedToken = await new SignJWT({ nonce: pending.rows[0].nonce, acr: "mfa",
+    email: "workforce.admin@example.test", email_verified: true })
+    .setProtectedHeader({ alg: "RS256", kid: "workforce-admin-key" }).setIssuer(configuration.issuer)
+    .setAudience(configuration.audience).setSubject("workforce-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
+  const invitedPrincipal = await completeOidcLogin(app, configuration,
+    { code: "code", state: verifiedLogin.state, correlationId: randomUUID() },
+    async () => new Response(JSON.stringify({ id_token: verifiedToken }), { status: 200 }));
+  assert.deepEqual(invitedPrincipal.organizationRoles, []);
+  assert.equal(invitedPrincipal.returnTo, "/platform/administrators");
+  workforce = await listPlatformAdministratorWorkforce(app, invitedPrincipal, randomUUID());
+  assert.equal(workforce.administrators.find(({ personId }) => personId === invitedPrincipal.principalId)?.status, "active");
+
+  workforce = await proposePlatformAdministratorChange(app, principalD,
+    { changeType: "suspend", targetPersonId: invitedPrincipal.principalId, reason: "Pause authority during review" }, randomUUID());
+  const suspendInvitee = workforce.changeRequests.find(({ changeType, target, status }) =>
+    changeType === "suspend" && target.personId === invitedPrincipal.principalId && status === "pending");
+  assert.ok(suspendInvitee);
+  await decidePlatformAdministratorChange(app, principalG, suspendInvitee.id, "approve",
+    "Review requires immediate access suspension", randomUUID());
+  assert.ok((await owner.query("SELECT revoked_at FROM identity.authentication_sessions WHERE id=$1",
+    [invitedPrincipal.authenticationSessionId])).rows[0].revoked_at);
+
+  workforce = await proposePlatformAdministratorChange(app, principalD,
+    { changeType: "recover", targetPersonId: invitedPrincipal.principalId, reason: "Review completed without findings" }, randomUUID());
+  const recoverInvitee = workforce.changeRequests.find(({ changeType, target, status }) =>
+    changeType === "recover" && target.personId === invitedPrincipal.principalId && status === "pending");
+  assert.ok(recoverInvitee);
+  await decidePlatformAdministratorChange(app, principalG, recoverInvitee.id, "approve",
+    "Restore approved after completed review", randomUUID());
+
+  workforce = await proposePlatformAdministratorChange(app, principalD,
+    { changeType: "revoke", targetPersonId: invitedPrincipal.principalId, reason: "Temporary coverage engagement ended" }, randomUUID());
+  const revokeInvitee = workforce.changeRequests.find(({ changeType, target, status }) =>
+    changeType === "revoke" && target.personId === invitedPrincipal.principalId && status === "pending");
+  assert.ok(revokeInvitee);
+  await decidePlatformAdministratorChange(app, principalG, revokeInvitee.id, "approve",
+    "Revoke authority at the end of engagement", randomUUID());
+
+  const suspendBootstrap = await proposePlatformAdministratorChange(app, principalG,
+    { changeType: "suspend", targetPersonId: ids.personD, reason: "Exercise final-administrator protection" }, randomUUID());
+  const suspendBootstrapRequest = suspendBootstrap.changeRequests.find(({ changeType, target, status }) =>
+    changeType === "suspend" && target.personId === ids.personD && status === "pending");
+  assert.ok(suspendBootstrapRequest);
+  const suspendRecovery = await proposePlatformAdministratorChange(app, principalG,
+    { changeType: "suspend", targetPersonId: ids.personG, reason: "Exercise final-administrator protection" }, randomUUID());
+  const suspendRecoveryRequest = suspendRecovery.changeRequests.find(({ changeType, target, status }) =>
+    changeType === "suspend" && target.personId === ids.personG && status === "pending");
+  assert.ok(suspendRecoveryRequest);
+  await decidePlatformAdministratorChange(app, principalD, suspendRecoveryRequest.id, "approve",
+    "Voluntary suspension leaves one active administrator", randomUUID());
+  await assert.rejects(
+    decidePlatformAdministratorChange(app, principalD, suspendBootstrapRequest.id, "approve",
+      "Attempt to suspend the final active administrator", randomUUID()),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION" && /final active/u.test(error.message)
+  );
+  const recovered = await owner.query(
+    "SELECT identity.break_glass_recover_platform_administrator($1,$2,$3,$4,$5) AS recovered",
+    [ids.personD, ids.personG, "Restore the second approver after protection test", "INC-CONTROL-002", randomUUID()]
+  );
+  assert.equal(recovered.rows[0].recovered, true);
+  const audit = await owner.query(
+    "SELECT action FROM evidence.platform_audit_records WHERE action LIKE 'platform.platform_administrator_%' ORDER BY recorded_at"
+  );
+  assert.equal(audit.rows.some(({ action }) => action === "platform.platform_administrator_assigned"), true);
+  assert.equal(audit.rows.some(({ action }) => action === "platform.platform_administrator_revoked"), true);
+  assert.equal(audit.rows.filter(({ action }) => action === "platform.platform_administrator_break_glass_recovered").length >= 2, true);
+});
+
+test("CONTROL-PLANE-T04 governs Organization workforce joiner, mover, leaver, reconciliation, and access review", async () => {
+  await owner.query(
+    `UPDATE identity.organization_provisioning
+        SET entitlements=ARRAY['studio_authoring','session_delivery','research_reporting']
+      WHERE organization_id=$1`,
+    [ids.orgA]
+  );
+
+  let workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  assert.equal(workforce.members.some(({ personId, status }) => personId === ids.personD && status === "active"), true);
+
+  const scimCredential = await createOrganizationScimCredential(app, principalD,
+    { label: "Integration workforce sync" }, randomUUID());
+  const scim = await authenticateScimCredential(app, `Bearer ${scimCredential.credential}`, randomUUID());
+  assert.equal(scim.organizationId, ids.orgA);
+
+  const externalId = `integration-${randomUUID()}`;
+  const created = await createScimUser(app, scim, {
+    externalId,
+    userName: "scim.worker@example.test",
+    displayName: "SCIM Workforce Member",
+    active: true,
+    roles: [{ value: "designer" }]
+  }, randomUUID());
+  const scimPersonId = created.id;
+  assert.equal(created.active, true);
+  assert.deepEqual(created.roles.map(({ value }) => value), ["designer"]);
+
+  await assert.rejects(
+    createOrganizationGroupRoleMapping(app, principalD, {
+      groupExternalId: "forbidden-platform-administrators",
+      groupDisplayName: "Forbidden platform authority",
+      organizationRole: "platform_administrator"
+    }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "VALIDATION_FAILED"
+  );
+
+  workforce = await createOrganizationGroupRoleMapping(app, principalD, {
+    groupExternalId: "simulation-operators",
+    groupDisplayName: "Simulation Operators",
+    organizationRole: "operator"
+  }, randomUUID());
+  const mapping = workforce.groupMappings.find(({ groupExternalId }) => groupExternalId === "simulation-operators");
+  assert.ok(mapping);
+  await patchScimGroup(app, scim, mapping.id, {
+    Operations: [{ op: "add", path: "members", value: [{ value: scimPersonId }] }]
+  }, randomUUID());
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  assert.deepEqual(workforce.members.find(({ personId }) => personId === scimPersonId)?.roles.sort(), ["designer", "operator"]);
+
+  await patchScimGroup(app, scim, mapping.id, {
+    Operations: [{ op: "replace", path: "members", value: [] }]
+  }, randomUUID());
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  assert.equal(workforce.reconciliation.groupRemovalCandidates, 1);
+  assert.equal(workforce.members.find(({ personId }) => personId === scimPersonId)?.roles.includes("operator"), true,
+    "a failed or incomplete group synchronization must not silently delete access");
+
+  const workforceSessionId = randomUUID();
+  const workforceParticipantId = randomUUID();
+  const projectionGrantId = randomUUID();
+  await owner.query(
+    `INSERT INTO identity.authentication_sessions
+       (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+     VALUES ($1,$2,$3,'https://identity.example.test','scim-worker','mfa',now()+interval '1 hour')`,
+    [workforceSessionId, ids.orgA, scimPersonId]
+  );
+  await owner.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4)",
+    [workforceParticipantId, ids.orgA, ids.sessionA, scimPersonId]);
+  await owner.query("INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3)",
+    [ids.orgA, ids.sessionA, workforceParticipantId]);
+  await owner.query(
+    `INSERT INTO sync.projection_grants
+       (id,organization_id,session_id,participant_id,policy_revision,access_revision,granted_fields,expires_at)
+     VALUES ($1,$2,$3,$4,'workforce-test',1,'[]'::jsonb,now()+interval '1 hour')`,
+    [projectionGrantId, ids.orgA, ids.sessionA, workforceParticipantId]
+  );
+
+  const suspended = await patchScimUser(app, scim, scimPersonId, {
+    Operations: [{ op: "replace", path: "active", value: false }]
+  }, randomUUID());
+  assert.equal(suspended.active, false);
+  assert.ok((await owner.query("SELECT revoked_at FROM identity.authentication_sessions WHERE id=$1", [workforceSessionId])).rows[0].revoked_at);
+  assert.ok((await owner.query("SELECT revoked_at FROM sync.projection_grants WHERE id=$1", [projectionGrantId])).rows[0].revoked_at);
+
+  await deprovisionScimUser(app, scim, scimPersonId, randomUUID());
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  assert.equal(workforce.members.find(({ personId }) => personId === scimPersonId)?.status, "deprovisioned");
+  assert.equal((await owner.query(
+    "SELECT count(*)::int AS count FROM identity.memberships WHERE organization_id=$1 AND person_id=$2",
+    [ids.orgA, scimPersonId]
+  )).rows[0].count, 0);
+
+  const deliveredInvitations = [];
+  const delivery = { async deliver(input) {
+    deliveredInvitations.push(input);
+    return { providerReference: `test:${input.deliveryId}`, previewUrl: input.invitationUrl };
+  } };
+  const invitation = await issueOrganizationWorkforceInvitation(app, principalD, {
+    email: "invited.worker@example.test",
+    displayName: "Invited Workforce Member",
+    roles: ["reviewer"]
+  }, randomUUID(), delivery, "https://plenum.example");
+  assert.equal(deliveredInvitations[0].messageType, "ORGANIZATION_WORKFORCE_INVITATION");
+  const invitationToken = invitation.invitationUrl.split("/").at(-1);
+  const accepted = await acceptOrganizationWorkforceInvitation(app, invitationToken,
+    "Invited Workforce Member", randomUUID());
+  assert.equal(accepted.organizationId, ids.orgA);
+  assert.equal((await owner.query(
+    "SELECT count(*)::int AS count FROM identity.memberships WHERE organization_id=$1 AND person_id=$2",
+    [ids.orgA, accepted.personId]
+  )).rows[0].count, 0, "acceptance alone must not grant Organization access before identity linking");
+  const activeProvider = await owner.query(
+    "SELECT id FROM identity.organization_identity_provider_revisions WHERE organization_id=$1 AND status='active'",
+    [ids.orgA]
+  );
+  const linkedPersonId = await withOrganizationTransaction(app, ids.orgA, (client) =>
+    linkOrganizationWorkforceOidcIdentity(client, {
+      organizationId: ids.orgA,
+      issuer: "https://identity.example.test",
+      subject: `invited-workforce-${randomUUID()}`,
+      email: accepted.email,
+      emailVerified: true,
+      authenticationStrength: "mfa",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1_000)
+    }, activeProvider.rows[0].id, randomUUID())
+  );
+  assert.equal(linkedPersonId, accepted.personId);
+  assert.deepEqual((await owner.query(
+    "SELECT organization_role FROM identity.memberships WHERE organization_id=$1 AND person_id=$2 ORDER BY organization_role",
+    [ids.orgA, accepted.personId]
+  )).rows.map(({ organization_role }) => organization_role), ["reviewer"]);
+
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  const secondAdmin = workforce.members.find(({ personId }) => personId === ids.personG);
+  assert.ok(secondAdmin);
+  workforce = await transitionOrganizationWorkforceMember(app, principalD, ids.personG, {
+    transition: "suspend", expectedVersion: secondAdmin.lifecycleVersion, reason: "Exercise final-Admin protection"
+  }, randomUUID());
+  const finalAdmin = workforce.members.find(({ personId }) => personId === ids.personD);
+  assert.ok(finalAdmin);
+  await assert.rejects(
+    transitionOrganizationWorkforceMember(app, principalD, ids.personD, {
+      transition: "deprovision", expectedVersion: finalAdmin.lifecycleVersion, reason: "Attempt to remove final Admin"
+    }, randomUUID()),
+    (error) => error?.envelope?.error?.code === "INVALID_TRANSITION"
+  );
+  const suspendedAdmin = workforce.members.find(({ personId }) => personId === ids.personG);
+  assert.ok(suspendedAdmin);
+  await transitionOrganizationWorkforceMember(app, principalD, ids.personG, {
+    transition: "activate", expectedVersion: suspendedAdmin.lifecycleVersion, reason: "Final-Admin protection verified"
+  }, randomUUID());
+
+  workforce = await startOrganizationAccessReview(app, principalD, randomUUID());
+  assert.equal(workforce.accessReview?.status, "open");
+  for (const item of workforce.accessReview.items) {
+    workforce = await decideOrganizationAccessReviewItem(app, principalD, item.id,
+      { decision: "retain", reason: "Confirmed against current workforce ownership" }, randomUUID());
+  }
+  workforce = await completeOrganizationAccessReview(app, principalD, workforce.accessReview.id, randomUUID());
+  assert.equal(workforce.accessReview?.status, "completed");
+  assert.equal(workforce.reconciliation.reviewDue, false);
+
+  const audit = await owner.query(
+    `SELECT action FROM evidence.audit_records
+      WHERE organization_id=$1 AND action IN
+        ('organization.scim_user_provisioned','organization.workforce_suspended',
+         'organization.workforce_deprovisioned','organization.access_review_completed')`,
+    [ids.orgA]
+  );
+  assert.equal(new Set(audit.rows.map(({ action }) => action)).size, 4);
+});
+
+test("CONTROL-PLANE-T05 preserves provider attempts, retry intent, reconciliation, bounce, and reissue evidence", async () => {
+  const scimCredential = await createOrganizationScimCredential(app, principalD,
+    { label: `Step 6 provider ${randomUUID()}` }, randomUUID());
+  const scim = await authenticateScimCredential(app, `Bearer ${scimCredential.credential}`, randomUUID());
+  const providerRequestId = `entra-${randomUUID()}`;
+  const operationId = await beginProvisioningOperation(app, scim, {
+    source: "entra", operationType: "patch_user", targetRef: `person:${ids.personD}`,
+    externalRequestId: providerRequestId
+  }, randomUUID());
+  await completeProvisioningOperation(app, ids.orgA, operationId, {
+    status: "failed", errorCode: "INVALID_TRANSITION", errorReason: "Synthetic provider retry exercise"
+  }, randomUUID());
+  let workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  assert.equal(workforce.provisioningOperations.find(({ id }) => id === operationId)?.status, "failed");
+  workforce = await scheduleProvisioningOperationRetry(app, principalD, operationId, randomUUID());
+  assert.equal(workforce.provisioningOperations.find(({ id }) => id === operationId)?.status, "retry_pending");
+
+  const replayedId = await beginProvisioningOperation(app, scim, {
+    source: "entra", operationType: "patch_user", targetRef: `person:${ids.personD}`,
+    externalRequestId: providerRequestId
+  }, randomUUID());
+  assert.equal(replayedId, operationId);
+  await completeProvisioningOperation(app, ids.orgA, replayedId, { status: "succeeded" }, randomUUID());
+  const attempts = await owner.query(
+    "SELECT attempt_number,outcome FROM identity.organization_provisioning_operation_attempts WHERE operation_id=$1 ORDER BY attempt_number",
+    [operationId]
+  );
+  assert.deepEqual(attempts.rows, [{ attempt_number: 1, outcome: "failed" }, { attempt_number: 2, outcome: "succeeded" }]);
+  await assert.rejects(
+    owner.query("UPDATE identity.organization_provisioning_operation_attempts SET outcome='failed' WHERE operation_id=$1", [operationId]),
+    (error) => error?.code === "55000"
+  );
+
+  workforce = await runOrganizationWorkforceReconciliation(app, principalD, randomUUID());
+  assert.ok(workforce.reconciliation.lastRunAt);
+  assert.equal(workforce.provisioningOperations.some(({ operationType, status }) =>
+    operationType === "workforce_reconciliation" && status === "succeeded"), true);
+
+  const deliveries = [];
+  const delivery = { async deliver(input) {
+    deliveries.push(input);
+    return { providerReference: `step6:${input.deliveryId}`, previewUrl: input.invitationUrl };
+  } };
+  await issueOrganizationWorkforceInvitation(app, principalD, {
+    email: "step6.bounce@example.test", displayName: "Step 6 Bounce Exercise", roles: ["designer"]
+  }, randomUUID(), delivery, "https://plenum.example");
+  const firstDelivery = deliveries[0];
+  const providerEventId = `bounce-${randomUUID()}`;
+  const firstReceipt = await recordInvitationDeliveryEvent(app, {
+    providerEventId, deliveryId: firstDelivery.deliveryId, status: "bounced",
+    occurredAt: new Date().toISOString(), reason: "Synthetic mailbox rejection"
+  }, randomUUID());
+  assert.deepEqual(firstReceipt, { accepted: true, duplicate: false });
+  assert.deepEqual(await recordInvitationDeliveryEvent(app, {
+    providerEventId, deliveryId: firstDelivery.deliveryId, status: "bounced",
+    occurredAt: new Date().toISOString(), reason: "Synthetic mailbox rejection"
+  }, randomUUID()), { accepted: true, duplicate: true });
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  const bounced = workforce.invitations.find(({ email }) => email === "step6.bounce@example.test");
+  assert.equal(bounced?.deliveryStatus, "bounced");
+  await reissueOrganizationWorkforceInvitation(app, principalD, bounced.id, randomUUID(), delivery, "https://plenum.example");
+  workforce = await getOrganizationWorkforce(app, principalD, randomUUID());
+  const invitationHistory = workforce.invitations.filter(({ email }) => email === "step6.bounce@example.test");
+  assert.equal(invitationHistory.some(({ status }) => status === "revoked"), true);
+  assert.equal(invitationHistory.some(({ status, deliveryStatus }) => status === "pending" && deliveryStatus === "sent"), true);
+  assert.equal((await owner.query(
+    "SELECT count(*)::int AS count FROM identity.invitation_delivery_events WHERE provider_event_id=$1", [providerEventId]
+  )).rows[0].count, 1);
+});
+
 test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, versioned, and least-privilege", async () => {
   const templateId = "31000000-0000-4000-8000-000000000001";
   await owner.query(
@@ -532,6 +1164,24 @@ test("PS-710-T02 Project and Template lifecycle is tenant-scoped, replay-safe, v
   const reviewerView = await listProjectPortal(app, principalF, { status: "all" }, randomUUID());
   assert.equal(reviewerView.permissions.canCreateProject, false);
   assert.deepEqual(reviewerView.projects.map(({ id }) => id), [ids.projectA]);
+  const documentsBeforeDemo = Number((await owner.query(
+    "SELECT count(*) FROM studio.collaborative_documents WHERE organization_id=$1 AND project_id=$2",
+    [ids.orgA, ids.projectA]
+  )).rows[0].count);
+  const designerDemo = await getProjectDemo(app, principalE, ids.projectA, randomUUID());
+  const adminDemo = await getProjectDemo(app, principalD, ids.projectA, randomUUID());
+  const reviewerDemo = await getProjectDemo(app, principalF, ids.projectA, randomUUID());
+  assert.equal(designerDemo.contractId, "project-demo-v1");
+  assert.equal(designerDemo.demoMode, true);
+  assert.equal(adminDemo.projectId, ids.projectA);
+  assert.equal(reviewerDemo.projectId, ids.projectA);
+  assert.notEqual(designerDemo.demoSessionId, reviewerDemo.demoSessionId);
+  assert.equal(Number((await owner.query(
+    "SELECT count(*) FROM studio.collaborative_documents WHERE organization_id=$1 AND project_id=$2",
+    [ids.orgA, ids.projectA]
+  )).rows[0].count), documentsBeforeDemo);
+  await assert.rejects(() => getProjectDemo(app, principalF, ids.projectB, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
   assert.deepEqual((await listSimulationTemplates(app, principalF, {}, randomUUID())).templates, []);
   await assert.rejects(() => listProjectPortal(app, principal, {}, randomUUID()),
     (error) => error.envelope?.error.code === "ACCESS_REVOKED");

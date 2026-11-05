@@ -28,6 +28,8 @@ Critical controls have stable tab order and never rely on drag. Optional shortcu
 
 ## State, viewport and evidence
 
+The normal family implementation and focused cross-family evidence are closed in `../impeccable/operator-control/family-closeout.md`; remaining human, device and task-level state gates are explicitly NOT RUN.
+
 All Operator states apply, including locked, delayed delivery, partial fan-out, provider unavailable, stale command, conflicting Operator command, revoked scope and completed Session. Verify 1280x600 as a primary risk viewport as well as the full matrix. Planned evidence key: `operator-control`; no PS-800 PASS evidence exists yet.
 
 Tier behavior: 1920/1440 show timeline/control, queues and inspector; 1280x720/600 keep current Stage/timer and safety actions visible while secondary evidence becomes a sheet; 1024x768 stacks queues below primary control; 768x1024 and 390x844 expose one operational region at a time with persistent Session/Stage/clock status. At 200%/320px, no critical action requires horizontal scroll.

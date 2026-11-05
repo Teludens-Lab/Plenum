@@ -35,13 +35,14 @@ variables {
   identity_hostname      = "identity.staging.plenum.example"
   media_hostname         = "media.staging.plenum.example"
   application_contract = {
-    deployment_id             = "plenum-staging"
-    retention_actor_person_id = "00000000-0000-4000-8000-000000000001"
-    oidc_provider_key         = "plenum-staging"
-    oidc_organization_id      = "00000000-0000-4000-8000-000000000002"
-    oidc_client_id            = "plenum"
-    s3_region                 = "us-ashburn-1"
-    media_adapter_digest      = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    deployment_id                = "plenum-staging"
+    retention_actor_person_id    = "00000000-0000-4000-8000-000000000001"
+    oidc_provider_key            = "plenum-staging"
+    oidc_organization_id         = "00000000-0000-4000-8000-000000000002"
+    oidc_client_id               = "plenum"
+    s3_region                    = "us-ashburn-1"
+    media_adapter_digest         = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    invitation_delivery_endpoint = "https://notifications.staging.plenum.example/v1/messages"
   }
 }
 

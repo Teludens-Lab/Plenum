@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 export const SECRET_KEYS = Object.freeze([
   "DATABASE_URL",
   "FLOOR_TOKEN_SECRET",
+  "INVITATION_DELIVERY_BEARER_TOKEN",
+  "INVITATION_DELIVERY_WEBHOOK_TOKEN",
   "MEDIA_API_KEY",
   "MEDIA_API_SECRET",
   "S3_ACCESS_KEY_ID",

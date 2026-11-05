@@ -37,12 +37,14 @@ Terraform state, plans, local variable files, private keys, and `.env` files are
 
 ## Shared secret contract
 
-Both profiles supply exactly these six non-empty JSON string fields to the image at process start:
+Both profiles supply exactly these eight non-empty JSON string fields to the image at process start:
 
 ```json
 {
   "DATABASE_URL": "<secret>",
   "FLOOR_TOKEN_SECRET": "<secret>",
+  "INVITATION_DELIVERY_BEARER_TOKEN": "<secret>",
+  "INVITATION_DELIVERY_WEBHOOK_TOKEN": "<secret>",
   "MEDIA_API_KEY": "<secret>",
   "MEDIA_API_SECRET": "<secret>",
   "S3_ACCESS_KEY_ID": "<secret>",

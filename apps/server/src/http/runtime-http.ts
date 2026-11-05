@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
@@ -20,6 +20,49 @@ import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
 import { revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
+import {
+  acceptOrganizationWorkforceInvitation,
+  authenticateScimCredential,
+  beginProvisioningOperation,
+  completeProvisioningOperation,
+  completeOrganizationAccessReview,
+  createOrganizationGroupRoleMapping,
+  createOrganizationScimCredential,
+  createScimUser,
+  decideOrganizationAccessReviewItem,
+  deprovisionScimUser,
+  getOrganizationWorkforce,
+  getScimUser,
+  issueOrganizationWorkforceInvitation,
+  listScimGroups,
+  listScimUsers,
+  patchScimGroup,
+  patchScimUser,
+  recordInvitationDeliveryEvent,
+  reissueOrganizationWorkforceInvitation,
+  replaceScimUser,
+  revokeOrganizationScimCredential,
+  revokeOrganizationWorkforceInvitation,
+  runOrganizationWorkforceReconciliation,
+  scheduleProvisioningOperationRetry,
+  startOrganizationAccessReview,
+  transitionOrganizationWorkforceMember,
+  type ProvisioningOperationSource,
+  type ScimCredentialContext
+} from "../identity/organization-workforce.js";
+import {
+  activateOrganizationIdentityProvider,
+  approveOrganizationIdentityProvider,
+  beginOrganizationIdentityProviderTest,
+  getOrganizationIdentityProviderManagement,
+  preflightOrganizationIdentityProvider,
+  rollbackOrganizationIdentityProvider,
+  stageOrganizationIdentityProvider,
+  suspendOrganizationIdentityProvider,
+  systemIdentityMetadataFetcher,
+  type IdentityMetadataFetcher,
+  type StageOrganizationIdentityProviderInput
+} from "../identity/organization-providers.js";
 import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
 import { getAdjudications } from "../adjudication/service.js";
@@ -49,9 +92,10 @@ import {
   resolveInvitationSession,
   resolveVisibleInvitationSession,
   resolvePrincipalCommandContext,
-  submitJoinRequest
+  submitJoinRequest,
+  submitJoinRequestByCode
 } from "../runtime/access/onboarding.js";
-import { getParticipantEntry } from "../runtime/access/participant-entry.js";
+import { getParticipantBrandingAsset, getParticipantEntry, getParticipantRuntimeResource } from "../runtime/access/participant-entry.js";
 import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
 import { acceptPluginLicense, approvePluginArtifact, getPluginCatalog, importPluginRevocations,
   installPluginArtifact, provisionPluginTrustRoot, registerPluginPublisher, revokePluginArtifact,
@@ -66,7 +110,7 @@ import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport
 import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { getDataPolicyOperations, getReportArtifact, getSessionRetentionStatus, listOrganizationMemberAdministration,
   listPluginOperations, listResearchReportableSessions, listSessionReportArtifacts, replaceOrganizationMemberRoles } from "../operations/administration.js";
-import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getPublicationReview, getRolePreview,
+import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getProjectDemo, getPublicationReview, getRolePreview,
   publishCollaborativeDraft, rehearseCollaborativeDraft, type CollaborativePublishInput,
   type RolePreviewInput } from "../studio/collaboration/service.js";
 import { archiveProject, createProject, listProjectPortal, listSimulationTemplates, publishSimulationTemplate,
@@ -80,6 +124,30 @@ import {
   listSessionCatalog
 } from "../registry/lifecycle-portal.js";
 import { exportReleasePackage, importReleasePackage } from "../registry/publication.js";
+import {
+  acceptFirstAdminInvitation,
+  addOrganizationDomain,
+  createPlatformOrganization,
+  getPlatformOrganization,
+  issueFirstAdminInvitation,
+  listPlatformOrganizations,
+  reissueOrganizationDomainChallenge,
+  revokeFirstAdminInvitation,
+  transitionOrganizationLifecycle,
+  updatePlatformOrganizationProvisioning,
+  verifyOrganizationDomain,
+  systemDomainVerificationResolver,
+  type CreatePlatformOrganizationInput,
+  type DomainVerificationResolver,
+  type FirstAdminInvitationDelivery,
+  type UpdatePlatformOrganizationInput
+} from "../platform/provisioning.js";
+import {
+  decidePlatformAdministratorChange,
+  listPlatformAdministratorWorkforce,
+  proposePlatformAdministratorChange,
+  type ProposePlatformAdministratorChangeInput
+} from "../platform/workforce.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_PACKAGE_BYTES = 32_000_000;
@@ -95,6 +163,54 @@ export interface RuntimeHttpOptions {
   objectStore?: ObjectStore;
   replayAdapter?: SessionReplayAdapter;
   contentScanner?: ContentScanner;
+  domainVerificationResolver?: DomainVerificationResolver;
+  firstAdminInvitationDelivery?: FirstAdminInvitationDelivery;
+  invitationDeliveryWebhookToken?: string;
+  publicBaseUrl?: string;
+  identityMetadataFetcher?: IdentityMetadataFetcher;
+}
+
+function provisioningSource(request: IncomingMessage): ProvisioningOperationSource {
+  const declared = typeof request.headers["x-plenum-provider"] === "string" ? request.headers["x-plenum-provider"].toLowerCase() : "";
+  const agent = typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"].toLowerCase() : "";
+  if (declared === "entra" || agent.includes("microsoft") || agent.includes("azure")) return "entra";
+  if (declared === "okta" || agent.includes("okta")) return "okta";
+  return "scim";
+}
+
+function provisioningRequestId(request: IncomingMessage): string | undefined {
+  for (const header of ["x-ms-correlation-id", "x-okta-request-id", "x-request-id"] as const) {
+    const value = request.headers[header];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim().slice(0, 300);
+  }
+  return undefined;
+}
+
+async function withScimOperation<T>(
+  options: RuntimeHttpOptions,
+  request: IncomingMessage,
+  context: ScimCredentialContext,
+  operationType: string,
+  targetRef: string,
+  correlationId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const externalRequestId = provisioningRequestId(request);
+  const operationId = await beginProvisioningOperation(options.pool, context, {
+    source: provisioningSource(request), operationType, targetRef,
+    ...(externalRequestId === undefined ? {} : { externalRequestId })
+  }, correlationId);
+  try {
+    const result = await operation();
+    await completeProvisioningOperation(options.pool, context.organizationId, operationId, { status: "succeeded" }, correlationId);
+    return result;
+  } catch (cause) {
+    const errorCode = cause instanceof AuthorizationError ? cause.envelope.error.code : "INTERNAL_ERROR";
+    const errorReason = cause instanceof Error ? cause.message : "The provider operation failed.";
+    await completeProvisioningOperation(options.pool, context.organizationId, operationId,
+      { status: "failed", errorCode, errorReason }, correlationId);
+    throw cause;
+  }
 }
 
 function collaborativePublishInput(body: JsonObject, correlationId: string): CollaborativePublishInput {
@@ -165,6 +281,11 @@ function send(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body));
 }
 
+function sendScim(response: ServerResponse, status: number, body: unknown): void {
+  response.writeHead(status, { "content-type": "application/scim+json; charset=utf-8", "cache-control": "no-store" });
+  response.end(status === 204 ? undefined : JSON.stringify(body));
+}
+
 function sendSse(response: ServerResponse, body: string): void {
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -179,6 +300,49 @@ function sendArtifact(response: ServerResponse, artifact: { contentType: string;
     "content-disposition": `attachment; filename="${artifact.filename}"`, "cache-control": "no-store",
     "x-content-type-options": "nosniff" });
   response.end(Buffer.from(artifact.bytes));
+}
+
+function sendParticipantBrandingAsset(
+  request: IncomingMessage,
+  response: ServerResponse,
+  asset: { contentType: string; bytes: Uint8Array; digest: string }
+): void {
+  const etag = `"${asset.digest}"`;
+  if (request.headers["if-none-match"] === etag) {
+    response.writeHead(304, { etag, "cache-control": "private, max-age=31536000, immutable" });
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": asset.contentType,
+    "content-length": asset.bytes.byteLength,
+    "cache-control": "private, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+    etag
+  });
+  response.end(Buffer.from(asset.bytes));
+}
+
+function sendParticipantRuntimeResource(
+  request: IncomingMessage,
+  response: ServerResponse,
+  asset: { contentType: string; bytes: Uint8Array; digest: string }
+): void {
+  const etag = `"${asset.digest}"`;
+  if (request.headers["if-none-match"] === etag) {
+    response.writeHead(304, { etag, "cache-control": "private, max-age=31536000, immutable" });
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": asset.contentType,
+    "content-length": asset.bytes.byteLength,
+    "cache-control": "private, max-age=31536000, immutable",
+    "content-security-policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+    "x-content-type-options": "nosniff",
+    etag
+  });
+  response.end(Buffer.from(asset.bytes));
 }
 
 async function readBody(request: IncomingMessage, correlationId: string): Promise<JsonObject> {
@@ -273,6 +437,47 @@ function projectLifecycleInput(body: JsonObject, correlationId: string) {
   return { requestId: body.requestId, expectedVersion: body.expectedVersion };
 }
 
+function platformOrganizationInput(body: JsonObject, correlationId: string): CreatePlatformOrganizationInput {
+  const allowed = new Set(["name", "slug", "legalName", "countryCode", "timeZone", "deploymentProfile",
+    "dataResidencyRegion", "entitlements", "supportContact", "securityContact"]);
+  const entitlements = body.entitlements;
+  if (Object.keys(body).some((field) => !allowed.has(field)) ||
+      ![body.name, body.slug, body.legalName, body.countryCode, body.timeZone, body.deploymentProfile,
+        body.dataResidencyRegion, body.supportContact].every((value) => typeof value === "string") ||
+      !Array.isArray(entitlements) || !entitlements.every((value) => typeof value === "string") ||
+      (body.securityContact !== undefined && typeof body.securityContact !== "string")) {
+    throw authorizationError("VALIDATION_FAILED", "Organization provisioning fields are invalid.", correlationId);
+  }
+  return body as unknown as CreatePlatformOrganizationInput;
+}
+
+function platformOrganizationUpdateInput(body: JsonObject, correlationId: string): UpdatePlatformOrganizationInput {
+  const allowed = new Set(["legalName", "countryCode", "timeZone", "deploymentProfile",
+    "dataResidencyRegion", "entitlements", "supportContact", "securityContact"]);
+  const entitlements = body.entitlements;
+  if (Object.keys(body).some((field) => !allowed.has(field)) ||
+      ![body.legalName, body.countryCode, body.timeZone, body.deploymentProfile,
+        body.dataResidencyRegion, body.supportContact].every((value) => typeof value === "string") ||
+      !Array.isArray(entitlements) || !entitlements.every((value) => typeof value === "string") ||
+      (body.securityContact !== undefined && typeof body.securityContact !== "string")) {
+    throw authorizationError("VALIDATION_FAILED", "Organization provisioning fields are invalid.", correlationId);
+  }
+  return body as unknown as UpdatePlatformOrganizationInput;
+}
+
+function identityProviderInput(body: JsonObject, correlationId: string): StageOrganizationIdentityProviderInput {
+  const allowed = new Set(["protocol", "displayName", "discoveryUrl", "metadataUrl", "clientId", "audience", "domainIds", "replacesProviderId"]);
+  if (Object.keys(body).some((field) => !allowed.has(field)) ||
+      (body.protocol !== "oidc" && body.protocol !== "saml") || typeof body.displayName !== "string" ||
+      typeof body.discoveryUrl !== "string" || typeof body.clientId !== "string" || typeof body.audience !== "string" ||
+      !Array.isArray(body.domainIds) || !body.domainIds.every((value) => typeof value === "string") ||
+      (body.metadataUrl !== undefined && typeof body.metadataUrl !== "string") ||
+      (body.replacesProviderId !== undefined && typeof body.replacesProviderId !== "string")) {
+    throw authorizationError("VALIDATION_FAILED", "Identity-provider configuration fields are invalid.", correlationId);
+  }
+  return body as unknown as StageOrganizationIdentityProviderInput;
+}
+
 function deviceHeader(request: IncomingMessage, correlationId: string): string {
   const value = request.headers["x-device-id"];
   if (typeof value !== "string" || !uuid.test(value)) {
@@ -294,26 +499,12 @@ async function registerDevice(pool: Pool, principal: AuthenticatedPrincipal): Pr
 
 async function getProductShellContext(pool: Pool, principal: AuthenticatedPrincipal, correlationId: string) {
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await client.query("SELECT set_config('app.platform_actor_id',$1,true)", [principal.principalId]);
     const result = await client.query<{ display_name: string; organization_name: string; is_member: boolean }>(
       `SELECT person.display_name, organization.name AS organization_name
          FROM identity.persons person
          JOIN identity.organizations organization ON organization.id = $1
-        WHERE organization.id = $1 AND person.id = $2 AND (
-          EXISTS (SELECT 1 FROM identity.memberships membership
-            WHERE membership.organization_id=$1 AND membership.person_id=$2)
-          OR EXISTS (SELECT 1 FROM runtime.participants participant
-            JOIN runtime.seat_assignments assignment
-              ON assignment.organization_id=participant.organization_id AND assignment.session_id=participant.session_id
-             AND assignment.participant_id=participant.id AND assignment.valid_to IS NULL
-            WHERE participant.organization_id=$1 AND participant.person_id=$2)
-          OR EXISTS (SELECT 1 FROM identity.session_invitations invitation
-            WHERE invitation.organization_id=$1 AND invitation.recipient_person_id=$2
-              AND invitation.accepted_at IS NULL AND invitation.revoked_at IS NULL
-              AND invitation.expires_at>transaction_timestamp())
-          OR EXISTS (SELECT 1 FROM runtime.join_requests request
-            WHERE request.organization_id=$1 AND request.person_id=$2
-              AND request.status IN ('waiting_room','assignment_pending','admitted'))
-        )
+        WHERE organization.id = $1 AND person.id = $2
         LIMIT 1`,
       [principal.organizationId, principal.principalId]
     );
@@ -321,7 +512,13 @@ async function getProductShellContext(pool: Pool, principal: AuthenticatedPrinci
     if (row === undefined) {
       throw authorizationError("PERMISSION_DENIED", "Current Organization or Session access is required.", correlationId);
     }
-    const destinations: Array<"home" | "studio" | "runtime" | "operations"> = ["home", "runtime"];
+    const platformAuthority = await client.query<{ authorized: boolean }>(
+      "SELECT identity.current_platform_administrator() AS authorized"
+    );
+    const platformRoles: Array<"platform_administrator"> = platformAuthority.rows[0]?.authorized === true
+      ? ["platform_administrator"] : [];
+    const destinations: Array<"home" | "studio" | "runtime" | "operations" | "platform"> =
+      principal.organizationRoles.length === 0 ? [] : ["home", "runtime"];
     if (principal.organizationRoles.some((role) =>
       role === "designer" || role === "reviewer" || role === "publisher" || role === "admin")) {
       destinations.splice(1, 0, "studio");
@@ -329,11 +526,13 @@ async function getProductShellContext(pool: Pool, principal: AuthenticatedPrinci
     if (principal.organizationRoles.some((role) => role === "publisher" || role === "operator" || role === "admin")) {
       destinations.push("operations");
     }
+    if (platformRoles.length > 0) destinations.push("platform");
     return {
       contractId: PRODUCT_SHELL_CONTRACT_ID,
       principal: { id: principal.principalId, displayName: row.display_name },
       organization: { id: principal.organizationId, name: row.organization_name, roles: principal.organizationRoles },
-      destinations
+      destinations,
+      platformRoles
     };
   });
 }
@@ -373,17 +572,313 @@ async function receiptFor(
 export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
     const correlationId = randomUUID();
+    let scimRequest = false;
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
-      if (!url.pathname.startsWith("/v1/")) return false;
-      const principal = await options.authenticate(request, correlationId);
+      scimRequest = url.pathname.startsWith("/scim/v2/");
+      if (!url.pathname.startsWith("/v1/") && !scimRequest) return false;
       let match: RegExpMatchArray | null;
+      if (scimRequest) {
+        const context = await authenticateScimCredential(options.pool,
+          typeof request.headers.authorization === "string" ? request.headers.authorization : undefined, correlationId);
+        if (request.method === "GET" && url.pathname === "/scim/v2/ServiceProviderConfig") {
+          sendScim(response, 200, { schemas: ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
+            patch: { supported: true }, bulk: { supported: false }, filter: { supported: true, maxResults: 200 },
+            changePassword: { supported: false }, sort: { supported: false }, etag: { supported: false },
+            authenticationSchemes: [{ type: "oauthbearertoken", name: "Bearer Token", primary: true }] });
+          return true;
+        }
+        if (request.method === "GET" && url.pathname === "/scim/v2/ResourceTypes") {
+          sendScim(response, 200, { schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], totalResults: 2,
+            startIndex: 1, itemsPerPage: 2, Resources: [
+              { id: "User", name: "User", endpoint: "/Users", schema: "urn:ietf:params:scim:schemas:core:2.0:User" },
+              { id: "Group", name: "Group", endpoint: "/Groups", schema: "urn:ietf:params:scim:schemas:core:2.0:Group" }
+            ] }); return true;
+        }
+        if (request.method === "GET" && url.pathname === "/scim/v2/Schemas") {
+          sendScim(response, 200, { schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], totalResults: 2,
+            startIndex: 1, itemsPerPage: 2, Resources: [
+              { id: "urn:ietf:params:scim:schemas:core:2.0:User", name: "User", attributes: [] },
+              { id: "urn:ietf:params:scim:schemas:core:2.0:Group", name: "Group", attributes: [] }
+            ] }); return true;
+        }
+        if (request.method === "GET" && url.pathname === "/scim/v2/Users") {
+          sendScim(response, 200, await listScimUsers(options.pool, context, {
+            startIndex: Number(url.searchParams.get("startIndex") ?? 1), count: Number(url.searchParams.get("count") ?? 100),
+            ...(url.searchParams.get("filter") === null ? {} : { filter: url.searchParams.get("filter") as string })
+          }, correlationId)); return true;
+        }
+        if (request.method === "POST" && url.pathname === "/scim/v2/Users") {
+          const body = await readBody(request, correlationId);
+          sendScim(response, 201, await withScimOperation(options, request, context, "create_user", "scim:Users",
+            correlationId, () => createScimUser(options.pool, context, body, correlationId))); return true;
+        }
+        if ((match = url.pathname.match(/^\/scim\/v2\/Users\/([^/]+)$/u))) {
+          const personId = pathId(match[1], correlationId);
+          if (request.method === "GET") sendScim(response, 200, await getScimUser(options.pool, context, personId, correlationId));
+          else if (request.method === "PUT") { const body = await readBody(request, correlationId); sendScim(response, 200,
+            await withScimOperation(options, request, context, "replace_user", `person:${personId}`, correlationId,
+              () => replaceScimUser(options.pool, context, personId, body, correlationId))); }
+          else if (request.method === "PATCH") { const body = await readBody(request, correlationId); sendScim(response, 200,
+            await withScimOperation(options, request, context, "patch_user", `person:${personId}`, correlationId,
+              () => patchScimUser(options.pool, context, personId, body, correlationId))); }
+          else if (request.method === "DELETE") { await withScimOperation(options, request, context, "deprovision_user",
+            `person:${personId}`, correlationId, () => deprovisionScimUser(options.pool, context, personId, correlationId));
+            sendScim(response, 204, {}); }
+          else sendScim(response, 405, { schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], status: "405", detail: "Method not allowed." });
+          return true;
+        }
+        if (request.method === "GET" && url.pathname === "/scim/v2/Groups") {
+          sendScim(response, 200, await listScimGroups(options.pool, context)); return true;
+        }
+        if (request.method === "PATCH" && (match = url.pathname.match(/^\/scim\/v2\/Groups\/([^/]+)$/u))) {
+          const mappingId = pathId(match[1], correlationId); const body = await readBody(request, correlationId);
+          sendScim(response, 200, await withScimOperation(options, request, context, "patch_group", `group_role_mapping:${mappingId}`,
+            correlationId, () => patchScimGroup(options.pool, context, mappingId, body, correlationId))); return true;
+        }
+        sendScim(response, 404, { schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"], status: "404",
+          detail: "The SCIM resource was not found." }); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/invitations\/([A-Za-z0-9_-]{43})\/accept$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "displayName") || typeof body.displayName !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The first Admin display name is required.", correlationId);
+        }
+        send(response, 200, await acceptFirstAdminInvitation(options.pool, match[1] as string, body.displayName, correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/organization\/invitations\/([A-Za-z0-9_-]{43})\/accept$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "displayName") || typeof body.displayName !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The invited workforce member display name is required.", correlationId);
+        }
+        send(response, 200, await acceptOrganizationWorkforceInvitation(options.pool, match[1] as string,
+          body.displayName, correlationId)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/invitation-deliveries/events") {
+        const configured = options.invitationDeliveryWebhookToken;
+        const presented = typeof request.headers.authorization === "string" && request.headers.authorization.startsWith("Bearer ")
+          ? request.headers.authorization.slice("Bearer ".length) : "";
+        const presentedDigest = createHash("sha256").update(presented).digest();
+        const configuredDigest = createHash("sha256").update(configured ?? "").digest();
+        if (configured === undefined || presented.length === 0 ||
+            !timingSafeEqual(presentedDigest, configuredDigest)) {
+          throw authorizationError("UNAUTHENTICATED", "A valid invitation delivery webhook credential is required.", correlationId);
+        }
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["providerEventId", "deliveryId", "status", "occurredAt", "reason"].includes(field)) ||
+            typeof body.providerEventId !== "string" || typeof body.deliveryId !== "string" ||
+            !["delivered", "bounced", "failed"].includes(String(body.status)) || typeof body.occurredAt !== "string" ||
+            (body.reason !== undefined && typeof body.reason !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The invitation delivery event is invalid.", correlationId);
+        }
+        send(response, 202, await recordInvitationDeliveryEvent(options.pool, {
+          providerEventId: body.providerEventId, deliveryId: body.deliveryId,
+          status: body.status as "delivered" | "bounced" | "failed", occurredAt: body.occurredAt,
+          ...(typeof body.reason === "string" ? { reason: body.reason } : {})
+        }, correlationId)); return true;
+      }
+      const principal = await options.authenticate(request, correlationId);
       if (request.method === "GET" && url.pathname === "/v1/product-context") {
         send(response, 200, await getProductShellContext(options.pool, principal, correlationId));
         return true;
       }
+      if (request.method === "GET" && url.pathname === "/v1/admin/identity-providers") {
+        send(response, 200, await getOrganizationIdentityProviderManagement(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/admin\/identity-providers\/([^/]+)\/test$/u))) {
+        if (options.publicBaseUrl === undefined) throw authorizationError("INVALID_TRANSITION",
+          "The public authentication callback is not configured for this deployment.", correlationId);
+        const result = await beginOrganizationIdentityProviderTest(options.pool, principal, pathId(match[1], correlationId),
+          new URL("/auth/callback", options.publicBaseUrl).toString(), "/admin/identity", correlationId);
+        send(response, 200, result); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/admin\/identity-providers\/([^/]+)\/approve$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "reason") || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "An approval reason is required.", correlationId);
+        }
+        send(response, 200, { identityProviders: await approveOrganizationIdentityProvider(options.pool, principal,
+          pathId(match[1], correlationId), body.reason, correlationId) }); return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/platform/organizations") {
+        send(response, 200, await listPlatformOrganizations(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/platform/administrators") {
+        send(response, 200, await listPlatformAdministratorWorkforce(options.pool, principal, correlationId));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/platform/administrators/changes") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["changeType", "targetPersonId", "email", "displayName", "reason"].includes(field)) ||
+            typeof body.changeType !== "string" || typeof body.reason !== "string" ||
+            (body.targetPersonId !== undefined && typeof body.targetPersonId !== "string") ||
+            (body.email !== undefined && typeof body.email !== "string") ||
+            (body.displayName !== undefined && typeof body.displayName !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The Platform Administrator change request is invalid.", correlationId);
+        }
+        send(response, 201, await proposePlatformAdministratorChange(options.pool, principal,
+          body as unknown as ProposePlatformAdministratorChangeInput, correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/administrators\/changes\/([^/]+)\/(approve|reject)$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "reason") || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "A decision reason is required.", correlationId);
+        }
+        send(response, 200, await decidePlatformAdministratorChange(options.pool, principal,
+          pathId(match[1], correlationId), match[2] as "approve" | "reject", body.reason, correlationId,
+          options.firstAdminInvitationDelivery, options.publicBaseUrl));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/platform/organizations") {
+        send(response, 201, await createPlatformOrganization(options.pool, principal,
+          platformOrganizationInput(await readBody(request, correlationId), correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)$/u))) {
+        send(response, 200, await getPlatformOrganization(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "PUT" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/provisioning$/u))) {
+        send(response, 200, await updatePlatformOrganizationProvisioning(options.pool, principal,
+          pathId(match[1], correlationId), platformOrganizationUpdateInput(await readBody(request, correlationId), correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/identity-providers$/u))) {
+        send(response, 201, { identityProviders: await stageOrganizationIdentityProvider(options.pool, principal,
+          pathId(match[1], correlationId), identityProviderInput(await readBody(request, correlationId), correlationId), correlationId) });
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/identity-providers\/([^/]+)\/preflight$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).length !== 0) throw authorizationError("VALIDATION_FAILED", "Preflight accepts no client evidence.", correlationId);
+        send(response, 200, { identityProviders: await preflightOrganizationIdentityProvider(options.pool, principal,
+          pathId(match[1], correlationId), pathId(match[2], correlationId), correlationId,
+          options.identityMetadataFetcher ?? systemIdentityMetadataFetcher) }); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/identity-providers\/([^/]+)\/(activate|suspend|rollback)$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "reason") || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "A lifecycle reason is required.", correlationId);
+        }
+        const organizationId = pathId(match[1], correlationId); const providerId = pathId(match[2], correlationId);
+        const action = match[3];
+        const providers = action === "activate" ? await activateOrganizationIdentityProvider(options.pool, principal, organizationId, providerId, body.reason, correlationId) :
+          action === "suspend" ? await suspendOrganizationIdentityProvider(options.pool, principal, organizationId, providerId, body.reason, correlationId) :
+            await rollbackOrganizationIdentityProvider(options.pool, principal, organizationId, providerId, body.reason, correlationId);
+        send(response, 200, { identityProviders: providers }); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/domains$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["domain", "verificationMethod"].includes(field)) ||
+            typeof body.domain !== "string" || body.verificationMethod !== "dns_txt") {
+          throw authorizationError("VALIDATION_FAILED", "Domain verification fields are invalid.", correlationId);
+        }
+        send(response, 201, await addOrganizationDomain(options.pool, principal, pathId(match[1], correlationId),
+          { domain: body.domain, verificationMethod: body.verificationMethod }, correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/domains\/([^/]+)\/verify$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).length !== 0) {
+          throw authorizationError("VALIDATION_FAILED", "DNS verification does not accept client-supplied evidence.", correlationId);
+        }
+        send(response, 200, await verifyOrganizationDomain(options.pool, principal,
+          pathId(match[1], correlationId), pathId(match[2], correlationId), correlationId,
+          options.domainVerificationResolver ?? systemDomainVerificationResolver));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/domains\/([^/]+)\/reissue$/u))) {
+        send(response, 200, await reissueOrganizationDomainChallenge(options.pool, principal,
+          pathId(match[1], correlationId), pathId(match[2], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/first-admin-invitations$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "email") || typeof body.email !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The first Admin email address is required.", correlationId);
+        }
+        if (options.firstAdminInvitationDelivery === undefined || options.publicBaseUrl === undefined) {
+          throw authorizationError("INVALID_TRANSITION", "Invitation delivery is not configured for this deployment.", correlationId);
+        }
+        send(response, 201, await issueFirstAdminInvitation(options.pool, principal,
+          pathId(match[1], correlationId), body.email, correlationId,
+          options.firstAdminInvitationDelivery, options.publicBaseUrl));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/first-admin-invitations\/revoke$/u))) {
+        send(response, 200, await revokeFirstAdminInvitation(options.pool, principal,
+          pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/first-admin-invitations\/reissue$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => field !== "email") || typeof body.email !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The first Admin email address is required.", correlationId);
+        }
+        if (options.firstAdminInvitationDelivery === undefined || options.publicBaseUrl === undefined) {
+          throw authorizationError("INVALID_TRANSITION", "Invitation delivery is not configured for this deployment.", correlationId);
+        }
+        send(response, 201, await issueFirstAdminInvitation(options.pool, principal,
+          pathId(match[1], correlationId), body.email, correlationId,
+          options.firstAdminInvitationDelivery, options.publicBaseUrl));
+        return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/platform\/organizations\/([^/]+)\/(activate|suspend|offboard)$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["expectedVersion", "reason"].includes(field)) ||
+            typeof body.expectedVersion !== "number" || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "Lifecycle version and reason are required.", correlationId);
+        }
+        send(response, 200, await transitionOrganizationLifecycle(options.pool, principal,
+          pathId(match[1], correlationId), match[2] as "activate" | "suspend" | "offboard",
+          body.expectedVersion, body.reason, correlationId));
+        return true;
+      }
       if (request.method === "GET" && url.pathname === "/v1/participant-entry") {
         send(response, 200, await getParticipantEntry(options.pool, principal));
+        return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/participant-entry/join-requests") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["requestId", "deviceId", "sessionCode"].includes(field)) ||
+            typeof body.requestId !== "string" || typeof body.deviceId !== "string" || typeof body.sessionCode !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "A request ID, registered Device, and Session code are required.", correlationId);
+        }
+        const receipt = await submitJoinRequestByCode(options.pool, principal, {
+          requestId: body.requestId,
+          deviceId: body.deviceId,
+          sessionCode: body.sessionCode
+        }, correlationId, options.deploymentId);
+        send(response, statusForReceipt(receipt), receipt);
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/participant-entry\/sessions\/([^/]+)\/releases\/([^/]+)\/assets\/([^/]+)$/u))) {
+        const sessionId = pathId(match[1], correlationId);
+        const releaseId = pathId(match[2], correlationId);
+        const resourceId = decodeURIComponent(match[3] ?? "");
+        sendParticipantBrandingAsset(request, response,
+          await getParticipantBrandingAsset(options.pool, principal, sessionId, releaseId, resourceId, correlationId));
         return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
@@ -398,6 +893,102 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       if (request.method === "GET" && url.pathname === "/v1/operations/members") {
         send(response, 200, await listOrganizationMemberAdministration(options.pool, principal, correlationId));
         return true;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/operations/workforce") {
+        send(response, 200, await getOrganizationWorkforce(options.pool, principal, correlationId)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/operations/workforce/invitations") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["email", "displayName", "roles"].includes(field)) ||
+            typeof body.email !== "string" || typeof body.displayName !== "string" || !Array.isArray(body.roles) ||
+            !body.roles.every((role) => typeof role === "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The workforce invitation is invalid.", correlationId);
+        }
+        if (options.firstAdminInvitationDelivery === undefined || options.publicBaseUrl === undefined) {
+          throw authorizationError("INVALID_TRANSITION", "Invitation delivery is not configured for this deployment.", correlationId);
+        }
+        send(response, 201, await issueOrganizationWorkforceInvitation(options.pool, principal,
+          { email: body.email, displayName: body.displayName, roles: body.roles }, correlationId,
+          options.firstAdminInvitationDelivery, options.publicBaseUrl)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/invitations\/([^/]+)\/revoke$/u))) {
+        send(response, 200, await revokeOrganizationWorkforceInvitation(options.pool, principal,
+          pathId(match[1], correlationId), correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/invitations\/([^/]+)\/reissue$/u))) {
+        if (options.firstAdminInvitationDelivery === undefined || options.publicBaseUrl === undefined) {
+          throw authorizationError("INVALID_TRANSITION", "Invitation delivery is not configured for this deployment.", correlationId);
+        }
+        send(response, 201, await reissueOrganizationWorkforceInvitation(options.pool, principal,
+          pathId(match[1], correlationId), correlationId, options.firstAdminInvitationDelivery, options.publicBaseUrl)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/operations/workforce/reconcile") {
+        send(response, 200, await runOrganizationWorkforceReconciliation(options.pool, principal, correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/provisioning-operations\/([^/]+)\/retry$/u))) {
+        send(response, 200, await scheduleProvisioningOperationRetry(options.pool, principal,
+          pathId(match[1], correlationId), correlationId)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/operations/workforce/scim-credentials") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["label", "expiresAt"].includes(field)) || typeof body.label !== "string" ||
+            (body.expiresAt !== undefined && typeof body.expiresAt !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The SCIM credential request is invalid.", correlationId);
+        }
+        send(response, 201, await createOrganizationScimCredential(options.pool, principal,
+          { label: body.label, ...(typeof body.expiresAt === "string" ? { expiresAt: body.expiresAt } : {}) }, correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/scim-credentials\/([^/]+)\/revoke$/u))) {
+        send(response, 200, await revokeOrganizationScimCredential(options.pool, principal,
+          pathId(match[1], correlationId), correlationId)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/operations/workforce/group-mappings") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["groupExternalId", "groupDisplayName", "organizationRole", "identityProviderId"].includes(field)) ||
+            typeof body.groupExternalId !== "string" || typeof body.groupDisplayName !== "string" ||
+            typeof body.organizationRole !== "string" || (body.identityProviderId !== undefined && typeof body.identityProviderId !== "string")) {
+          throw authorizationError("VALIDATION_FAILED", "The identity-provider group mapping is invalid.", correlationId);
+        }
+        send(response, 201, await createOrganizationGroupRoleMapping(options.pool, principal, {
+          groupExternalId: body.groupExternalId, groupDisplayName: body.groupDisplayName,
+          organizationRole: body.organizationRole,
+          ...(typeof body.identityProviderId === "string" ? { identityProviderId: body.identityProviderId } : {})
+        }, correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/members\/([^/]+)\/(activate|suspend|deprovision)$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["expectedVersion", "reason"].includes(field)) ||
+            typeof body.expectedVersion !== "number" || typeof body.reason !== "string") {
+          throw authorizationError("VALIDATION_FAILED", "The workforce lifecycle request is invalid.", correlationId);
+        }
+        send(response, 200, await transitionOrganizationWorkforceMember(options.pool, principal,
+          pathId(match[1], correlationId), { transition: match[2] as "activate" | "suspend" | "deprovision",
+            expectedVersion: body.expectedVersion, reason: body.reason }, correlationId)); return true;
+      }
+      if (request.method === "POST" && url.pathname === "/v1/operations/workforce/access-reviews") {
+        send(response, 201, await startOrganizationAccessReview(options.pool, principal, correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/access-reviews\/items\/([^/]+)\/decide$/u))) {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((field) => !["decision", "reason"].includes(field)) ||
+            typeof body.decision !== "string" || typeof body.reason !== "string" ||
+            !["retain", "suspend", "deprovision"].includes(body.decision)) {
+          throw authorizationError("VALIDATION_FAILED", "The access review decision is invalid.", correlationId);
+        }
+        send(response, 200, await decideOrganizationAccessReviewItem(options.pool, principal,
+          pathId(match[1], correlationId), { decision: body.decision as "retain" | "suspend" | "deprovision",
+            reason: body.reason }, correlationId)); return true;
+      }
+      if (request.method === "POST" &&
+          (match = url.pathname.match(/^\/v1\/operations\/workforce\/access-reviews\/([^/]+)\/complete$/u))) {
+        send(response, 200, await completeOrganizationAccessReview(options.pool, principal,
+          pathId(match[1], correlationId), correlationId)); return true;
       }
       if (request.method === "PUT" && (match = url.pathname.match(/^\/v1\/operations\/members\/([^/]+)\/roles$/u))) {
         const body = await readBody(request, correlationId);
@@ -723,6 +1314,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           rolePreviewInput(await readBody(request, correlationId), correlationId), correlationId));
         return true;
       }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/demo$/u))) {
+        send(response, 200, await getProjectDemo(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/publish$/u))) {
         if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Publication storage is not configured.", correlationId);
         const projectId = pathId(match[1], correlationId);
@@ -874,6 +1469,23 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
             : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }),
           correlationId
         }));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-resources\/([^/]+)$/u))) {
+        const activeSessionRoleId = url.searchParams.get("activeSessionRoleId");
+        const deviceId = url.searchParams.get("deviceId");
+        if (activeSessionRoleId === null || activeSessionRoleId.length === 0 || deviceId === null || !uuid.test(deviceId)) {
+          throw authorizationError("VALIDATION_FAILED", "A registered Device and Active Role Context are required.", correlationId);
+        }
+        sendParticipantRuntimeResource(request, response, await getParticipantRuntimeResource(
+          options.pool,
+          principal,
+          pathId(match[1], correlationId),
+          decodeURIComponent(match[2] ?? ""),
+          deviceId,
+          activeSessionRoleId,
+          correlationId
+        ));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/sync\/(bootstrap|snapshot|deltas|stream)$/u))) {
@@ -1225,9 +1837,14 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       return true;
     } catch (error) {
       if (error instanceof AuthorizationError) {
-        send(response, statusFor(error.envelope.error.code), error.envelope);
+        const status = statusFor(error.envelope.error.code);
+        if (scimRequest) sendScim(response, status, { schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+          status: String(status), detail: error.envelope.error.message });
+        else send(response, status, error.envelope);
       } else {
-        send(response, 500, createErrorEnvelope("INTERNAL", "The request could not be completed.", correlationId));
+        if (scimRequest) sendScim(response, 500, { schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+          status: "500", detail: "The request could not be completed." });
+        else send(response, 500, createErrorEnvelope("INTERNAL", "The request could not be completed.", correlationId));
       }
       return true;
     }

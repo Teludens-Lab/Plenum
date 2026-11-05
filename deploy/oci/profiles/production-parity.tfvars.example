@@ -18,13 +18,14 @@ oidc_issuer          = "https://identity.example/realms/plenum"
 media_url            = "wss://media.example"
 
 application_contract = {
-  deployment_id             = "plenum-staging"
-  retention_actor_person_id = "00000000-0000-4000-8000-000000000001"
-  oidc_provider_key         = "plenum-staging"
-  oidc_organization_id      = "00000000-0000-4000-8000-000000000002"
-  oidc_client_id            = "plenum"
-  s3_region                 = "us-ashburn-1"
-  media_adapter_digest      = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+  deployment_id                 = "plenum-staging"
+  retention_actor_person_id     = "00000000-0000-4000-8000-000000000001"
+  oidc_provider_key             = "plenum-staging"
+  oidc_organization_id          = "00000000-0000-4000-8000-000000000002"
+  oidc_client_id                = "plenum"
+  s3_region                     = "us-ashburn-1"
+  media_adapter_digest          = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+  invitation_delivery_endpoint = "https://notifications.example/v1/messages"
 }
 
 # OCIDs are identifiers only. Secret values remain inside OCI Vault.

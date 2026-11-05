@@ -6,7 +6,9 @@ import { randomUUID } from "node:crypto";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
   authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
-  createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore
+  createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
+  WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
+  createSystemIdentityMetadataFetcher
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 
@@ -21,10 +23,14 @@ const databaseUrl = required("DATABASE_URL");
 const s3Endpoint = required("S3_ENDPOINT");
 const oidcIssuer = required("OIDC_ISSUER").replace(/\/$/u, "");
 const mediaUrl = required("MEDIA_URL");
+const publicBaseUrl = required("PLENUM_PUBLIC_BASE_URL");
+const invitationDeliveryEndpoint = required("INVITATION_DELIVERY_ENDPOINT");
+const invitationDeliveryWebhookToken = required("INVITATION_DELIVERY_WEBHOOK_TOKEN");
 const deploymentId = required("PLENUM_DEPLOYMENT_ID");
 const retentionActorPersonId = required("PLENUM_RETENTION_ACTOR_PERSON_ID");
 const trustedProxy = process.env.PLENUM_TRUST_PROXY === "1";
-if (profile === "air_gapped" && [s3Endpoint, oidcIssuer, mediaUrl].some((value) => {
+if (new URL(publicBaseUrl).protocol !== "https:") throw new Error("PLENUM_PUBLIC_BASE_URL must use HTTPS");
+if (profile === "air_gapped" && [s3Endpoint, oidcIssuer, mediaUrl, invitationDeliveryEndpoint].some((value) => {
   const host = new URL(value).hostname;
   return !host.endsWith(".plenum.lan") && !["storage", "identity", "media"].includes(host);
 })) throw new Error("Air-gapped dependencies must use institution-local endpoints");
@@ -57,10 +63,13 @@ const authenticate = async (request, correlationId) => {
   const token = bearer ?? cookie;
   if (!token || !tokenPattern.test(token)) throw authorizationError("UNAUTHENTICATED", "Sign in is required.", correlationId);
   const result = await pool.query(`SELECT session.id,session.person_id,session.organization_id,session.authentication_strength,session.expires_at,
-      array_agg(membership.organization_role ORDER BY membership.organization_role)::text[] AS organization_roles
-    FROM identity.authentication_sessions session JOIN identity.memberships membership
+      COALESCE(array_agg(membership.organization_role ORDER BY membership.organization_role)
+        FILTER (WHERE membership.organization_role IS NOT NULL),ARRAY[]::text[])::text[] AS organization_roles
+    FROM identity.authentication_sessions session LEFT JOIN identity.memberships membership
       ON membership.organization_id=session.organization_id AND membership.person_id=session.person_id
     WHERE session.id=$1 AND session.revoked_at IS NULL AND session.expires_at>transaction_timestamp()
+      AND ((membership.person_id IS NOT NULL AND identity.person_has_active_organization_access(session.organization_id,session.person_id))
+        OR (session.identity_provider_id IS NULL AND identity.person_is_active_platform_administrator(session.person_id)))
     GROUP BY session.id`, [token]);
   const row = result.rows[0];
   if (!row) throw authorizationError("UNAUTHENTICATED", "The authentication session is invalid or expired.", correlationId);
@@ -68,8 +77,14 @@ const authenticate = async (request, correlationId) => {
     organizationRoles: row.organization_roles, authenticationStrength: row.authentication_strength, expiresAt: row.expires_at };
 };
 const mediaAdapter = media;
+const firstAdminInvitationDelivery = new WebhookFirstAdminInvitationDelivery({
+  endpoint: invitationDeliveryEndpoint,
+  bearerToken: required("INVITATION_DELIVERY_BEARER_TOKEN")
+});
 const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
-  objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET") });
+  objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET"),
+  firstAdminInvitationDelivery, invitationDeliveryWebhookToken, publicBaseUrl,
+  identityMetadataFetcher: createSystemIdentityMetadataFetcher({ allowPrivateNetworks: profile !== "cloud" }) });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
@@ -116,14 +131,34 @@ const server = createServer(async (request, response) => {
       response.end(`${JSON.stringify({ status: "ready", profile })}\n`); return;
     }
     if (request.method === "GET" && url.pathname === "/auth/login") {
-      const login = await beginOidcLogin(pool, oidc);
+      const recovery = url.searchParams.get("platformRecovery") === "1" || url.searchParams.has("platformAdminInvitation");
+      const email = url.searchParams.get("email")?.trim().toLowerCase();
+      const organization = url.searchParams.get("organization")?.trim().toLowerCase();
+      if (!recovery && !email && !organization) {
+        response.writeHead(302, { location: "/?signIn=1", "cache-control": "no-store" }); response.end(); return;
+      }
+      const configuration = recovery ? oidc : await resolveOrganizationIdentityProvider(pool,
+        email ? { domain: email.split("@").at(-1) } : { slug: organization },
+        new URL("/auth/callback", publicBaseUrl).toString(), randomUUID());
+      const login = await beginOidcLogin(pool, configuration, {
+        ...(url.searchParams.has("platformAdminInvitation") ? {
+          platformAdministratorInvitationToken: url.searchParams.get("platformAdminInvitation") ?? ""
+        } : {}),
+        ...(url.searchParams.has("returnTo") ? { returnTo: url.searchParams.get("returnTo") ?? "" } : {}),
+        stepUp: url.searchParams.get("stepUp") === "1",
+        purpose: recovery ? "platform_recovery" : "sign_in"
+      });
       response.writeHead(302, { location: login.authorizationUrl, "cache-control": "no-store" }); response.end(); return;
     }
     if (request.method === "GET" && url.pathname === "/auth/callback") {
-      const principal = await completeOidcLogin(pool, oidc, { code: url.searchParams.get("code") ?? "",
-        state: url.searchParams.get("state") ?? "", correlationId: randomUUID() });
+      const state = url.searchParams.get("state") ?? "";
+      const resolved = await resolveIdentityProviderForLoginState(pool, state,
+        new URL("/auth/callback", publicBaseUrl).toString(), randomUUID());
+      const principal = await completeOidcLogin(pool, resolved?.configuration ?? oidc, { code: url.searchParams.get("code") ?? "",
+        state, correlationId: randomUUID() });
       const maxAge = Math.max(0, Math.floor((principal.expiresAt.getTime() - Date.now()) / 1000));
-      response.writeHead(302, { location: "/", "set-cookie": `${cookieName}=${principal.authenticationSessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
+      response.writeHead(302, { location: principal.returnTo ?? "/",
+        ...(principal.preserveSession === true ? {} : { "set-cookie": `${cookieName}=${principal.authenticationSessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}` }),
         "cache-control": "no-store" }); response.end(); return;
     }
     if (await api(request, response)) return;

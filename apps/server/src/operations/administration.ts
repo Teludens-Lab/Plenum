@@ -7,6 +7,7 @@ import type { Pool, PoolClient } from "pg";
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { replaceWorkforceMemberRoles } from "../identity/organization-workforce.js";
 
 const approvedRoles: readonly OrganizationRole[] = [
   "admin", "designer", "publisher", "operator", "reviewer", "research_analyst"
@@ -30,9 +31,13 @@ async function requireCurrentRole(
        JOIN identity.memberships membership
          ON membership.organization_id=authentication_session.organization_id
         AND membership.person_id=authentication_session.person_id
+       JOIN identity.organization_workforce_members workforce
+         ON workforce.organization_id=membership.organization_id
+        AND workforce.person_id=membership.person_id
       WHERE authentication_session.organization_id=$1 AND authentication_session.id=$2
         AND authentication_session.person_id=$3 AND authentication_session.revoked_at IS NULL
         AND authentication_session.expires_at>transaction_timestamp()
+        AND workforce.status='active'
         AND membership.organization_role=ANY($4::text[]) LIMIT 1`,
     [principal.organizationId, principal.authenticationSessionId, principal.principalId, roles]
   );
@@ -88,50 +93,7 @@ export async function replaceOrganizationMemberRoles(
   input: { roles: OrganizationRole[]; expectedRevision: string },
   correlationId: string
 ): Promise<{ personId: string; roles: OrganizationRole[]; revision: string }> {
-  if (!/^[0-9a-f-]{36}$/iu.test(personId) || !/^[0-9a-f]{64}$/u.test(input.expectedRevision) ||
-      input.roles.length === 0 || new Set(input.roles).size !== input.roles.length ||
-      input.roles.some((role) => !approvedRoles.includes(role))) {
-    throw authorizationError("VALIDATION_FAILED", "The Organization Role change is invalid.", correlationId);
-  }
-  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentRole(client, principal, ["admin"], correlationId);
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-      [`organization-members:${principal.organizationId}`]);
-    const current = await client.query<{ organization_role: OrganizationRole }>(
-      `SELECT organization_role FROM identity.memberships
-        WHERE organization_id=$1 AND person_id=$2 ORDER BY organization_role FOR UPDATE`,
-      [principal.organizationId, personId]
-    );
-    if (current.rowCount === 0) throw authorizationError("NOT_FOUND", "The Organization member was not found.", correlationId);
-    const before = current.rows.map(({ organization_role }) => organization_role);
-    if (revision(before) !== input.expectedRevision) {
-      throw authorizationError("STALE_AGGREGATE_VERSION", "Organization Roles changed in another view. Refresh before trying again.", correlationId);
-    }
-    if (before.includes("admin") && !input.roles.includes("admin")) {
-      const admins = await client.query<{ count: string }>(
-        `SELECT count(DISTINCT person_id)::text AS count FROM identity.memberships
-          WHERE organization_id=$1 AND organization_role='admin'`, [principal.organizationId]
-      );
-      if (Number(admins.rows[0]?.count ?? 0) <= 1) {
-        throw authorizationError("INVALID_TRANSITION", "The last Organization Admin cannot be removed.", correlationId);
-      }
-    }
-    await client.query(
-      `DELETE FROM identity.memberships WHERE organization_id=$1 AND person_id=$2
-        AND NOT (organization_role=ANY($3::text[]))`,
-      [principal.organizationId, personId, input.roles]
-    );
-    for (const role of input.roles) {
-      await client.query(
-        `INSERT INTO identity.memberships(organization_id,person_id,organization_role)
-         VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [principal.organizationId, personId, role]
-      );
-    }
-    const after = [...input.roles].sort();
-    await audit(client, principal, "organization.roles_replaced", `person:${personId}`,
-      { correlationId, before, after });
-    return { personId, roles: after, revision: revision(after) };
-  });
+  return replaceWorkforceMemberRoles(pool, principal, personId, input, correlationId);
 }
 
 export interface PluginOperationsV1 {

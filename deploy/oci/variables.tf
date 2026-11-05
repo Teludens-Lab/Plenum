@@ -125,13 +125,14 @@ variable "media_url" {
 variable "application_contract" {
   description = "Non-secret application configuration shared by both profiles."
   type = object({
-    deployment_id             = string
-    retention_actor_person_id = string
-    oidc_provider_key         = string
-    oidc_organization_id      = string
-    oidc_client_id            = string
-    s3_region                 = string
-    media_adapter_digest      = string
+    deployment_id                = string
+    retention_actor_person_id    = string
+    oidc_provider_key            = string
+    oidc_organization_id         = string
+    oidc_client_id               = string
+    s3_region                    = string
+    media_adapter_digest         = string
+    invitation_delivery_endpoint = string
   })
   validation {
     condition = alltrue([
@@ -139,6 +140,10 @@ variable "application_contract" {
       can(regex("^[0-9a-fA-F-]{36}$", var.application_contract.oidc_organization_id))
     ])
     error_message = "The organization and retention actor identifiers must be UUIDs."
+  }
+  validation {
+    condition     = can(regex("^https://", var.application_contract.invitation_delivery_endpoint))
+    error_message = "invitation_delivery_endpoint must use HTTPS."
   }
 }
 

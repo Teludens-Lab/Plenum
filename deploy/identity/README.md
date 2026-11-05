@@ -25,3 +25,5 @@ docker compose -f deploy/identity/keycloak/compose.yaml -f deploy/identity/keycl
 ```
 
 Rotate realm signing keys in Keycloak with an overlap window: add and activate the new key, allow Plenum's remote JWKS cache to refresh, then retire the old key only after all issued tokens using it have expired. The application accepts only RS256 and continues to map Persons and Organization Memberships from its own database; identity-provider role claims are not authoritative.
+
+Platform Administrator workforce changes use OIDC step-up. The provider must honor `prompt=login`, accept `acr_values=mfa`, and return `acr=mfa` or `acr=urn:mfa` only after multifactor authentication. Plenum accepts that session for privileged workforce changes for at most 10 minutes; provider group or role claims never grant Platform Administrator authority.

@@ -3,6 +3,190 @@ info:
   title: Plenum platform API
   version: 0.1.0
 paths:
+  /v1/platform/administrators:
+    get:
+      operationId: listPlatformAdministratorWorkforce
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Platform Administrator assignments, step-up state, and governed change requests. }
+        "403": { description: Active Platform Administrator authority is absent or revoked. }
+  /v1/platform/administrators/changes:
+    post:
+      operationId: proposePlatformAdministratorChange
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      x-requires-step-up: mfa-within-10-minutes
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Privilege change recorded for a distinct second approver. }
+        "403": { description: Recent multifactor authentication is absent. }
+        "409": { description: A matching change is pending or the target state is ineligible. }
+  /v1/platform/administrators/changes/{changeRequestId}/{decision}:
+    post:
+      operationId: decidePlatformAdministratorChange
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      x-requires-step-up: mfa-within-10-minutes
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: changeRequestId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: decision, required: true, schema: { type: string, enum: [approve, reject] } }
+      responses:
+        "200": { description: A distinct approver rejected the request or atomically applied the approved privilege change. }
+        "403": { description: Recent multifactor authentication or active Platform Administrator authority is absent. }
+        "409": { description: Self-approval, expiry, invalid target state, or final-active-Administrator protection blocked the decision. }
+  /v1/platform/organizations:
+    get:
+      operationId: listPlatformOrganizations
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Provisioned Organizations and activation readiness. }
+        "403": { description: Active Platform Administrator authority is absent or revoked. }
+    post:
+      operationId: createPlatformOrganization
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Pending Organization, deployment profile, and entitlements recorded atomically. }
+        "409": { description: The workspace slug already exists. }
+        "422": { description: Provisioning details are invalid. }
+  /v1/platform/organizations/{organizationId}:
+    get:
+      operationId: getPlatformOrganization
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Organization provisioning profile, gates, domains, first Admin state, and immutable audit history. }
+        "404": { description: Provisioned Organization not found. }
+  /v1/platform/organizations/{organizationId}/domains:
+    post:
+      operationId: addOrganizationDomain
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "201": { description: Expiring DNS TXT challenge created for the Organization domain. }
+  /v1/platform/organizations/{organizationId}/provisioning:
+    put:
+      operationId: updatePlatformOrganizationProvisioning
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Provisioning facts confirmed and any legacy reconciliation gate cleared. }
+        "409": { description: The Organization is offboarded and cannot be reconfigured. }
+  /v1/platform/organizations/{organizationId}/domains/{domainId}/verify:
+    post:
+      operationId: verifyOrganizationDomain
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: domainId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Authoritative DNS TXT lookup matched the current challenge and updated the activation gate. }
+        "409": { description: The challenge expired, changed, could not resolve, or did not match. }
+  /v1/platform/organizations/{organizationId}/domains/{domainId}/reissue:
+    post:
+      operationId: reissueOrganizationDomainChallenge
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: domainId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Previous TXT value invalidated and a new 72-hour challenge issued. }
+  /v1/platform/organizations/{organizationId}/first-admin-invitations:
+    post:
+      operationId: issueFirstAdminInvitation
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "201": { description: One-time first Admin invitation persisted, delivered, and tracked. }
+        "409": { description: Domain verification, delivery configuration, or lifecycle prerequisite is incomplete. }
+  /v1/platform/organizations/{organizationId}/first-admin-invitations/revoke:
+    post:
+      operationId: revokeFirstAdminInvitation
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Pending invitation revoked and queued delivery cancelled. }
+  /v1/platform/organizations/{organizationId}/first-admin-invitations/reissue:
+    post:
+      operationId: reissueFirstAdminInvitation
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "201": { description: Previous invitation revoked and a fresh expiring invitation delivered. }
+  /v1/platform/organizations/{organizationId}/{lifecycleAction}:
+    post:
+      operationId: transitionOrganizationLifecycle
+      x-contract-id: platform-control-plane-v1
+      x-authorized-platform-role: platform_administrator
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: lifecycleAction, required: true, schema: { type: string, enum: [activate, suspend, offboard] } }
+      responses:
+        "200": { description: Lifecycle transition and immutable audit record committed atomically. }
+        "409": { description: Lifecycle version is stale or activation prerequisites are incomplete. }
+  /v1/platform/invitations/{token}/accept:
+    post:
+      operationId: acceptFirstAdminInvitation
+      x-contract-id: platform-control-plane-v1
+      security: []
+      parameters: [{ in: path, name: token, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" } }]
+      responses:
+        "200": { description: One-time invitation accepted and first Organization Admin membership created atomically; verified-email OIDC linking completes on first sign-in after activation. }
+        "409": { description: Invitation is expired, revoked, already used, or no longer eligible. }
+  /v1/organization/invitations/{token}/accept:
+    post:
+      operationId: acceptOrganizationWorkforceInvitation
+      x-contract-id: organization-workforce-v1
+      security: []
+      parameters: [{ in: path, name: token, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" } }]
+      responses:
+        "200": { description: Invitation accepted; Organization Roles remain inactive until exact-email identity linking succeeds. }
+        "409": { description: Invitation is expired, revoked, already used, or no longer eligible. }
+  /v1/participant-entry/join-requests:
+    post:
+      operationId: submitParticipantJoinRequestByCode
+      x-contract-id: participant-entry-v1
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, deviceId, sessionCode]
+              properties:
+                requestId: { type: string, format: uuid }
+                deviceId: { type: string, format: uuid }
+                sessionCode: { type: string, minLength: 6, maxLength: 100 }
+      responses:
+        "200": { description: Existing authoritative receipt returned for a replayed request. }
+        "201": { description: Authenticated participant join request accepted by the Session Authority. }
+        "403": { description: Code is invalid or unavailable inside the authenticated Organization. }
+        "422": { description: Request body or Session code is invalid. }
   /v1/operations/members:
     get:
       operationId: listOrganizationMemberAdministration
@@ -12,6 +196,195 @@ paths:
       responses:
         "200": { description: Organization members with current role-set revisions. }
         "403": { description: Current Admin authority is absent or revoked. }
+  /v1/operations/workforce:
+    get:
+      operationId: getOrganizationWorkforce
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Tenant-scoped workforce, invitation, SCIM, group-mapping, access-review, and reconciliation projection. }
+  /v1/operations/workforce/invitations:
+    post:
+      operationId: issueOrganizationWorkforceInvitation
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Expiring invitation queued, delivered, and audited without granting access. }
+  /v1/operations/workforce/invitations/{invitationId}/revoke:
+    parameters: [{ in: path, name: invitationId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: revokeOrganizationWorkforceInvitation
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses: { "200": { description: Pending invitation revoked with immutable audit evidence. } }
+  /v1/operations/workforce/invitations/{invitationId}/reissue:
+    parameters: [{ in: path, name: invitationId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: reissueOrganizationWorkforceInvitation
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: Previous single-use link revoked and a replacement invitation delivered. }
+        "409": { description: Invitation is already accepted, linked, or revoked and cannot be reissued. }
+  /v1/operations/workforce/reconcile:
+    post:
+      operationId: runOrganizationWorkforceReconciliation
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses: { "200": { description: Durable drift findings recorded without changing access. } }
+  /v1/operations/workforce/provisioning-operations/{operationId}/retry:
+    parameters: [{ in: path, name: operationId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: scheduleProvisioningOperationRetry
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Failed operation marked ready for an identity-provider resend. }
+        "409": { description: Operation is not failed or has reached the retry limit. }
+  /v1/invitation-deliveries/events:
+    post:
+      operationId: recordInvitationDeliveryEvent
+      security: [{ InvitationDeliveryWebhookBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [providerEventId, deliveryId, status, occurredAt]
+              properties:
+                providerEventId: { type: string, minLength: 1, maxLength: 300 }
+                deliveryId: { type: string, format: uuid }
+                status: { type: string, enum: [delivered, bounced, failed] }
+                occurredAt: { type: string, format: date-time }
+                reason: { type: string, maxLength: 1000 }
+      responses:
+        "202": { description: Authenticated idempotent delivery disposition accepted. }
+        "401": { description: Webhook bearer credential is missing or invalid. }
+  /v1/operations/workforce/scim-credentials:
+    post:
+      operationId: createOrganizationScimCredential
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: One-time SCIM bearer credential returned; only its SHA-256 digest is retained. }
+  /v1/operations/workforce/scim-credentials/{credentialId}/revoke:
+    parameters: [{ in: path, name: credentialId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: revokeOrganizationScimCredential
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses: { "200": { description: SCIM credential revoked and audited. } }
+  /v1/operations/workforce/group-mappings:
+    post:
+      operationId: createOrganizationGroupRoleMapping
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "201": { description: IdP group mapped to one entitled Organization Role; platform authority is outside this contract. }
+  /v1/operations/workforce/members/{personId}/{workforceAction}:
+    post:
+      operationId: transitionOrganizationWorkforceMember
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: personId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: workforceAction, required: true, schema: { type: string, enum: [activate, suspend, deprovision] } }
+      responses:
+        "200": { description: Lifecycle transition, session and projection revocation, and immutable audit evidence committed atomically. }
+        "409": { description: Lifecycle version is stale or final-Admin protection blocks the transition. }
+  /v1/operations/workforce/access-reviews:
+    post:
+      operationId: startOrganizationAccessReview
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses: { "201": { description: Periodic access review opened with a snapshot of every active or suspended workforce member. } }
+  /v1/operations/workforce/access-reviews/items/{itemId}/decide:
+    parameters: [{ in: path, name: itemId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: decideOrganizationAccessReviewItem
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses: { "200": { description: Retain, suspend, or deprovision decision applied and audited. } }
+  /v1/operations/workforce/access-reviews/{reviewId}/complete:
+    parameters: [{ in: path, name: reviewId, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: completeOrganizationAccessReview
+      x-contract-id: organization-workforce-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Access review completed after every item has an accountable decision. }
+        "409": { description: One or more review decisions are still pending. }
+  /scim/v2/ServiceProviderConfig:
+    get:
+      operationId: getScimServiceProviderConfig
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Supported SCIM 2.0 capabilities and authentication scheme. } }
+  /scim/v2/ResourceTypes:
+    get:
+      operationId: listScimResourceTypes
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Supported User and Group resource types. } }
+  /scim/v2/Schemas:
+    get:
+      operationId: listScimSchemas
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Supported SCIM User and Group schemas. } }
+  /scim/v2/Users:
+    get:
+      operationId: listScimUsers
+      x-contract-id: organization-workforce-v1
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: SCIM 2.0 User list scoped to the credential Organization. } }
+    post:
+      operationId: createScimUser
+      x-contract-id: organization-workforce-v1
+      security: [{ ScimBearer: [] }]
+      responses: { "201": { description: Workforce user provisioned with entitled Organization Roles and audit evidence. } }
+  /scim/v2/Users/{personId}:
+    parameters: [{ in: path, name: personId, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: getScimUser
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Organization-scoped SCIM User. } }
+    put:
+      operationId: replaceScimUser
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Explicit joiner-mover-leaver state applied with final-Admin and entitlement enforcement. } }
+    patch:
+      operationId: patchScimUser
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Supported SCIM User attributes updated. } }
+    delete:
+      operationId: deprovisionScimUser
+      security: [{ ScimBearer: [] }]
+      responses: { "204": { description: Access revoked immediately while governed records are retained. } }
+  /scim/v2/Groups:
+    get:
+      operationId: listScimGroups
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Admin-approved IdP group mappings and current synchronized membership. } }
+  /scim/v2/Groups/{mappingId}:
+    parameters: [{ in: path, name: mappingId, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      operationId: patchScimGroup
+      x-contract-id: organization-workforce-v1
+      security: [{ ScimBearer: [] }]
+      responses: { "200": { description: Group additions grant the approved role; removals become reconciliation candidates and do not silently delete access. } }
   /v1/operations/members/{personId}/roles:
     put:
       operationId: replaceOrganizationMemberRoles
@@ -254,6 +627,25 @@ paths:
               schema: { $ref: "#/components/schemas/RolePreviewV1" }
         "403": { description: Studio authority is absent or was revoked. }
         "422": { description: Role, Stage, Team, or Interface Profile selection is invalid. }
+  /v1/projects/{projectId}/demo:
+    get:
+      operationId: getProjectDemo
+      x-contract-id: project-demo-v1
+      x-authorized-organization-roles: [admin, designer, reviewer]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current Project Draft materialization for an isolated browser-local QA demo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDemoV1" }
+        "403": { description: The user is not a Designer or Admin, or is not assigned to this Project as a Reviewer. }
+        "404": { description: The Project Draft was not found. }
   /v1/projects/{projectId}/publish:
     post:
       operationId: freezeAndPublishCollaborativeDraft
@@ -1041,6 +1433,10 @@ paths:
           name: X-Device-ID
           required: true
           schema: { type: string, format: uuid }
+        - in: query
+          name: activeSessionRoleId
+          required: false
+          schema: { type: string, minLength: 1 }
       responses:
         "200":
           description: Tenant-, Session-, and role-scoped Effect Proposals.
@@ -1125,6 +1521,19 @@ paths:
               schema: { $ref: "#/components/schemas/RuntimeProjectionV1" }
         "403": { description: Participant, Device, Seat Assignment, or Interface Profile is not authorized. }
         "404": { description: Missing and unauthorized Sessions share TARGET_NOT_FOUND semantics. }
+  /v1/sessions/{sessionId}/runtime-resources/{resourceId}:
+    get:
+      operationId: getParticipantRuntimeResource
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: resourceId, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { in: query, name: deviceId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: activeSessionRoleId, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200": { description: Immutable Release resource referenced by the authorized Runtime Interface Profile. }
+        "403": { description: Participant, Device, active Role, or Interface Profile does not authorize this resource. }
+        "404": { description: The referenced Release resource does not exist. }
   /v1/sessions/{sessionId}/polls:
     get:
       operationId: getPolls
@@ -2012,6 +2421,18 @@ components:
         layout: { type: string, enum: [single_column, main_with_sidebar, dashboard_grid, workspace_tabs] }
         modules: { type: array, items: { type: object } }
         content: { type: array, items: { type: object } }
+    ProjectDemoV1:
+      type: object
+      additionalProperties: false
+      required: [contractId, projectId, projectTitle, demoSessionId, demoMode, materialization, validation]
+      properties:
+        contractId: { const: project-demo-v1 }
+        projectId: { type: string, format: uuid }
+        projectTitle: { type: string, minLength: 1 }
+        demoSessionId: { type: string, format: uuid }
+        demoMode: { const: true }
+        materialization: { type: object }
+        validation: { type: object }
     PluginArtifactV1:
       type: object
       additionalProperties: false
@@ -2310,6 +2731,8 @@ components:
         sessionStatus: { type: string, minLength: 1 }
         releaseId: { type: string, format: uuid }
         releaseLabel: { type: string, minLength: 1 }
+        simulationTitle: { type: string, minLength: 1 }
+        sessionTitle: { type: string, minLength: 1 }
         participantId: { type: string, format: uuid }
         activeSessionRoleId: { type: string, minLength: 1 }
         activeSessionRoleLabel: { type: string, minLength: 1 }
@@ -2324,7 +2747,21 @@ components:
         stageRemainingSeconds: { type: [integer, "null"], minimum: 0 }
         interfaceProfileId: { type: string, minLength: 1 }
         layout: { type: string, enum: [single_column, main_with_sidebar, dashboard_grid, workspace_tabs] }
+        navigation: { type: object }
+        regions: { type: array, items: { type: object } }
         modules: { type: array, items: { type: object } }
+        resources:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, type, mediaType]
+            properties:
+              id: { type: string, minLength: 1 }
+              name: { type: string, minLength: 1 }
+              type: { type: string, minLength: 1 }
+              mediaType: { type: string, minLength: 1 }
+              altText: { type: string }
         createTasks: { type: array, items: { type: object } }
         artifacts: { type: array, items: { $ref: "#/components/schemas/RuntimeArtifactV1" } }
         messages: { type: array, items: { type: object } }
@@ -2615,3 +3052,13 @@ components:
       in: cookie
       name: plenum_session
       description: Opaque server Authentication Session identifier; Secure, HttpOnly and SameSite.
+    ScimBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Organization-scoped SCIM credential shown once and stored only as a digest.
+    InvitationDeliveryWebhookBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Dedicated inbound delivery-receipt credential held by the approved notification provider.

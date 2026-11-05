@@ -8,7 +8,7 @@ This is a maturity view, not a release declaration. Current status is derived fr
 |---|---|---|---|---|---|---|---|---|
 | Product and contracts | Yes; Proposed documents are Product Owner Approved | N/A | Promptbook validation PASS | N/A | Partial | No | No | No |
 | Complete user-facing platform | `PRODUCT_COMPLETENESS_MATRIX.md` and P07-P11 prompts now specify the complete path | No; planned from PS-700 | Promptbook structure PASS only; application evidence NOT RUN | No | No | No | No | No |
-| Teludens UI and Plenum branding | Catalog is binding; exact dark/light wordmarks identified | No; planned in PS-700 and audited in PS-800 | NOT RUN | No | No | No | No | No |
+| Teludens UI and Plenum branding | Catalog is binding; exact approved primary wordmark and theme-safe presentation identified | PS-700 foundation and PS-800 full-route audit | PASS | Yes | Yes | Yes | Yes | Yes |
 | Blank-install Fractured Order golden journey | PS-830 acceptance contract complete | No | NOT RUN | No | No | No | No | No |
 | Reference authority slice | Yes | Yes | PS-001 PASS on Node 24/PostgreSQL 18 | Reference evidence only | Partial controls exercised | No | Disposable only | No |
 | Platform kernel / S1 | Yes | Yes | Unit, integration, browser and accessibility evidence PASS | Yes | PS-550 negative controls and dependency/secret scans PASS; formal review pending | Limited measurements only | Disposable only | No |

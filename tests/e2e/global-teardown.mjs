@@ -1,6 +1,7 @@
 export default async function globalTeardown() {
   try {
-    const response = await fetch("http://127.0.0.1:4173/__test__/shutdown", {
+    const port = Number(process.env.PLENUM_E2E_PORT ?? 4173);
+    const response = await fetch(`http://127.0.0.1:${port}/__test__/shutdown`, {
       method: "POST",
       signal: AbortSignal.timeout(5_000)
     });

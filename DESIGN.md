@@ -12,6 +12,11 @@ colors:
   graphite-secondary: "#3b4740"
   boundary: "#c1cac0"
 typography:
+  entryDisplay:
+    fontFamily: "Iowan Old Style, Palatino Linotype, Book Antiqua, Palatino, Georgia, serif"
+    fontSize: "min(5.8vw, 5.75rem)"
+    fontWeight: 400
+    lineHeight: 0.98
   headline:
     fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "2rem"
@@ -104,6 +109,8 @@ Mineral Sage carries selection and decision; Graphite carries subject and readin
 **Body Font:** Inter with system UI fallbacks  
 **Label/Mono Font:** Inter for labels; JetBrains Mono/SFMono/Consolas only for genuine identifiers and code
 
+The unauthenticated entry surface is the deliberate exception: its single question, “What happens next?”, uses a restrained old-style serif stack on one continuous line. It is an editorial invitation into the simulation system, not an application workspace heading. All authenticated work surfaces retain the Teludens Inter hierarchy.
+
 **Character:** neutral, precise, and editorial through proportion rather than a second display typeface. Weight and spacing establish hierarchy; uppercase tracked labels are short annotations, never substitute headlines.
 
 ### Hierarchy
@@ -124,6 +131,10 @@ The Teludens application frame owns the experience: persistent shell, context he
 Default composition dials for this brief are interpreted as variance 3, motion 4, and density 3. Because the named Taste Skill configuration is unavailable, these are recorded as direction, not written into an unsupported configuration format.
 
 Operational surfaces use the standard or operations Teludens density. Whitespace separates changes in subject or consequence; repeated rows and controls stay compact enough for comparison.
+
+### Public entry surface
+
+The public root is a quiet off-white paper field with the supplied all-caps geometric PLENUM wordmark, one continuous-line question, one sentence, and one primary entry action. It intentionally carries no branch illustration. The simulation topology belongs to motion and identity resolution: context paths converge on a dark-green current-state marker and split into named future scenarios behind the local human-test role chooser and in the transition/loading layer between entry, identity selection, and the resolved workspace. Small state signals continue through its active route. Entry transitions use a short continuity curve: the old surface recedes slightly, the topology resolves in coordinated stages, and the next same-origin document settles in without bounce or blur. Reduced motion presents the complete static topology immediately and removes transition delays.
 
 ## Elevation & Depth
 

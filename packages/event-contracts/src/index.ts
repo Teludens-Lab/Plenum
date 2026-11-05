@@ -54,6 +54,7 @@ export const PUBLICATION_REVIEW_CONTRACT_ID = "publication-review-v1";
 export const CORE_DESIGN_EDITOR_CONTRACT_ID = "core-design-editor-v1";
 export const STUDIO_FOUNDATION_EDITOR_CONTRACT_ID = "studio-foundation-editor-v1";
 export const ROLE_PREVIEW_CONTRACT_ID = "role-preview-v1";
+export const PROJECT_DEMO_CONTRACT_ID = "project-demo-v1";
 export const POLL_DEFINITION_CONTRACT_ID = "poll-definition-v1";
 export const VOICE_DEFINITION_CONTRACT_ID = "voice-definition-v1";
 export const VOICE_CONSENT_CONTRACT_ID = "voice-consent-v1";
@@ -78,12 +79,248 @@ export const CONTENT_LIBRARY_CONTRACT_ID = "content-library-v1";
 export const UPLOAD_QUARANTINE_CONTRACT_ID = "upload-quarantine-v1";
 export const OPERATIONS_ADMIN_CONTRACT_ID = "operations-admin-v1";
 export const REPORT_DELIVERY_CONTRACT_ID = "report-delivery-v1";
+export const PLATFORM_CONTROL_PLANE_CONTRACT_ID = "platform-control-plane-v1";
+export const ORGANIZATION_WORKFORCE_CONTRACT_ID = "organization-workforce-v1";
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;
   principal: { id: string; displayName: string };
   organization: { id: string; name: string; roles: string[] };
-  destinations: Array<"home" | "studio" | "runtime" | "operations">;
+  destinations: Array<"home" | "studio" | "runtime" | "operations" | "platform">;
+  platformRoles: Array<"platform_administrator">;
+}
+
+export type OrganizationLifecycleStatusV1 = "pending" | "active" | "suspended" | "offboarded";
+export type OrganizationDeploymentProfileV1 = "unconfigured" | "cloud" | "self_hosted" | "air_gapped";
+export type OrganizationIdentityProviderProtocolV1 = "oidc" | "saml";
+export type OrganizationIdentityProviderStatusV1 =
+  "draft" | "preflight_passed" | "tested" | "approved" | "active" | "suspended" | "superseded";
+
+export interface OrganizationIdentityProviderV1 extends JsonObject {
+  id: string;
+  version: number;
+  protocol: OrganizationIdentityProviderProtocolV1;
+  displayName: string;
+  status: OrganizationIdentityProviderStatusV1;
+  discoveryUrl: string;
+  metadataUrl: string | null;
+  domains: string[];
+  preflightedAt: string | null;
+  testedAt: string | null;
+  approvedAt: string | null;
+  activatedAt: string | null;
+  suspendedAt: string | null;
+  preflightFailure: string | null;
+  replacesProviderId: string | null;
+}
+
+export type OrganizationWorkforceStatusV1 = "invited" | "active" | "suspended" | "deprovisioned";
+
+export interface OrganizationWorkforceMemberV1 extends JsonObject {
+  personId: string;
+  displayName: string;
+  email: string | null;
+  externalId: string | null;
+  source: "legacy" | "invitation" | "scim";
+  status: OrganizationWorkforceStatusV1;
+  lifecycleVersion: number;
+  roles: string[];
+  roleRevision: string;
+  lastScimSeenAt: string | null;
+  lastAccessReviewedAt: string | null;
+}
+
+export interface OrganizationWorkforceV1 extends JsonObject {
+  contractId: typeof ORGANIZATION_WORKFORCE_CONTRACT_ID;
+  roles: string[];
+  members: OrganizationWorkforceMemberV1[];
+  invitations: Array<{
+    id: string;
+    email: string;
+    displayName: string;
+    roles: string[];
+    status: "pending" | "accepted" | "linked" | "expired" | "revoked";
+    deliveryStatus: "queued" | "sent" | "delivered" | "bounced" | "failed" | "cancelled";
+    expiresAt: string;
+    deliveryFailure: string | null;
+  }>;
+  scimCredentials: Array<{
+    id: string;
+    label: string;
+    tokenPrefix: string;
+    expiresAt: string | null;
+    lastUsedAt: string | null;
+    revokedAt: string | null;
+  }>;
+  groupMappings: Array<{
+    id: string;
+    groupExternalId: string;
+    groupDisplayName: string;
+    organizationRole: string;
+    identityProviderId: string | null;
+    activeMemberCount: number;
+  }>;
+  accessReview: {
+    id: string;
+    status: "open" | "completed";
+    startedAt: string;
+    pendingCount: number;
+    items: Array<{
+      id: string;
+      personId: string;
+      displayName: string;
+      statusSnapshot: string;
+      rolesSnapshot: string[];
+      decision: "retain" | "suspend" | "deprovision" | null;
+      decisionReason: string | null;
+    }>;
+  } | null;
+  reconciliation: {
+    staleScimMembers: number;
+    entitlementConflicts: number;
+    groupRemovalCandidates: number;
+    reviewDue: boolean;
+    failedOperations: number;
+    lastRunAt: string | null;
+  };
+  provisioningOperations: Array<{
+    id: string;
+    source: "entra" | "okta" | "scim" | "invitation" | "reconciliation";
+    operationType: string;
+    targetRef: string;
+    status: "received" | "succeeded" | "failed" | "retry_pending";
+    attemptCount: number;
+    errorCode: string | null;
+    errorReason: string | null;
+    startedAt: string;
+    completedAt: string | null;
+    nextRetryAt: string | null;
+  }>;
+}
+
+export interface OrganizationProvisioningGateV1 extends JsonObject {
+  key: "deployment_profile" | "entitlements" | "verified_domain" | "first_admin";
+  label: string;
+  complete: boolean;
+  prerequisite: string;
+}
+
+export interface PlatformOrganizationSummaryV1 extends JsonObject {
+  id: string;
+  name: string;
+  slug: string;
+  lifecycleStatus: OrganizationLifecycleStatusV1;
+  lifecycleVersion: number;
+  configurationStatus: "complete" | "needs_reconciliation";
+  deploymentProfile: OrganizationDeploymentProfileV1;
+  dataResidencyRegion: string | null;
+  entitlements: string[];
+  verifiedDomainCount: number;
+  firstAdminStatus: "not_invited" | "pending" | "accepted" | "expired";
+  gates: OrganizationProvisioningGateV1[];
+  createdAt: string;
+}
+
+export interface PlatformOrganizationsV1 extends JsonObject {
+  contractId: typeof PLATFORM_CONTROL_PLANE_CONTRACT_ID;
+  organizations: PlatformOrganizationSummaryV1[];
+}
+
+export interface PlatformOrganizationDetailV1 extends JsonObject {
+  contractId: typeof PLATFORM_CONTROL_PLANE_CONTRACT_ID;
+  organization: PlatformOrganizationSummaryV1 & {
+    legalName: string;
+    countryCode: string | null;
+    timeZone: string | null;
+    supportContact: string | null;
+    securityContact: string | null;
+    activatedAt: string | null;
+    suspendedAt: string | null;
+    offboardedAt: string | null;
+  };
+  domains: Array<{
+    id: string;
+    domain: string;
+    verificationMethod: "dns_txt" | "manual_contract";
+    verifiedAt: string | null;
+    challenge: {
+      recordType: "TXT";
+      name: string;
+      value: string;
+      expiresAt: string;
+      lastCheckedAt: string | null;
+      failure: string | null;
+    } | null;
+  }>;
+  firstAdminInvitation: {
+    id: string;
+    email: string;
+    status: "pending" | "accepted" | "expired" | "revoked";
+    expiresAt: string;
+    acceptedAt: string | null;
+    identityLinkedAt: string | null;
+    delivery: {
+      status: "queued" | "sent" | "failed" | "cancelled";
+      attemptCount: number;
+      sentAt: string | null;
+      failedAt: string | null;
+      failureReason: string | null;
+    } | null;
+  } | null;
+  identityProviders: OrganizationIdentityProviderV1[];
+  auditRecords: Array<{
+    id: string;
+    action: string;
+    actorDisplayName: string;
+    recordedAt: string;
+    details: JsonObject;
+  }>;
+}
+
+export type PlatformAdministratorStatusV1 = "active" | "suspended" | "revoked";
+export type PlatformAdministratorChangeTypeV1 = "invite" | "suspend" | "revoke" | "recover";
+export type PlatformAdministratorChangeStatusV1 = "pending" | "approved" | "rejected" | "applied" | "expired";
+
+export interface PlatformAdministratorWorkforceV1 extends JsonObject {
+  contractId: typeof PLATFORM_CONTROL_PLANE_CONTRACT_ID;
+  currentPersonId: string;
+  stepUp: { satisfied: boolean; expiresAt: string | null };
+  administrators: Array<{
+    personId: string;
+    displayName: string;
+    status: PlatformAdministratorStatusV1;
+    homeOrganization: { id: string; name: string };
+    assignedAt: string;
+    suspendedAt: string | null;
+    revokedAt: string | null;
+    assignmentVersion: number;
+    activeSessionCount: number;
+    lastAuthenticatedAt: string | null;
+  }>;
+  changeRequests: Array<{
+    id: string;
+    changeType: PlatformAdministratorChangeTypeV1;
+    status: PlatformAdministratorChangeStatusV1;
+    target: { personId: string | null; displayName: string; email: string | null };
+    requestedBy: { personId: string; displayName: string };
+    requestedAt: string;
+    expiresAt: string;
+    reason: string;
+    decidedBy: { personId: string; displayName: string } | null;
+    decidedAt: string | null;
+    decisionReason: string | null;
+    invitation: {
+      expiresAt: string;
+      identityLinkedAt: string | null;
+      deliveryStatus: "queued" | "sent" | "failed" | "cancelled";
+      deliveryFailureReason: string | null;
+    } | null;
+  }>;
+}
+
+export interface PlatformAdministratorMutationV1 extends JsonObject {
+  workforce: PlatformAdministratorWorkforceV1;
+  invitationUrl?: string;
 }
 
 export interface OrganizationMemberV1 extends JsonObject {
@@ -256,6 +493,20 @@ export interface ParticipantSeatChoiceV1 extends JsonObject {
   teamLabel: string | null;
 }
 
+export interface ParticipantBrandAssetV1 extends JsonObject {
+  url: string;
+  altText: string;
+  mediaType: "image/png" | "image/jpeg";
+}
+
+export interface ParticipantSessionBrandingV1 extends JsonObject {
+  title: string;
+  subtitle: string | null;
+  developer: string;
+  developerLogo: ParticipantBrandAssetV1 | null;
+  simulationImage: ParticipantBrandAssetV1 | null;
+}
+
 export interface ParticipantSessionEntryV1 extends JsonObject {
   sessionId: string;
   governingReleaseId: string;
@@ -266,6 +517,7 @@ export interface ParticipantSessionEntryV1 extends JsonObject {
   invitationId: string | null;
   roleContexts: ParticipantRoleContextV1[];
   eligibleSeats: ParticipantSeatChoiceV1[];
+  branding?: ParticipantSessionBrandingV1;
 }
 
 export interface ParticipantEntryV1 extends JsonObject {
@@ -275,7 +527,13 @@ export interface ParticipantEntryV1 extends JsonObject {
 
 export interface RuntimeNavigationV1 extends JsonObject {
   contractId: typeof RUNTIME_NAVIGATION_CONTRACT_ID;
-  items: Array<{ id: string; label: string; moduleId: string }>;
+  items: Array<{ id: string; label: string; moduleId: string; regionId?: string }>;
+  defaultItemId?: string;
+}
+
+export interface RuntimeRegionV1 extends JsonObject {
+  id: string;
+  moduleIds: string[];
 }
 
 export const OFFLINE_QUEUEABLE_COMMAND_TYPES_V1 = [
@@ -527,6 +785,17 @@ export interface RolePreviewV1 {
   content: Array<{ id: string; title: string; type: string; body?: string }>;
 }
 
+/** Read-only Draft materialization used by the isolated browser-local QA demo. */
+export interface ProjectDemoV1 {
+  contractId: typeof PROJECT_DEMO_CONTRACT_ID;
+  projectId: string;
+  projectTitle: string;
+  demoSessionId: string;
+  demoMode: true;
+  materialization: JsonObject;
+  validation: StudioValidationReportV1;
+}
+
 /** Platform authorization for the Session Operator persona; this is never a Release Session Role. */
 export const SESSION_OPERATOR_POLICY_V1 = {
   displayLabel: "Game Master",
@@ -732,11 +1001,19 @@ export interface RuntimeCreateTaskV1 {
 export interface RuntimeModuleV1 {
   id: string;
   type: "session_status" | "artifact_form" | "task_list" | "artifact_presentation" | "slide_deck" |
-    "message_inbox" | "proposal_thread" | "inject_inbox";
+    "resource_library" | "message_inbox" | "proposal_thread" | "inject_inbox";
   title: string;
   mode: "read" | "write";
   emptyStateText: string;
   configuration: JsonObject;
+}
+
+export interface RuntimeResourceV1 {
+  id: string;
+  name: string;
+  type: string;
+  mediaType: string;
+  altText?: string;
 }
 
 export interface RuntimeMessageV1 {
@@ -889,6 +1166,8 @@ export interface RuntimeProjectionV1 {
   sessionStatus: string;
   releaseId: string;
   releaseLabel: string;
+  simulationTitle?: string;
+  sessionTitle?: string;
   participantId: string;
   activeSessionRoleId: string;
   activeSessionRoleLabel: string;
@@ -904,8 +1183,10 @@ export interface RuntimeProjectionV1 {
   interfaceProfileId: string;
   layout: "single_column" | "main_with_sidebar" | "dashboard_grid" | "workspace_tabs";
   navigation: RuntimeNavigationV1;
+  regions?: RuntimeRegionV1[];
   roleContexts: ParticipantRoleContextV1[];
   modules: RuntimeModuleV1[];
+  resources: RuntimeResourceV1[];
   createTasks: RuntimeCreateTaskV1[];
   artifacts: RuntimeArtifactV1[];
   messages: RuntimeMessageV1[];
@@ -1493,6 +1774,17 @@ export const rolePreviewV1Schema = {
   }
 } as const satisfies ContractSchema<RolePreviewV1>;
 
+export const projectDemoV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: PROJECT_DEMO_CONTRACT_ID, title: "Isolated Project QA demo v1",
+  type: "object", additionalProperties: false,
+  required: ["contractId", "projectId", "projectTitle", "demoSessionId", "demoMode", "materialization", "validation"],
+  properties: {
+    contractId: { const: PROJECT_DEMO_CONTRACT_ID }, projectId: uuidProperty,
+    projectTitle: { type: "string", minLength: 1 }, demoSessionId: uuidProperty, demoMode: { const: true },
+    materialization: { type: "object" }, validation: { type: "object" }
+  }
+} as const satisfies ContractSchema<ProjectDemoV1>;
+
 export const compatibilityReportV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: COMPATIBILITY_REPORT_CONTRACT_ID,
@@ -1809,7 +2101,8 @@ export const runtimeNavigationV1Schema = {
   required: ["contractId", "items"],
   properties: {
     contractId: { const: RUNTIME_NAVIGATION_CONTRACT_ID },
-    items: { type: "array", items: { type: "object" } }
+    items: { type: "array", items: { type: "object" } },
+    defaultItemId: { type: "string", minLength: 1 }
   }
 } as const satisfies ContractSchema<RuntimeNavigationV1>;
 
@@ -2021,6 +2314,8 @@ export const runtimeProjectionV1Schema = {
     sessionStatus: { type: "string", minLength: 1 },
     releaseId: uuidProperty,
     releaseLabel: { type: "string", minLength: 1 },
+    simulationTitle: { type: "string", minLength: 1 },
+    sessionTitle: { type: "string", minLength: 1 },
     participantId: uuidProperty,
     activeSessionRoleId: { type: "string", minLength: 1 },
     activeSessionRoleLabel: { type: "string", minLength: 1 },
@@ -2036,8 +2331,10 @@ export const runtimeProjectionV1Schema = {
     interfaceProfileId: { type: "string", minLength: 1 },
     layout: { type: "string", enum: ["single_column", "main_with_sidebar", "dashboard_grid", "workspace_tabs"] },
     navigation: { type: "object" },
+    regions: { type: "array", items: { type: "object" } },
     roleContexts: { type: "array", items: { type: "object" } },
     modules: { type: "array", items: { type: "object" } },
+    resources: { type: "array", items: { type: "object" } },
     createTasks: { type: "array", items: { type: "object" } },
     artifacts: { type: "array", items: { type: "object" } },
     messages: { type: "array", items: { type: "object" } },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import {
   type CommandEnvelopeV1,
   type CommandReceiptV1,
@@ -46,6 +46,10 @@ import { LifecyclePortal } from "./product/LifecyclePortal.js";
 import { ParticipantPortal } from "./product/ParticipantPortal.js";
 import { AdministrationPortal } from "./product/AdministrationPortal.js";
 import { ResearchReportingPortal } from "./product/ResearchReportingPortal.js";
+import { ProjectDemo } from "./product/ProjectDemo.js";
+import { PlatformOrganizationsPortal } from "./product/PlatformOrganizationsPortal.js";
+import { PlatformAdministratorsPortal } from "./product/PlatformAdministratorsPortal.js";
+import { navigateWithLoader, PlenumLoader } from "./PlenumLoader.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -84,43 +88,212 @@ function sessionId(): string | null {
   return stablePath ?? new URLSearchParams(window.location.search).get("sessionId");
 }
 
-function ConnectionBadge({ state }: { state: ConnectionState }) {
-  const label = state === "online" ? "Connected"
+function friendlyReference(value: string, fallback: string): string {
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/iu.test(value)) return fallback;
+  return value.replaceAll(/[-_]+/gu, " ").replaceAll(/\b\w/gu, (letter) => letter.toUpperCase());
+}
+
+function connectionLabel(state: ConnectionState): string {
+  return state === "online" ? "Connected"
     : state === "loading" ? "Connecting"
       : state === "offline" ? "Offline"
         : state === "unauthorized" ? "Sign-in required"
           : "Connection error";
+}
+
+function ConnectionBadge({ state }: { state: ConnectionState }) {
+  const label = connectionLabel(state);
   return <span className={`badge badge-${state}`} role="status" aria-live="polite" aria-atomic="true" aria-label={`Plenum status: ${label}`}>{label}</span>;
+}
+
+function ConnectionIndicator({ state }: { state: ConnectionState }) {
+  const label = connectionLabel(state);
+  return <span className={`connection-indicator connection-indicator-${state}`} role="status" aria-live="polite" aria-label={`Plenum status: ${label}`}>
+    <span className="visually-hidden">{label}</span>
+  </span>;
 }
 
 function BrandWordmark() {
   return <a className="brand-wordmark" href="/" aria-label="Plenum home">
-    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725" />
-    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true" />
+    <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-primary.png" alt="Plenum" width="2170" height="725" />
+    <img className="brand-wordmark-light" src="/branding/plenum-wordmark-primary.png" alt="" width="2170" height="725" aria-hidden="true" />
   </a>;
 }
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    localStorage.getItem("plenum.theme") === "dark" ? "dark" : "light");
+    document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("plenum.theme", theme);
+    try { localStorage.setItem("plenum.theme", theme); } catch { /* The document theme still applies when storage is unavailable. */ }
+    const synchronizeTheme = (event: StorageEvent) => {
+      if (event.key === "plenum.theme") setTheme(event.newValue === "dark" ? "dark" : "light");
+    };
+    window.addEventListener("storage", synchronizeTheme);
+    return () => window.removeEventListener("storage", synchronizeTheme);
   }, [theme]);
+  const nextTheme = theme === "light" ? "dark" : "light";
   return <button className="btn-secondary theme-toggle" type="button"
-    aria-label={`Theme: ${theme}. Use ${theme === "light" ? "dark" : "light"} theme`}
-    onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}>Theme: {theme}</button>;
+    aria-label={`Theme: ${theme}. Use ${nextTheme} theme`} title={`Use ${nextTheme} theme`}
+    onClick={() => setTheme(nextTheme)}>
+    {theme === "light" ? <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
+    </svg> : <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" />
+    </svg>}
+  </button>;
 }
 
-function Shell({ connection, children, bounded = false }: { connection: ConnectionState; children: ReactNode; bounded?: boolean }) {
-  return <div className={`app-frame${bounded ? " app-frame-bounded" : ""}`}>
+function Shell({ connection, children, bounded = false, entry = false, entryLoading = false, entryTransitioning = false, onEntry, brandContent, headerContent }: {
+  connection: ConnectionState; children: ReactNode; bounded?: boolean; entry?: boolean; entryLoading?: boolean;
+  entryTransitioning?: boolean;
+  onEntry?: (event: ReactMouseEvent<HTMLAnchorElement>) => void;
+  brandContent?: ReactNode;
+  headerContent?: ReactNode;
+}) {
+  return <div className={`app-frame${bounded ? " app-frame-bounded" : ""}${entry ? " app-frame-entry" : ""}${entryTransitioning ? " is-transitioning" : ""}`}>
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="app-header">
-      <BrandWordmark />
-      <div className="header-actions"><ThemeToggle /><ConnectionBadge state={connection} /></div>
+      {brandContent ?? <BrandWordmark />}
+      {entry ? <div className="header-actions entry-header-actions">
+        {entryLoading ? null : <>
+          <a className="entry-header-sign-in" href="#about">About</a>
+          <a className="entry-header-sign-in" href="/auth/login?returnTo=%2F" onClick={onEntry}>Sign In</a>
+        </>}
+        <ThemeToggle />
+        <span className="visually-hidden" role="status" aria-live="polite"
+          aria-label={`Plenum status: ${entryLoading ? "Connecting" : "Sign-in required"}`}>
+          {entryLoading ? "Connecting" : "Sign-in required"}
+        </span>
+      </div> : headerContent ?? <div className="header-actions"><ThemeToggle /><ConnectionBadge state={connection} /></div>}
     </header>
     {children}
   </div>;
+}
+
+function EntryTransition({ label }: { label: string }) {
+  return <PlenumLoader label={label} overlay />;
+}
+
+function EntryLanding() {
+  const [transitioning, setTransitioning] = useState(false);
+  const signInOpen = new URLSearchParams(window.location.search).get("signIn") === "1";
+  const beginEntry = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    event.preventDefault();
+    if (transitioning) return;
+    setTransitioning(true);
+    const destination = event.currentTarget.href;
+    window.setTimeout(() => window.location.assign(destination), 160);
+  };
+  if (signInOpen) return <Shell connection="unauthorized" entry>
+    <main id="main-content" className="entry-auth-page" tabIndex={-1}><section className="entry-auth-panel" aria-labelledby="entry-auth-title">
+      <a className="entry-auth-close" href="/" aria-label="Close sign in"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></a>
+      <BrandWordmark />
+      <h1 id="entry-auth-title">Welcome back.</h1><p className="entry-auth-intro">Continue through your Organization identity provider.</p>
+      <form action="/auth/login" method="get"><div className="field"><label htmlFor="organization-email">Work email</label>
+        <input id="organization-email" name="email" type="email" autoComplete="email" autoFocus required placeholder="you@organization.com" /></div>
+        <input type="hidden" name="returnTo" value="/" />
+        <button className="entry-auth-submit" type="submit">Continue securely</button></form>
+      <p className="entry-auth-note">Plenum uses your verified domain to select the governed sign-in provider. Your password stays with your Organization.</p>
+      <a className="entry-recovery-link" href="/auth/login?platformRecovery=1&returnTo=%2Fplatform%2Forganizations">Platform recovery</a>
+    </section></main>
+  </Shell>;
+  return <Shell connection="unauthorized" entry entryTransitioning={transitioning} onEntry={beginEntry}>
+    <main id="main-content" className="entry-landing" tabIndex={-1}>
+      <section id="about" className="entry-introduction" aria-labelledby="entry-title">
+        <h1 id="entry-title">What happens next?</h1>
+        <p>Design, deliver and audit governed simulations.</p>
+        <a className="entry-primary-action" href="/auth/login?returnTo=%2F" onClick={beginEntry}>
+          <span>Enter Plenum</span>
+          <svg className="entry-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 18 18 6M10 6h8v8" />
+          </svg>
+        </a>
+      </section>
+      <p className="entry-assurance">Organization sign-in · Plenum never handles your password.</p>
+    </main>
+    {transitioning ? <EntryTransition label="Resolving next state" /> : null}
+  </Shell>;
+}
+
+function EntryLoadingState() {
+  return <Shell connection="loading" entry entryLoading>
+    <main id="main-content" className="entry-loading-page" tabIndex={-1} aria-busy="true">
+      <h1 className="visually-hidden">Loading Plenum</h1><PlenumLoader label="Resolving next state" overlay />
+    </main>
+  </Shell>;
+}
+
+function FirstAdminInvitation({ token }: { token: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [accepted, setAccepted] = useState<{ organizationName: string } | null>(null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const data = new FormData(event.currentTarget); setPending(true); setError("");
+    try {
+      setAccepted(await api<{ organizationName: string }>(`/v1/platform/invitations/${token}/accept`, {
+        method: "POST", body: JSON.stringify({ displayName: String(data.get("displayName")) })
+      }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The invitation could not be accepted.");
+    } finally { setPending(false); }
+  };
+  return <Shell connection="unauthorized" bounded headerContent={<div className="header-actions"><ThemeToggle /></div>}>
+    <main id="main-content" className="first-admin-entry" tabIndex={-1}>
+      <section className="first-admin-panel" aria-labelledby="first-admin-title">
+        {accepted === null ? <><h1 id="first-admin-title">Accept Organization Admin access</h1>
+          <p>Set the name shown to members of your Organization. This invitation grants Organization authority, not Plenum platform authority.</p>
+          <form onSubmit={(event) => void submit(event)}><div className="field"><label htmlFor="first-admin-display-name">Display name</label>
+            <input id="first-admin-display-name" name="displayName" autoComplete="name" required minLength={2} maxLength={200}
+              aria-invalid={error.length > 0} aria-describedby={error.length > 0 ? "first-admin-error" : undefined} /></div>
+            {error.length > 0 ? <p id="first-admin-error" className="field-error" role="alert">{error}</p> : null}
+            <button className="btn-primary" type="submit" disabled={pending}>{pending ? "Accepting…" : "Accept Admin invitation"}</button></form></> : <>
+          <h1 id="first-admin-title">Admin access accepted</h1><p>Your Admin membership for {accepted.organizationName} is ready. After a Plenum Platform Administrator activates the Organization, sign in with this invitationâ€™s verified email address to link your identity provider account.</p>
+          <a className="btn-primary link-button" href="/auth/login?returnTo=%2Fadmin%2Fmembers">Sign in after activation</a></>}
+      </section>
+    </main>
+  </Shell>;
+}
+
+function PlatformAdministratorInvitation({ token }: { token: string }) {
+  const signInUrl = `/auth/login?platformAdminInvitation=${encodeURIComponent(token)}&stepUp=1&returnTo=%2Fplatform%2Fadministrators`;
+  return <Shell connection="unauthorized" bounded headerContent={<div className="header-actions"><ThemeToggle /></div>}>
+    <main id="main-content" className="first-admin-entry" tabIndex={-1}>
+      <section className="first-admin-panel" aria-labelledby="platform-administrator-invitation-title">
+        <h1 id="platform-administrator-invitation-title">Join Plenum platform operations</h1>
+        <p>Sign in through the identity provider for the invited work email. Plenum will verify the exact email address and require multifactor authentication before assigning platform authority.</p>
+        <a className="btn-primary link-button" href={signInUrl}>Verify identity and continue</a>
+        <p className="field-hint">This invitation grants Plenum Platform Administrator authority. It does not add an Organization Role.</p>
+      </section>
+    </main>
+  </Shell>;
+}
+
+function OrganizationWorkforceInvitation({ token }: { token: string }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [accepted, setAccepted] = useState<{ organizationName: string; email: string } | null>(null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const data = new FormData(event.currentTarget); setPending(true); setError("");
+    try { setAccepted(await api<{ organizationName: string; email: string }>(`/v1/organization/invitations/${token}/accept`, {
+      method: "POST", body: JSON.stringify({ displayName: String(data.get("displayName")) })
+    })); } catch (cause) { setError(cause instanceof Error ? cause.message : "The invitation could not be accepted."); }
+    finally { setPending(false); }
+  };
+  const signInUrl = accepted === null ? "#" : `/auth/login?email=${encodeURIComponent(accepted.email)}&returnTo=%2F`;
+  return <Shell connection="unauthorized" bounded headerContent={<div className="header-actions"><ThemeToggle /></div>}>
+    <main id="main-content" className="first-admin-entry" tabIndex={-1}><section className="first-admin-panel" aria-labelledby="workforce-invitation-title">
+      {accepted === null ? <><h1 id="workforce-invitation-title">Join your Organization</h1><p>Confirm the name shown to colleagues. Your Organization Roles remain inactive until Plenum verifies the invited work identity.</p>
+        <form onSubmit={(event) => void submit(event)}><div className="field"><label htmlFor="workforce-invitation-name">Display name</label><input id="workforce-invitation-name" name="displayName" autoComplete="name" required minLength={2} maxLength={200}
+          aria-invalid={error.length > 0} aria-describedby={error.length > 0 ? "workforce-invitation-error" : undefined} /></div>
+          {error.length > 0 ? <p id="workforce-invitation-error" className="field-error" role="alert">{error}</p> : null}
+          <button className="btn-primary" type="submit" disabled={pending}>{pending ? "Acceptingâ€¦" : "Accept invitation"}</button></form></> : <>
+        <h1 id="workforce-invitation-title">Invitation accepted</h1><p>Continue through {accepted.organizationName} sign-in with <strong>{accepted.email}</strong>. Exact-email verification activates the approved Organization Roles.</p>
+        <a className="btn-primary link-button" href={signInUrl}>Verify identity and continue</a></>}
+    </section></main>
+  </Shell>;
 }
 
 function StatePage({ connection, title, message, retry }: {
@@ -128,12 +301,12 @@ function StatePage({ connection, title, message, retry }: {
 }) {
   return <Shell connection={connection}>
     <main id="main-content" className="state-page" tabIndex={-1}>
-      <section className="card state-card" aria-busy={connection === "loading"}>
+      {connection === "loading" ? <><h1 className="visually-hidden">{title}</h1><PlenumLoader label={message} overlay /></> : <section className="card state-card">
         <p className="eyebrow">Runtime status</p>
         <h1>{title}</h1>
         <p role={connection === "error" ? "alert" : "status"}>{message}</p>
         {retry === undefined ? null : <button className="btn-primary" type="button" onClick={retry}>Retry</button>}
-      </section>
+      </section>}
     </main>
   </Shell>;
 }
@@ -142,17 +315,63 @@ const clearsOfflineData = (error: ApiError): boolean =>
   ["ACCESS_REVOKED", "NOT_A_PARTICIPANT", "DEVICE_NOT_REGISTERED", "PERMISSION_DENIED"]
     .includes(error.envelope.error.code);
 
-function AccessContext({ context, titleId, onSignOut, onClose }: {
+function AccessContext({ context, titleId, onSignOut }: {
   context: ProductShellContextV1;
   titleId: string;
   onSignOut: () => Promise<void>;
-  onClose?: () => void;
 }) {
+  const roles = context.organization.roles.map((role) => friendlyReference(role, "Session participant")).join(", ") || "Session participant";
   return <>
-    <p className="eyebrow">Context inspector</p><h2 id={titleId}>Access</h2>
-    <dl><div><dt>Organization</dt><dd>{context.organization.name}</dd></div><div><dt>Organization roles</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div><div><dt>Connection</dt><dd>Authoritative service online</dd></div></dl>
-    <div className="account-context-actions"><button className="btn-secondary" type="button" onClick={() => void onSignOut()}>Sign out</button>
-      {onClose === undefined ? null : <button className="btn-secondary account-context-close" type="button" onClick={onClose}>Close access context</button>}</div>
+    <div className="account-menu-identity"><h2 id={titleId}>{context.principal.displayName}</h2>
+      <p>{context.organization.name}</p><span className="badge badge-state">{roles}</span></div>
+    <p className="account-menu-connection"><span className="connection-indicator connection-indicator-online" aria-hidden="true" />Connected</p>
+    <button className="account-menu-sign-out" type="button" onClick={() => void onSignOut()}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" /></svg>
+      Sign out
+    </button>
+  </>;
+}
+
+function ProductHeader({ context, connection, workspaceTitle, navigationOpen, accountOpen, accountToggleRef, accountMenuRef,
+  showNavigation, onToggleNavigation, onToggleAccount, onSignOut }: {
+  context: ProductShellContextV1;
+  connection: ConnectionState;
+  workspaceTitle: string;
+  navigationOpen: boolean;
+  showNavigation: boolean;
+  accountOpen: boolean;
+  accountToggleRef: RefObject<HTMLButtonElement | null>;
+  accountMenuRef: RefObject<HTMLElement | null>;
+  onToggleNavigation: () => void;
+  onToggleAccount: () => void;
+  onSignOut: () => Promise<void>;
+}) {
+  const role = workspaceTitle === "Platform control plane" && context.platformRoles.includes("platform_administrator")
+    ? "Platform Administrator" : friendlyReference(context.organization.roles[0] ?? "", "Participant");
+  return <>
+    <div className="product-header-context" aria-label="Current workspace context">
+      <span className="product-header-organization" title={context.organization.name}>{context.organization.name}</span>
+      <svg className="product-header-separator" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" /></svg>
+      <h1 id="product-title" className="product-header-title">{workspaceTitle}</h1>
+    </div>
+    <div className="header-actions product-header-actions">
+      {showNavigation ? <button className="workspace-navigation-toggle header-icon-button" type="button" aria-expanded={navigationOpen}
+        aria-controls="workspace-navigation" aria-label={navigationOpen ? "Close workspaces" : "Open workspaces"} onClick={onToggleNavigation}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+      </button> : null}
+      <ConnectionIndicator state={connection} />
+      <ThemeToggle />
+      <button ref={accountToggleRef} className="account-context-toggle" type="button" aria-expanded={accountOpen}
+        aria-haspopup="dialog" aria-controls="account-context-menu"
+        aria-label={`${accountOpen ? "Close" : "Open"} account menu for ${context.principal.displayName} — ${role}`} onClick={onToggleAccount}>
+        <span className="account-role-label">{role}</span>
+        <svg className="account-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+      </button>
+      {accountOpen ? <section ref={accountMenuRef} id="account-context-menu" className="account-context-menu" role="dialog"
+        aria-labelledby="account-menu-title" tabIndex={-1}>
+        <AccessContext context={context} titleId="account-menu-title" onSignOut={onSignOut} />
+      </section> : null}
+    </div>
   </>;
 }
 
@@ -162,10 +381,12 @@ function ProductEntry() {
   const [unauthenticated, setUnauthenticated] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const accountContextRef = useRef<HTMLDialogElement>(null);
+  const accountMenuRef = useRef<HTMLElement>(null);
   const accountToggleRef = useRef<HTMLButtonElement>(null);
-  const administration = /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(window.location.pathname);
+  const administration = /^\/admin\/(?:members|plugins|deployment|data-policy|identity)\/?$/u.test(window.location.pathname);
   const researchReporting = /^\/research\/reports\/?$/u.test(window.location.pathname);
+  const platform = /^\/platform\/(?:organizations(?:\/[0-9a-f-]{36})?|administrators)\/?$/iu.test(window.location.pathname);
+  const platformAdministrators = /^\/platform\/administrators\/?$/iu.test(window.location.pathname);
 
   const load = useCallback(async () => {
     setConnection("loading");
@@ -195,6 +416,24 @@ function ProductEntry() {
     window.addEventListener("online", online);
     return () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); };
   }, [load]);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || accountMenuRef.current?.contains(event.target) || accountToggleRef.current?.contains(event.target)) return;
+      setAccountOpen(false);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAccountOpen(false);
+      requestAnimationFrame(() => accountToggleRef.current?.focus());
+    };
+    document.addEventListener("pointerdown", dismissOnPointerDown);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOnPointerDown);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [accountOpen]);
 
   const signOut = async () => {
     try {
@@ -208,29 +447,18 @@ function ProductEntry() {
   };
 
   const toggleAccountContext = () => {
-    const dialog = accountContextRef.current;
-    if (dialog === null) return;
-    if (dialog.open) {
-      dialog.close();
+    if (accountOpen) {
+      setAccountOpen(false);
       return;
     }
     setNavigationOpen(false);
-    dialog.showModal();
     setAccountOpen(true);
-    requestAnimationFrame(() => dialog.focus());
+    requestAnimationFrame(() => accountMenuRef.current?.focus());
   };
 
-  const closeAccountContext = () => {
-    if (accountContextRef.current?.open) {
-      accountContextRef.current.close();
-      return;
-    }
+  const closeAccountContext = (returnFocus = false) => {
     setAccountOpen(false);
-  };
-
-  const handleAccountContextClosed = () => {
-    setAccountOpen(false);
-    requestAnimationFrame(() => accountToggleRef.current?.focus());
+    if (returnFocus) requestAnimationFrame(() => accountToggleRef.current?.focus());
   };
 
   const requestedWorkspace = new URLSearchParams(window.location.search).get("workspace");
@@ -239,24 +467,24 @@ function ProductEntry() {
     window.location.hash === "#release-catalog" || window.location.hash === "#session-catalog" ? "lifecycle" : null;
   const canUseProjects = context?.destinations.includes("studio") ?? false;
   const canUseLifecycle = context?.destinations.includes("operations") ?? false;
+  const canUsePlatform = context?.destinations.includes("platform") ?? false;
   const defaultWorkspace = canUseProjects ? "projects" : canUseLifecycle ? "lifecycle" : "participant";
-  const workspace = administration ? "administration" : researchReporting ? "research" : releaseOrSessionDetail ? "lifecycle" :
+  const workspace = platform ? "platform" : administration ? "administration" : researchReporting ? "research" : releaseOrSessionDetail ? "lifecycle" :
     requestedWorkspace === "projects" && canUseProjects ? "projects" :
       requestedWorkspace === "lifecycle" && canUseLifecycle ? "lifecycle" :
         requestedWorkspace === "participant" ? "participant" : hashWorkspace ?? defaultWorkspace;
   const workspaceTitle = workspace === "projects" ? "Projects" : workspace === "lifecycle" ? "Releases and Sessions" :
-    workspace === "participant" ? "Your Sessions" : workspace === "administration" ? "Administration" : "Research reports";
+    workspace === "participant" ? "Your Sessions" : workspace === "administration" ? "Administration" :
+      workspace === "platform" ? "Platform control plane" : "Research reports";
 
-  return <Shell connection={connection} bounded>
-    <main id="main-content" className="product-shell" data-workspace={workspace} tabIndex={-1}>
-      {connection === "loading" ? <section className="card shell-state teludens-state" aria-busy="true">
-        <p className="eyebrow">Loading</p><h2>Opening your workspace</h2><p>Verifying identity and Organization access.</p>
-      </section> : null}
-      {unauthenticated ? <section className="card shell-state teludens-state" data-state="unauthorized">
-        <p className="eyebrow">Authentication required</p><h2>Continue to Plenum</h2>
-        <p>Your Organization identity provider controls access. Plenum never asks for your password directly.</p>
-        <div className="actions"><a className="btn-primary link-button" href="/auth/login?returnTo=%2F">Sign in</a><button className="btn-secondary" type="button" onClick={() => void load()}>Try again</button></div>
-      </section> : null}
+  if (connection === "loading") return <EntryLoadingState />;
+  if (unauthenticated) return <EntryLanding />;
+
+  return <Shell connection={connection} bounded headerContent={context === null ? undefined : <ProductHeader context={context} connection={connection}
+    workspaceTitle={workspaceTitle} navigationOpen={navigationOpen} showNavigation={workspace !== "participant"} accountOpen={accountOpen} accountToggleRef={accountToggleRef}
+    accountMenuRef={accountMenuRef} onToggleNavigation={() => { closeAccountContext(); setNavigationOpen((open) => !open); }}
+    onToggleAccount={toggleAccountContext} onSignOut={async () => { closeAccountContext(); await signOut(); }} />}>
+    <main id="main-content" className="product-shell" data-workspace={workspace} tabIndex={-1} aria-labelledby={context === null ? undefined : "product-title"}>
       {!unauthenticated && connection === "offline" ? <section className="card shell-state teludens-state" data-state="offline">
         <p className="eyebrow">Offline</p><h2>Account context is unavailable</h2><p>No protected workspace data is shown while Plenum is disconnected.</p>
         <button className="btn-secondary" type="button" onClick={() => void load()}>Retry connection</button>
@@ -265,53 +493,30 @@ function ProductEntry() {
         <p className="eyebrow">Unable to open Plenum</p><h2>Account context did not load</h2><p>Retry safely. No Project or Session was changed.</p>
         <button className="btn-secondary" type="button" onClick={() => void load()}>Retry</button>
       </section> : null}
-      {context === null ? null : <>
-        <header className="workspace-context-header teludens-path">
-          <div>
-            <p className="eyebrow">{context.organization.name}</p>
-            <h1 id="product-title">{workspaceTitle}</h1>
-          </div>
-          <dl aria-label="Current workspace context">
-            <div><dt>Signed in as</dt><dd>{context.principal.displayName}</dd></div>
-            <div><dt>Organization role</dt><dd>{context.organization.roles.join(", ") || "Session participant"}</dd></div>
-          </dl>
-          <button className="btn-secondary workspace-navigation-toggle" type="button" aria-expanded={navigationOpen}
-            aria-controls="workspace-navigation" onClick={() => { setAccountOpen(false); setNavigationOpen((open) => !open); }}>
-            {navigationOpen ? "Close workspaces" : "Open workspaces"}
-          </button>
-          <button ref={accountToggleRef} className="btn-secondary account-context-toggle" type="button" aria-expanded={accountOpen}
-            aria-controls="account-context-sheet" onClick={toggleAccountContext}>
-            {accountOpen ? "Close access context" : "Open access context"}
-          </button>
-        </header>
-        <div className="shell-grid" data-density="standard">
-        <nav id="workspace-navigation" className={`shell-navigation teludens-node${navigationOpen ? " is-open" : ""}`} aria-labelledby="navigation-title">
+      {context === null ? null : <div className={`shell-grid${workspace === "participant" ? " participant-shell-grid" : ""}`} data-density="standard">
+        {workspace === "participant" ? null : <nav id="workspace-navigation" className={`shell-navigation teludens-node${navigationOpen ? " is-open" : ""}`} aria-labelledby="navigation-title">
           <p className="eyebrow">Lifecycle</p><h2 id="navigation-title">Workspaces</h2>
           <ul>
             {canUseProjects ? <li><a aria-current={workspace === "projects" ? "page" : undefined} href="/?workspace=projects">Projects<span>Govern designs and reusable templates</span></a></li> : null}
             {canUseLifecycle ? <li><a aria-current={workspace === "lifecycle" ? "page" : undefined} href="/?workspace=lifecycle">Releases and Sessions<span>Publish, configure, and monitor delivery</span></a></li> : null}
-            <li><a aria-current={workspace === "participant" ? "page" : undefined} href="/?workspace=participant">Your Sessions<span>Enter an invited or assigned Session</span></a></li>
+            <li><a href="/?workspace=participant">Your Sessions<span>Enter an invited or assigned Session</span></a></li>
             {canUseProjects ? <li><a href="/studio/">Project editor<span>Open the focused authoring workspace</span></a></li> : null}
             {context.organization.roles.some((role) => role === "admin" || role === "publisher") ? <li><a aria-current={administration ? "page" : undefined} href="/admin/plugins">Administration<span>Roles, Plugins, policy, and deployment posture</span></a></li> : null}
+            {canUsePlatform ? <li><a aria-current={platform ? "page" : undefined} href="/platform/organizations">Platform control plane<span>Provision and govern Organization access</span></a></li> : null}
             {context.organization.roles.includes("research_analyst") ? <li><a aria-current={researchReporting ? "page" : undefined} href="/research/reports">Research reports<span>Consent-filtered evidence and provenance</span></a></li> : null}
           </ul>
-        </nav>
-        <div className="product-workspaces" aria-labelledby="product-title">
-          {administration ? <AdministrationPortal organizationId={context.organization.id} roles={context.organization.roles} /> : researchReporting ?
+        </nav>}
+        <div className={`product-workspaces${workspace === "participant" ? " participant-product-workspaces" : ""}`} aria-labelledby="product-title">
+          {platform ? canUsePlatform ? platformAdministrators ? <PlatformAdministratorsPortal /> : <PlatformOrganizationsPortal /> : <section className="card portal-state teludens-state" data-state="unauthorized">
+            <h2>Platform authority unavailable</h2><p>Active Plenum Platform Administrator authority is required. Organization administration does not grant this access.</p></section> :
+            administration ? <AdministrationPortal organizationId={context.organization.id} roles={context.organization.roles} /> : researchReporting ?
             context.organization.roles.includes("research_analyst") ? <ResearchReportingPortal /> :
               <section className="card portal-state teludens-state" data-state="unauthorized"><p className="eyebrow">Least privilege</p>
                 <h2>Research reporting access unavailable</h2><p>An active Research Analyst Organization Role and project-scoped Research Access Grant are required. Protected research data was not loaded.</p></section> :
             workspace === "projects" ? <ProjectPortal /> : workspace === "lifecycle" ?
-              <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : <ParticipantPortal />}
+              <LifecyclePortal isAdmin={context.organization.roles.includes("admin")} /> : <ParticipantPortal displayName={context.principal.displayName} />}
         </div>
-        <aside id="account-context" className="account-context teludens-branch" aria-labelledby="account-title">
-          <AccessContext context={context} titleId="account-title" onSignOut={signOut} />
-        </aside>
-        <dialog ref={accountContextRef} id="account-context-sheet" className="account-context-sheet teludens-branch" aria-labelledby="account-sheet-title"
-          aria-modal="true" tabIndex={-1} onClose={handleAccountContextClosed}>
-          <AccessContext context={context} titleId="account-sheet-title" onSignOut={async () => { closeAccountContext(); await signOut(); }} onClose={closeAccountContext} />
-        </dialog>
-      </div></>}
+      </div>}
     </main>
   </Shell>;
 }
@@ -598,7 +803,6 @@ function CreateTask({ task, disabled, send }: {
   send(action: RuntimeActionV1, artifact: RuntimeArtifactV1 | null, content?: JsonObject, artifactTypeKey?: string): void;
 }) {
   return <section className="card" aria-labelledby={`create-${task.artifactTypeKey}`}>
-    <p className="eyebrow">New Artifact</p>
     <h2 id={`create-${task.artifactTypeKey}`}>{task.title}</h2>
     <FieldEditor form={task.form} disabled={disabled} submitLabel="Save draft"
       onSubmit={(content) => send(task.action, null, content, task.artifactTypeKey)} />
@@ -644,7 +848,6 @@ function ArtifactCard({ artifact, disabled, send }: {
   return <article className="card artifact" aria-labelledby={`artifact-${artifact.id}`}>
     <div className="card-heading">
       <div>
-        <p className="eyebrow">{artifact.createdByMe ? "Your Artifact" : "Assigned task"}</p>
         <h3 id={`artifact-${artifact.id}`}>{artifact.title}</h3>
       </div>
       <span className="badge badge-state">{artifact.stateLabel}</span>
@@ -671,7 +874,7 @@ function EffectProposalReview({ proposals, disabled, decide }: {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   if (proposals.length === 0) return null;
   return <section aria-labelledby="effect-proposals-title">
-    <div className="section-heading"><p className="eyebrow">Human approval required</p><h2 id="effect-proposals-title">Effect Proposals</h2></div>
+    <div className="section-heading"><h2 id="effect-proposals-title">Effect Proposals</h2></div>
     <p className="hint">Plugin output is staged only. Authoritative state changes only after an approved Command receives a server receipt.</p>
     <div className="card-grid">{proposals.map((proposal) => {
       const reason = reasons[proposal.id] ?? "";
@@ -725,7 +928,7 @@ function MessageInbox({ module, projection, disabled, send }: {
     setText("");
   };
   return <section aria-labelledby={`${module.id}-heading`}>
-    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    <div className="section-heading"><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
     {module.mode !== "write" || routeId === null ? null : <form className="card" onSubmit={submit}>
       <div className="field"><label htmlFor={`${module.id}-text`}>Message</label>
         <textarea id={`${module.id}-text`} rows={3} required value={text} disabled={disabled}
@@ -763,7 +966,7 @@ function InjectInbox({ module, projection, disabled, send }: {
   module: RuntimeModuleV1; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
 }) {
   return <section aria-labelledby={`${module.id}-heading`}>
-    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    <div className="section-heading"><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
     {projection.injects.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <div className="card-grid">
       {projection.injects.map((inject) => <InjectCard key={inject.id} inject={inject} disabled={disabled} send={send} />)}
     </div>}
@@ -829,7 +1032,7 @@ function ProposalThreads({ module, projection, disabled, send }: {
   }) : [];
   const pending = actorMode === "custodian" ? messages.filter((message) => message.approvedAt === null) : [];
   return <section aria-labelledby={`${module.id}-heading`}>
-    <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    <div className="section-heading"><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
     {openable.length === 0 ? null : <div className="card"><h3>Open approved recipient threads</h3><div className="actions">
       {openable.map(({ artifact, team }) => <button key={`${artifact.id}-${team}`} className="btn-secondary" type="button" disabled={disabled}
         onClick={() => send("message.proposal_forward", crypto.randomUUID(), 0, { sourceArtifactId: artifact.id, recipientTeamId: team })}>
@@ -901,6 +1104,8 @@ function RuntimeView() {
   const [adjudications, setAdjudications] = useState<AdjudicationRequestV1[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string>("");
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [activeNavigationItemId, setActiveNavigationItemId] = useState<string | null>(null);
   const main = useRef<HTMLElement>(null);
   const loadVersion = useRef(0);
   const pending = outbox?.entries.some(({ status }) => status === "local_pending" || status === "received") === true;
@@ -1013,6 +1218,10 @@ function RuntimeView() {
   }, [deviceId, id, requestedRole]);
 
   useEffect(() => { void load(); }, []); // Initial load owns device registration.
+  useEffect(() => {
+    if (projection === null) return;
+    setActiveNavigationItemId(projection.navigation.defaultItemId ?? projection.navigation.items[0]?.id ?? null);
+  }, [projection?.interfaceProfileId, projection?.navigation.defaultItemId]);
   useEffect(() => {
     const offline = () => setConnection("offline");
     const online = () => { setNotice("Connection restored. Refreshing authoritative state."); void load(); };
@@ -1194,64 +1403,151 @@ function RuntimeView() {
       message={connection === "loading" ? "Resolving your authorized Session view." : error ?? "Reconnect and try again."}
       {...(connection === "loading" ? {} : { retry: () => void load() })} />;
   }
-  const taskModule = projection.modules.find((module) => module.type === "task_list");
-  const formModule = projection.modules.find((module) => module.type === "artifact_form");
-  const messageModules = projection.modules.filter((module) => module.type === "message_inbox");
-  const proposalModules = projection.modules.filter((module) => module.type === "proposal_thread");
-  const injectModules = projection.modules.filter((module) => module.type === "inject_inbox");
-  return <Shell connection={connection}>
-    <main id="main-content" className={`runtime-layout layout-${projection.layout}`} ref={main} tabIndex={-1}>
-      <section className="hero" aria-labelledby="runtime-title">
-        <p className="eyebrow">{projection.releaseLabel}</p>
-        <h1 id="runtime-title">{projection.activeTeamLabel === null ? projection.activeSessionRoleLabel : `${projection.activeTeamLabel} ${projection.activeSessionRoleLabel}`} workspace</h1>
-        <p>{projection.currentStageLabel ?? "Session workspace"} · Session {projection.sessionStatus}</p>
-      </section>
-      <div className="runtime-context-actions">
-        {projection.roleContexts.length > 1 ? <label>Active Role Context
-          <select value={projection.activeSessionRoleId} disabled={pending || connection !== "online"} onChange={(event) => {
-            const selected = projection.roleContexts.find((candidate) => candidate.sessionRoleId === event.target.value);
-            if (selected !== undefined) window.location.assign(selected.runtimeUrl);
-          }}>{projection.roleContexts.map((role) => <option value={role.sessionRoleId} key={`${role.seatLabel}:${role.sessionRoleId}`}>
-            {role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`}
-          </option>)}</select>
-        </label> : null}
-        <a className="btn-secondary link-button" href="/">Exit Session</a>
+  const roleContextLabel = projection.activeTeamLabel === null ? projection.activeSessionRoleLabel
+    : `${projection.activeTeamLabel} · ${projection.activeSessionRoleLabel}`;
+  const workspaceTitle = projection.sessionTitle ?? projection.simulationTitle ?? "Session workspace";
+  const remainingTime = projection.stageRemainingSeconds === null ? null
+    : `${String(Math.floor(projection.stageRemainingSeconds / 60)).padStart(2, "0")}:${String(projection.stageRemainingSeconds % 60).padStart(2, "0")}`;
+  const moduleById = new Map(projection.modules.map((module) => [module.id, module]));
+  const regions = projection.regions === undefined || projection.regions.length === 0
+    ? [{ id: "main", moduleIds: projection.modules.map((module) => module.id) }]
+    : projection.regions;
+  const activeNavigationItem = projection.navigation.items.find((item) => item.id === activeNavigationItemId)
+    ?? projection.navigation.items.find((item) => item.id === projection.navigation.defaultItemId)
+    ?? projection.navigation.items[0];
+  const visibleRegions = projection.layout === "workspace_tabs" && activeNavigationItem?.regionId !== undefined
+    ? regions.filter((region) => region.id === activeNavigationItem.regionId)
+    : regions;
+  const renderRuntimeModule = (module: RuntimeModuleV1): ReactNode => {
+    if (module.type === "artifact_form") return <section id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
+      <div className="section-heading"><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2></div>
+      {projection.createTasks.length === 0 ? <p className="empty-state">{module.emptyStateText}</p>
+        : <div className="card-grid">{projection.createTasks.map((task) => <CreateTask key={task.artifactTypeKey} task={task}
+            disabled={submitting} send={send} />)}</div>}
+    </section>;
+    if (module.type === "task_list") return <section id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
+      <div className="section-heading"><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2></div>
+      {projection.artifacts.length === 0 ? <p className="empty-state">{module.emptyStateText}</p>
+        : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
+            artifact={artifact} disabled={submitting} send={send} />)}</div>}
+    </section>;
+    if (module.type === "message_inbox") return <div id={`runtime-module-${module.id}`}><MessageInbox module={module} projection={projection}
+      disabled={submitting} send={sendInformation} /></div>;
+    if (module.type === "proposal_thread") return <div id={`runtime-module-${module.id}`}><ProposalThreads module={module} projection={projection}
+      disabled={submitting} send={sendInformation} /></div>;
+    if (module.type === "inject_inbox") return <div id={`runtime-module-${module.id}`}><InjectInbox module={module} projection={projection}
+      disabled={submitting} send={sendInformation} /></div>;
+    if (module.type === "session_status") return <section className="card curated-runtime-module" id={`runtime-module-${module.id}`}
+      aria-labelledby={`runtime-module-${module.id}-title`}>
+      <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
+      <dl className="runtime-status-list">
+        <div><dt>Session</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+        <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({friendlyReference(projection.currentStageStatus, "Not started")})</dd></div>
+        <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
+      </dl>
+    </section>;
+    if (module.type === "artifact_presentation") return <section className="card curated-runtime-module runtime-presentation-module"
+      id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
+      <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
+      {projection.artifacts.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <ul className="presentation-artifact-list">
+        {projection.artifacts.map((artifact) => <li key={artifact.id}><strong>{artifact.title}</strong><span>{artifact.stateLabel}</span></li>)}
+      </ul>}
+    </section>;
+    if (module.type === "resource_library") {
+      const configuredIds = Array.isArray(module.configuration.resourceIds)
+        ? module.configuration.resourceIds.filter((resourceId): resourceId is string => typeof resourceId === "string") : [];
+      const resources = projection.resources.filter((resource) => configuredIds.includes(resource.id));
+      return <section className="card curated-runtime-module runtime-resource-library" id={`runtime-module-${module.id}`}
+        aria-labelledby={`runtime-module-${module.id}-title`}>
+        <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
+        {resources.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <ul className="runtime-resource-list">
+          {resources.map((resource) => {
+            const resourceUrl = id === null || deviceId === null ? null
+              : `/v1/sessions/${id}/runtime-resources/${encodeURIComponent(resource.id)}?deviceId=${encodeURIComponent(deviceId)}&activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}`;
+            return <li key={resource.id}>
+              <div><strong>{resource.name}</strong><span>{resource.type.replaceAll("_", " ")} · {resource.mediaType}</span>
+                {resource.altText === undefined ? null : <p>{resource.altText}</p>}</div>
+              {resourceUrl === null ? <span className="hint">Available while connected</span>
+                : <a className="btn-secondary link-button" href={resourceUrl} target="_blank" rel="noreferrer">Open resource</a>}
+            </li>;
+          })}
+        </ul>}
+      </section>;
+    }
+    const releaseResourceId = typeof module.configuration.releaseResourceId === "string"
+      ? module.configuration.releaseResourceId : null;
+    const resourceUrl = id === null || deviceId === null || releaseResourceId === null ? null
+      : `/v1/sessions/${id}/runtime-resources/${encodeURIComponent(releaseResourceId)}?deviceId=${encodeURIComponent(deviceId)}&activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}`;
+    return <section className="card curated-runtime-module runtime-deck-module" id={`runtime-module-${module.id}`}
+      aria-labelledby={`runtime-module-${module.id}-title`}>
+      <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
+      {resourceUrl === null ? <p className="empty-state">{module.emptyStateText}</p> : <iframe
+        className="runtime-deck-frame" src={resourceUrl} title={module.title} loading="lazy" sandbox="allow-scripts" allowFullScreen />}
+    </section>;
+  };
+  return <Shell connection={connection}
+    brandContent={<a className="runtime-product-brand" href="/" title="Leave Session">
+      <strong>{projection.simulationTitle ?? projection.releaseLabel}</strong><span>{projection.releaseLabel}</span>
+    </a>}
+    headerContent={<div className="header-actions runtime-header-actions">
+      <div className="runtime-stage-summary"><span>{projection.currentStageLabel ?? "Session workspace"}</span>
+        <strong>{remainingTime ?? friendlyReference(projection.currentStageStatus, "Not started")}</strong></div>
+      <span className="runtime-connection"><ConnectionIndicator state={connection} /><span>{connectionLabel(connection)}</span></span>
+      <ThemeToggle />
+      <span className="runtime-role-badge">{roleContextLabel}</span>
+    </div>}>
+    <main id="main-content" className={`runtime-layout family-workspace participant-runtime-workspace layout-${projection.layout}`} ref={main} tabIndex={-1}>
+      <div className="hero family-workspace-header">
+        <p className="runtime-role-context">{roleContextLabel}</p>
+        <h1 id="runtime-title">{workspaceTitle}</h1>
+        <p>{projection.navigation.items[0]?.label ?? "Workspace"} · {projection.currentStageLabel ?? "Session workspace"} · Session {friendlyReference(projection.sessionStatus, "Unavailable")}</p>
       </div>
-      <nav className="card runtime-module-navigation" aria-label="Runtime modules"><ul>
-        {projection.navigation.items.map((item) => <li key={item.id}><a href={`#runtime-module-${item.moduleId}`}>{item.label}</a></li>)}
-      </ul></nav>
+      <nav className="runtime-module-navigation family-workspace-navigation" aria-label="Runtime modules">
+        <button className="runtime-navigation-toggle" type="button" aria-expanded={navigationOpen}
+          aria-controls="runtime-navigation-content" onClick={() => setNavigationOpen((open) => !open)}>
+          {navigationOpen ? "Close workspace navigation" : "Open workspace navigation"}
+        </button>
+        <div id="runtime-navigation-content" className={navigationOpen ? "runtime-navigation-content is-open" : "runtime-navigation-content"}>
+          <h2>{projection.activeSessionRoleLabel}</h2><ul>
+            {projection.navigation.items.map((item) => <li key={item.id}><a href={`#runtime-module-${item.moduleId}`}
+              aria-current={item.id === activeNavigationItem?.id ? "page" : undefined} onClick={() => {
+                setActiveNavigationItemId(item.id);
+                setNavigationOpen(false);
+              }}>{item.label}</a></li>)}
+          </ul>
+          <details className="runtime-context-disclosure"><summary>Session context</summary>
+            <dl className="runtime-status-list">
+              <div><dt>Session</dt><dd>{projection.sessionTitle ?? friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+              <div><dt>Status</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+              <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"}</dd></div>
+              <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
+              <div><dt>Connection</dt><dd>{connectionLabel(connection)}</dd></div>
+            </dl>
+          </details>
+        </div>
+      </nav>
+      <div className="family-workspace-primary">
+        <div className="runtime-context-actions">
+          {projection.roleContexts.length > 1 ? <label>Active Role Context
+            <select value={projection.activeSessionRoleId} disabled={pending || connection !== "online"} onChange={(event) => {
+              const selected = projection.roleContexts.find((candidate) => candidate.sessionRoleId === event.target.value);
+              if (selected !== undefined) navigateWithLoader(selected.runtimeUrl);
+            }}>{projection.roleContexts.map((role) => <option value={role.sessionRoleId} key={`${role.seatLabel}:${role.sessionRoleId}`}>
+              {role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`}
+            </option>)}</select>
+          </label> : null}
+          <a className="btn-secondary link-button" href="/">Exit Session</a>
+        </div>
       <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
       {outbox === null ? null : <OfflineOutboxPanel outbox={outbox} retry={() => void retryPending()} saveDraft={saveOfflineDraft} />}
-      {formModule === undefined ? null : <section id={`runtime-module-${formModule.id}`} aria-labelledby="create-heading">
-        <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="create-heading">{formModule.title}</h2></div>
-        {projection.createTasks.length === 0 ? <p className="empty-state">{formModule.emptyStateText}</p>
-          : <div className="card-grid">{projection.createTasks.map((task) => <CreateTask key={task.artifactTypeKey} task={task}
-              disabled={submitting} send={send} />)}</div>}
-      </section>}
-      {taskModule === undefined ? null : <section id={`runtime-module-${taskModule.id}`} aria-labelledby="tasks-heading">
-        <div className="section-heading"><p className="eyebrow">Configured module</p><h2 id="tasks-heading">{taskModule.title}</h2></div>
-        {projection.artifacts.length === 0 ? <p className="empty-state">{taskModule.emptyStateText}</p>
-          : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
-              artifact={artifact} disabled={submitting} send={send} />)}</div>}
-      </section>}
-      {messageModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><MessageInbox module={module} projection={projection}
-        disabled={submitting} send={sendInformation} /></div>)}
-      {proposalModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><ProposalThreads module={module} projection={projection}
-        disabled={submitting} send={sendInformation} /></div>)}
-      {injectModules.map((module) => <div id={`runtime-module-${module.id}`} key={module.id}><InjectInbox module={module} projection={projection}
-        disabled={submitting} send={sendInformation} /></div>)}
-      {projection.modules.filter((module) => ["session_status", "artifact_presentation", "slide_deck"].includes(module.type))
-        .map((module) => <section className="card curated-runtime-module" id={`runtime-module-${module.id}`} key={module.id}
-          aria-labelledby={`runtime-module-${module.id}-title`}>
-          <p className="eyebrow">Configured module</p><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
-          {module.type === "session_status" ? <dl className="runtime-status-list">
-            <div><dt>Session</dt><dd>{projection.sessionStatus}</dd></div>
-            <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({projection.currentStageStatus})</dd></div>
-            <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
-          </dl> : <p className="empty-state">{module.emptyStateText}</p>}
-        </section>)}
+      <div className="runtime-regions">
+        {visibleRegions.map((region) => <div className={`runtime-region runtime-region-${region.id}`} data-region-id={region.id} key={region.id}>
+          {region.moduleIds.map((moduleId) => moduleById.get(moduleId)).filter((module): module is RuntimeModuleV1 => module !== undefined)
+            .map((module) => <div className="runtime-region-module" key={module.id}>{renderRuntimeModule(module)}</div>)}
+        </div>)}
+      </div>
       {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
-        <div className="section-heading"><p className="eyebrow">Authoritative voting</p><h2 id="polls-heading">Polls</h2></div>
+        <div className="section-heading"><h2 id="polls-heading">Polls</h2></div>
         <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>
       </section>}
       {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <VoiceControls projection={projection}
@@ -1259,6 +1555,7 @@ function RuntimeView() {
       <EffectProposalReview proposals={effectProposals} disabled={submitting} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
       <AdjudicationReview adjudications={adjudications} disabled={submitting} send={sendInformation} />
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
+      </div>
     </main>
   </Shell>;
 }
@@ -1319,6 +1616,7 @@ function OperatorView() {
     message={connection === "loading" ? "Reading authoritative Session state." : error ?? "This view is unavailable."}
     {...(connection === "loading" ? {} : { retry: () => void load() })} />;
   const states = Object.entries(projection.artifactsByState);
+  const staffingRoleIds = readiness === null ? [] : [...new Set(readiness.staffing.seats.flatMap((seat) => seat.sessionRoleIds))];
   const send = async (path: string, operationType: string, payload: JsonObject = {}, aggregateId = id,
     expectedAggregateVersion = readiness?.assignmentVersion ?? 0) => {
     if (id === null || deviceId === null || pending || aggregateId === null) return null;
@@ -1380,9 +1678,9 @@ function OperatorView() {
     finally { setPending(false); }
   };
   return <Shell connection={connection}>
-    <main id="main-content" className="runtime-layout" tabIndex={-1}>
-      <section className="hero"><p className="eyebrow">Operator console</p><h1>Session control view</h1><p><strong>{projection.sessionTitle}</strong> · {projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
-      <nav className="card session-operation-navigation" aria-label="Session operations">
+    <main id="main-content" className="runtime-layout family-workspace operator-workspace" tabIndex={-1}>
+      <section className="hero family-workspace-header"><h1>Session control</h1><p><strong>{projection.sessionTitle}</strong> · {projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
+      <nav className="session-operation-navigation family-workspace-navigation" aria-label="Session operations">
         <a href={`/admin/sessions/${projection.sessionId}#staffing-title`}>Staffing</a>
         <a href={`/sessions/${projection.sessionId}/runtime`}>Runtime</a>
         <a href={`/admin/sessions/${projection.sessionId}/reports`}>Reports</a>
@@ -1390,9 +1688,17 @@ function OperatorView() {
         <a href={`/admin/sessions/${projection.sessionId}/archive`}>Archive</a>
         <a href={`/sessions/${projection.sessionId}`}>Session detail</a>
       </nav>
+      <aside className="family-workspace-inspector" aria-labelledby="operator-context-title">
+        <h2 id="operator-context-title">Control context</h2>
+        <dl className="runtime-status-list"><div><dt>Session</dt><dd>{projection.sessionStatus}</dd></div>
+          <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div>
+          <div><dt>Connection</dt><dd>{connection}</dd></div>
+          <div><dt>Pending action</dt><dd>{pending ? "Submitting" : "None"}</dd></div></dl>
+      </aside>
+      <div className="family-workspace-primary">
       {operationView === null ? null : <p className="live-region" role="status" aria-live="polite">{operationNotice}</p>}
       {operationView === "reports" ? <section className="card operation-panel" aria-labelledby="reports-title">
-        <p className="eyebrow">Evidence export</p><h2 id="reports-title">Generate a Session report</h2>
+        <h2 id="reports-title">Generate a Session report</h2>
         <form onSubmit={(event) => void generateReport(event)}>
           <div className="field"><label htmlFor="report-kind">Report</label><select id="report-kind" name="reportKind" defaultValue="after_action">
             <option value="after_action">After action</option><option value="session_archive">Session archive</option>
@@ -1417,19 +1723,21 @@ function OperatorView() {
         <section aria-labelledby="report-history-title"><h3 id="report-history-title">Generated artifacts</h3>
           {reportArtifacts.length === 0 ? <p className="empty-state">No reports have been generated for this Session.</p> : <ul className="administration-list compact">
             {reportArtifacts.map((artifact) => <li key={artifact.artifactId}><span><strong>{artifact.filename}</strong> · {new Date(artifact.createdAt).toLocaleString()}</span>
-              <code>{artifact.sha256}</code>{artifact.purgedAt === null ? <a className="btn-secondary link-button" href={`/v1/report-artifacts/${artifact.artifactId}`}>Download</a> : <span>Purged under retention policy</span>}</li>)}</ul>}
+              <details className="provenance-disclosure"><summary>Technical provenance</summary><code>{artifact.sha256}</code></details>
+              {artifact.purgedAt === null ? <a className="btn-secondary link-button" href={`/v1/report-artifacts/${artifact.artifactId}`}>Download report</a> : <span>Purged under retention policy</span>}</li>)}</ul>}
         </section>
       </section> : null}
       {operationView === "replay" ? <section className="card operation-panel" aria-labelledby="replay-title">
-        <p className="eyebrow">Deterministic verification</p><h2 id="replay-title">Replay Session evidence</h2>
+        <h2 id="replay-title">Replay Session evidence</h2>
         <p>Replay compares authoritative Evidence against the configured deterministic adapter without changing Session state.</p>
         <button className="btn-primary" type="button" disabled={pending} onClick={() => void runReplay()}>Run replay</button>
         {replayResult === null ? null : <div className="replay-result">
           <div className={`status-notice ${replayResult.matched ? "status-success" : "status-warning"}`} role="status">
             <strong>{replayResult.matched ? "Matched" : "Divergence detected"}</strong> · {replayResult.comparedEvents} compared Evidence Events
           </div>
-          <dl className="provenance-grid"><div><dt>Captured History manifest digest</dt><dd><code>{replayResult.manifestDigest}</code></dd></div>
+          <dl className="provenance-grid"><div><dt>Compared events</dt><dd>{replayResult.comparedEvents}</dd></div>
             <div><dt>Reconstructed Narrative</dt><dd>Deterministic comparison only; never represented as a transcript</dd></div></dl>
+          <details className="provenance-disclosure"><summary>Replay manifest digest</summary><code>{replayResult.manifestDigest}</code></details>
           {replayResult.divergences.length === 0 ? <p>No differences were found between captured and replayed history.</p> : <table className="data-table">
             <caption>Machine-readable replay differences</caption><thead><tr><th scope="col">Difference</th><th scope="col">Sequence</th><th scope="col">Captured digest</th><th scope="col">Replayed digest</th></tr></thead>
             <tbody>{replayResult.divergences.map((item, index) => <tr key={`${item.code}-${item.sequence}-${index}`}><td>{item.code ?? "difference"}</td><td>{item.sequence ?? "—"}</td>
@@ -1437,9 +1745,9 @@ function OperatorView() {
         </div>}
       </section> : null}
       {operationView === "archive" ? <section className="card operation-panel" aria-labelledby="archive-title">
-        <p className="eyebrow">Retention lifecycle</p><h2 id="archive-title">Archive Session</h2>
+        <h2 id="archive-title">Archive Session</h2>
         <p>Archiving preserves immutable Release and Evidence history while removing this Session from active operations.</p>
-        {retentionStatus === null ? <p aria-busy="true">Loading retention consequences.</p> : <div className="retention-impact">
+        {retentionStatus === null ? <PlenumLoader label="Loading retention consequences" /> : <div className="retention-impact">
           {retentionStatus.organizationLegalHoldActive ? <p className="status-notice"><strong>Active legal hold:</strong> matching purge remains blocked after archive.</p> : null}
           <ul>{retentionStatus.consequences.map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>
           <h3>Applicable retention policies</h3>{retentionStatus.policies.length === 0 ? <p className="empty-state">No Organization or Session-specific retention policy is recorded.</p> :
@@ -1452,17 +1760,18 @@ function OperatorView() {
           <button className="btn-primary" type="submit" disabled={pending || projection.sessionStatus === "archived"}>{projection.sessionStatus === "archived" ? "Session archived" : "Confirm archive"}</button>
         </form>
       </section> : null}
+      {operationView === null ? <>
       <section className="metric-grid" aria-label="Session summary">
         <div className="card metric"><span>Connected Participants</span><strong>{projection.connectedParticipantCount} / {projection.participantCount}</strong></div>
         <div className="card metric"><span>Occupied Seats</span><strong>{projection.occupiedSeatCount} / {projection.totalSeatCount}</strong></div>
         <div className="card metric"><span>Active tasks</span><strong>{projection.activeTasks.length}</strong></div>
       </section>
       {projection.warnings.length === 0 ? null : <section className="card operation-panel" aria-labelledby="warning-title">
-        <p className="eyebrow">Attention required</p><h2 id="warning-title">Operational warnings</h2>
+        <h2 id="warning-title">Operational warnings</h2>
         <ul className="status-list">{projection.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
       </section>}
       <section className="card operation-panel" aria-labelledby="lifecycle-control-title">
-        <p className="eyebrow">Authoritative lifecycle · version {projection.sessionVersion}</p><h2 id="lifecycle-control-title">Session control</h2>
+        <h2 id="lifecycle-control-title">Session control</h2><p className="hint">Authoritative lifecycle version {projection.sessionVersion}</p>
         <p>The preview below names the requested transition. Plenum records the confirmed reason, before/after state, actor, Release, and server time.</p>
         <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
           const operation = String(data.get("operation"));
@@ -1481,7 +1790,7 @@ function OperatorView() {
         </form>
       </section>
       {projection.stage === null ? null : <section className="card operation-panel" aria-labelledby="stage-control-title">
-        <p className="eyebrow">Server-authoritative timer · Stage version {projection.stage.version}</p><h2 id="stage-control-title">{projection.stage.label}</h2>
+        <h2 id="stage-control-title">{projection.stage.label}</h2><p className="hint">Server-authoritative timer · Stage version {projection.stage.version}</p>
         <p>Status: <strong>{projection.stage.status.replaceAll("_", " ")}</strong> · elapsed {projection.stage.elapsedSeconds}s
           {projection.stage.remainingSeconds === null ? " · untimed" : ` · ${projection.stage.remainingSeconds}s remaining`} · extension {projection.stage.extensionSeconds}s</p>
         <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const operation = String(data.get("operation"));
@@ -1508,7 +1817,7 @@ function OperatorView() {
           <button className="btn-primary" type="submit" disabled={pending || !["active","paused"].includes(projection.sessionStatus)}>Apply Stage control</button>
         </form>
       </section>}
-      <section aria-labelledby="inject-queue-title"><div className="section-heading"><p className="eyebrow">Decision-relevant queue</p><h2 id="inject-queue-title">Injects</h2></div>
+      <section aria-labelledby="inject-queue-title"><div className="section-heading"><h2 id="inject-queue-title">Injects</h2></div>
         {projection.injectQueue.length === 0 ? <p className="empty-state">No Inject Definitions are configured.</p> : <ul className="readiness-list">{projection.injectQueue.map((item) => <li key={item.definitionId}>
           <span><strong>{item.title}</strong> · {item.state} · {item.releaseMode}{item.scheduledAt === null ? "" : ` · ${new Date(item.scheduledAt).toLocaleString()}`}</span>
           {item.releaseMode === "manual" && item.id === null ? <button className="btn-secondary" type="button" disabled={pending}
@@ -1519,12 +1828,12 @@ function OperatorView() {
               { reason: `Cancel ${item.title}`, confirmed: true }, item.id, item.version)}>Cancel Inject</button> : null}
         </li>)}</ul>}
       </section>
-      <section aria-labelledby="adjudication-queue-title"><div className="section-heading"><p className="eyebrow">Decision-relevant queue</p><h2 id="adjudication-queue-title">Adjudications</h2></div>
+      <section aria-labelledby="adjudication-queue-title"><div className="section-heading"><h2 id="adjudication-queue-title">Adjudications</h2></div>
         {projection.adjudicationQueue.length === 0 ? <p className="empty-state">No Adjudications require action.</p> : <ul className="readiness-list">
           {projection.adjudicationQueue.map((item) => <li key={item.id}><span><strong>{item.status}</strong> · version {item.version}</span><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></li>)}</ul>}
       </section>
       <section aria-labelledby="delivery-health-title">
-        <div className="section-heading"><p className="eyebrow">Delivery health</p><h2 id="delivery-health-title">Runtime deliveries</h2></div>
+        <div className="section-heading"><h2 id="delivery-health-title">Runtime deliveries</h2></div>
         <p>{projection.deliveryHealth.pending} pending · {projection.deliveryHealth.deadLettered} dead-lettered</p>
         {projection.deliveryHealth.deadLetters.length === 0 ? <p className="empty-state">No dead-lettered deliveries.</p> :
           <ul className="readiness-list">{projection.deliveryHealth.deadLetters.map((item) => <li key={item.outboxId}>
@@ -1535,7 +1844,7 @@ function OperatorView() {
           </li>)}</ul>}
       </section>
       {readiness === null ? null : <section aria-labelledby="staffing-title">
-        <div className="section-heading"><p className="eyebrow">Verified onboarding</p><h2 id="staffing-title">Session staffing</h2></div>
+        <div className="section-heading"><h2 id="staffing-title">Session staffing</h2></div>
         <div className="card-grid">
           <article className="card"><h3>Issue invitation</h3>
             <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
@@ -1545,30 +1854,32 @@ function OperatorView() {
               if (seatId !== "") payload.seatId = seatId;
               void send(`/v1/sessions/${id}/invitations`, "invitation.issue", payload, crypto.randomUUID(), 0)
                 .then((result) => setInvitationToken(result !== null && "invitationToken" in result ? result.invitationToken : null)); }}>
-              <div className="field"><label htmlFor="invite-person">Recipient Person ID <span className="hint">(optional)</span></label>
-                <input id="invite-person" name="personId" type="text" autoComplete="off" /></div>
+              <details className="provenance-disclosure"><summary>Reserve for a directory person</summary>
+                <div className="field"><label htmlFor="invite-person">Directory person reference <span className="hint">(optional)</span></label>
+                  <input id="invite-person" name="personId" type="text" autoComplete="off" /></div></details>
               <div className="field"><label htmlFor="invite-seat">Reserved Seat <span className="hint">(optional)</span></label>
                 <select id="invite-seat" name="seatId"><option value="">Any eligible Seat</option>
-                  {readiness.staffing.seats.map((item) => <option key={item.seatId} value={item.seatId}>{item.seatId}</option>)}</select></div>
+                  {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <button className="btn-primary" type="submit" disabled={pending}>Issue invitation</button>
             </form>
             {invitationToken === null ? null : <p className="credential" role="status">Copy this one-time token now: <code>{invitationToken}</code></p>}
           </article>
-          <article className="card"><h3>Assign Participant</h3>
-            <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+          <article className="card"><h3>Assign participant</h3><p>Use direct assignment only when an authorized directory reference is available.</p>
+            <details className="provenance-disclosure"><summary>Open direct assignment form</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
               void send(`/v1/sessions/${id}/participants`, "participant.assign", {
                 personId: String(data.get("personId")), seatId: String(data.get("seatId")), sessionRoleId: String(data.get("sessionRoleId"))
               }, crypto.randomUUID()); }}>
-              <div className="field"><label htmlFor="assign-person">Person ID</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
+              <div className="field"><label htmlFor="assign-person">Directory person reference</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
               <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((item) => <option key={item.seatId} value={item.seatId}>{item.seatId}</option>)}</select></div>
-              <div className="field"><label htmlFor="assign-role">Session Role ID</label><input id="assign-role" name="sessionRoleId" type="text" required autoComplete="off" /></div>
+                {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+              <div className="field"><label htmlFor="assign-role">Session Role</label><select id="assign-role" name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
+                  {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
-            </form>
+            </form></details>
           </article>
         </div>
         <h3>Seat occupancy</h3>
-        <ul className="readiness-list">{readiness.staffing.seats.map((item) => <li key={item.seatId}><span><strong>{item.seatId}</strong>{item.teamId === null ? "" : ` · Team ${item.teamId}`}</span>
+        <ul className="readiness-list">{readiness.staffing.seats.map((item, index) => <li key={item.seatId}><span><strong>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</strong></span>
           <span>{item.occupied} / {item.maximum ?? "unlimited"} occupied · minimum {item.minimum}</span></li>)}</ul>
         <h3>Waiting room</h3>
         {readiness.staffing.joinRequests.length === 0 ? <p className="empty-state">No pending join requests.</p> : <ul className="readiness-list">
@@ -1583,7 +1894,8 @@ function OperatorView() {
             <span>{item.reasons.join(", ")}</span></li>)}</ul>}
         <h3>Active assignments</h3>
         {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
-          {readiness.staffing.assignments.map((item) => <li key={item.seatAssignmentId}><span><strong>{item.seatId}</strong> · {item.personId} · {item.sessionRoleId}</span>
+          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
+            <details className="provenance-disclosure"><summary>Assignment references</summary><code>{item.personId} · {item.seatAssignmentId}</code></details>
             <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
               void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
                 previousSeatAssignmentId: item.seatAssignmentId, newSeatId: String(data.get("seatId")),
@@ -1591,15 +1903,16 @@ function OperatorView() {
                 exposureAcknowledged: data.get("exposureAcknowledged") === "on"
               }, item.participantId, item.accessRevision); }}>
               <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((seat) => <option key={seat.seatId} value={seat.seatId}>{seat.seatId}</option>)}</select></div>
-              <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role ID</label><input id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required /></div>
+                {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+              <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role</label><select id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
+                {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
               <label className="choice"><input name="exposureAcknowledged" type="checkbox" /> I acknowledge that previously viewed information cannot be withdrawn.</label>
               <button className="btn-primary" type="submit" disabled={pending}>Reassign</button>
             </form></details></li>)}</ul>}
       </section>}
       {readiness === null ? null : <section aria-labelledby="readiness-title">
-        <div className="section-heading"><p className="eyebrow">Release and assignment version {readiness.assignmentVersion}</p><h2 id="readiness-title">Operator readiness</h2></div>
+        <div className="section-heading"><h2 id="readiness-title">Operator readiness</h2><p>Release and assignment version {readiness.assignmentVersion}</p></div>
         <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
         <ul className="readiness-list">
           {readiness.checks.map((check) => <li key={check.key}>
@@ -1625,17 +1938,32 @@ function OperatorView() {
           {projection.recentEvents.map((event, index) => <li key={`${event.type}-${event.recordedAt}-${index}`}><span>{event.type}</span><time dateTime={event.recordedAt}>{new Date(event.recordedAt).toLocaleString()}</time></li>)}</ol>}
       </section>
       <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
+      </> : null}
+      </div>
     </main>
   </Shell>;
 }
 
 export function App() {
+  const projectDemoId = useMemo(() => window.location.pathname.match(/^\/projects\/([0-9a-f-]{36})\/demo\/?$/iu)?.[1] ?? null, []);
+  const firstAdminToken = useMemo(() => window.location.pathname.match(/^\/platform\/invitations\/([A-Za-z0-9_-]{43})\/?$/u)?.[1] ?? null, []);
+  const platformAdministratorToken = useMemo(() => window.location.pathname.match(/^\/platform\/administrator-invitations\/([A-Za-z0-9_-]{43})\/?$/u)?.[1] ?? null, []);
+  const workforceInvitationToken = useMemo(() => window.location.pathname.match(/^\/organization\/invitations\/([A-Za-z0-9_-]{43})\/?$/u)?.[1] ?? null, []);
   const operator = useMemo(() => window.location.pathname.startsWith("/admin/"), []);
   const productEntry = useMemo(() => {
     const pathname = window.location.pathname;
     return pathname === "/" || /^\/(?:releases|sessions)\/[0-9a-f-]{36}$/iu.test(pathname) ||
-      /^\/admin\/(?:members|plugins|deployment|data-policy)\/?$/u.test(pathname) || /^\/research\/reports\/?$/u.test(pathname);
+      /^\/admin\/(?:members|identity|plugins|deployment|data-policy)\/?$/u.test(pathname) || /^\/research\/reports\/?$/u.test(pathname) ||
+      /^\/platform\/(?:organizations(?:\/[0-9a-f-]{36})?|administrators)\/?$/iu.test(pathname);
   }, []);
+  if (firstAdminToken !== null) return <FirstAdminInvitation token={firstAdminToken} />;
+  if (platformAdministratorToken !== null) return <PlatformAdministratorInvitation token={platformAdministratorToken} />;
+  if (workforceInvitationToken !== null) return <OrganizationWorkforceInvitation token={workforceInvitationToken} />;
+  if (projectDemoId !== null) return <Shell connection="online" bounded headerContent={<div className="header-actions qa-demo-header-actions">
+    <a className="qa-demo-back-link" href="/?workspace=projects">Projects</a>
+    <strong className="qa-demo-mode-label"><span className="connection-indicator" aria-hidden="true" />QA Demo <span>Isolated Draft</span></strong>
+    <ThemeToggle />
+  </div>}><ProjectDemo projectId={projectDemoId} FieldEditorComponent={FieldEditor} /></Shell>;
   if (productEntry) return <ProductEntry />;
   return operator ? <OperatorView /> : <RuntimeView />;
 }

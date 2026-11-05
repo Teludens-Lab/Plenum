@@ -20,6 +20,7 @@ const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
 const localUserTest = process.argv.includes("--local-user-test");
 const seedUserTest = process.argv.includes("--seed-user-test");
+const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
 if (seedUserTest && !localUserTest) throw new Error("--seed-user-test requires --local-user-test");
 if (seedUserTest) await (await import("./global-setup.mjs")).default();
 const localUserTestCookieName = "plenum_ps700_identity";
@@ -175,6 +176,22 @@ const api = createRuntimeHttpHandler({
   replayAdapter: { async replay(input) { return input; } },
   contentScanner,
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
+  publicBaseUrl: `http://127.0.0.1:${runtimePort}`,
+  domainVerificationResolver: {
+    async resolveTxt(name) {
+      const result = await pool.query(
+        "SELECT challenge_value FROM identity.organization_domains WHERE challenge_name=$1",
+        [name]
+      );
+      return result.rows.map(({ challenge_value }) => challenge_value);
+    }
+  },
+  firstAdminInvitationDelivery: {
+    async deliver(input) {
+      return { providerReference: `synthetic:${input.deliveryId}`, previewUrl: input.invitationUrl };
+    }
+  },
+  invitationDeliveryWebhookToken: "synthetic-invitation-delivery-webhook-token",
   authenticate
 });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
@@ -191,20 +208,21 @@ async function personaPage(returnTo, error = "") {
   const webIndex = await readFile(join(webRoot, "index.html"), "utf8");
   const stylesheet = webIndex.match(/href="([^"]+\.css)"/u)?.[1];
   if (stylesheet === undefined) throw new Error("Runtime web stylesheet was not found");
-  const choices = Object.entries(localPersonas).map(([value, persona]) => `<label class="choice">
-    <input type="radio" name="persona" value="${value}" required>
-    <span class="persona-choice-copy"><strong>${persona.label}</strong><span>${persona.description}</span></span>
-  </label>`).join("");
+  const choices = Object.entries(localPersonas).map(([value, persona]) =>
+    `<option value="${value}">${persona.label}</option>`).join("");
   return `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <meta name="color-scheme" content="light dark"><title>Choose a synthetic persona / Plenum</title><link rel="stylesheet" href="${stylesheet}"></head>
-    <body><a class="skip-link" href="#main-content">Skip to main content</a><header class="app-header">
-      <a class="brand-wordmark" href="/" aria-label="Plenum home"><img class="brand-wordmark-dark" src="/branding/plenum-wordmark-dark.png" alt="Plenum" width="2170" height="725"><img class="brand-wordmark-light" src="/branding/plenum-wordmark-light.png" alt="" width="2170" height="725" aria-hidden="true"></a>
-      <span class="badge badge-state">Local user test</span></header><main id="main-content" class="state-page" tabindex="-1">
-      <section class="card state-card"><h1>Choose a synthetic persona</h1><p>This loopback-only chooser changes test identity without passwords, developer tools, or authorization headers.</p>
-      ${error === "" ? "" : `<p class="field-error" role="alert">${error}</p>`}
-      <form class="persona-form" method="post" action="/__test__/identity?returnTo=${encodeURIComponent(returnTo)}"><fieldset><legend>Test role</legend>${choices}</fieldset>
-      <div class="actions"><button class="btn-primary" type="submit">Continue as selected persona</button><a class="btn-secondary link-button" href="/">Cancel</a></div></form>
-      <p class="hint">Synthetic data only. This chooser does not exist in a production deployment.</p></section></main></body></html>`;
+    <meta name="color-scheme" content="light dark"><script>try{document.documentElement.dataset.theme=localStorage.getItem("plenum.theme")==="dark"?"dark":"light"}catch{document.documentElement.dataset.theme="light"}</script><title>Choose a test role / Plenum</title><link rel="stylesheet" href="${stylesheet}"></head>
+    <body class="entry-auth-body"><a class="skip-link" href="#main-content">Skip to main content</a><header class="app-header entry-auth-header">
+      <a class="brand-wordmark" href="/" aria-label="Plenum home"><img class="brand-wordmark-dark" src="/branding/plenum-wordmark-primary.png" alt="Plenum" width="2170" height="725"><img class="brand-wordmark-light" src="/branding/plenum-wordmark-primary.png" alt="" width="2170" height="725" aria-hidden="true"></a>
+      <a class="entry-auth-close" href="/" aria-label="Close sign-in"><svg class="entry-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg></a></header><main id="main-content" class="entry-auth-page" tabindex="-1">
+      <section class="entry-auth-panel" aria-labelledby="entry-auth-title"><h1 id="entry-auth-title">Choose a test role</h1><p class="entry-auth-intro">Enter a seeded workspace as a synthetic user.</p>
+      ${error === "" ? "" : `<p class="field-error" id="persona-error" role="alert">${error}</p>`}
+      <form class="persona-form" method="post" action="/__test__/identity?returnTo=${encodeURIComponent(returnTo)}">
+      <div class="field"><label for="persona">Test role</label><select id="persona" name="persona" required ${error === "" ? "" : "aria-describedby=\"persona-error\""}><option value="">Select a role</option>${choices}</select></div>
+      <button class="entry-auth-submit" type="submit"><span>Continue</span><svg class="entry-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14M14 7l5 5-5 5"/></svg></button></form>
+      <p class="entry-auth-note">Synthetic data only.</p></section></main>
+      <div class="plenum-loader-overlay" aria-hidden="true"><div class="plenum-loader" role="status" aria-live="polite" aria-atomic="true" aria-label="Resolving next state" aria-busy="true"><svg class="plenum-loader__star" viewBox="-16 -16 32 32" aria-hidden="true" focusable="false">${[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => `<line class="plenum-loader__petal" x1="0" y1="-6" x2="0" y2="-13" transform="rotate(${angle})"></line>`).join("")}</svg></div></div>
+      <script>document.querySelector(".persona-form")?.addEventListener("submit",function(event){if(window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;event.preventDefault();var overlay=document.querySelector(".plenum-loader-overlay");overlay?.setAttribute("aria-hidden","false");overlay?.classList.add("is-visible");document.querySelector("#main-content")?.setAttribute("aria-busy","true");window.setTimeout(()=>this.submit(),160);});</script></body></html>`;
 }
 
 async function formBody(request) {
@@ -289,7 +307,6 @@ server.on("upgrade", (request, socket, head) => void collaboration.handleUpgrade
   if (!handled) socket.destroy();
 }));
 
-const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
 server.listen(runtimePort, "127.0.0.1", () => console.log(
   `${localUserTest ? "PS-710 through PS-790 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:${runtimePort}${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}; PS-790 files: ${join(process.cwd(), "output", "user-test", "ps-790")}` : ""}`
 ));

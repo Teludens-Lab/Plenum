@@ -33,7 +33,7 @@ Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Sc
 
 ## Prerequisites
 
-Task prerequisites: `PS-810`.
+Task prerequisites: `PS-815`.
 
 Before editing, read Roadmap section 16, `PROJECT_STATE.md`, this prompt, the requirement rows, the smallest governing sections, Glossary terms, contracts, and tests. Check `git status --short`, current versions, and prerequisite evidence. Stop on a dirty overlap or failed prerequisite; preserve unrelated work. Required git state: no unreviewed overlapping changes and no unresolved failed gate. Do not create a commit unless the repository workflow or user explicitly authorizes it.
 

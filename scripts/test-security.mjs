@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const started = Date.now();
@@ -18,7 +18,16 @@ const revision = run("git", ["rev-parse", "HEAD"]).stdout.trim();
 const sourceFiles = run("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
   .stdout.split("\0").filter(Boolean).sort();
 const sourceManifest = createHash("sha256");
-for (const file of sourceFiles) sourceManifest.update(file).update("\0").update(await readFile(join(process.cwd(), file))).update("\0");
+for (const file of sourceFiles) {
+  const path = join(process.cwd(), file);
+  try {
+    if (!(await stat(path)).isFile()) continue;
+    sourceManifest.update(file).update("\0").update(await readFile(path)).update("\0");
+  } catch (error) {
+    if (error?.code === "ENOENT") continue;
+    throw error;
+  }
+}
 const output = `${tests.stdout}${tests.stderr}`;
 const status = tests.status === 0 && audit.status === 0 ? "PASS" : "FAIL";
 const evidence = {

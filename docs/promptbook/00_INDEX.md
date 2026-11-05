@@ -2,13 +2,13 @@
 
 ## Executive summary
 
-This promptbook now schedules 48 dependency-ordered tasks across P00-P11. P00-P06 built and verified the platform's principal technical slices; P07-P11 close the remaining product, workflow, user-interface, operational and acceptance gaps needed for a genuinely usable platform. It generates implementation instructions only; it does not claim that planned completion work is already implemented, deployed, ratified or released.
+This promptbook now schedules 49 dependency-ordered tasks across P00-P11. P00-P06 built and verified the platform's principal technical slices; P07-P11 close the remaining product, workflow, user-interface, operational and acceptance gaps needed for a genuinely usable platform. It generates implementation instructions only; it does not claim that planned completion work is already implemented, deployed, ratified or released.
 
 The retained executable spike remains `references/plenum-runtime-slice/` v0.2.0 and is not a golden source. The Product Owner confirmed Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the immutable behavioral reference under `references/fractured-order/`. P00-P05 now have extensive Node 24/PostgreSQL 18/browser/accessibility/deployment evidence recorded in `PROJECT_STATE.md`, culminating in PS-550 engineering completion and a production NO-GO. That evidence proves technical slices, not the complete user-facing product; P07-P11 close that distinction explicitly.
 
 ## Finished-system definition
 
-The implementation target is a blank-install, UI-only lifecycle: a non-programming Designer can create or import and visually verify Fractured Order, publish a Release, staff and run a Session, complete all role workflows, adjudicate and recover, and produce traceable evidence, reports, replay and archive. The same platform must then author and run two materially different simulations without Runtime code changes. Every product surface uses the Teludens catalog under `references/teludens-design-system-catalog/`, including the complete Fractured Order experience, and uses its dark/light Plenum wordmarks as platform branding. Release approval remains separate from implementation completion.
+The implementation target is a blank-install, UI-only lifecycle: a non-programming Designer can create or import and visually verify Fractured Order, publish a Release, staff and run a Session, complete all role workflows, adjudicate and recover, and produce traceable evidence, reports, replay and archive. The same platform must then author and run two materially different simulations without Runtime code changes. Every product surface uses the Teludens catalog under `references/teludens-design-system-catalog/`, including the complete Fractured Order experience, and uses the approved primary Plenum wordmark with theme-safe presentation as platform branding. Release approval remains separate from implementation completion.
 
 ## Deliverable map
 
@@ -51,7 +51,7 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 ## Coverage and exclusions
 
-- Vertical tasks: 48 (32 P00-P06 tasks plus 16 product-completion tasks in P07-P11).
+- Vertical tasks: 49 (32 P00-P06 tasks plus 17 product-completion tasks in P07-P11).
 - Normative coverage: 94/94 REQs and 28/28 INVs.
 - Product exclusions preserved: AI-assisted authoring, ranked-choice voting, video, feedback loops, public Plugin marketplace, arbitrary custom code, mandatory Kubernetes, and unsupported production claims.
 - Dependency cycles: none, verified by the promptbook validator.

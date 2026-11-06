@@ -832,7 +832,7 @@ code { font-family: var(--font-mono); }
   .family-workspace-inspector { order: 3; }
   .catalog-row { grid-template-columns: 1fr; }
   .catalog-row .card-heading { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .catalog-row .badge { justify-self: start; }
+  .catalog-row .badge { max-width: 100%; justify-self: start; overflow-wrap: anywhere; white-space: normal; }
   .catalog-row .project-metadata { grid-template-columns: 1fr; }
   .catalog-facts { grid-template-columns: 1fr; }
   .catalog-row-actions, .filter-actions, .actions { width: 100%; display: grid; grid-template-columns: 1fr; justify-content: stretch; }

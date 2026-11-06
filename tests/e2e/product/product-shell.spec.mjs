@@ -26,6 +26,23 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
   return { context, page: await context.newPage() };
 }
 
+async function horizontalOverflowState(page) {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const overflow = Math.max(0, Math.ceil(root.scrollWidth - root.clientWidth));
+    if (overflow === 0) return { overflow, offenders: [] };
+    const offenders = Array.from(document.body.querySelectorAll("*"))
+      .filter((element) => element instanceof HTMLElement && element.getBoundingClientRect().right > root.clientWidth + 1)
+      .slice(0, 8)
+      .map((element) => {
+        const name = element.id === "" ? element.tagName.toLowerCase() : `${element.tagName.toLowerCase()}#${element.id}`;
+        const classes = Array.from(element.classList).slice(0, 3).join(".");
+        return `${name}${classes === "" ? "" : `.${classes}`}`;
+      });
+    return { overflow, offenders };
+  });
+}
+
 async function expectCompactWorkWordmark(page) {
   const wordmark = page.locator(".app-header .brand-wordmark img:visible");
   await expect(wordmark).toHaveCount(1);
@@ -593,7 +610,7 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
   const zoomed = await actor(browser, fixture.tokens.operator, { width: 320, height: 720 });
   await zoomed.page.goto("/?workspace=lifecycle");
   await zoomed.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-  await expect.poll(() => zoomed.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expect.poll(() => horizontalOverflowState(zoomed.page)).toEqual({ overflow: 0, offenders: [] });
   expect(await zoomed.page.evaluate(() => {
     const workspaces = document.querySelector(".workspace-navigation-toggle")?.getBoundingClientRect();
     const account = document.querySelector(".account-context-toggle")?.getBoundingClientRect();

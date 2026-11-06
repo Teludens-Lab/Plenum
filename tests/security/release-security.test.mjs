@@ -97,6 +97,7 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
     "test:security", "test:supply-chain", "test:deployment", "audit:product-completeness"]) assert.equal(ci.includes(gate), true);
   assert.doesNotMatch(ci, /server -s3 -ip=0\.0\.0\.0(?:\s|$)/u);
   assert.match(ci, /server -s3 -ip=127\.0\.0\.1 -ip\.bind=0\.0\.0\.0 -s3\.ip\.bind=0\.0\.0\.0/u);
+  assert.match(security, /codeql:\s+[\s\S]*?permissions:\s+[\s\S]*?actions: read[\s\S]*?security-events: write/u);
   assert.match(security, /github\/codeql-action\/analyze@[0-9a-f]{40}/u);
   assert.match(security, /actions\/dependency-review-action@[0-9a-f]{40}/u);
   assert.match(dast, /test "\$TARGET_URL" = "https:\/\/plenum-stage-01\.duckdns\.org"/u);

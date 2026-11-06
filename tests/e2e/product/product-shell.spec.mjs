@@ -29,10 +29,10 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
 async function horizontalOverflowState(page) {
   return page.evaluate(() => {
     const root = document.documentElement;
-    const overflow = Math.max(0, Math.ceil(root.scrollWidth - root.clientWidth));
+    const overflow = Math.max(0, Math.ceil(root.scrollWidth - window.innerWidth));
     if (overflow === 0) return { overflow, offenders: [] };
     const offenders = Array.from(document.body.querySelectorAll("*"))
-      .filter((element) => element instanceof HTMLElement && element.getBoundingClientRect().right > root.clientWidth + 1)
+      .filter((element) => element instanceof HTMLElement && element.getBoundingClientRect().right > window.innerWidth + 1)
       .slice(0, 8)
       .map((element) => {
         const name = element.id === "" ? element.tagName.toLowerCase() : `${element.tagName.toLowerCase()}#${element.id}`;

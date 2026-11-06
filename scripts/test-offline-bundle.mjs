@@ -27,7 +27,7 @@ try {
   }
   const manifest = JSON.parse(await readFile(join(output, "deployment-manifest.json"), "utf8"));
   const archiveBytes = (await stat(join(output, "images.tar"))).size;
-  if (manifest.images.length !== 5 || archiveBytes === 0) throw new Error("Offline image closure is incomplete");
+  if (manifest.images.length !== 6 || archiveBytes === 0) throw new Error("Offline image closure is incomplete");
   await mkdir(join(process.cwd(), "test-results", "deployment"), { recursive: true });
   await writeFile(evidencePath, `${JSON.stringify({ contractId: "offline-bundle-evidence-v1", status: "PASS",
     generatedAt: new Date().toISOString(), applicationImageId: manifest.applicationImageId, imageCount: manifest.images.length,

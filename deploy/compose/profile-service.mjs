@@ -8,7 +8,7 @@ import {
   authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
-  createSystemIdentityMetadataFetcher
+  createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 
@@ -82,6 +82,12 @@ const authenticate = async (request, correlationId) => {
     organizationRoles: row.organization_roles, authenticationStrength: row.authentication_strength, expiresAt: row.expires_at };
 };
 const mediaAdapter = media;
+const contentScanner = process.env.CONTENT_SCANNER_HOST?.trim() ? new ClamAvContentScanner({
+  host: process.env.CONTENT_SCANNER_HOST.trim(),
+  port: Number(process.env.CONTENT_SCANNER_PORT ?? 3310),
+  timeoutMs: Number(process.env.CONTENT_SCANNER_TIMEOUT_MS ?? 10_000)
+}) : undefined;
+const telemetry = new OperationalTelemetry({ deploymentId });
 const firstAdminInvitationDelivery = new WebhookFirstAdminInvitationDelivery({
   endpoint: invitationDeliveryEndpoint,
   bearerToken: invitationDeliveryBearerToken
@@ -94,9 +100,20 @@ const postmarkInvitationAdapter = notificationsHostname ? new PostmarkInvitation
 }) : undefined;
 const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
   objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET"),
+  ...(contentScanner === undefined ? {} : { contentScanner }),
   firstAdminInvitationDelivery, invitationDeliveryBearerToken, invitationDeliveryWebhookToken,
   ...(notificationsHostname && postmarkInvitationAdapter ? { notificationsHostname, postmarkInvitationAdapter } : {}), publicBaseUrl,
-  identityMetadataFetcher: createSystemIdentityMetadataFetcher({ allowPrivateNetworks: profile !== "cloud" }) });
+  identityMetadataFetcher: createSystemIdentityMetadataFetcher({ allowPrivateNetworks: profile !== "cloud" }),
+  async onSecurityEvent(event) {
+    telemetry.emit({ event: event.eventType, severity: event.severity, outcome: event.outcome,
+      correlationId: event.correlationId, category: event.category });
+    try {
+      await recordOperationalSecurityEvent(pool, { deploymentId, ...event });
+    } catch {
+      telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
+        correlationId: event.correlationId, category: "upload_scan" });
+    }
+  } });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
@@ -113,21 +130,36 @@ const serviceStartedAt = Date.now();
 let retentionLastSucceededAt;
 
 const server = createServer(async (request, response) => {
+  const telemetryContext = telemetry.begin(request);
+  response.setHeader("x-correlation-id", telemetryContext.correlationId);
   for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
   try {
     const url = new URL(request.url ?? "/", "https://plenum.invalid");
+    if (request.method === "GET" && url.pathname === "/internal/metrics") {
+      const address = request.socket.remoteAddress;
+      if (address !== "127.0.0.1" && address !== "::1" && address !== "::ffff:127.0.0.1") {
+        response.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
+        response.end('{"error":"not_found"}\n'); return;
+      }
+      response.writeHead(200, { "content-type": "text/plain; version=0.0.4; charset=utf-8", "cache-control": "no-store" });
+      response.end(telemetry.metrics()); return;
+    }
     const rateLimitRule = classifyDeploymentRequest(request, trustedProxy);
     if (rateLimitRule !== null) {
       const decision = await consumeDeploymentRateLimit(pool, deploymentId, rateLimitRule);
       response.setHeader("x-ratelimit-limit", String(rateLimitRule.limit));
       response.setHeader("x-ratelimit-remaining", String(decision.remaining));
       if (!decision.allowed) {
-        const correlationId = randomUUID();
         response.writeHead(429, { "content-type": "application/json", "cache-control": "no-store",
           "retry-after": String(decision.retryAfterSeconds) });
-        response.end(`${JSON.stringify(authorizationError("RATE_LIMITED", "Request rate limit exceeded.", correlationId).envelope)}\n`);
-        console.warn(JSON.stringify({ event: "security.rate_limit_exceeded", correlationId,
-          deploymentId, category: rateLimitRule.category }));
+        response.end(`${JSON.stringify(authorizationError("RATE_LIMITED", "Request rate limit exceeded.", telemetryContext.correlationId).envelope)}\n`);
+        telemetry.emit({ event: "security.rate_limit_exceeded", severity: "warning", outcome: "denied",
+          correlationId: telemetryContext.correlationId, traceId: telemetryContext.traceId, category: rateLimitRule.category });
+        await recordOperationalSecurityEvent(pool, { deploymentId, eventType: "security.rate_limited",
+          severity: "warning", outcome: "denied", correlationId: telemetryContext.correlationId,
+          category: rateLimitRule.category }).catch(() => telemetry.emit({ event: "security.evidence_failed",
+            severity: "error", outcome: "failed", correlationId: telemetryContext.correlationId,
+            traceId: telemetryContext.traceId, category: "rate_limit" }));
         return;
       }
     }
@@ -135,6 +167,7 @@ const server = createServer(async (request, response) => {
       await pool.query("SELECT 1");
       await s3.send(new ListObjectsV2Command({ Bucket: s3Bucket, MaxKeys: 1 }));
       if (await media.health() !== "available") throw new Error("Media unavailable");
+      if (contentScanner !== undefined && await contentScanner.health() !== "available") throw new Error("Malware scanner unavailable");
       if (Date.now() - serviceStartedAt > 60_000 &&
           (retentionLastSucceededAt === undefined || Date.now() - retentionLastSucceededAt > 26 * 60 * 60_000)) {
         throw new Error("Retention enforcement unavailable");
@@ -173,7 +206,7 @@ const server = createServer(async (request, response) => {
         ...(principal.preserveSession === true ? {} : { "set-cookie": `${cookieName}=${principal.authenticationSessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}` }),
         "cache-control": "no-store" }); response.end(); return;
     }
-    if (await api(request, response)) return;
+    if (await api(request, response, telemetryContext.correlationId)) return;
     const studio = url.pathname.startsWith("/studio/");
     const relative = url.pathname.startsWith("/assets/") ? normalize(url.pathname.slice(1)) :
       studio && url.pathname.startsWith("/studio/assets/") ? normalize(url.pathname.slice("/studio/".length)) : "index.html";
@@ -182,8 +215,13 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream" });
     response.end(file);
   } catch {
+    telemetry.emit({ event: "service.request_failed", severity: "error", outcome: "failed",
+      correlationId: telemetryContext.correlationId, traceId: telemetryContext.traceId,
+      method: telemetryContext.method, route: telemetryContext.route, category: "unhandled" });
     response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
     response.end('{"error":"service_unavailable"}\n');
+  } finally {
+    telemetry.complete(telemetryContext, response);
   }
 });
 server.on("upgrade", (request, socket, head) => void (async () => {
@@ -204,10 +242,11 @@ async function enforceRetention() {
   try {
     const result = await runRetentionEnforcement(pool, oidc.organizationId, retentionActorPersonId, correlationId);
     retentionLastSucceededAt = Date.now();
-    console.info(JSON.stringify({ event: "retention.enforcement_completed", correlationId, ...result }));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "retention.enforcement_failed", correlationId,
-      message: error instanceof Error ? error.message : "unknown error" }));
+    telemetry.emit({ event: "retention.enforcement_completed", severity: "info", outcome: "succeeded",
+      correlationId, category: result.heldArtifacts > 0 ? "legal_holds_present" : "standard" });
+  } catch {
+    telemetry.emit({ event: "retention.enforcement_failed", severity: "error", outcome: "failed",
+      correlationId, category: "scheduled_run" });
   } finally {
     retentionRunning = false;
   }

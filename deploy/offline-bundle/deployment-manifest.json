@@ -2,17 +2,18 @@
   "contractId": "deployment-manifest-v1",
   "manifestVersion": 1,
   "platformVersion": "0.1.0",
-  "schemaVersion": "024",
+  "schemaVersion": "039",
   "applicationImage": "plenum-platform:0.1.0",
   "images": [
     "postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
     "chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d",
     "quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b",
-    "livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a"
+    "livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a",
+    "clamav/clamav-debian:1.4.6@sha256:ce80e97855d937e93009bb47eb5ecb410b514b844b03d0ecf00e8eeec92810cc"
   ],
   "profiles": ["cloud", "institutional", "air_gapped"],
-  "contracts": ["deployment-manifest-v1", "backup-manifest-v1", "verification-export-v1"],
-  "migrations": { "first": "001", "last": "025", "strategy": "forward-fix" },
+  "contracts": ["deployment-manifest-v1", "backup-manifest-v1", "verification-export-v1", "operational-telemetry-v1"],
+  "migrations": { "first": "001", "last": "039", "strategy": "forward-fix" },
   "runtimeDependencies": { "publicNetworkRequired": false, "trustMaterialIncluded": false }
 }
 

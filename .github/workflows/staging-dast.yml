@@ -1,0 +1,31 @@
+name: Staging DAST
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Approved non-production staging origin
+        required: true
+        default: https://plenum-stage-01.duckdns.org
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging-security
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+      - name: Refuse unapproved or production targets
+        env:
+          TARGET_URL: ${{ inputs.target }}
+        run: test "$TARGET_URL" = "https://plenum-stage-01.duckdns.org"
+      - uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: ${{ inputs.target }}
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: ps-810-staging-dast

@@ -62,7 +62,10 @@ test("PS-530-T01 runs the identical application image in cloud, institutional, a
   }
   assert.equal(airGapped.networks.plenum.internal, true);
   for (const service of [institutional.services.database, institutional.services.storage,
-    institutional.services.identity, institutional.services.media]) assert.match(service.image, /@sha256:[0-9a-f]{64}$/u);
+    institutional.services.identity, institutional.services.media, institutional.services["malware-scanner"]]) {
+    assert.match(service.image, /@sha256:[0-9a-f]{64}$/u);
+  }
+  assert.equal(institutional.services.application.environment.CONTENT_SCANNER_HOST, "malware-scanner");
   assert.deepEqual(institutional.services.database.command, [
     "postgres", "-c", "wal_buffers=16MB", "-c", "checkpoint_timeout=15min", "-c", "max_wal_size=4GB"
   ]);

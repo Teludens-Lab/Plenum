@@ -147,7 +147,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-810-add-ci-observability-and-production-security-controls`
 - Proposed subject: `build(platform): add CI observability and security gates`
-- Expected migrations: `033_observability_security_events`
+- Expected migrations: `039_operational_security_events`
 - Expected API/contract IDs: `operational-telemetry-v1`
 
 Proposed body:
@@ -168,7 +168,7 @@ Refs: PS-810, REQ-051, REQ-052, REQ-066
 
 Proposed PR description:
 
-Summary: Operators and maintainers can detect failures, trace affected Sessions, respond safely, and prevent unverified builds from becoming releases. Risks: high workflow and authorization regressions. Migration: 033_observability_security_events. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
+Summary: Operators and maintainers can detect failures, trace affected Sessions, respond safely, and prevent unverified builds from becoming releases. Risks: high workflow and authorization regressions. Migration: 039_operational_security_events. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

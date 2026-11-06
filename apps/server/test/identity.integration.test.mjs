@@ -171,7 +171,8 @@ import {
   runOrganizationWorkforceReconciliation,
   scheduleProvisioningOperationRetry,
   recordInvitationDeliveryEvent,
-  reissueOrganizationWorkforceInvitation
+  reissueOrganizationWorkforceInvitation,
+  recordOperationalSecurityEvent
 } from "../dist/index.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -323,7 +324,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/035_platform_administrator_workforce.sql",
     "apps/server/migrations/036_organization_identity_providers.sql",
     "apps/server/migrations/037_organization_workforce.sql",
-    "apps/server/migrations/038_identity_workforce_operations.sql"
+    "apps/server/migrations/038_identity_workforce_operations.sql",
+    "apps/server/migrations/039_operational_security_events.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -3616,4 +3618,45 @@ test("SYNC-13 creates, anchors, exports, and independently verifies a due Eviden
     async anchorCheckpoint() { throw new Error("synthetic custodian outage"); }
   }, new Date(Date.now() + 6 * 60 * 1_000)), /custodian outage/iu);
   assert.equal((await owner.query("SELECT count(*) FROM evidence.checkpoint_batches WHERE session_id=$1", [ids.sessionB])).rows[0].count, "0");
+});
+
+test("PS-810 stores immutable security evidence without granting application read access", async () => {
+  const correlationId = randomUUID();
+  const eventId = await recordOperationalSecurityEvent(app, {
+    deploymentId: ids.deploymentA,
+    organizationId: ids.orgA,
+    sessionId: ids.sessionA,
+    actorPersonId: ids.personA,
+    eventType: "security.rate_limited",
+    severity: "warning",
+    outcome: "denied",
+    correlationId,
+    category: "authenticated_api"
+  });
+  const stored = await owner.query(
+    `SELECT event_type,severity,outcome,correlation_id,category
+       FROM evidence.operational_security_events WHERE id=$1`, [eventId]
+  );
+  assert.deepEqual(stored.rows[0], {
+    event_type: "security.rate_limited",
+    severity: "warning",
+    outcome: "denied",
+    correlation_id: correlationId,
+    category: "authenticated_api"
+  });
+  await assert.rejects(owner.query(
+    "UPDATE evidence.operational_security_events SET category='changed' WHERE id=$1", [eventId]
+  ), /append-only/iu);
+
+  const client = await owner.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL ROLE plenum_app");
+    await assert.rejects(client.query(
+      "SELECT id FROM evidence.operational_security_events WHERE id=$1", [eventId]
+    ), /permission denied/iu);
+    await client.query("ROLLBACK");
+  } finally {
+    client.release();
+  }
 });

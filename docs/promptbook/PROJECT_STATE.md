@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-11-02.
+Updated: 2026-11-06.
 
 ## Repository
 
@@ -108,6 +108,8 @@ Updated: 2026-11-02.
 ## Next eligible work
 
 PS-810 is the next eligible work.
+
+PS-810 implementation is in progress as of 2026-11-06. The bounded change adds pinned CI/security/provenance workflows, `operational-telemetry-v1` structured logs and internal metrics, provider-neutral dashboards and seven owned alerts, additive migration `039_operational_security_events`, a fail-closed ClamAV INSTREAM adapter and pinned scanner sidecar, local license/SBOM evidence, and incident/rotation/operator runbooks. Typecheck, build, 126/126 unit/contract tests, contract lint, 3/3 security source/history/configuration controls, integration/migration 35/35 on PostgreSQL 18.6 and SeaweedFS 4.48, product browser 34/34, accessibility 11/11, deployment smoke 6/6, the six-image disconnected bundle, supply-chain review for 170 third-party packages, observability validation, AWS 15/15 and OCI 13/13 plan-package tests, completeness audit and promptbook validation pass locally. Verification also restored the intended reviewer boundary: reviewers receive synchronized read-only Studio state while update authority remains designer-only. GitHub CI, CodeQL, dependency review, staging DAST, release attestations, live alert delivery, secret rotation rehearsal and the PS-810 operator script remain `NOT RUN`. PS-810 is therefore not yet change-level accepted or production-approved. The bounded evidence index is `docs/release-evidence/PS-810-index.md`.
 
 PS-800 **change-level acceptance PASS as of 2026-11-05**. All seven view families use bounded full-width workspaces, state-valid primary actions, Teludens type/control tokens, responsive task order and progressive technical provenance. The approved geometric primary Plenum wordmark is now the catalog source of truth with shared theme-safe presentation; the Teludens audit verifies its exact hash in Runtime and Studio. Runtime now includes the paper texture it references. `npm run test:visual` passes 4/4 browser scenarios and fail-closes on 25 route/state/family captures; `npm run test:e2e:product` passes 34/34; `npm run test:a11y` passes 11/11; lint, typecheck, build, the 228-obligation completeness audit, promptbook validation and the Teludens audit pass. The Product Owner attested the human, physical-device, browser, assistive-technology and performance checks as approved on 2026-11-05; detailed participant/device/measurement records were not supplied and are not fabricated. Evidence is in `docs/design/state-inventory.md`, `docs/design/user-test/PS-800-script.md`, and `output/playwright/ps-800/after/`. This closes PS-800 only; later production gates remain independent.
 

@@ -63,6 +63,13 @@ docs/design/*
 !docs/design/user-test/
 docs/design/user-test/*
 !docs/design/user-test/PS-800-script.md
+!docs/design/user-test/PS-810-script.md
+!docs/operations/
+docs/operations/*
+!docs/operations/PS-810-OBSERVABILITY-SECURITY.md
+!docs/release-evidence/
+docs/release-evidence/*
+!docs/release-evidence/PS-810-index.md
 !docs/promptbook/
 docs/promptbook/*
 !docs/promptbook/prompts/

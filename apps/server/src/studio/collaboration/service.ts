@@ -261,6 +261,19 @@ export async function assertStudioSyncAccess(
   correlationId: string
 ): Promise<void> {
   await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireStudioAccess(client, principal, ["admin", "designer", "publisher"], correlationId);
+    const project = await client.query("SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2", [principal.organizationId, projectId]);
+    if (project.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Simulation Project was not found.", correlationId);
+  });
+}
+
+export async function assertStudioReadAccess(
+  pool: Pool,
+  principal: AuthenticatedPrincipal,
+  projectId: string,
+  correlationId: string
+): Promise<void> {
+  await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireStudioAccess(client, principal, ["admin", "designer", "publisher", "reviewer", "operator"], correlationId);
     const project = await client.query("SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2", [principal.organizationId, projectId]);
     if (project.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Simulation Project was not found.", correlationId);

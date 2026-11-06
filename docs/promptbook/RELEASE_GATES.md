@@ -21,9 +21,9 @@
 | Performance | Named hardware/load, workload, percentile/error/saturation evidence against approved target | PASS for PS-545 approved named equivalent; production-institution acceptance external |
 | Deployment | Hosted, managed LAN, fully disconnected; clean install/upgrade/rollback where supported | PARTIAL: three reference profiles pass; institutional clean install/upgrade/rollback NOT RUN |
 | Air gap | Network-deny run with complete dependency and asset bundle | PASS locally; institution acceptance NOT RUN |
-| Observability | Scrubbed structured logs, metrics, correlation and actionable failure diagnosis | PARTIAL: evidence/audit correlation tested; production monitoring and alert response NOT RUN |
+| Observability | Scrubbed structured logs, metrics, correlation and actionable failure diagnosis | PARTIAL: PS-810 app-owned telemetry, normalized routes, Session/correlation trace, internal metrics and seven owned alert contracts pass local checks; live collector, alert delivery and response rehearsal NOT RUN |
 | Operational readiness | REQ-069 checklist completed for planned Session | NOT RUN: requires a named Session and operator |
-| Supply chain | Lockfiles, licenses, vulnerability/secret scans, provenance and release manifest | PARTIAL: dependency and high-confidence secret scans pass; formal SAST/license/provenance approval NOT RUN |
+| Supply chain | Lockfiles, licenses, vulnerability/secret scans, provenance and release manifest | PARTIAL: dependency, high-confidence secret, pinned-workflow, reviewed-license and CycloneDX SBOM checks pass locally; GitHub CodeQL, dependency review, staging DAST and artifact attestations are checked in but NOT RUN |
 | Evidence package | Roadmap section 13 categories, responsible owners, immutable artifact references | PASS for PS-550 engineering index; owner signatures absent |
 | Defects | No required-gate failure or unresolved severity-1 defect; lower risk disposition recorded | PASS locally: deployment-wide rate limiting and retention enforcement now have fresh-database evidence; external NOT RUN gates still prevent release |
 | Rollback/recovery | Previous-version redeploy, feature disablement, data forward-fix/restore rehearsed | PARTIAL: local restore/forward-fix pass; production redeploy exercise NOT RUN |

@@ -3,7 +3,10 @@ services:
     environment:
       PLENUM_DEPLOYMENT_PROFILE: institutional
       NODE_EXTRA_CA_CERTS: /run/secrets/identity-ca.crt
-    depends_on: [database, storage, identity, media]
+      CONTENT_SCANNER_HOST: malware-scanner
+      CONTENT_SCANNER_PORT: "3310"
+      CONTENT_SCANNER_TIMEOUT_MS: "10000"
+    depends_on: [database, storage, identity, media, malware-scanner]
     secrets: [identity-ca]
   database:
     image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
@@ -47,6 +50,9 @@ services:
       - source: livekit-keys
         target: livekit-keys.yaml
     volumes: ["../media/livekit.yaml:/etc/livekit.yaml:ro"]
+    networks: [plenum]
+  malware-scanner:
+    image: clamav/clamav-debian:1.4.6@sha256:ce80e97855d937e93009bb47eb5ecb410b514b844b03d0ecf00e8eeec92810cc
     networks: [plenum]
 secrets:
   postgres-password:

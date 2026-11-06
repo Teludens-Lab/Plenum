@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -70,4 +70,44 @@ test("REQ-051 deployment boundary requires protected credentials and browser sec
   assert.match(rateLimit, /operations\.consume_request_rate_limit/u);
   assert.match(retentionMigration, /legal_hold_events/u);
   assert.match(retentionMigration, /guard_export_artifact_retention/u);
+});
+
+test("PS-810 CI and operational security controls fail closed without sensitive telemetry", async () => {
+  const workflowDirectory = resolve(root, ".github/workflows");
+  const workflowNames = (await readdir(workflowDirectory)).filter((name) => name.endsWith(".yml")).sort();
+  assert.deepEqual(workflowNames, ["ci.yml", "release-provenance.yml", "security.yml", "staging-dast.yml"]);
+  for (const name of workflowNames) {
+    const workflow = await readFile(resolve(workflowDirectory, name), "utf8");
+    assert.doesNotMatch(workflow, /pull_request_target/u);
+    for (const match of workflow.matchAll(/^\s*- uses:\s+([^\s#]+)/gmu)) {
+      assert.match(match[1], /^[^@\s]+@[0-9a-f]{40}$/u, `${name} must pin ${match[1]} to a full commit`);
+    }
+  }
+
+  const [ci, security, dast, provenance, telemetry, migration, compose] = await Promise.all([
+    readFile(resolve(workflowDirectory, "ci.yml"), "utf8"),
+    readFile(resolve(workflowDirectory, "security.yml"), "utf8"),
+    readFile(resolve(workflowDirectory, "staging-dast.yml"), "utf8"),
+    readFile(resolve(workflowDirectory, "release-provenance.yml"), "utf8"),
+    readFile(resolve(root, "apps/server/src/observability/telemetry.ts"), "utf8"),
+    readFile(resolve(root, "apps/server/migrations/039_operational_security_events.sql"), "utf8"),
+    readFile(resolve(root, "deploy/oci/runtime/compose.functional-free.yaml.tftpl"), "utf8")
+  ]);
+  for (const gate of ["typecheck", "lint", "npm test", "test:integration", "test:e2e:product", "test:a11y",
+    "test:security", "test:supply-chain", "test:deployment", "audit:product-completeness"]) assert.equal(ci.includes(gate), true);
+  assert.doesNotMatch(ci, /server -s3 -ip=0\.0\.0\.0(?:\s|$)/u);
+  assert.match(ci, /server -s3 -ip=127\.0\.0\.1 -ip\.bind=0\.0\.0\.0 -s3\.ip\.bind=0\.0\.0\.0/u);
+  assert.match(security, /github\/codeql-action\/analyze@[0-9a-f]{40}/u);
+  assert.match(security, /actions\/dependency-review-action@[0-9a-f]{40}/u);
+  assert.match(dast, /test "\$TARGET_URL" = "https:\/\/plenum-stage-01\.duckdns\.org"/u);
+  assert.match(dast, /fail_action: true/u);
+  assert.match(provenance, /attestations: write/u);
+  assert.match(provenance, /sbom-path: test-results\/supply-chain\/sbom\.cdx\.json/u);
+  for (const prohibited of ["authorization", "cookie", "user-agent", "request.body", "email"]) {
+    assert.doesNotMatch(telemetry.toLowerCase(), new RegExp(prohibited.replace(".", "\\."), "u"));
+  }
+  assert.match(migration, /GRANT INSERT ON evidence\.operational_security_events TO plenum_app/u);
+  assert.match(migration, /REVOKE SELECT, UPDATE, DELETE, TRUNCATE/u);
+  assert.match(compose, /clamav\/clamav-debian:1\.4\.6@sha256:[0-9a-f]{64}/u);
+  assert.match(compose, /CONTENT_SCANNER_HOST: malware-scanner/u);
 });

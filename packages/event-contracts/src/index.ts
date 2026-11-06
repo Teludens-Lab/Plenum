@@ -81,6 +81,32 @@ export const OPERATIONS_ADMIN_CONTRACT_ID = "operations-admin-v1";
 export const REPORT_DELIVERY_CONTRACT_ID = "report-delivery-v1";
 export const PLATFORM_CONTROL_PLANE_CONTRACT_ID = "platform-control-plane-v1";
 export const ORGANIZATION_WORKFORCE_CONTRACT_ID = "organization-workforce-v1";
+export const OPERATIONAL_TELEMETRY_CONTRACT_ID = "operational-telemetry-v1";
+
+export type OperationalTelemetrySeverityV1 = "info" | "warning" | "error";
+export type OperationalTelemetryOutcomeV1 = "succeeded" | "failed" | "denied";
+
+/**
+ * Scrubbed operational event emitted at the HTTP boundary. It intentionally
+ * excludes request bodies, credentials, addresses, user-agent strings, and
+ * arbitrary exception text.
+ */
+export interface OperationalTelemetryEventV1 extends JsonObject {
+  contractId: typeof OPERATIONAL_TELEMETRY_CONTRACT_ID;
+  event: string;
+  severity: OperationalTelemetrySeverityV1;
+  outcome: OperationalTelemetryOutcomeV1;
+  recordedAt: string;
+  correlationId: string;
+  traceId: string;
+  deploymentId: string;
+  method?: string;
+  route?: string;
+  statusCode?: number;
+  durationMs?: number;
+  sessionId?: string;
+  category?: string;
+}
 
 export interface ProductShellContextV1 extends JsonObject {
   contractId: typeof PRODUCT_SHELL_CONTRACT_ID;

@@ -8,7 +8,7 @@ import { WebSocketServer, WebSocket, type RawData } from "ws";
 
 import { AuthorizationError } from "../../errors.js";
 import type { AuthenticatedPrincipal } from "../../identity/login.js";
-import { applyStudioUpdate, assertStudioSyncAccess, getCollaborativeDraft, studioSyncEnvelope } from "./service.js";
+import { applyStudioUpdate, assertStudioReadAccess, getCollaborativeDraft, studioSyncEnvelope } from "./service.js";
 
 const MAX_SOCKET_MESSAGE_BYTES = 384 * 1024;
 const projectPath = /^\/v1\/projects\/([0-9a-f-]+)\/collaboration$/iu;
@@ -52,7 +52,7 @@ export function createStudioCollaborationGateway(options: StudioCollaborationGat
     for (const peer of peers.get(sender.documentId) ?? []) {
       if (peer === sender) continue;
       try {
-        await assertStudioSyncAccess(options.pool, peer.principal, peer.projectId, randomUUID());
+        await assertStudioReadAccess(options.pool, peer.principal, peer.projectId, randomUUID());
         send(peer.socket, message);
       } catch {
         peer.socket.close(1008, "Studio access revoked");
@@ -108,7 +108,7 @@ export function createStudioCollaborationGateway(options: StudioCollaborationGat
       const correlationId = randomUUID();
       try {
         const principal = await options.authenticate(request, correlationId);
-        await assertStudioSyncAccess(options.pool, principal, projectId, correlationId);
+        await assertStudioReadAccess(options.pool, principal, projectId, correlationId);
         const state = await getCollaborativeDraft(options.pool, principal, projectId, correlationId);
         webSockets.handleUpgrade(request, socket, head, (webSocket) => connected(
           webSocket, principal, projectId, state.documentId, studioSyncEnvelope(state)

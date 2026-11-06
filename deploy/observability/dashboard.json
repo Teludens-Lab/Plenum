@@ -1,0 +1,30 @@
+{
+  "contractId": "operational-dashboard-v1",
+  "telemetryContractId": "operational-telemetry-v1",
+  "panels": [
+    {
+      "id": "request-rate-and-errors",
+      "title": "Request rate and server errors",
+      "signal": "metric",
+      "query": "plenum_http_server_requests_total grouped by route and status_class"
+    },
+    {
+      "id": "request-latency",
+      "title": "Request latency",
+      "signal": "metric",
+      "query": "plenum_http_server_request_duration_milliseconds p50 p95 p99 by route"
+    },
+    {
+      "id": "session-correlation",
+      "title": "Session operations",
+      "signal": "log",
+      "query": "contractId=operational-telemetry-v1 and sessionId exists grouped by event and outcome"
+    },
+    {
+      "id": "security-and-governance",
+      "title": "Security and governance events",
+      "signal": "log",
+      "query": "contractId=operational-telemetry-v1 and event starts with security or retention"
+    }
+  ]
+}

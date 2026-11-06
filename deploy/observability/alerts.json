@@ -1,0 +1,63 @@
+{
+  "contractId": "operational-alerts-v1",
+  "telemetryContractId": "operational-telemetry-v1",
+  "retentionDays": 90,
+  "alerts": [
+    {
+      "id": "readiness-unavailable",
+      "signal": "metric",
+      "condition": "health probe receives non-2xx for 5 minutes",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#readiness-unavailable"
+    },
+    {
+      "id": "server-error-rate",
+      "signal": "metric",
+      "condition": "5xx request ratio exceeds 5 percent for 10 minutes",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#server-error-rate"
+    },
+    {
+      "id": "request-latency",
+      "signal": "metric",
+      "condition": "p95 request duration exceeds 1000 milliseconds for 15 minutes",
+      "action": "ticket",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#request-latency"
+    },
+    {
+      "id": "security-evidence-failed",
+      "signal": "log",
+      "condition": "event equals security.evidence_failed at least once",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#security-evidence-failed"
+    },
+    {
+      "id": "malware-scanner-unavailable",
+      "signal": "log",
+      "condition": "event equals security.upload_scan_failed at least once",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#malware-scanner-unavailable"
+    },
+    {
+      "id": "infected-upload",
+      "signal": "log",
+      "condition": "event equals security.upload_infected at least once",
+      "action": "ticket",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#infected-upload"
+    },
+    {
+      "id": "retention-enforcement-failed",
+      "signal": "log",
+      "condition": "event equals retention.enforcement_failed at least once",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#retention-enforcement-failed"
+    }
+  ]
+}

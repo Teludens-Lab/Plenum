@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-unit-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:security
+      - run: npm run test:supply-chain
+      - run: npm run validate:observability
+      - run: npm run validate:promptbook
+      - run: npm run audit:product-completeness
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: static-security-evidence
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 30
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_PASSWORD: plenum-ci
+          POSTGRES_DB: plenum
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d plenum"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:plenum-ci@127.0.0.1:5432/plenum
+      S3_ENDPOINT: http://127.0.0.1:8333
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: plenum-test
+      S3_SECRET_ACCESS_KEY: plenum-test-secret
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
+      - name: Start pinned S3-compatible integration fixture
+        run: >-
+          docker run --detach --name plenum-ci-storage --publish 8333:8333
+          chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+          server -s3 -ip=127.0.0.1 -ip.bind=0.0.0.0 -s3.ip.bind=0.0.0.0 -master.telemetry=false
+      - run: npm run test:integration
+
+  browser-accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [product, accessibility]
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_PASSWORD: plenum-ci
+          POSTGRES_DB: plenum
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d plenum"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:plenum-ci@127.0.0.1:5432/plenum
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - if: matrix.suite == 'product'
+        run: npm run test:e2e:product
+      - if: matrix.suite == 'accessibility'
+        run: npm run test:a11y
+      - if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: browser-${{ matrix.suite }}-failure-evidence
+          path: output/playwright/
+          if-no-files-found: warn
+          retention-days: 14
+
+  packaging-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:aws-plan
+      - run: npm run test:oci-plan
+      - run: npm run test:deployment
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: deployment-evidence
+          path: test-results/deployment/
+          if-no-files-found: error
+          retention-days: 30

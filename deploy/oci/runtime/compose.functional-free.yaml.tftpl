@@ -123,6 +123,10 @@ services:
       - 50000-50100:50000-50100/udp
     restart: unless-stopped
 
+  malware-scanner:
+    image: clamav/clamav-debian:1.4.6@sha256:ce80e97855d937e93009bb47eb5ecb410b514b844b03d0ecf00e8eeec92810cc
+    restart: unless-stopped
+
   application:
     image: ${application_image}
     group_add: ["2000"]
@@ -131,6 +135,9 @@ services:
       ${key}: ${jsonencode(value)}
 %{ endfor ~}
       PLENUM_SECRET_BUNDLE_FILE: /run/secrets/application.json
+      CONTENT_SCANNER_HOST: malware-scanner
+      CONTENT_SCANNER_PORT: "3310"
+      CONTENT_SCANNER_TIMEOUT_MS: "10000"
     secrets:
       - source: application
         target: application.json
@@ -140,6 +147,8 @@ services:
       identity:
         condition: service_started
       media:
+        condition: service_started
+      malware-scanner:
         condition: service_started
     restart: unless-stopped
 

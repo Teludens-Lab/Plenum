@@ -175,6 +175,15 @@ export interface RuntimeHttpOptions {
   postmarkInvitationAdapter?: PostmarkInvitationAdapter;
   publicBaseUrl?: string;
   identityMetadataFetcher?: IdentityMetadataFetcher;
+  onSecurityEvent?(event: {
+    eventType: string;
+    organizationId?: string;
+    actorPersonId?: string;
+    severity: "info" | "warning" | "error";
+    outcome: "succeeded" | "failed" | "denied";
+    correlationId: string;
+    category?: string;
+  }): Promise<void>;
 }
 
 function bearerAuthorized(authorization: string | undefined, expected: string | undefined): boolean {
@@ -598,8 +607,9 @@ async function receiptFor(
 }
 
 export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
-  return async (request: IncomingMessage, response: ServerResponse): Promise<boolean> => {
-    const correlationId = randomUUID();
+  return async (request: IncomingMessage, response: ServerResponse, requestCorrelationId?: string): Promise<boolean> => {
+    const correlationId = requestCorrelationId !== undefined && uuid.test(requestCorrelationId)
+      ? requestCorrelationId : randomUUID();
     let scimRequest = false;
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
@@ -1327,8 +1337,21 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/content-library\/uploads$/u))) {
         if (options.objectStore === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", "Content storage is not configured.", correlationId);
-        send(response, 201, await uploadContentVersion(options.pool, options.objectStore, options.contentScanner, principal,
-          pathId(match[1], correlationId), contentUploadInput(await readBody(request, correlationId), correlationId), correlationId));
+        const uploaded = await uploadContentVersion(options.pool, options.objectStore, options.contentScanner, principal,
+          pathId(match[1], correlationId), contentUploadInput(await readBody(request, correlationId), correlationId), correlationId);
+        const scanStatus = uploaded.contentItem.versions[0]?.scanStatus;
+        if ((scanStatus === "failed" || scanStatus === "infected") && options.onSecurityEvent !== undefined) {
+          await options.onSecurityEvent({
+            eventType: scanStatus === "infected" ? "security.upload_infected" : "security.upload_scan_failed",
+            organizationId: principal.organizationId,
+            actorPersonId: principal.principalId,
+            severity: scanStatus === "infected" ? "warning" : "error",
+            outcome: scanStatus === "infected" ? "denied" : "failed",
+            correlationId,
+            category: scanStatus === "infected" ? "infected_content" : "scanner_unavailable"
+          }).catch(() => undefined);
+        }
+        send(response, 201, uploaded);
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/plugin-catalog$/u))) {

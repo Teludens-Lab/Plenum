@@ -20,7 +20,7 @@ const required = (name) => {
 const profile = required("PLENUM_DEPLOYMENT_PROFILE");
 if (!["cloud", "institutional", "air_gapped"].includes(profile)) throw new Error("Invalid PLENUM_DEPLOYMENT_PROFILE");
 const databaseUrl = required("DATABASE_URL");
-const s3Endpoint = required("S3_ENDPOINT");
+const s3Endpoint = process.env.S3_ENDPOINT?.trim();
 const oidcIssuer = required("OIDC_ISSUER").replace(/\/$/u, "");
 const mediaUrl = required("MEDIA_URL");
 const publicBaseUrl = required("PLENUM_PUBLIC_BASE_URL");
@@ -32,17 +32,20 @@ const deploymentId = required("PLENUM_DEPLOYMENT_ID");
 const retentionActorPersonId = required("PLENUM_RETENTION_ACTOR_PERSON_ID");
 const trustedProxy = process.env.PLENUM_TRUST_PROXY === "1";
 if (new URL(publicBaseUrl).protocol !== "https:") throw new Error("PLENUM_PUBLIC_BASE_URL must use HTTPS");
-if (profile === "air_gapped" && [s3Endpoint, oidcIssuer, mediaUrl, invitationDeliveryEndpoint].some((value) => {
+if (profile === "air_gapped" && (!s3Endpoint || [s3Endpoint, oidcIssuer, mediaUrl, invitationDeliveryEndpoint].some((value) => {
   const host = new URL(value).hostname;
   return !host.endsWith(".plenum.lan") && !["storage", "identity", "media"].includes(host);
-})) throw new Error("Air-gapped dependencies must use institution-local endpoints");
+}))) throw new Error("Air-gapped dependencies must use institution-local endpoints");
 
 const pool = createDatabasePool(databaseUrl);
-const s3 = new S3Client({ endpoint: s3Endpoint, region: process.env.S3_REGION ?? "us-east-1",
+const s3 = new S3Client({
+  ...(s3Endpoint ? { endpoint: s3Endpoint } : {}),
+  region: process.env.S3_REGION ?? "us-east-1",
   forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "0",
   ...(process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY ? { credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
-  } } : {}) });
+  } } : {})
+});
 const s3Bucket = required("S3_BUCKET");
 const clientId = required("OIDC_CLIENT_ID");
 const oidc = {

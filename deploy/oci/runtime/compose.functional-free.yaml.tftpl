@@ -3,12 +3,13 @@ name: plenum-functional-free
 services:
   database:
     image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    group_add: ["2000"]
     environment:
       POSTGRES_DB: plenum
       POSTGRES_USER: plenum
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
     secrets: [postgres-password]
-    volumes: [postgres-data:/var/lib/postgresql/data]
+    volumes: [postgres-data:/var/lib/postgresql]
     healthcheck:
       test: [CMD-SHELL, pg_isready -U plenum -d plenum]
       interval: 5s
@@ -18,6 +19,7 @@ services:
 
   migrate:
     image: ${application_image}
+    group_add: ["2000"]
     entrypoint: [/bin/sh, -ec]
     command:
       - |
@@ -25,13 +27,13 @@ services:
         psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
           'CREATE TABLE IF NOT EXISTS public.plenum_schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())'
         for migration in /app/references/plenum-runtime-slice/migrations/*.sql /app/apps/server/migrations/*.sql; do
-          name="$$(basename "$${migration}")"
+          name="$$(basename "$$$${migration}")"
           applied="$$(psql --host database --username plenum --dbname plenum --tuples-only --no-align --command \
-            "SELECT 1 FROM public.plenum_schema_migrations WHERE name = '$${name}'")"
-          if [ "$${applied}" != "1" ]; then
-            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --file "$${migration}"
+            "SELECT 1 FROM public.plenum_schema_migrations WHERE name = '$$$${name}'")"
+          if [ "$$$${applied}" != "1" ]; then
+            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --file "$$$${migration}"
             psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
-              "INSERT INTO public.plenum_schema_migrations(name) VALUES ('$${name}')"
+              "INSERT INTO public.plenum_schema_migrations(name) VALUES ('$$$${name}')"
           fi
         done
     secrets: [postgres-password]
@@ -42,6 +44,7 @@ services:
 
   identity:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    group_add: ["2000"]
     entrypoint: [/bin/sh, -ec]
     command:
       - |
@@ -66,12 +69,16 @@ services:
 
   identity-bootstrap:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    group_add: ["2000"]
     entrypoint: [/bin/sh, -ec]
     command:
       - |
+        temporary_home="$$(mktemp -d)"
+        trap 'rm -rf "$$temporary_home"' EXIT
+        export HOME="$$temporary_home"
         until /opt/keycloak/bin/kcadm.sh config credentials --server http://identity:8080 --realm master \
           --user plenum-admin --password "$$(cat /run/secrets/keycloak-admin-password)"; do sleep 3; done
-        /opt/keycloak/bin/kcadm.sh set-password --server http://identity:8080 --realm plenum \
+        /opt/keycloak/bin/kcadm.sh set-password -r plenum \
           --userid ${person_id} --new-password "$$(cat /run/secrets/test-user-password)"
     secrets: [keycloak-admin-password, test-user-password]
     depends_on:
@@ -81,6 +88,7 @@ services:
 
   data-bootstrap:
     image: ${application_image}
+    group_add: ["2000"]
     entrypoint: [/bin/sh, -ec]
     command:
       - |
@@ -104,8 +112,11 @@ services:
 
   media:
     image: livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a
+    group_add: ["2000"]
     command: [--config, /etc/livekit.yaml, --key-file, /run/secrets/livekit-keys.yaml]
-    secrets: [livekit-keys]
+    secrets:
+      - source: livekit-keys
+        target: livekit-keys.yaml
     volumes: [/etc/plenum/livekit.yaml:/etc/livekit.yaml:ro]
     ports:
       - 7881:7881/tcp
@@ -114,6 +125,7 @@ services:
 
   application:
     image: ${application_image}
+    group_add: ["2000"]
     environment:
 %{ for key, value in environment ~}
       ${key}: ${jsonencode(value)}
@@ -141,6 +153,13 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on: [application, identity, media]
+    networks:
+      default:
+        aliases:
+          - ${application_hostname}
+          - ${identity_hostname}
+          - ${media_hostname}
+          - ${notifications_hostname}
     restart: unless-stopped
 
 secrets:

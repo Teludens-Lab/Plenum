@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+image="$1"
+docker_config="/run/plenum/docker"
+registry_json="$(aws ssm get-parameter --region "${region}" --name "${registry_parameter_name}" --with-decryption --query Parameter.Value --output text)"
+username="$(printf '%s' "$registry_json" | jq -er '.username | select(type == "string" and length > 0)')"
+password="$(printf '%s' "$registry_json" | jq -er '.password | select(type == "string" and length > 0)')"
+
+cleanup() {
+  unset registry_json username password
+  docker --config "$docker_config" logout ghcr.io >/dev/null 2>&1 || true
+  rm -rf "$docker_config"
+}
+trap cleanup EXIT
+
+install -d -m 0700 "$docker_config"
+printf '%s' "$password" | docker --config "$docker_config" login ghcr.io --username "$username" --password-stdin >/dev/null
+docker --config "$docker_config" pull "$image"

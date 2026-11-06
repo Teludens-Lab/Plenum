@@ -1,0 +1,32 @@
+deployment_profile = "free-plan-staging"
+aws_profile        = "plenum-staging"
+region             = "us-east-2"
+
+application_image     = "ghcr.io/teludens-lab/plenum@sha256:106c41ce6a17bd6a32870503d1b96a9960410e0565422a2c5eebaf05cfaf7091"
+application_release   = "staging-s3-role-20261106-1"
+application_platforms = ["linux/amd64", "linux/arm64"]
+
+runtime_instance_profile_name = "plenum-staging-runtime"
+ssm_parameter_prefix          = "/plenum/staging"
+
+application_hostname   = "plenum-stage-01.duckdns.org"
+identity_hostname      = "plenum-identity-01.duckdns.org"
+media_hostname         = "plenum-media-01.duckdns.org"
+notifications_hostname = "plenum-notifications-01.duckdns.org"
+
+application_contract = {
+  deployment_id                 = "plenum-staging"
+  retention_actor_person_id     = "00000000-0000-4000-8000-000000000001"
+  oidc_provider_key             = "plenum-staging"
+  oidc_organization_id          = "00000000-0000-4000-8000-000000000002"
+  oidc_client_id                = "plenum"
+  media_adapter_digest          = "sha256:REPLACE_WITH_APPROVED_ADAPTER_DIGEST"
+  invitation_delivery_endpoint = "https://plenum-notifications-01.duckdns.org/v1/messages"
+}
+
+instance_type   = "m7i-flex.large"
+root_volume_gbs = 50
+
+# This permits planning only. The repository intentionally contains no apply wrapper.
+# Applying the reviewed plan would consume the account's Free-plan credits.
+acknowledge_credit_funded_resources = true

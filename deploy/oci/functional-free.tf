@@ -17,6 +17,7 @@ locals {
     application_hostname = var.application_hostname
     identity_hostname    = var.identity_hostname
     media_hostname       = var.media_hostname
+    notifications_hostname = var.notifications_hostname
     environment          = local.application_environment
     organization_id      = var.application_contract.oidc_organization_id
     person_id            = var.application_contract.retention_actor_person_id

@@ -28,7 +28,7 @@ locals {
     OIDC_CLIENT_ID                   = var.application_contract.oidc_client_id
     OIDC_REDIRECT_URI                = "https://${var.application_hostname}/auth/callback"
     MEDIA_URL                        = local.resolved_media_url
-    MEDIA_API_URL                    = local.is_functional_free ? "http://media:7880" : replace(local.resolved_media_url, "wss://", "https://")
+    MEDIA_API_URL                    = replace(local.resolved_media_url, "wss://", "https://")
     MEDIA_ADAPTER_DIGEST             = var.application_contract.media_adapter_digest
     PLENUM_PUBLIC_BASE_URL           = "https://${var.application_hostname}"
     INVITATION_DELIVERY_ENDPOINT     = var.application_contract.invitation_delivery_endpoint

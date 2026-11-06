@@ -20,8 +20,16 @@ test("secret bundle accepts only the complete allowlisted contract", () => {
   assert.throws(() => parseSecretBundle(JSON.stringify(incomplete)), /Missing Plenum secret keys: DATABASE_URL/u);
 });
 
+test("static S3 credentials are optional as a pair and never accepted partially", () => {
+  const s3 = Object.fromEntries(OPTIONAL_SECRET_GROUPS[0].map((key) => [key, `${key.toLowerCase()}-test-value`]));
+  assert.deepEqual(parseSecretBundle(JSON.stringify({ ...valid, ...s3 })), { ...valid, ...s3 });
+  const incomplete = { ...valid, ...s3 };
+  delete incomplete.S3_SECRET_ACCESS_KEY;
+  assert.throws(() => parseSecretBundle(JSON.stringify(incomplete)), /Incomplete Plenum secret group/u);
+});
+
 test("Postmark credentials are optional as a group and never accepted partially", () => {
-  const postmark = Object.fromEntries(OPTIONAL_SECRET_GROUPS[0].map((key) => [key, `${key.toLowerCase()}-test-value`]));
+  const postmark = Object.fromEntries(OPTIONAL_SECRET_GROUPS[1].map((key) => [key, `${key.toLowerCase()}-test-value`]));
   assert.deepEqual(parseSecretBundle(JSON.stringify({ ...valid, ...postmark })), { ...valid, ...postmark });
   const incomplete = { ...valid, ...postmark };
   delete incomplete.POSTMARK_WEBHOOK_PASSWORD;

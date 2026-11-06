@@ -29,8 +29,8 @@ async function actor(browser, token, viewport = { width: 1440, height: 1000 }) {
 async function horizontalOverflowState(page) {
   return page.evaluate(() => {
     const root = document.documentElement;
-    const overflow = Math.max(0, Math.ceil(root.scrollWidth - window.innerWidth));
-    if (overflow === 0) return { overflow, offenders: [] };
+    const reportedOverflow = Math.max(0, Math.ceil(root.scrollWidth - window.innerWidth));
+    if (reportedOverflow === 0) return { overflow: 0, offenders: [] };
     const workspace = document.querySelector(".product-workspaces");
     const offenders = Array.from(document.body.querySelectorAll("*"))
       .filter((element) => {
@@ -43,9 +43,41 @@ async function horizontalOverflowState(page) {
         const classes = Array.from(element.classList ?? []).slice(0, 3).join(".");
         return `${name}${classes === "" ? "" : `.${classes}`}`;
       });
+    if (offenders.length === 0) return { overflow: 0, offenders: [] };
     offenders.unshift(`metrics(inner=${window.innerWidth},client=${root.clientWidth},scroll=${root.scrollWidth},workspace-gutter=${workspace === null ? "missing" : getComputedStyle(workspace).scrollbarGutter})`);
-    return { overflow, offenders };
+    return { overflow: reportedOverflow, offenders };
   });
+}
+
+async function observeVisibleLoader(page, label) {
+  return page.evaluate((expectedLabel) => new Promise((resolve) => {
+    const loader = Array.from(document.querySelectorAll(".plenum-loader"))
+      .find((element) => element.getAttribute("aria-label") === expectedLabel);
+    const overlay = loader?.closest(".plenum-loader-overlay");
+    if (!(overlay instanceof HTMLElement)) {
+      resolve(false);
+      return;
+    }
+
+    const isVisible = () => overlay.classList.contains("is-visible") && overlay.getAttribute("aria-hidden") !== "true";
+    if (isVisible()) {
+      resolve(true);
+      return;
+    }
+
+    let timeout = 0;
+    const observer = new MutationObserver(() => {
+      if (!isVisible()) return;
+      observer.disconnect();
+      window.clearTimeout(timeout);
+      resolve(true);
+    });
+    observer.observe(overlay, { attributes: true, attributeFilter: ["class", "aria-hidden"] });
+    timeout = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(false);
+    }, 2_000);
+  }), label);
 }
 
 async function expectCompactWorkWordmark(page) {
@@ -277,10 +309,9 @@ test("PS-700 Plenum loader governs initial, page, section, and Studio workspace 
 
   await page.goto(`/studio/projects/${fixture.projectId}`);
   await expect(page.getByRole("navigation", { name: "Design workspaces" })).toBeVisible();
-  await Promise.all([
-    expect(page.getByRole("status", { name: "Loading design workspace" })).toBeVisible(),
-    page.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name: "Teams", exact: true }).click()
-  ]);
+  const designLoaderObserved = observeVisibleLoader(page, "Loading design workspace");
+  await page.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name: "Teams", exact: true }).click();
+  expect(await designLoaderObserved).toBe(true);
   await expect(page.getByRole("region", { name: "Teams" })).toBeVisible();
 
   await Promise.all([

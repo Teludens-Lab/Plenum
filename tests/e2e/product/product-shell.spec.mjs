@@ -31,14 +31,19 @@ async function horizontalOverflowState(page) {
     const root = document.documentElement;
     const overflow = Math.max(0, Math.ceil(root.scrollWidth - window.innerWidth));
     if (overflow === 0) return { overflow, offenders: [] };
+    const workspace = document.querySelector(".product-workspaces");
     const offenders = Array.from(document.body.querySelectorAll("*"))
-      .filter((element) => element instanceof HTMLElement && element.getBoundingClientRect().right > window.innerWidth + 1)
+      .filter((element) => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.left < -1 || bounds.right > window.innerWidth + 1;
+      })
       .slice(0, 8)
       .map((element) => {
         const name = element.id === "" ? element.tagName.toLowerCase() : `${element.tagName.toLowerCase()}#${element.id}`;
-        const classes = Array.from(element.classList).slice(0, 3).join(".");
+        const classes = Array.from(element.classList ?? []).slice(0, 3).join(".");
         return `${name}${classes === "" ? "" : `.${classes}`}`;
       });
+    offenders.unshift(`metrics(inner=${window.innerWidth},client=${root.clientWidth},scroll=${root.scrollWidth},workspace-gutter=${workspace === null ? "missing" : getComputedStyle(workspace).scrollbarGutter})`);
     return { overflow, offenders };
   });
 }

@@ -795,7 +795,7 @@ code { font-family: var(--font-mono); }
   .shell-navigation { display: none; }
   .shell-navigation.is-open { display: block; }
   .shell-navigation, .product-workspaces { padding: min(var(--space-4), 4vw); }
-  .product-workspaces { max-height: none; overflow: visible; }
+  .product-workspaces { max-height: none; overflow: visible; scrollbar-gutter: auto; }
   .participant-product-workspaces { padding: 0; }
   .participant-entry-intro { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); padding: var(--space-5); }
   .participant-entry-notice, .participant-entry-empty { margin-inline: var(--space-5); }

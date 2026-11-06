@@ -84,14 +84,16 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
     }
   }
 
-  const [ci, security, dast, provenance, telemetry, migration, compose] = await Promise.all([
+  const [ci, security, dast, provenance, telemetry, migration, readerMigration, compose, operationsAgent] = await Promise.all([
     readFile(resolve(workflowDirectory, "ci.yml"), "utf8"),
     readFile(resolve(workflowDirectory, "security.yml"), "utf8"),
     readFile(resolve(workflowDirectory, "staging-dast.yml"), "utf8"),
     readFile(resolve(workflowDirectory, "release-provenance.yml"), "utf8"),
     readFile(resolve(root, "apps/server/src/observability/telemetry.ts"), "utf8"),
     readFile(resolve(root, "apps/server/migrations/039_operational_security_events.sql"), "utf8"),
-    readFile(resolve(root, "deploy/oci/runtime/compose.functional-free.yaml.tftpl"), "utf8")
+    readFile(resolve(root, "apps/server/migrations/040_operational_security_reader.sql"), "utf8"),
+    readFile(resolve(root, "deploy/oci/runtime/compose.functional-free.yaml.tftpl"), "utf8"),
+    readFile(resolve(root, "deploy/compose/operations-agent.mjs"), "utf8")
   ]);
   for (const gate of ["typecheck", "lint", "npm test", "test:integration", "test:e2e:product", "test:a11y",
     "test:security", "test:supply-chain", "test:deployment", "audit:product-completeness"]) assert.equal(ci.includes(gate), true);
@@ -112,6 +114,11 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
   }
   assert.match(migration, /GRANT INSERT ON evidence\.operational_security_events TO plenum_app/u);
   assert.match(migration, /REVOKE SELECT, UPDATE, DELETE, TRUNCATE/u);
+  assert.match(readerMigration, /CREATE ROLE plenum_operations_evidence_reader NOLOGIN/u);
+  assert.match(readerMigration, /GRANT SELECT ON evidence\.operational_security_event_feed/u);
   assert.match(compose, /clamav\/clamav-debian:1\.4\.6@sha256:[0-9a-f]{64}/u);
   assert.match(compose, /CONTENT_SCANNER_HOST: malware-scanner/u);
+  assert.match(compose, /malware-scanner:\s*\n\s+condition: service_healthy/u);
+  assert.match(operationsAgent, /https:\/\/api\.postmarkapp\.com\/email/u);
+  assert.doesNotMatch(operationsAgent, /S3_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY)|AWS_SECRET/u);
 });

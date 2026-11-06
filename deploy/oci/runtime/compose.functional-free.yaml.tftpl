@@ -27,13 +27,13 @@ services:
         psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
           'CREATE TABLE IF NOT EXISTS public.plenum_schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())'
         for migration in /app/references/plenum-runtime-slice/migrations/*.sql /app/apps/server/migrations/*.sql; do
-          name="$$(basename "$$$${migration}")"
+          name="$$(basename "$$${migration}")"
           applied="$$(psql --host database --username plenum --dbname plenum --tuples-only --no-align --command \
-            "SELECT 1 FROM public.plenum_schema_migrations WHERE name = '$$$${name}'")"
-          if [ "$$$${applied}" != "1" ]; then
-            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --file "$$$${migration}"
+            "SELECT 1 FROM public.plenum_schema_migrations WHERE name = '$$${name}'")"
+          if [ "$$${applied}" != "1" ]; then
+            psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --file "$$${migration}"
             psql --host database --username plenum --dbname plenum --set ON_ERROR_STOP=1 --command \
-              "INSERT INTO public.plenum_schema_migrations(name) VALUES ('$$$${name}')"
+              "INSERT INTO public.plenum_schema_migrations(name) VALUES ('$$${name}')"
           fi
         done
     secrets: [postgres-password]
@@ -127,6 +127,27 @@ services:
     image: clamav/clamav-debian:1.4.6@sha256:ce80e97855d937e93009bb47eb5ecb410b514b844b03d0ecf00e8eeec92810cc
     restart: unless-stopped
 
+  operations-reader-bootstrap:
+    image: ${application_image}
+    group_add: ["2000"]
+    command: [deploy/compose/operations-reader-bootstrap.mjs]
+    secrets:
+      - source: operations
+        target: operations.json
+      - postgres-password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: no
+
+  operations-state-init:
+    image: ${application_image}
+    user: "0:0"
+    entrypoint: [/bin/sh, -ec]
+    command: ["chown -R 65532:65532 /var/lib/plenum-operations && chmod 0700 /var/lib/plenum-operations"]
+    volumes: [operations-state:/var/lib/plenum-operations]
+    restart: no
+
   application:
     image: ${application_image}
     group_add: ["2000"]
@@ -138,6 +159,7 @@ services:
       CONTENT_SCANNER_HOST: malware-scanner
       CONTENT_SCANNER_PORT: "3310"
       CONTENT_SCANNER_TIMEOUT_MS: "10000"
+      METRICS_PORT: "9090"
     secrets:
       - source: application
         target: application.json
@@ -149,7 +171,45 @@ services:
       media:
         condition: service_started
       malware-scanner:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, --input-type=module, --eval, "const response=await fetch('http://127.0.0.1:8080/healthz');if(!response.ok)process.exit(1)"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  operations-agent:
+    image: ${application_image}
+    group_add: ["2000"]
+    command: [deploy/compose/operations-agent.mjs]
+    environment:
+      PLENUM_DEPLOYMENT_ID: ${jsonencode(environment.PLENUM_DEPLOYMENT_ID)}
+      APPLICATION_HEALTH_URL: http://application:8080/healthz
+      APPLICATION_METRICS_URL: http://application:9090/metrics
+      OPERATIONS_POLL_INTERVAL_MS: "30000"
+    secrets:
+      - source: operations
+        target: operations.json
+    volumes: [operations-state:/var/lib/plenum-operations]
+    read_only: true
+    tmpfs: [/tmp:rw,noexec,nosuid,nodev,size=16m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      application:
         condition: service_started
+      operations-reader-bootstrap:
+        condition: service_completed_successfully
+      operations-state-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, node, --input-type=module, --eval, "const {stat}=await import('node:fs/promises');const value=await stat('/tmp/plenum-operations-heartbeat');if(Date.now()-value.mtimeMs>120000)process.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   ingress:
@@ -182,8 +242,11 @@ secrets:
     file: /etc/plenum/secrets/test-user-password
   livekit-keys:
     file: /etc/plenum/secrets/livekit-keys.yaml
+  operations:
+    file: /etc/plenum/secrets/operations.json
 
 volumes:
   postgres-data: {}
   caddy-data: {}
   caddy-config: {}
+  operations-state: {}

@@ -48,7 +48,8 @@ const migrations = [
   "apps/server/migrations/036_organization_identity_providers.sql",
   "apps/server/migrations/037_organization_workforce.sql",
   "apps/server/migrations/038_identity_workforce_operations.sql",
-  "apps/server/migrations/039_operational_security_events.sql"
+  "apps/server/migrations/039_operational_security_events.sql",
+  "apps/server/migrations/040_operational_security_reader.sql"
 ];
 
 export default async function globalSetup() {

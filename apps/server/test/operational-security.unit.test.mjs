@@ -3,6 +3,10 @@ import { createServer } from "node:net";
 import test from "node:test";
 
 import { ClamAvContentScanner, OperationalTelemetry } from "../dist/index.js";
+import {
+  deliverOperationalAlert, evaluateSustainedCondition, metricWindow, parsePrometheusSnapshot
+} from "../../../deploy/compose/operations-agent.mjs";
+import { parseOperationsSecretBundle } from "../../../deploy/compose/operations-secrets.mjs";
 
 const deploymentId = "10000000-0000-4000-8000-000000000001";
 
@@ -41,6 +45,7 @@ test("PS-810 telemetry correlates Session requests without recording sensitive r
   }
   const metrics = telemetry.metrics();
   assert.match(metrics, /plenum_http_server_requests_total\{method="GET",route="\/v1\/operator\/sessions\/:id\/projection",status_class="2xx"\} 1/u);
+  assert.match(metrics, /plenum_operational_events_total\{event="http\.request_completed",severity="info",outcome="succeeded"\} 1/u);
   assert.equal(metrics.includes("60000000-0000-4000-8000-000000000001"), false);
 });
 
@@ -113,4 +118,56 @@ test("PS-810 ClamAV readiness uses the private daemon protocol", async () => {
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
+});
+
+test("PS-810 operations secret is narrow and rejects unexpected credentials", () => {
+  const value = parseOperationsSecretBundle(JSON.stringify({
+    ALERT_RECIPIENT: "operations@example.test",
+    DATABASE_PASSWORD: "a".repeat(32),
+    POSTMARK_FROM: "Plenum <sender@example.test>",
+    POSTMARK_SERVER_TOKEN: "b".repeat(16)
+  }));
+  assert.equal(value.ALERT_RECIPIENT, "operations@example.test");
+  assert.throws(() => parseOperationsSecretBundle(JSON.stringify({ ...value, AWS_SECRET_ACCESS_KEY: "prohibited" })), /unknown operations secret keys/iu);
+});
+
+test("PS-810 collector calculates bounded metric windows and sustained thresholds", () => {
+  const previous = parsePrometheusSnapshot([
+    'plenum_http_server_requests_total{method="GET",route="/",status_class="2xx"} 10',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="2xx",le="1000"} 10',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="2xx",le="+Inf"} 10'
+  ].join("\n"));
+  const current = parsePrometheusSnapshot([
+    'plenum_http_server_requests_total{method="GET",route="/",status_class="2xx"} 28',
+    'plenum_http_server_requests_total{method="GET",route="/",status_class="5xx"} 2',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="2xx",le="1000"} 28',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="2xx",le="+Inf"} 28',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="5xx",le="1000"} 2',
+    'plenum_http_server_request_duration_milliseconds_bucket{method="GET",route="/",status_class="5xx",le="+Inf"} 2'
+  ].join("\n"));
+  assert.deepEqual(metricWindow(current, previous), { errorRatio: 0.1, p95Milliseconds: 1000, sampleCount: 20, eventDeltas: {} });
+  assert.deepEqual(evaluateSustainedCondition(undefined, true, 1_000, 300_000), { since: 1_000, notified: false, shouldNotify: false });
+  assert.deepEqual(evaluateSustainedCondition({ since: 1_000, notified: false }, true, 301_000, 300_000),
+    { since: 1_000, notified: true, shouldNotify: true });
+});
+
+test("PS-810 operational receiver sends a scrubbed Postmark message", async () => {
+  let request;
+  const messageId = await deliverOperationalAlert({
+    ALERT_RECIPIENT: "operations@example.test", POSTMARK_FROM: "Plenum <sender@example.test>",
+    POSTMARK_SERVER_TOKEN: "secret-token-value", POSTMARK_MESSAGE_STREAM: "outbound"
+  }, {
+    id: "readiness-unavailable", action: "page", deploymentId,
+    recordedAt: "2026-11-06T00:00:00.000Z", outcome: "failed",
+    runbook: "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#readiness-unavailable"
+  }, async (url, init) => {
+    request = { url, init };
+    return new Response(JSON.stringify({ MessageID: "message-1" }), { status: 200 });
+  });
+  assert.equal(messageId, "message-1");
+  assert.equal(request.url, "https://api.postmarkapp.com/email");
+  assert.equal(request.init.headers["X-Postmark-Server-Token"], "secret-token-value");
+  const body = JSON.parse(request.init.body);
+  assert.equal(body.To, "operations@example.test");
+  assert.equal(JSON.stringify(body).includes("secret-token-value"), false);
 });

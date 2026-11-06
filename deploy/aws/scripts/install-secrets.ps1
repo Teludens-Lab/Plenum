@@ -94,6 +94,10 @@ $postmarkFrom = Read-RequiredText `
   -InvalidMessage "Use the form Plenum <verified-address@example.org>."
 $postmarkToken = Read-SecretValue -Prompt "Postmark server token" -MinimumLength 16
 $postmarkWebhookPassword = Read-SecretValue -Prompt "Postmark webhook password" -MinimumLength 32
+$alertRecipient = Read-RequiredText `
+  -Prompt "Staging operational alert recipient" `
+  -Pattern '^[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+$' `
+  -InvalidMessage "Enter one valid email address."
 $githubUser = Read-RequiredText `
   -Prompt "GitHub username with package access" `
   -Pattern '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$' `
@@ -103,6 +107,7 @@ $keycloakAdminPassword = Read-SecretValue -Prompt "Keycloak staging administrato
 $testUserPassword = Read-SecretValue -Prompt "Plenum staging test-user password" -MinimumLength 12 -Confirm
 
 $postgresPassword = New-Base64UrlSecret 32
+$operationsDatabasePassword = New-Base64UrlSecret 32
 $floorTokenSecret = New-Base64UrlSecret 32
 $invitationBearerToken = New-Base64UrlSecret 32
 $invitationWebhookToken = New-Base64UrlSecret 32
@@ -128,6 +133,12 @@ $parameters = [ordered]@{
   "$ParameterPrefix/livekit-keys"            = "${mediaApiKey}: ${mediaApiSecret}`n"
   "$ParameterPrefix/registry"                = (@{ username = $githubUser; password = $githubToken } | ConvertTo-Json -Compress)
   "$ParameterPrefix/application"             = ($application | ConvertTo-Json -Compress)
+  "$ParameterPrefix/operations"              = ([ordered]@{
+    ALERT_RECIPIENT       = $alertRecipient
+    DATABASE_PASSWORD     = $operationsDatabasePassword
+    POSTMARK_FROM         = $postmarkFrom
+    POSTMARK_SERVER_TOKEN = $postmarkToken
+  } | ConvertTo-Json -Compress)
 }
 
 $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) ("plenum-ssm-" + [Guid]::NewGuid().ToString("N"))
@@ -160,8 +171,9 @@ try {
     Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
   }
   Remove-Variable -Name postmarkToken, postmarkWebhookPassword, githubToken, `
-    keycloakAdminPassword, testUserPassword, postgresPassword, floorTokenSecret, invitationBearerToken, `
+    keycloakAdminPassword, testUserPassword, postgresPassword, operationsDatabasePassword, alertRecipient, `
+    floorTokenSecret, invitationBearerToken, `
     invitationWebhookToken, mediaApiSecret, application, parameters -ErrorAction SilentlyContinue
 }
 
-Write-Host "All six encrypted staging parameters were created. No secret values were printed or added to Terraform state."
+Write-Host "All seven encrypted staging parameters were created. No secret values were printed or added to Terraform state."

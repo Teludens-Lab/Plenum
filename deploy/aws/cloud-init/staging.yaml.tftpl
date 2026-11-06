@@ -73,4 +73,4 @@ runcmd:
   - [sh, -c, "systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || systemctl enable --now amazon-ssm-agent.service || true"]
   - [systemctl, daemon-reload]
   - [systemctl, enable, plenum.service]
-  - [sh, -c, "echo 'Plenum is staged but intentionally stopped until the six SSM SecureString parameters are populated.' > /etc/plenum/DEPLOYMENT_STATUS"]
+  - [sh, -c, "echo 'Plenum is staged but intentionally stopped until the seven SSM SecureString parameters are populated.' > /etc/plenum/DEPLOYMENT_STATUS"]

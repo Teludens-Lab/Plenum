@@ -325,7 +325,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/036_organization_identity_providers.sql",
     "apps/server/migrations/037_organization_workforce.sql",
     "apps/server/migrations/038_identity_workforce_operations.sql",
-    "apps/server/migrations/039_operational_security_events.sql"
+    "apps/server/migrations/039_operational_security_events.sql",
+    "apps/server/migrations/040_operational_security_reader.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -3658,5 +3659,21 @@ test("PS-810 stores immutable security evidence without granting application rea
     await client.query("ROLLBACK");
   } finally {
     client.release();
+  }
+
+  const operations = await owner.connect();
+  try {
+    await operations.query("BEGIN");
+    await operations.query("SET LOCAL ROLE plenum_operations_evidence_reader");
+    const feed = await operations.query(
+      "SELECT event_type,correlation_id FROM evidence.operational_security_event_feed WHERE id=$1", [eventId]
+    );
+    assert.deepEqual(feed.rows[0], { event_type: "security.rate_limited", correlation_id: correlationId });
+    await assert.rejects(operations.query(
+      "UPDATE evidence.operational_security_event_feed SET category='changed' WHERE id=$1", [eventId]
+    ), /permission denied|cannot update/iu);
+    await operations.query("ROLLBACK");
+  } finally {
+    operations.release();
   }
 });

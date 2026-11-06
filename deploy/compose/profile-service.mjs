@@ -224,6 +224,21 @@ const server = createServer(async (request, response) => {
     telemetry.complete(telemetryContext, response);
   }
 });
+// Keep the collector endpoint on the private Compose network. The public
+// listener deliberately continues to expose /internal/metrics only to its own
+// loopback interface.
+const metricsServer = createServer((request, response) => {
+  if (request.method !== "GET" || request.url !== "/metrics") {
+    response.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
+    response.end('{"error":"not_found"}\n');
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": "text/plain; version=0.0.4; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(telemetry.metrics());
+});
 server.on("upgrade", (request, socket, head) => void (async () => {
   const rule = classifyDeploymentRequest(request, trustedProxy);
   if (rule !== null && !(await consumeDeploymentRateLimit(pool, deploymentId, rule)).allowed) {
@@ -234,6 +249,7 @@ server.on("upgrade", (request, socket, head) => void (async () => {
   if (!await collaboration.handleUpgrade(request, socket, head)) socket.destroy();
 })().catch(() => socket.destroy()));
 server.listen(Number(process.env.PORT ?? 8080), "0.0.0.0");
+metricsServer.listen(Number(process.env.METRICS_PORT ?? 9090), "0.0.0.0");
 let retentionRunning = false;
 async function enforceRetention() {
   if (retentionRunning) return;
@@ -247,6 +263,10 @@ async function enforceRetention() {
   } catch {
     telemetry.emit({ event: "retention.enforcement_failed", severity: "error", outcome: "failed",
       correlationId, category: "scheduled_run" });
+    await recordOperationalSecurityEvent(pool, { deploymentId, eventType: "retention.enforcement_failed",
+      severity: "error", outcome: "failed", correlationId, category: "scheduled_run" })
+      .catch(() => telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
+        correlationId, category: "retention_enforcement" }));
   } finally {
     retentionRunning = false;
   }
@@ -259,7 +279,14 @@ let closing = false;
 async function close() {
   if (closing) return; closing = true;
   clearTimeout(retentionStart); clearInterval(retentionInterval);
-  await collaboration.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); await pool.end();
+  await collaboration.close();
+  server.closeAllConnections();
+  metricsServer.closeAllConnections();
+  await Promise.all([
+    new Promise((resolve) => server.close(resolve)),
+    new Promise((resolve) => metricsServer.close(resolve))
+  ]);
+  await pool.end();
 }
 process.on("SIGTERM", () => void close());
 process.on("SIGINT", () => void close());

@@ -84,6 +84,8 @@ test("AWS runtime secrets stay in scoped SSM SecureString parameters", async () 
   assert.match(pull, /ssm get-parameter[\s\S]*--with-decryption/u);
   assert.match(pull, /--password-stdin/u);
   assert.match(outputs, /required_parameter_names/u);
+  assert.match(fetch, /operations\.json/u);
+  assert.match(outputs, /\/operations/u);
   assert.doesNotMatch(example, /(?:password|token|secret)\s*=\s*"[^<R][^"\n]+"/iu);
 });
 
@@ -98,9 +100,10 @@ test("shared Compose supports PostgreSQL 18 and preserves migration shell variab
   const compose = await read("deploy/oci/runtime/compose.functional-free.yaml.tftpl");
   assert.match(compose, /postgres-data:\/var\/lib\/postgresql\]/u);
   assert.doesNotMatch(compose, /postgres-data:\/var\/lib\/postgresql\/data/u);
-  assert.match(compose, /\$\$\$\$\{migration\}/u);
-  assert.match(compose, /\$\$\$\$\{name\}/u);
-  assert.match(compose, /\$\$\$\$\{applied\}/u);
+  assert.match(compose, /\$\$\$\{migration\}/u);
+  assert.match(compose, /\$\$\$\{name\}/u);
+  assert.match(compose, /\$\$\$\{applied\}/u);
+  assert.doesNotMatch(compose, /\$\$\$\$\{(?:migration|name|applied)\}/u);
   assert.match(compose, /temporary_home="\$\$\(mktemp -d\)"[\s\S]*set-password -r plenum/u);
   assert.doesNotMatch(compose, /set-password --server/u);
 });
@@ -116,8 +119,19 @@ test("runtime secrets remain host-private and readable by non-root containers", 
   assert.match(fetch, /head -n 1 \/etc\/plenum\/secrets\/livekit-keys\.yaml/u);
   assert.match(fetch, /tail -n \+2 \/etc\/plenum\/secrets\/livekit-keys\.yaml/u);
   assert.match(cloudInit, /groupadd --system --gid 2000 plenum-secrets/u);
-  assert.equal((compose.match(/group_add: \["2000"\]/gu) ?? []).length, 7);
+  assert.equal((compose.match(/group_add: \["2000"\]/gu) ?? []).length, 9);
   assert.match(compose, /source: livekit-keys\s+target: livekit-keys\.yaml/u);
+  assert.match(compose, /source: operations\s+target: operations\.json/u);
+});
+
+test("AWS staging connects the scanner and independent operations collector", async () => {
+  const compose = await read("deploy/oci/runtime/compose.functional-free.yaml.tftpl");
+  assert.match(compose, /malware-scanner:[\s\S]*clamav\/clamav-debian:1\.4\.6@sha256:[0-9a-f]{64}/u);
+  assert.match(compose, /malware-scanner:\s*\n\s+condition: service_healthy/u);
+  assert.match(compose, /operations-reader-bootstrap:[\s\S]*operations-reader-bootstrap\.mjs/u);
+  assert.match(compose, /operations-agent:[\s\S]*operations-agent\.mjs/u);
+  assert.match(compose, /APPLICATION_METRICS_URL: http:\/\/application:9090\/metrics/u);
+  assert.match(compose, /operations-agent:[\s\S]*read_only: true[\s\S]*cap_drop: \[ALL\][\s\S]*no-new-privileges:true/u);
 });
 
 test("AWS package reuses the approved runtime and immutable release", async () => {

@@ -35,6 +35,7 @@ output "required_parameter_names" {
     "${var.ssm_parameter_prefix}/keycloak-admin-password",
     "${var.ssm_parameter_prefix}/test-user-password",
     "${var.ssm_parameter_prefix}/livekit-keys",
+    "${var.ssm_parameter_prefix}/operations",
     "${var.ssm_parameter_prefix}/registry"
   ]
 }

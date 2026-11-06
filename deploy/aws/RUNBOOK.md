@@ -22,9 +22,12 @@ Create these as Standard-tier SSM `SecureString` parameters using the default AW
 - `/plenum/staging/keycloak-admin-password`
 - `/plenum/staging/test-user-password`
 - `/plenum/staging/livekit-keys`
+- `/plenum/staging/operations`
 - `/plenum/staging/registry`
 
 The application JSON retains the established Plenum secret contract plus the all-or-none Postmark group. It must not contain `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`; AWS S3 authentication is provided only by the EC2 instance role. The registry value is exactly `{"username":"GITHUB_USER","password":"READ_PACKAGES_PAT"}`.
+
+The operations JSON contains only `ALERT_RECIPIENT`, `DATABASE_PASSWORD`, `POSTMARK_FROM` and `POSTMARK_SERVER_TOKEN`. The database password belongs only to the read-only `plenum_operations` login. Do not reuse the PostgreSQL owner or application password.
 
 For the first staging installation, run the prompt-driven installer from a trusted local PowerShell session:
 
@@ -34,6 +37,14 @@ For the first staging installation, run the prompt-driven installer from a trust
 
 The installer verifies that no `/plenum/staging/*` parameters exist, generates independent internal credentials, prompts without echo for the external Postmark and GHCR credentials, and submits each value through a short-lived local AWS CLI input file that is deleted immediately. It deliberately refuses to rotate or overwrite an existing staging secret set.
 
+For the existing host that predates the operations parameter, create only that parameter with:
+
+```powershell
+./deploy/aws/scripts/configure-operations.ps1
+```
+
+The command prompts for the verified Postmark sender, server token and alert receiver, generates an independent database password, and refuses to overwrite an existing value.
+
 For the existing staging environment, preserve the current SSM parameter version, then remove only `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `/plenum/staging/application` after the corrected image is present. Rollback restores the previous parameter version and previous image/configuration while the OCI bucket remains intact.
 
 ## Authorized deployment sequence
@@ -41,9 +52,9 @@ For the existing staging environment, preserve the current SSM parameter version
 1. Apply only the exact reviewed plan after explicit approval. The plan must add the S3 resources and must not replace `aws_instance.plenum`.
 2. Point all four DuckDNS records at the `public_ipv4` output.
 3. Wait for the EC2 instance to appear as an online Systems Manager managed node; do not open SSH.
-4. Populate the six SecureString parameters.
+4. Populate the seven SecureString parameters.
 5. Start `plenum.service` through an authorized Session Manager session. The service fetches secrets, pulls the pinned image, removes temporary registry credentials, and starts Compose.
-6. Run `node deploy/compose/verify-object-storage.mjs` inside the application container and require `object storage upload/read/delete: PASS`; then verify Compose health, DNS, TLS, `/healthz`, OIDC login, Runtime, Studio, media, invitation delivery, delivery callback, and controlled bounce.
+6. Run `node deploy/compose/verify-object-storage.mjs` inside the application container and require `object storage upload/read/delete: PASS`; then verify Compose health, the ClamAV service is healthy, `operations-reader-bootstrap` exited `0`, `operations-agent` is healthy, DNS, TLS, `/healthz`, OIDC login, Runtime, Studio, media, invitation delivery, delivery callback, controlled bounce and one controlled operations alert.
 7. Record credit consumption and stop the instance when the test window ends. The Elastic IP and EBS volume continue consuming credits while retained.
 
 ## Storage retention contract
@@ -57,5 +68,5 @@ For the existing staging environment, preserve the current SSM parameter version
 
 - Application rollback changes only the pinned digest through a new reviewed plan. Do not reverse database migrations.
 - Before instance replacement, export and verify a PostgreSQL backup; root-volume deletion is enabled because the volume is Terraform-owned.
-- If the host is compromised, remove DuckDNS records, stop the instance, preserve evidence, rotate all six parameter values, and revoke the GHCR credential.
-- Before credits expire, export database/object evidence, destroy the reviewed AWS resources, release the Elastic IP, delete the six parameters, deactivate the deployer access key, and verify the Billing dashboard shows no retained resources.
+- If the host is compromised, remove DuckDNS records, stop the instance, preserve evidence, rotate all seven parameter values, and revoke the GHCR credential.
+- Before credits expire, export database/object evidence, destroy the reviewed AWS resources, release the Elastic IP, delete the seven parameters, deactivate the deployer access key, and verify the Billing dashboard shows no retained resources.

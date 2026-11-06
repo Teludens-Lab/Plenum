@@ -8,13 +8,14 @@ This is a **plan-only** Terraform package for the AWS project currently locked t
 - One encrypted 50 GB gp3 root volume.
 - One VPC, public subnet, internet gateway, route table, and security group.
 - One stable Elastic IP for the four existing DuckDNS names.
-- Caddy, Plenum, PostgreSQL, Keycloak, and LiveKit run through the existing digest-pinned Compose contract.
+- Caddy, Plenum, PostgreSQL, Keycloak, LiveKit, the pinned ClamAV scanner and the bounded operations agent run through the digest-pinned Compose contract.
 - One private, versioned, AES-256-encrypted S3 bucket in `us-east-2`, with all public access blocked.
 - The application reaches S3 only as the `plenum-staging-runtime` EC2 role; no object-storage access key is stored in the application secret bundle.
 - Noncurrent object versions expire after 30 days. Objects written below `transient-audio/` expire through a one-day S3 lifecycle rule, which produces an approximately 24-48 hour eligibility window because S3 rounds lifecycle dates to midnight UTC.
 - Governed text remains authoritative in PostgreSQL; release JSON, images, exports, and other file objects have no blanket current-version expiry.
 - Session Manager replaces SSH; port 22 is not exposed.
-- Runtime and GHCR credentials are fetched from six scoped SSM `SecureString` parameters and never enter Terraform state or user data.
+- Runtime, operations-agent and GHCR credentials are fetched from seven scoped SSM `SecureString` parameters and never enter Terraform state or user data.
+- `plenum_operations` is a separate PostgreSQL login with a generated password and read-only access to one scrubbed security-evidence view. The operations agent retains bounded metric samples locally for 90 days and sends actionable alerts to one configured Postmark receiver.
 
 This is a staging topology, not a production topology. It has one host, no automatic failover, and consumes the Free-plan credit balance while running. Public IPv4 and EBS continue to consume credits even when the instance is stopped.
 

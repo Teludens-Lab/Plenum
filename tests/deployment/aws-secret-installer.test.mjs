@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const installer = await readFile("deploy/aws/scripts/install-secrets.ps1", "utf8");
+const operationsInstaller = await readFile("deploy/aws/scripts/configure-operations.ps1", "utf8");
 
 test("AWS secret installer fails closed before first-install writes", () => {
   assert.match(installer, /describe-parameters/u);
@@ -40,8 +41,21 @@ test("AWS secret installer writes the complete runtime contract", () => {
     "livekit-keys",
     "registry"
   ]) assert.match(installer, new RegExp(suffix, "u"));
+  assert.match(installer, /operations/u);
+  for (const key of ["ALERT_RECIPIENT", "DATABASE_PASSWORD", "POSTMARK_FROM", "POSTMARK_SERVER_TOKEN"]) {
+    assert.match(installer, new RegExp(key, "u"));
+  }
   assert.match(installer, /"\$\{mediaApiKey\}: \$\{mediaApiSecret\}`n"/u);
   assert.doesNotMatch(installer, /"keys:`n  \$\{mediaApiKey\}/u);
   assert.doesNotMatch(installer, /S3_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY)/u);
   assert.doesNotMatch(installer, /OCI object-storage/u);
+});
+
+test("AWS operations bootstrap is create-only and keeps receiver credentials out of arguments", () => {
+  assert.match(operationsInstaller, /already exists[\s\S]*will not rotate or overwrite/u);
+  assert.doesNotMatch(operationsInstaller, /--overwrite/u);
+  assert.match(operationsInstaller, /Read-Host -Prompt \$Prompt -AsSecureString/u);
+  assert.match(operationsInstaller, /--cli-input-json \$requestUri/u);
+  assert.doesNotMatch(operationsInstaller, /ssm put-parameter[\s\S]{0,300}--value/u);
+  assert.match(operationsInstaller, /Remove-Item -LiteralPath \$directory -Recurse -Force/u);
 });

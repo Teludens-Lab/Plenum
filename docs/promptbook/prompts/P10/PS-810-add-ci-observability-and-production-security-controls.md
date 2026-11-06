@@ -68,10 +68,14 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 ## Implementation
 
-- Create deterministic CI with disposable dependencies and retained evidence
-- Instrument critical user journeys and saturation without sensitive data
-- Integrate approved scanning and signed build provenance
-- Document and rehearse alert ownership, key/secret rotation and upload quarantine failure
+- Phase 1 - CI: inventory every existing validation command, then create required blocking jobs for type checking, lint, unit and contract tests, PostgreSQL and object-storage integration, product browser tests, accessibility, security, deployment packaging, migrations and completeness; use disposable fixtures and retain named evidence artifacts
+- Phase 2 - supply chain: run CodeQL, pull-request dependency review, secret and configuration checks, license policy and CycloneDX SBOM generation; fail closed on high-severity findings, unreviewed license expressions, missing artifacts or skipped required jobs
+- Phase 3 - runtime telemetry: emit structured correlation, trace, deployment, normalized route, outcome, duration and authorized Session context; expose private bounded metrics, reject sensitive fields and unbounded labels, and keep public callers away from internal metrics
+- Phase 4 - durable security evidence: apply additive migrations 039 and 040, record governed security events through a least-privilege append-only boundary, create a separate read-only operational identity over the scrubbed evidence view, prove neither application nor operations can mutate evidence, and preserve the original denial when evidence recording fails
+- Phase 5 - upload protection: connect the approved pinned malware scanner to every deployment profile presented for acceptance, keep clean uploads unavailable until a clean result, keep infected or unscannable uploads quarantined, and emit actionable scrubbed events without filenames or file bytes
+- Phase 6 - operational response: translate the checked-in dashboard and alert contracts into the selected staging collector and notification route, name the responsible owner, link each notification to its runbook, and prove at least one end-to-end alert delivery; checked-in JSON alone is not alert delivery
+- Phase 7 - release assurance: restrict DAST to the approved staging origin, package the exact candidate, bind checksum, SBOM and GitHub provenance to the same commit, and retain artifacts without granting the workflow production credentials
+- Phase 8 - acceptance: follow docs/design/user-test/PS-810-script.md in order, record PASS, FAIL, BLOCKED or NOT RUN with exact references, rehearse one reversible staging secret rotation and rollback, close high-severity defects, and obtain named change-level approval
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
 
@@ -147,7 +151,7 @@ Update contracts at their authoritative owner instead of duplicating them. Add c
 
 - Proposed branch: `feat/ps-810-add-ci-observability-and-production-security-controls`
 - Proposed subject: `build(platform): add CI observability and security gates`
-- Expected migrations: `039_operational_security_events`
+- Expected migrations: `039_operational_security_events`, `040_operational_security_reader`
 - Expected API/contract IDs: `operational-telemetry-v1`
 
 Proposed body:
@@ -168,7 +172,7 @@ Refs: PS-810, REQ-051, REQ-052, REQ-066
 
 Proposed PR description:
 
-Summary: Operators and maintainers can detect failures, trace affected Sessions, respond safely, and prevent unverified builds from becoming releases. Risks: high workflow and authorization regressions. Migration: 039_operational_security_events. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
+Summary: Operators and maintainers can detect failures, trace affected Sessions, respond safely, and prevent unverified builds from becoming releases. Risks: high workflow and authorization regressions. Migrations: 039_operational_security_events and 040_operational_security_reader. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change.
 
 Review the focused diff and list exact files. Never commit failed gates or unrelated changes.
 

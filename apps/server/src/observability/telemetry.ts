@@ -69,6 +69,7 @@ export class OperationalTelemetry {
   readonly #clock: () => bigint;
   readonly #requests = new Map<string, number>();
   readonly #durations = new Map<string, number[]>();
+  readonly #events = new Map<string, number>();
 
   constructor(options: OperationalTelemetryOptions) {
     if (!uuidPattern.test(options.deploymentId)) throw new Error("Operational telemetry requires a deployment UUID");
@@ -150,6 +151,8 @@ export class OperationalTelemetry {
       ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
       ...(input.category === undefined ? {} : { category: input.category })
     };
+    const eventKey = JSON.stringify([input.event, input.severity, input.outcome]);
+    this.#events.set(eventKey, (this.#events.get(eventKey) ?? 0) + 1);
     this.#write(JSON.stringify(event));
   }
 
@@ -158,8 +161,14 @@ export class OperationalTelemetry {
       "# HELP plenum_http_server_requests_total Completed HTTP requests.",
       "# TYPE plenum_http_server_requests_total counter",
       "# HELP plenum_http_server_request_duration_milliseconds HTTP request duration.",
-      "# TYPE plenum_http_server_request_duration_milliseconds histogram"
+      "# TYPE plenum_http_server_request_duration_milliseconds histogram",
+      "# HELP plenum_operational_events_total Bounded operational events.",
+      "# TYPE plenum_operational_events_total counter"
     ];
+    for (const [key, count] of [...this.#events.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      const [event, severity, outcome] = JSON.parse(key) as [string, string, string];
+      lines.push(`plenum_operational_events_total{event="${escapeMetricLabel(event)}",severity="${severity}",outcome="${outcome}"} ${count}`);
+    }
     for (const [key, count] of [...this.#requests.entries()].sort(([left], [right]) => left.localeCompare(right))) {
       const [method, route, statusClass] = JSON.parse(key) as [string, string, string];
       const labels = `method="${escapeMetricLabel(method)}",route="${escapeMetricLabel(route)}",status_class="${statusClass}"`;

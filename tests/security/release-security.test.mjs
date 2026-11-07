@@ -117,6 +117,7 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
   assert.match(security, /actions\/dependency-review-action@[0-9a-f]{40}/u);
   assert.match(dast, /test "\$TARGET_URL" = "https:\/\/plenum-stage-01\.duckdns\.org"/u);
   assert.match(dast, /rules_file_name: \.zap\/rules\.tsv/u);
+  assert.match(dast, /cmd_options: -c \.zap\/rules\.tsv/u);
   assert.match(dast, /fail_action: true/u);
   const reviewedDastRules = dastRules.split(/\r?\n/u)
     .map((line) => line.trim())

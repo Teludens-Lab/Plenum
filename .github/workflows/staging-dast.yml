@@ -27,6 +27,7 @@ jobs:
         with:
           target: ${{ inputs.target }}
           rules_file_name: .zap/rules.tsv
+          cmd_options: -c .zap/rules.tsv
           fail_action: true
           allow_issue_writing: false
           artifact_name: ps-810-staging-dast

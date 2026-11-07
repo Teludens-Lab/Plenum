@@ -1,0 +1,5 @@
+# Reviewed informational observations for the public staging shell.
+# New or unlisted ZAP alerts remain WARN and fail the staging DAST job.
+10015	INFO	(Public shell and fingerprinted assets intentionally use explicit cache directives)
+10049	INFO	(Public shell and fingerprinted assets are intentionally cacheable)
+10109	INFO	(Plenum is intentionally a client-rendered modern web application)

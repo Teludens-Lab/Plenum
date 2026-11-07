@@ -178,7 +178,7 @@ Do not modify the real dependency policy merely to manufacture this result.
 
 5. Run the workflow and wait for completion.
 6. Download the `ps-810-staging-dast` artifact.
-7. Review every finding. Any unresolved high-severity finding is a blocker.
+7. Review every finding. The tracked rules file may classify only the reviewed modern-application and intentional public-cache notices as informational. Any new or unlisted alert fails the workflow and requires review; any unresolved high-severity finding is a blocker.
 8. Verify the allowlist separately by attempting a workflow run with a harmless unapproved non-production origin. The job must stop at **Refuse unapproved or production targets** before ZAP scans it.
 
 Pass conditions:

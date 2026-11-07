@@ -93,10 +93,11 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
     }
   }
 
-  const [ci, security, dast, provenance, telemetry, migration, readerMigration, compose, operationsAgent] = await Promise.all([
+  const [ci, security, dast, dastRules, provenance, telemetry, migration, readerMigration, compose, operationsAgent] = await Promise.all([
     readFile(resolve(workflowDirectory, "ci.yml"), "utf8"),
     readFile(resolve(workflowDirectory, "security.yml"), "utf8"),
     readFile(resolve(workflowDirectory, "staging-dast.yml"), "utf8"),
+    readFile(resolve(root, ".zap/rules.tsv"), "utf8"),
     readFile(resolve(workflowDirectory, "release-provenance.yml"), "utf8"),
     readFile(resolve(root, "apps/server/src/observability/telemetry.ts"), "utf8"),
     readFile(resolve(root, "apps/server/migrations/039_operational_security_events.sql"), "utf8"),
@@ -115,7 +116,13 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
   assert.match(security, /actions\/upload-artifact@[0-9a-f]{40}[\s\S]*?path: codeql-results\/\*\.sarif/u);
   assert.match(security, /actions\/dependency-review-action@[0-9a-f]{40}/u);
   assert.match(dast, /test "\$TARGET_URL" = "https:\/\/plenum-stage-01\.duckdns\.org"/u);
+  assert.match(dast, /rules_file_name: \.zap\/rules\.tsv/u);
   assert.match(dast, /fail_action: true/u);
+  const reviewedDastRules = dastRules.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .map((line) => line.split(/\s+/u).slice(0, 2).join(" "));
+  assert.deepEqual(reviewedDastRules, ["10015 INFO", "10049 INFO", "10109 INFO"]);
   assert.match(provenance, /attestations: write/u);
   assert.match(provenance, /sbom-path: test-results\/supply-chain\/sbom\.cdx\.json/u);
   for (const prohibited of ["authorization", "cookie", "user-agent", "request.body", "email"]) {

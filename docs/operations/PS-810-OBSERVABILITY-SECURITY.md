@@ -73,7 +73,7 @@ AWS object access is not a rotatable static key: the application receives tempor
 
 - `.github/workflows/ci.yml` blocks on static, unit, integration, browser, accessibility, security, migration/package, and completeness gates.
 - `.github/workflows/security.yml` runs CodeQL and pull-request dependency review.
-- `.github/workflows/staging-dast.yml` accepts only the approved non-production staging origin.
+- `.github/workflows/staging-dast.yml` accepts only the approved non-production staging origin. Its reviewed rules file classifies only the observed modern-application and intentional public-cache notices as informational; every new or unlisted alert remains a failing warning.
 - `.github/workflows/release-provenance.yml` packages the built output and requests GitHub build and SBOM attestations.
 - `npm run test:supply-chain` emits a CycloneDX SBOM and fails on any unreviewed license expression.
 

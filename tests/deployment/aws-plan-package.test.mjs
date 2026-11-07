@@ -125,7 +125,10 @@ test("runtime secrets remain host-private and readable by non-root containers", 
 });
 
 test("AWS staging connects the scanner and independent operations collector", async () => {
-  const compose = await read("deploy/oci/runtime/compose.functional-free.yaml.tftpl");
+  const [compose, readerBootstrap] = await Promise.all([
+    read("deploy/oci/runtime/compose.functional-free.yaml.tftpl"),
+    read("deploy/compose/operations-reader-bootstrap.mjs")
+  ]);
   assert.match(compose, /malware-scanner:[\s\S]*clamav\/clamav-debian:1\.4\.6@sha256:[0-9a-f]{64}/u);
   assert.match(compose, /malware-scanner:\s*\n\s+condition: service_healthy/u);
   assert.match(compose, /operations-reader-bootstrap:[\s\S]*operations-reader-bootstrap\.mjs/u);
@@ -133,6 +136,7 @@ test("AWS staging connects the scanner and independent operations collector", as
   assert.match(compose, /APPLICATION_METRICS_URL: http:\/\/application:9090\/metrics/u);
   assert.match(compose, /operations-agent:[\s\S]*read_only: true[\s\S]*cap_drop: \[ALL\][\s\S]*no-new-privileges:true/u);
   assert.match(compose, /tmpfs: \["\/tmp:rw,noexec,nosuid,nodev,size=16m"\]/u);
+  assert.match(readerBootstrap, /format\('[^']+', \$1::text\)/u);
 });
 
 test("AWS package reuses the approved runtime and immutable release", async () => {

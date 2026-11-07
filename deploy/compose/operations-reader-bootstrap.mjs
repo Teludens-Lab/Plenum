@@ -33,7 +33,7 @@ try {
       END
       $$`);
     const formatted = await client.query(
-      "SELECT format('ALTER ROLE plenum_operations PASSWORD %L', $1) AS statement",
+      "SELECT format('ALTER ROLE plenum_operations PASSWORD %L', $1::text) AS statement",
       [operations.DATABASE_PASSWORD]
     );
     await client.query(formatted.rows[0].statement);

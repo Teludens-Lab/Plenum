@@ -17,6 +17,7 @@ test("AWS package is plan-only and region-locked to the Free-plan project", asyn
   assert.match(readme, /plan-only/iu);
   assert.match(variables, /var\.region == "us-east-2"/u);
   assert.match(variables, /acknowledge_credit_funded_resources/u);
+  assert.match(variables, /application_contract\.deployment_id/u);
   assert.match(init, /terraform.+init/isu);
   assert.match(validate, /fmt.+validate.+test/isu);
   assert.match(plan, /terraform.+plan/isu);

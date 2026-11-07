@@ -126,6 +126,7 @@ variable "application_contract" {
   })
   validation {
     condition = alltrue([
+      can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", var.application_contract.deployment_id)),
       can(regex("^[0-9a-fA-F-]{36}$", var.application_contract.retention_actor_person_id)),
       can(regex("^[0-9a-fA-F-]{36}$", var.application_contract.oidc_organization_id)),
       can(regex("^https://", var.application_contract.invitation_delivery_endpoint))

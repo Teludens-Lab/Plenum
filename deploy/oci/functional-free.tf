@@ -13,16 +13,16 @@ data "oci_core_images" "oracle_linux_arm" {
 
 locals {
   free_compose = templatefile("${path.module}/runtime/compose.functional-free.yaml.tftpl", {
-    application_image    = var.application_image
-    application_hostname = var.application_hostname
-    identity_hostname    = var.identity_hostname
-    media_hostname       = var.media_hostname
+    application_image      = var.application_image
+    application_hostname   = var.application_hostname
+    identity_hostname      = var.identity_hostname
+    media_hostname         = var.media_hostname
     notifications_hostname = var.notifications_hostname
-    environment          = local.application_environment
-    organization_id      = var.application_contract.oidc_organization_id
-    person_id            = var.application_contract.retention_actor_person_id
-    oidc_issuer          = local.resolved_oidc_issuer
-    test_username        = var.functional_test_username
+    environment            = local.application_environment
+    organization_id        = var.application_contract.oidc_organization_id
+    person_id              = var.application_contract.retention_actor_person_id
+    oidc_issuer            = local.resolved_oidc_issuer
+    test_username          = var.functional_test_username
   })
   free_caddyfile = templatefile("${path.module}/runtime/Caddyfile.tftpl", {
     application_hostname   = var.application_hostname

@@ -33,6 +33,7 @@ test("both profiles share one immutable multi-platform release contract", async 
   assert.match(variables, /@sha256:\[0-9a-f\]\{64\}/u);
   assert.match(variables, /linux\/amd64/u);
   assert.match(variables, /linux\/arm64/u);
+  assert.match(variables, /application_contract\.deployment_id/u);
   assert.match(free, /application_image\s+=\s+var\.application_image/u);
   assert.match(production, /image_url\s+=\s+var\.application_image/u);
   assert.match(compose, /image: \$\{application_image\}/u);

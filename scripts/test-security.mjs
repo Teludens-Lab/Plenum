@@ -7,7 +7,8 @@ const started = Date.now();
 const run = (command, arguments_) => spawnSync(command, arguments_, {
   cwd: process.cwd(), encoding: "utf8", maxBuffer: 100 * 1024 * 1024
 });
-const tests = run(process.execPath, ["--test", "tests/security/release-security.test.mjs"]);
+const tests = run(process.execPath, ["--test", "tests/security/release-security.test.mjs",
+  "tests/security/security-headers.test.mjs"]);
 const audit = process.env.npm_execpath
   ? run(process.execPath, [process.env.npm_execpath, "audit", "--audit-level=high", "--json"])
   : run("npm", ["audit", "--audit-level=high", "--json"]);

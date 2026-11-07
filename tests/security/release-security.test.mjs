@@ -57,8 +57,7 @@ test("REQ-051 deployment boundary requires protected credentials and browser sec
     readFile(resolve(root, "apps/server/src/security/rate-limit.ts"), "utf8"),
     readFile(resolve(root, "apps/server/migrations/025_security_retention_enforcement.sql"), "utf8")
   ]);
-  for (const required of ["HttpOnly", "Secure", "SameSite=Lax", "strict-transport-security",
-    "content-security-policy", "permissions-policy", "x-content-type-options", "x-frame-options"]) {
+  for (const required of ["HttpOnly", "Secure", "SameSite=Lax", "buildSecurityHeaders"]) {
     assert.match(service, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
   }
   for (const required of ["postgres-password", "identity-tls-key", "livekit-keys"]) assert.match(institutional, new RegExp(required, "u"));
@@ -70,6 +69,16 @@ test("REQ-051 deployment boundary requires protected credentials and browser sec
   assert.match(rateLimit, /operations\.consume_request_rate_limit/u);
   assert.match(retentionMigration, /legal_hold_events/u);
   assert.match(retentionMigration, /guard_export_artifact_retention/u);
+});
+
+test("public edge emits one HSTS value while retaining direct-service transport protection", async () => {
+  const [serviceHeaders, caddy] = await Promise.all([
+    readFile(resolve(root, "deploy/compose/security-headers.mjs"), "utf8"),
+    readFile(resolve(root, "deploy/oci/runtime/Caddyfile.tftpl"), "utf8")
+  ]);
+  assert.match(serviceHeaders, /"strict-transport-security": "max-age=31536000; includeSubDomains"/u);
+  assert.match(caddy, /\$\{application_hostname\}[\s\S]*?header_down -Strict-Transport-Security/u);
+  assert.equal((caddy.match(/header Strict-Transport-Security/gmu) ?? []).length, 4);
 });
 
 test("PS-810 CI and operational security controls fail closed without sensitive telemetry", async () => {

@@ -11,6 +11,7 @@ import {
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
+import { buildSecurityHeaders } from "./security-headers.mjs";
 
 const required = (name) => {
   const value = process.env[name]?.trim();
@@ -118,14 +119,7 @@ const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
-const securityHeaders = {
-  "content-security-policy": "default-src 'self'; connect-src 'self' wss:; img-src 'self' data:; style-src 'self'; script-src 'self'",
-  "permissions-policy": "camera=(), geolocation=(), microphone=(self)",
-  "referrer-policy": "no-referrer",
-  "strict-transport-security": "max-age=31536000; includeSubDomains",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY"
-};
+const securityHeaders = buildSecurityHeaders({ publicBaseUrl, mediaUrl });
 const serviceStartedAt = Date.now();
 let retentionLastSucceededAt;
 

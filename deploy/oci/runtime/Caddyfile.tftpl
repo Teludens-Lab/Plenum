@@ -8,7 +8,9 @@
 ${application_hostname} {
   encode zstd gzip
   header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-  reverse_proxy application:8080
+  reverse_proxy application:8080 {
+    header_down -Strict-Transport-Security
+  }
 }
 
 ${identity_hostname} {

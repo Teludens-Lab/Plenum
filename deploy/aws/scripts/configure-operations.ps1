@@ -37,8 +37,16 @@ function Read-SecretValue([string]$Prompt, [int]$MinimumLength = 16) {
 
 & $aws.Source sts get-caller-identity --profile $Profile --query Account --output text | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "AWS identity verification failed for profile $Profile." }
-& $aws.Source ssm get-parameter --profile $Profile --region $Region --name $ParameterName --query Parameter.Name --output text 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) { throw "$ParameterName already exists. This bootstrap command will not rotate or overwrite it." }
+$existingName = & $aws.Source ssm describe-parameters `
+  --profile $Profile `
+  --region $Region `
+  --parameter-filters "Key=Name,Option=Equals,Values=$ParameterName" `
+  --query "Parameters[0].Name" `
+  --output text
+if ($LASTEXITCODE -ne 0) { throw "Could not inspect staging parameter metadata." }
+if (-not [string]::IsNullOrWhiteSpace($existingName) -and $existingName.Trim() -ne "None") {
+  throw "$ParameterName already exists. This bootstrap command will not rotate or overwrite it."
+}
 
 $postmarkFrom = Read-RequiredText "Verified Postmark sender (example: Plenum <you@company.edu>)" '^.+<[^<>@\s]+@[^<>@\s]+>$' "Use the form Plenum <verified-address@example.org>."
 $postmarkToken = Read-SecretValue "Postmark server token" 16

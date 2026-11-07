@@ -52,6 +52,9 @@ test("AWS secret installer writes the complete runtime contract", () => {
 });
 
 test("AWS operations bootstrap is create-only and keeps receiver credentials out of arguments", () => {
+  assert.match(operationsInstaller, /ssm describe-parameters/u);
+  assert.match(operationsInstaller, /Key=Name,Option=Equals/u);
+  assert.doesNotMatch(operationsInstaller, /ssm get-parameter/u);
   assert.match(operationsInstaller, /already exists[\s\S]*will not rotate or overwrite/u);
   assert.doesNotMatch(operationsInstaller, /--overwrite/u);
   assert.match(operationsInstaller, /Read-Host -Prompt \$Prompt -AsSecureString/u);

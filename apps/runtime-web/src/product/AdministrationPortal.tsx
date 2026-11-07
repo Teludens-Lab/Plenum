@@ -62,6 +62,7 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
   const [model, setModel] = useState<OrganizationWorkforceV1 | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [scimCredential, setScimCredential] = useState<string | null>(null);
+  const [lifecycleErrors, setLifecycleErrors] = useState<Record<string, string>>({});
   const load = useCallback(async () => setModel(await request<OrganizationWorkforceV1>("/v1/operations/workforce")), []);
   useEffect(() => { void load().catch((cause: unknown) => setNotice(cause instanceof Error ? cause.message : "Workforce access did not load.")); }, [load, setNotice]);
   const run = async (key: string, operation: () => Promise<OrganizationWorkforceV1>, success: string) => {
@@ -85,12 +86,35 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
       body: JSON.stringify({ roles, expectedRevision }) }); return request<OrganizationWorkforceV1>("/v1/operations/workforce"); },
     "Organization Roles updated and recorded in the Audit Log.");
   };
-  const lifecycle = async (personId: string, transition: "activate" | "suspend" | "deprovision", expectedVersion: number, reason: string) => {
+  const clearLifecycleError = (personId: string) => setLifecycleErrors((current) => {
+    if (current[personId] === undefined) return current;
+    const next = { ...current };
+    delete next[personId];
+    return next;
+  });
+  const lifecycle = async (personId: string, transition: "activate" | "suspend" | "deprovision", expectedVersion: number,
+    reason: string, reasonInput: HTMLInputElement) => {
+    const normalizedReason = reason.trim();
+    if (transition !== "activate" && (normalizedReason.length < 3 || normalizedReason.length > 1000)) {
+      const message = "Enter a lifecycle reason between 3 and 1,000 characters before suspending or deprovisioning this member.";
+      setLifecycleErrors((current) => ({ ...current, [personId]: message }));
+      setNotice("The workforce change needs a valid lifecycle reason.");
+      reasonInput.focus();
+      return;
+    }
+    clearLifecycleError(personId);
     if (transition === "deprovision" && !window.confirm("Deprovision this member? Active sessions and projections will end immediately. Governed records will be preserved.")) return;
     await run(`${transition}:${personId}`, () => request<OrganizationWorkforceV1>(`/v1/operations/workforce/members/${personId}/${transition}`,
-      { method: "POST", body: JSON.stringify({ expectedVersion, reason }) }), transition === "activate" ? "Workforce access reactivated." :
+      { method: "POST", body: JSON.stringify({ expectedVersion, reason: normalizedReason }) }), transition === "activate" ? "Workforce access reactivated." :
       transition === "suspend" ? "Workforce access suspended; active sessions and projections were revoked." :
         "Workforce access deprovisioned; governed records were preserved.");
+  };
+  const runLifecycleFromForm = (form: HTMLFormElement | null, personId: string,
+    transition: "activate" | "suspend" | "deprovision", expectedVersion: number) => {
+    const reasonInput = form?.elements.namedItem("reason");
+    if (!(reasonInput instanceof HTMLInputElement)) return;
+    const reason = transition === "activate" && reasonInput.value.trim() === "" ? "Access restored by Admin" : reasonInput.value;
+    void lifecycle(personId, transition, expectedVersion, reason, reasonInput);
   };
   const createCredential = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const form = event.currentTarget; setPending("credential");
@@ -139,9 +163,13 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
         <div className="workforce-member-summary"><div><h3>{member.displayName}</h3><p>{member.email ?? "Email will appear after identity linking"}</p></div><span className={`badge ${member.status === "active" ? "badge-success" : member.status === "suspended" ? "badge-warning" : "badge-muted"}`}>{member.status}</span></div>
         <form key={member.roleRevision} onSubmit={(event) => void saveRoles(event, member.personId, member.roleRevision)}><fieldset disabled={member.status !== "active"}><legend>Organization Roles</legend><div className="role-checkboxes">{model.roles.map((role) => <label className="choice" key={role}>
           <input type="checkbox" name="roles" value={role} defaultChecked={member.roles.includes(role)} />{roleLabels[role as OrganizationRole]}</label>)}</div></fieldset><button className="btn-secondary" type="submit" disabled={pending !== null || member.status !== "active"}>{pending === `roles:${member.personId}` ? "Saving…" : "Save roles"}</button></form>
-        <form className="workforce-lifecycle" onSubmit={(event) => event.preventDefault()}><div className="field"><label htmlFor={`reason-${member.personId}`}>Lifecycle reason</label><input id={`reason-${member.personId}`} name="reason" minLength={3} maxLength={1000} placeholder="Required for suspension or deprovisioning" /></div><div className="record-actions">
-          {member.status === "suspended" ? <button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => { const reason = String(new FormData(event.currentTarget.form as HTMLFormElement).get("reason") ?? ""); void lifecycle(member.personId, "activate", member.lifecycleVersion, reason || "Access restored by Admin"); }}>Reactivate</button> : member.status === "active" ? <><button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => void lifecycle(member.personId, "suspend", member.lifecycleVersion, String(new FormData(event.currentTarget.form as HTMLFormElement).get("reason") ?? ""))}>Suspend</button>
-            <button className="btn-danger" type="button" disabled={pending !== null} onClick={(event) => void lifecycle(member.personId, "deprovision", member.lifecycleVersion, String(new FormData(event.currentTarget.form as HTMLFormElement).get("reason") ?? ""))}>Deprovision</button></> : null}</div></form>
+        <form className="workforce-lifecycle" onSubmit={(event) => event.preventDefault()}><div className="field"><label htmlFor={`reason-${member.personId}`}>Lifecycle reason</label><input id={`reason-${member.personId}`} name="reason" minLength={3} maxLength={1000} required={member.status === "active"}
+          aria-invalid={lifecycleErrors[member.personId] !== undefined} aria-describedby={`reason-hint-${member.personId}${lifecycleErrors[member.personId] === undefined ? "" : ` reason-error-${member.personId}`}`}
+          onChange={() => clearLifecycleError(member.personId)} />
+          <p id={`reason-hint-${member.personId}`} className="field-hint">Required for suspension or deprovisioning.</p>
+          {lifecycleErrors[member.personId] === undefined ? null : <p id={`reason-error-${member.personId}`} className="field-error" role="alert">{lifecycleErrors[member.personId]}</p>}</div><div className="record-actions">
+          {member.status === "suspended" ? <button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "activate", member.lifecycleVersion)}>Reactivate</button> : member.status === "active" ? <><button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "suspend", member.lifecycleVersion)}>Suspend</button>
+            <button className="btn-danger" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "deprovision", member.lifecycleVersion)}>Deprovision</button></> : null}</div></form>
       </li>)}</ul>}
     </section>
     <details className="workforce-section workforce-disclosure"><summary>SCIM provisioning and IdP group mapping</summary><div className="workforce-disclosure-body"><p>Endpoint: <code>/scim/v2</code>. Group additions grant mapped Organization Roles; omissions become reconciliation candidates and never silently remove access.</p>

@@ -1597,6 +1597,18 @@ test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and a
   await page.goto("/admin/members");
   await expect(page.getByRole("heading", { name: "Workforce access" })).toBeVisible();
   const reviewer = page.locator("li.administration-record").filter({ hasText: "Synthetic final reviewer" });
+  const lifecycleRequests = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && /\/v1\/operations\/workforce\/members\/[^/]+\/suspend$/u.test(request.url())) lifecycleRequests.push(request.url());
+  });
+  const lifecycleReason = reviewer.getByLabel("Lifecycle reason");
+  await reviewer.getByRole("button", { name: "Suspend" }).click();
+  await expect(lifecycleReason).toBeFocused();
+  await expect(lifecycleReason).toHaveAttribute("aria-invalid", "true");
+  await expect(lifecycleReason).toHaveAccessibleDescription(/Required for suspension or deprovisioning.*Enter a lifecycle reason between 3 and 1,000 characters/iu);
+  expect(lifecycleRequests).toHaveLength(0);
+  await lifecycleReason.fill("Role verification completed without lifecycle change");
+  await expect(lifecycleReason).toHaveAttribute("aria-invalid", "false");
   await reviewer.getByLabel("Operator", { exact: true }).check();
   await reviewer.getByRole("button", { name: "Save roles" }).click();
   await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");

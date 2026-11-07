@@ -70,6 +70,7 @@ docs/operations/*
 !docs/release-evidence/
 docs/release-evidence/*
 !docs/release-evidence/PS-810-index.md
+!docs/release-evidence/PS-815-internal-acceptance-audit.md
 !docs/promptbook/
 docs/promptbook/*
 !docs/promptbook/prompts/

@@ -6,6 +6,8 @@ Decision: **ACCEPTANCE PENDING / PRODUCTION NO-GO**
 
 PS-810's bounded implementation is present, but this record does not promote uncommitted or partially verified work. GitHub-hosted, staging, and authorized human gates remain mandatory.
 
+Sequencing note (2026-11-07): PS-815 internal acceptance was authorized to proceed while the environment-dependent Postmark, staging, and operator evidence remains deferred. Those deferred rows still matter to final production approval, but they do not invalidate or block the independent PS-815 internal phase.
+
 ## Local automated evidence
 
 | Gate | Result | Evidence |

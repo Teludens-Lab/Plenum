@@ -89,7 +89,7 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 - Exercise real invitation delivery, bounce, duplicate callback, revocation, reissue and expiry through controlled inboxes
 - Force safe partial failures and prove telemetry, bounded retry, reconciliation, provider rollback, SCIM credential rotation and emergency Platform Administrator access
 - Rehearse the workforce migration against representative existing Organization data and verify the documented recovery procedure
-- Run the supported Windows, macOS, iOS and Android task matrix with keyboard, touch, zoom, forced colors, reduced motion and named screen readers
+- Run the supported Windows and macOS desktop-browser task matrix with keyboard, pointer, 200% browser zoom, forced colors, reduced motion and named desktop screen readers; mobile and touch-device acceptance are not applicable
 - Close defects, consolidate sanitized evidence and obtain named engineering, security, accessibility, operations and product approval for the identity/workforce subsystem
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
@@ -129,7 +129,7 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then real invitations are delivered, bounced, revoked, reissued and expired with duplicate provider events handled idempotently
 - Given the documented preconditions, when the task behavior is exercised, then suspension and deprovisioning terminate active sessions and future entry while preserving governed and immutable audit records
 - Given the documented preconditions, when the task behavior is exercised, then provider rollback, emergency Platform Administrator access, SCIM credential rotation and representative migration recovery succeed
-- Given the documented preconditions, when the task behavior is exercised, then authorized human testers complete the control-plane workflows on the supported device and assistive-technology matrix with no unresolved task-blocking defect
+- Given the documented preconditions, when the task behavior is exercised, then authorized human testers complete the control-plane workflows on the supported desktop-browser and assistive-technology matrix with no unresolved task-blocking defect
 - Given the documented preconditions, when the task behavior is exercised, then every required gate is PASS and named accountable approvers bind the subsystem decision to the exact tested artifacts
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:

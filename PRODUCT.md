@@ -36,7 +36,7 @@ The lifecycle is Organization and Project setup → visual authoring → validat
 
 Users move among seven UI families: Platform lifecycle, Studio authoring, Participant Runtime, Operator control, Organization administration, reporting and research, and replay and archive. The server is authoritative for identity, authorization, business decisions, and persisted state; client caches and previews are projections.
 
-The working mode is **Operate**. The workspace must support sustained keyboard, pointer, touch, zoom, reduced-motion, forced-colors, and assistive-technology use without changing task order or hiding consequential state.
+The working mode is **Operate**. Plenum is a desktop-browser platform. Supported desktop workspaces must sustain keyboard and pointer use, browser zoom, reduced motion, forced colors, and desktop assistive technology without changing task order or hiding consequential state. Mobile and touch-device layouts are not production acceptance targets.
 
 ## Capabilities and Constraints
 
@@ -75,4 +75,4 @@ The governing experience direction is **composed capability**: Apple OS fluidity
 
 ## Accessibility & Inclusion
 
-WCAG 2.2 AA is required. Keyboard, touch, pointer, 200% zoom/320px reflow, reduced motion, forced colors, screen-reader semantics, visible focus, and non-color state communication are first-class. Human/device/assistive-technology evidence remains distinct from automated evidence.
+WCAG 2.2 AA is required on supported desktop browsers. The acceptance floor is a 1024 × 768 desktop window, including its equivalent 200% browser-zoom viewport, with keyboard and pointer operation, reduced motion, forced colors, desktop screen-reader semantics, visible focus, and non-color state communication. Mobile, iOS, Android, and touch-device acceptance are not applicable. Human/device/assistive-technology evidence remains distinct from automated evidence.

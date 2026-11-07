@@ -4,7 +4,8 @@ import test from "node:test";
 
 import { ClamAvContentScanner, OperationalTelemetry } from "../dist/index.js";
 import {
-  deliverOperationalAlert, evaluateSustainedCondition, metricWindow, parsePrometheusSnapshot
+  deliverOperationalAlert, evaluateSustainedCondition, metricWindow, parsePrometheusSnapshot,
+  rehydrateSecurityEventCursor, securityEventCursor
 } from "../../../deploy/compose/operations-agent.mjs";
 import { parseOperationsSecretBundle } from "../../../deploy/compose/operations-secrets.mjs";
 
@@ -149,6 +150,26 @@ test("PS-810 collector calculates bounded metric windows and sustained threshold
   assert.deepEqual(evaluateSustainedCondition(undefined, true, 1_000, 300_000), { since: 1_000, notified: false, shouldNotify: false });
   assert.deepEqual(evaluateSustainedCondition({ since: 1_000, notified: false }, true, 301_000, 300_000),
     { since: 1_000, notified: true, shouldNotify: true });
+});
+
+test("PS-810 collector preserves PostgreSQL timestamp precision in the security-event cursor", async () => {
+  const eventId = "20000000-0000-4000-8000-000000000002";
+  const preciseTimestamp = "2026-11-07 02:57:43.403789+00";
+  assert.deepEqual(securityEventCursor({ id: eventId, recorded_at_cursor: preciseTimestamp }), {
+    recordedAt: preciseTimestamp,
+    id: eventId
+  });
+
+  const state = { cursor: { recordedAt: "2026-11-07T02:57:43.403Z", id: eventId } };
+  let query;
+  const pool = { async query(text, parameters) {
+    query = { text, parameters };
+    return { rows: [{ id: eventId, recorded_at_cursor: preciseTimestamp }] };
+  } };
+  assert.equal(await rehydrateSecurityEventCursor(pool, state, deploymentId), true);
+  assert.deepEqual(state.cursor, { recordedAt: preciseTimestamp, id: eventId });
+  assert.match(query.text, /recorded_at::text AS recorded_at_cursor/u);
+  assert.deepEqual(query.parameters, [deploymentId, eventId]);
 });
 
 test("PS-810 operational receiver sends a scrubbed Postmark message", async () => {

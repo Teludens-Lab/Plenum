@@ -163,13 +163,33 @@ async function metricsSnapshot() {
   return parsePrometheusSnapshot(await response.text());
 }
 
+export function securityEventCursor(row) {
+  if (typeof row?.id !== "string" || typeof row?.recorded_at_cursor !== "string" || row.recorded_at_cursor.length === 0) {
+    throw new Error("The operational security event cursor is invalid.");
+  }
+  return { recordedAt: row.recorded_at_cursor, id: row.id };
+}
+
 async function initializeCursor(pool, state) {
   const result = await pool.query(
-    `SELECT recorded_at,id FROM evidence.operational_security_event_feed
+    `SELECT recorded_at::text AS recorded_at_cursor,id FROM evidence.operational_security_event_feed
        WHERE deployment_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1`, [deploymentId]
   );
-  state.cursor = result.rows[0] ? { recordedAt: result.rows[0].recorded_at.toISOString(), id: result.rows[0].id } : null;
+  state.cursor = result.rows[0] ? securityEventCursor(result.rows[0]) : null;
   state.initialized = true;
+}
+
+export async function rehydrateSecurityEventCursor(pool, state, currentDeploymentId = deploymentId) {
+  if (state.cursor === null) return false;
+  const result = await pool.query(
+    `SELECT recorded_at::text AS recorded_at_cursor,id FROM evidence.operational_security_event_feed
+       WHERE deployment_id=$1 AND id=$2`, [currentDeploymentId, state.cursor.id]
+  );
+  if (result.rows[0] === undefined) return false;
+  const cursor = securityEventCursor(result.rows[0]);
+  if (cursor.recordedAt === state.cursor.recordedAt) return false;
+  state.cursor = cursor;
+  return true;
 }
 
 async function processSecurityEvents(pool, secret, state) {
@@ -180,7 +200,8 @@ async function processSecurityEvents(pool, secret, state) {
     cursorClause = "AND (recorded_at,id) > ($2::timestamptz,$3::uuid)";
   }
   const result = await pool.query(
-    `SELECT id,event_type,severity,outcome,correlation_id,category,recorded_at
+    `SELECT id,event_type,severity,outcome,correlation_id,category,recorded_at,
+            recorded_at::text AS recorded_at_cursor
        FROM evidence.operational_security_event_feed
       WHERE deployment_id=$1 ${cursorClause}
       ORDER BY recorded_at,id LIMIT 100`, parameters
@@ -195,7 +216,7 @@ async function processSecurityEvents(pool, secret, state) {
       });
       console.info(JSON.stringify({ event: "operations.alert_delivered", alertId: definition[0], severity: event.severity }));
     }
-    state.cursor = { recordedAt: event.recorded_at.toISOString(), id: event.id };
+    state.cursor = securityEventCursor(event);
     await saveState(state);
   }
 }
@@ -243,6 +264,7 @@ async function main() {
   const state = await loadState();
   try {
     if (!state.initialized) { await initializeCursor(pool, state); await saveState(state); }
+    else if (await rehydrateSecurityEventCursor(pool, state)) await saveState(state);
     await enforceTelemetryRetention();
     while (true) {
       await processSecurityEvents(pool, secret, state);

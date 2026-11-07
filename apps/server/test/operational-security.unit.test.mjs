@@ -79,8 +79,8 @@ async function scannerServer(reply) {
 
 test("PS-810 ClamAV adapter recognizes clean and infected INSTREAM responses", async (context) => {
   for (const fixture of [
-    { reply: "stream: OK\n", status: "clean" },
-    { reply: "stream: Eicar-Test-Signature FOUND\n", status: "infected" }
+    { reply: "stream: OK\0", status: "clean" },
+    { reply: "stream: Eicar-Test-Signature FOUND\0", status: "infected" }
   ]) {
     await context.test(fixture.status, async () => {
       const server = await scannerServer(fixture.reply);
@@ -109,7 +109,7 @@ test("PS-810 ClamAV adapter fails closed on an invalid scanner response", async 
 });
 
 test("PS-810 ClamAV readiness uses the private daemon protocol", async () => {
-  const server = await scannerServer("PONG\n");
+  const server = await scannerServer("PONG\0");
   try {
     const address = server.address();
     assert.equal(typeof address, "object");

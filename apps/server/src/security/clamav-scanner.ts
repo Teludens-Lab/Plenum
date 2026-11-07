@@ -5,6 +5,10 @@ import type { ContentScanResult, ContentScanner } from "../studio/content-librar
 const MAX_SCAN_BYTES = 512 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+function decodeResponse(chunks: Buffer[]): string {
+  return Buffer.concat(chunks).toString("utf8").replace(/\0+$/u, "").trim();
+}
+
 export interface ClamAvScannerOptions {
   host: string;
   port?: number;
@@ -43,7 +47,7 @@ export class ClamAvContentScanner implements ContentScanner {
       socket.on("data", (chunk: Buffer) => response.push(chunk));
       socket.on("end", () => {
         if (settled) return;
-        const result = Buffer.concat(response).toString("utf8").trim();
+        const result = decodeResponse(response);
         settled = true;
         if (/^stream: OK$/u.test(result)) resolve({ status: "clean", detail: "Approved malware scanner reported clean." });
         else if (/^stream: .+ FOUND$/u.test(result)) resolve({ status: "infected", detail: "Approved malware scanner detected unsafe content." });
@@ -74,7 +78,7 @@ export class ClamAvContentScanner implements ContentScanner {
       socket.setTimeout(this.#timeoutMs, () => finish("unavailable"));
       socket.on("error", () => finish("unavailable"));
       socket.on("data", (chunk: Buffer) => response.push(chunk));
-      socket.on("end", () => finish(Buffer.concat(response).toString("utf8").trim() === "PONG" ? "available" : "unavailable"));
+      socket.on("end", () => finish(decodeResponse(response) === "PONG" ? "available" : "unavailable"));
       socket.connect(this.#port, this.#host, () => socket.end("zPING\0"));
     });
   }

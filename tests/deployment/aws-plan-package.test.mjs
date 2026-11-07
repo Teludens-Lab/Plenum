@@ -132,6 +132,7 @@ test("AWS staging connects the scanner and independent operations collector", as
   assert.match(compose, /operations-agent:[\s\S]*operations-agent\.mjs/u);
   assert.match(compose, /APPLICATION_METRICS_URL: http:\/\/application:9090\/metrics/u);
   assert.match(compose, /operations-agent:[\s\S]*read_only: true[\s\S]*cap_drop: \[ALL\][\s\S]*no-new-privileges:true/u);
+  assert.match(compose, /tmpfs: \["\/tmp:rw,noexec,nosuid,nodev,size=16m"\]/u);
 });
 
 test("AWS package reuses the approved runtime and immutable release", async () => {

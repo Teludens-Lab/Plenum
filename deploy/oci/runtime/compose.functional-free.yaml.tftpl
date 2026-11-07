@@ -194,7 +194,7 @@ services:
         target: operations.json
     volumes: [operations-state:/var/lib/plenum-operations]
     read_only: true
-    tmpfs: [/tmp:rw,noexec,nosuid,nodev,size=16m]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     depends_on:

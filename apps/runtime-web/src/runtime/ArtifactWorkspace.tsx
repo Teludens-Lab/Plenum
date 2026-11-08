@@ -54,7 +54,7 @@ export function ArtifactWorkspace({ module, artifacts, renderArtifact }: {
       }}>{fullScreen ? "Exit full screen" : "Enter full screen"}</button>
       {presentationNotice === "" ? null : <p role="status">{presentationNotice}</p>}
     </div> : null}
-    {recent ? <h2 className="runtime-page-eyebrow">{module.title}</h2> : null}
+    <h2 className={recent ? "runtime-page-eyebrow" : "sr-only"}>{module.title}</h2>
     {types.length < 2 || recent ? null : <div className="artifact-type-tabs" role="group" aria-label="Filter records by form">
       <button type="button" aria-pressed={activeType === "all"} onClick={() => { setType("all"); setSelectedId(null); }}>All records <span>{records.length}</span></button>
       {types.map(([key, label]) => <button key={key} type="button" aria-pressed={activeType === key}

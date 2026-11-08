@@ -1470,7 +1470,7 @@ function RuntimeView() {
           </dl>
           <p>Saved work, arrivals and Stage changes appear as brief notices at the bottom of the screen.</p>
         </>} /> : null}
-      <main id="main-content" className={`runtime-main participant-runtime-workspace layout-${projection.layout}`} ref={main} tabIndex={-1}
+      <main id="main-content" className={`runtime-main participant-runtime-workspace layout-${projection.layout}`} ref={main} tabIndex={0}
         aria-labelledby="runtime-title">
         <RuntimePageHeader titleId="runtime-title"
           eyebrow={projection.activeTeamLabel === null ? projection.activeSessionRoleLabel : `${projection.activeSessionRoleLabel} · ${projection.activeTeamLabel}`}
@@ -1934,7 +1934,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
             <div><dt>Connection</dt><dd>{connectionLabel(connection)}</dd></div>
             <div><dt>Pending action</dt><dd>{pending ? "Submitting" : "None"}</dd></div></dl>
         </section>} /> : null}
-      <main id="main-content" className="runtime-main operator-workspace" tabIndex={-1} aria-labelledby="operator-title">
+      <main id="main-content" className="runtime-main operator-workspace" tabIndex={0} aria-labelledby="operator-title">
         <RuntimePageHeader titleId="operator-title" eyebrow="Operator console" title={operatorPageTitle}
           description={<p>{projection.sessionTitle} · {projection.releaseLabel} · Session {friendlyReference(projection.sessionStatus, "Unavailable")}</p>}
           navigationToggle={operatorSidebarVisible && operatorWideViewport ? undefined : <RuntimeNavigationToggle controls="operator-navigation"

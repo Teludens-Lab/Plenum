@@ -94,7 +94,7 @@ function SessionVisual({ session }: { session: ParticipantSessionEntryV1 | undef
         src={session.branding.developerLogo.url} alt="" decoding="async" />}
       <span>{session.branding?.developer ?? "Simulation developer"}</span>
     </div>
-    <div className="participant-simulation-identity"><h3>{title}</h3>
+    <div className="participant-simulation-identity"><h2>{title}</h2>
       {session.branding?.subtitle === null || session.branding === undefined ? null
         : <p className="participant-simulation-subtitle">{session.branding.subtitle}</p>}
     </div>
@@ -204,7 +204,7 @@ export function ParticipantPortal({ displayName }: { displayName: string }) {
       </nav> : null}
       {focused === undefined ? null : <article className="participant-session participant-session-entry" aria-label={focused.title}>
         <div className="participant-session-heading">
-          <div><h4>{focused.roleContexts.length > 0 ? "Enter your workspace" : "Choose your seat"}</h4>
+          <div><h3>{focused.roleContexts.length > 0 ? "Enter your workspace" : "Choose your seat"}</h3>
             <p>{focused.title} · {focused.releaseLabel}</p></div>
           <span className="badge badge-state">{displayStatus(focused.status)}</span>
         </div>

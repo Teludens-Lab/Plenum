@@ -13,7 +13,7 @@ All components consume `packages/design-system/src/tokens.css`; reusable raw col
 | Button/link action | default, hover, focus-visible, active, disabled | inherited | semantic element, 44px minimum in focus density, visible focus |
 | Access context sheet | desktop rail, short-height/tablet sheet, mobile sheet, closed | standard | labeled disclosure; opening focuses the context; internal close returns focus; Sign out remains available; forced-colors boundary |
 
-Operations density is reserved for later expert monitoring screens; the entry shell never defaults to it.
+The signed-in product shell (Projects, Releases and Sessions, Administration, Platform, Research) and Studio use operations density by owner direction (see `docs/design/impeccable/conflicts.md`, 2026-11-07); controls are 38px on fine pointers and keep the 44px minimum on coarse pointers. The public entry shell and participant workspaces stay in standard or focus density.
 
 ## PS-710 additions
 

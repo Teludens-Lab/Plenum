@@ -1,3 +1,7 @@
+import { ArtifactCard, ArtifactContent, CreateTask, CreateWorkspace, FieldEditor, createTaskKey } from "./runtime/ArtifactForms.js";
+import { ArtifactWorkspace, moduleArtifacts } from "./runtime/ArtifactWorkspace.js";
+import { SessionTool } from "./runtime/SessionTool.js";
+import { StageControls } from "./runtime/StageControls.js";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
 import {
   type CommandEnvelopeV1,
@@ -10,8 +14,6 @@ import {
   type ReadinessProjectionV1,
   type RuntimeActionV1,
   type RuntimeArtifactV1,
-  type RuntimeCreateTaskV1,
-  type RuntimeFormV1,
   type RuntimeInjectV1,
   type RuntimeMessageV1,
   type RuntimeModuleV1,
@@ -31,16 +33,14 @@ import {
   recordOfflineReceipt,
   updateOfflineDraft
 } from "@plenum/sync-client";
-import {
-  runtimeFieldConditionMatches,
-  runtimeFormValue,
-  setRuntimeFormValue,
-  validateRuntimeFormPayload,
-  type RuntimeFormDefinitionV1
-} from "@plenum/simulation-schema";
 import { VoiceControls } from "./voice/VoiceControls.js";
 import { AdjudicationReview } from "./adjudication/AdjudicationReview.js";
+import { RevisionHistory } from "./runtime/RevisionHistory.js";
+import type { RuntimeArtifactHistoryV1 } from "@plenum/event-contracts";
 import { OfflineRuntimeStore } from "./offline/storage.js";
+import { SessionTimeline } from "./runtime/SessionTimeline.js";
+import { SessionSettings } from "./runtime/SessionSettings.js";
+import { LocalDraftContext } from "./runtime/LocalDrafts.js";
 import { ProjectPortal } from "./product/ProjectPortal.js";
 import { LifecyclePortal } from "./product/LifecyclePortal.js";
 import { ParticipantPortal } from "./product/ParticipantPortal.js";
@@ -50,6 +50,19 @@ import { ProjectDemo } from "./product/ProjectDemo.js";
 import { PlatformOrganizationsPortal } from "./product/PlatformOrganizationsPortal.js";
 import { PlatformAdministratorsPortal } from "./product/PlatformAdministratorsPortal.js";
 import { navigateWithLoader, PlenumLoader } from "./PlenumLoader.js";
+import {
+  RuntimeHeader,
+  RuntimeIcon,
+  RuntimeNavigationToggle,
+  RuntimePageHeader,
+  RuntimeSidebar,
+  useStageClock,
+  useWideViewport,
+  type RuntimeIconName,
+  type RuntimeSidebarItem,
+  type RuntimeSidebarSection
+} from "./runtime/RuntimeFrame.js";
+import { ToastRegion, useToasts } from "./runtime/Toasts.js";
 
 type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
 
@@ -144,6 +157,33 @@ function ThemeToggle() {
   </button>;
 }
 
+const WORKSPACE_ICON_PATHS = {
+  projects: "M4 7h6l2 2h8v10H4zM4 7V5h6l2 2",
+  lifecycle: "M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5",
+  sessions: "M4 5h16v14H4zM8 3v4M16 3v4M4 10h16",
+  editor: "M4 20l1-4L16 5l3 3L8 19zM14 7l3 3",
+  administration: "M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4",
+  platform: "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01",
+  research: "M4 4v16h16M8 16v-4M12 16V8M16 16v-6"
+} as const;
+
+const RUNTIME_MODULE_ICONS: Record<RuntimeModuleV1["type"], RuntimeIconName> = {
+  session_status: "status",
+  artifact_form: "edit",
+  task_list: "list",
+  artifact_presentation: "presentation",
+  slide_deck: "deck",
+  resource_library: "resources",
+  message_inbox: "inbox",
+  proposal_thread: "proposal",
+  inject_inbox: "bell",
+  session_timeline: "list"
+};
+
+function WorkspaceIcon({ name }: { name: keyof typeof WORKSPACE_ICON_PATHS }) {
+  return <svg className="section-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={WORKSPACE_ICON_PATHS[name]} /></svg>;
+}
+
 function Shell({ connection, children, bounded = false, entry = false, entryLoading = false, entryTransitioning = false, onEntry, brandContent, headerContent }: {
   connection: ConnectionState; children: ReactNode; bounded?: boolean; entry?: boolean; entryLoading?: boolean;
   entryTransitioning?: boolean;
@@ -155,10 +195,10 @@ function Shell({ connection, children, bounded = false, entry = false, entryLoad
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="app-header">
       {brandContent ?? <BrandWordmark />}
+      {entry ? <span className="entry-descriptor">Governed simulation platform</span> : null}
       {entry ? <div className="header-actions entry-header-actions">
         {entryLoading ? null : <>
-          <a className="entry-header-sign-in" href="#about">About</a>
-          <a className="entry-header-sign-in" href="/auth/login?returnTo=%2F" onClick={onEntry}>Sign In</a>
+          <a className="entry-header-sign-in" href="/auth/login?returnTo=%2F" onClick={onEntry}>Sign in</a>
         </>}
         <ThemeToggle />
         <span className="visually-hidden" role="status" aria-live="polite"
@@ -202,17 +242,18 @@ function EntryLanding() {
   </Shell>;
   return <Shell connection="unauthorized" entry entryTransitioning={transitioning} onEntry={beginEntry}>
     <main id="main-content" className="entry-landing" tabIndex={-1}>
-      <section id="about" className="entry-introduction" aria-labelledby="entry-title">
-        <h1 id="entry-title">What happens next?</h1>
-        <p>Design, deliver and audit governed simulations.</p>
-        <a className="entry-primary-action" href="/auth/login?returnTo=%2F" onClick={beginEntry}>
-          <span>Enter Plenum</span>
-          <svg className="entry-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6 18 18 6M10 6h8v8" />
-          </svg>
-        </a>
+      <section className="entry-hero" aria-labelledby="entry-title">
+        <div className="entry-introduction">
+          <h1 id="entry-title">Design, deliver and audit governed simulations.</h1>
+          <a className="entry-primary-action" href="/auth/login?returnTo=%2F" onClick={beginEntry}>
+            <span>Enter Plenum</span>
+            <svg className="entry-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </a>
+        </div>
+        <img className="entry-chamber" src="/branding/plenum-chamber.webp" alt="" width="1240" height="740" />
       </section>
-      <p className="entry-assurance">Organization sign-in · Plenum never handles your password.</p>
     </main>
     {transitioning ? <EntryTransition label="Resolving next state" /> : null}
   </Shell>;
@@ -493,17 +534,17 @@ function ProductEntry() {
         <p className="eyebrow">Unable to open Plenum</p><h2>Account context did not load</h2><p>Retry safely. No Project or Session was changed.</p>
         <button className="btn-secondary" type="button" onClick={() => void load()}>Retry</button>
       </section> : null}
-      {context === null ? null : <div className={`shell-grid${workspace === "participant" ? " participant-shell-grid" : ""}`} data-density="standard">
-        {workspace === "participant" ? null : <nav id="workspace-navigation" className={`shell-navigation teludens-node${navigationOpen ? " is-open" : ""}`} aria-labelledby="navigation-title">
-          <p className="eyebrow">Lifecycle</p><h2 id="navigation-title">Workspaces</h2>
-          <ul>
-            {canUseProjects ? <li><a aria-current={workspace === "projects" ? "page" : undefined} href="/?workspace=projects">Projects<span>Govern designs and reusable templates</span></a></li> : null}
-            {canUseLifecycle ? <li><a aria-current={workspace === "lifecycle" ? "page" : undefined} href="/?workspace=lifecycle">Releases and Sessions<span>Publish, configure, and monitor delivery</span></a></li> : null}
-            <li><a href="/?workspace=participant">Your Sessions<span>Enter an invited or assigned Session</span></a></li>
-            {canUseProjects ? <li><a href="/studio/">Project editor<span>Open the focused authoring workspace</span></a></li> : null}
-            {context.organization.roles.some((role) => role === "admin" || role === "publisher") ? <li><a aria-current={administration ? "page" : undefined} href="/admin/plugins">Administration<span>Roles, Plugins, policy, and deployment posture</span></a></li> : null}
-            {canUsePlatform ? <li><a aria-current={platform ? "page" : undefined} href="/platform/organizations">Platform control plane<span>Provision and govern Organization access</span></a></li> : null}
-            {context.organization.roles.includes("research_analyst") ? <li><a aria-current={researchReporting ? "page" : undefined} href="/research/reports">Research reports<span>Consent-filtered evidence and provenance</span></a></li> : null}
+      {context === null ? null : <div className={`shell-grid${workspace === "participant" ? " participant-shell-grid" : ""}`} data-density={workspace === "participant" ? "standard" : "operations"}>
+        {workspace === "participant" ? null : <nav id="workspace-navigation" className={`shell-navigation teludens-node${navigationOpen ? " is-open" : ""}`} aria-label="Workspaces">
+                    <h2 className="visually-hidden">Workspaces</h2>
+                    <ul>
+            {canUseProjects ? <li><a aria-current={workspace === "projects" ? "page" : undefined} href="/?workspace=projects"><WorkspaceIcon name="projects" />Projects<span>Govern designs and reusable templates</span></a></li> : null}
+            {canUseLifecycle ? <li><a aria-current={workspace === "lifecycle" ? "page" : undefined} href="/?workspace=lifecycle"><WorkspaceIcon name="lifecycle" />Releases and Sessions<span>Publish, configure, and monitor delivery</span></a></li> : null}
+            <li><a href="/?workspace=participant"><WorkspaceIcon name="sessions" />Your Sessions<span>Enter an invited or assigned Session</span></a></li>
+            {canUseProjects ? <li><a href="/studio/"><WorkspaceIcon name="editor" />Project editor<span>Open the focused authoring workspace</span></a></li> : null}
+            {context.organization.roles.some((role) => role === "admin" || role === "publisher") ? <li><a aria-current={administration ? "page" : undefined} href="/admin/plugins"><WorkspaceIcon name="administration" />Administration<span>Roles, Plugins, policy, and deployment posture</span></a></li> : null}
+            {canUsePlatform ? <li><a aria-current={platform ? "page" : undefined} href="/platform/organizations"><WorkspaceIcon name="platform" />Platform control plane<span>Provision and govern Organization access</span></a></li> : null}
+            {context.organization.roles.includes("research_analyst") ? <li><a aria-current={researchReporting ? "page" : undefined} href="/research/reports"><WorkspaceIcon name="research" />Research reports<span>Consent-filtered evidence and provenance</span></a></li> : null}
           </ul>
         </nav>}
         <div className={`product-workspaces${workspace === "participant" ? " participant-product-workspaces" : ""}`} aria-labelledby="product-title">
@@ -614,257 +655,7 @@ function OfflineOutboxPanel({ outbox, retry, saveDraft }: {
   </section>;
 }
 
-type FieldEditorProps = {
-  form: RuntimeFormV1;
-  initial?: JsonObject;
-  disabled: boolean;
-  onSubmit(payload: JsonObject): void;
-  submitLabel: string;
-};
-
-function FieldEditor(props: FieldEditorProps) {
-  return props.form.sections.some((section) => section.repeatable === true)
-    ? <RepeatableFieldEditor {...props} />
-    : <FlatFieldEditor {...props} />;
-}
-
-function FlatFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
-  const idPrefix = useId().replaceAll(":", "");
-  const [values, setValues] = useState<Record<string, string | string[] | number>>(() => Object.fromEntries(
-    form.fields.map((field) => {
-      const value = runtimeFormValue(initial ?? {}, field.key);
-      const supported = typeof value === "string" || typeof value === "number" ||
-        (Array.isArray(value) && value.every((item) => typeof item === "string"));
-      return [field.key, supported ? value : field.type === "multi_select" || field.type === "artifact_reference" ? [] : ""];
-    })
-  ));
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const payload = (): JsonObject => {
-    const result: JsonObject = {};
-    for (const field of form.fields) {
-      const value = values[field.key];
-      setRuntimeFormValue(result, field.key, field.type === "number" && value !== "" ? Number(value) : value);
-    }
-    return result;
-  };
-  const canonicalForm = (): RuntimeFormDefinitionV1 => ({
-    ...form,
-    sections: form.sections.map((section) => ({ ...section, fields: section.fields.map((field) => ({
-      ...field, id: `${form.id}-${field.key}`, type: field.type === "text" ? "short_text" : field.type
-    })) }))
-  });
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const content = payload();
-    const nextErrors = Object.fromEntries(validateRuntimeFormPayload(canonicalForm(), content).map((issue) => [issue.field, issue.message]));
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length === 0) onSubmit(content);
-  };
-  return <form onSubmit={submit} noValidate>
-    {form.sections.map((section) => <fieldset key={section.id}>
-      {section.title === undefined ? null : <legend>{section.title}</legend>}
-      {section.fields.filter((field) => runtimeFieldConditionMatches(field.visibleWhen, payload())).map((field) => {
-      const id = `${idPrefix}-${form.id}-${field.key}`;
-      const error = errors[field.key];
-      const required = field.required || (field.requiredWhen !== undefined && runtimeFieldConditionMatches(field.requiredWhen, payload()));
-      const describedBy = [field.helpText === undefined ? null : `${id}-help`, error === undefined ? null : `${id}-error`]
-        .filter(Boolean).join(" ") || undefined;
-      return <div className="field" key={field.key}>
-        <label htmlFor={id}>{field.label}{required ? <span aria-hidden="true"> *</span> : null}</label>
-        {field.type === "long_text"
-          ? <textarea id={id} name={field.key} rows={4} value={typeof values[field.key] === "string" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
-              required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
-              onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} />
-          : field.type === "single_select"
-            ? <select id={id} name={field.key} value={typeof values[field.key] === "string" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
-                required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
-                onChange={(event) => setValues({ ...values, [field.key]: event.target.value })}>
-                <option value="">Select an option</option>
-                {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            : field.type === "multi_select" || field.type === "artifact_reference"
-              ? <select id={id} name={field.key} multiple value={Array.isArray(values[field.key]) ? values[field.key] : []}
-                  disabled={disabled || field.readOnly === true} required={required} aria-invalid={error !== undefined} aria-describedby={describedBy}
-                  onChange={(event) => setValues({ ...values, [field.key]: [...event.target.selectedOptions].map((option) => option.value) })}>
-                  {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-              : <input id={id} name={field.key} type={field.type === "number" ? "number" : "text"}
-              value={typeof values[field.key] === "string" || typeof values[field.key] === "number" ? values[field.key] : ""} disabled={disabled || field.readOnly === true}
-              required={required} min={field.validation?.min} max={field.validation?.max} minLength={field.validation?.minLength} maxLength={field.validation?.maxLength}
-              aria-invalid={error !== undefined} aria-describedby={describedBy}
-              onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} />}
-        {field.helpText === undefined ? null : <p id={`${id}-help`} className="hint">{field.helpText}</p>}
-        {error === undefined ? null : <p id={`${id}-error`} className="field-error" role="alert">Error: {error}</p>}
-      </div>;
-    })}</fieldset>)}
-    <button className="btn-primary" type="submit" disabled={disabled}>{submitLabel}</button>
-  </form>;
-}
-
-function RepeatableFieldEditor({ form, initial, disabled, onSubmit, submitLabel }: FieldEditorProps) {
-  const idPrefix = useId().replaceAll(":", "");
-  const blankItem = (section: RuntimeFormV1["sections"][number]): JsonObject => Object.fromEntries(
-    section.fields.map((field) => [field.key, field.type === "multi_select" || field.type === "artifact_reference" ? [] : ""])
-  ) as JsonObject;
-  const [values, setValues] = useState<JsonObject>(() => {
-    const result = structuredClone(initial ?? {}) as JsonObject;
-    for (const section of form.sections) {
-      if (section.repeatable === true) {
-        if (!Array.isArray(result[section.id])) result[section.id] = Array.from({ length: section.minItems ?? 0 }, () => blankItem(section));
-      } else {
-        for (const field of section.fields) {
-          if (runtimeFormValue(result, field.key) === undefined) setRuntimeFormValue(result, field.key, field.type === "multi_select" || field.type === "artifact_reference" ? [] : "");
-        }
-      }
-    }
-    return result;
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const setValue = (path: string, value: unknown) => {
-    const next = structuredClone(values) as JsonObject;
-    setRuntimeFormValue(next, path, value);
-    setValues(next);
-  };
-  const content = (): JsonObject => {
-    const result = structuredClone(values) as JsonObject;
-    for (const section of form.sections) {
-      const entries = section.repeatable === true && Array.isArray(result[section.id])
-        ? result[section.id] as JsonObject[] : [result];
-      entries.forEach((entry) => section.fields.filter((field) => field.type === "number").forEach((field) => {
-        const value = runtimeFormValue(entry, field.key);
-        if (value !== "") setRuntimeFormValue(entry, field.key, Number(value));
-      }));
-    }
-    return result;
-  };
-  const canonicalForm = (): RuntimeFormDefinitionV1 => ({
-    ...form,
-    sections: form.sections.map((section) => ({ ...section, fields: section.fields.map((field) => ({
-      ...field, id: `${form.id}-${section.id}-${field.key}`, type: field.type === "text" ? "short_text" : field.type
-    })) }))
-  });
-  const renderField = (field: RuntimeFormV1["fields"][number], context: JsonObject, path: string, id: string) => {
-    if (!runtimeFieldConditionMatches(field.visibleWhen, context)) return null;
-    const value = runtimeFormValue(values, path);
-    const error = errors[path];
-    const required = field.required || (field.requiredWhen !== undefined && runtimeFieldConditionMatches(field.requiredWhen, context));
-    const describedBy = [field.helpText === undefined ? null : `${id}-help`, error === undefined ? null : `${id}-error`].filter(Boolean).join(" ") || undefined;
-    const common = { disabled: disabled || field.readOnly === true, required, "aria-invalid": error !== undefined, "aria-describedby": describedBy };
-    return <div className="field" key={path}>
-      <label htmlFor={id}>{field.label}{required ? <span aria-hidden="true"> *</span> : null}</label>
-      {field.type === "long_text" ? <textarea {...common} id={id} name={path} rows={4} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(path, event.target.value)} />
-        : field.type === "single_select" ? <select {...common} id={id} name={path} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(path, event.target.value)}>
-            <option value="">Select an option</option>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        : field.type === "multi_select" || field.type === "artifact_reference" ? <select {...common} id={id} name={path} multiple value={Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []}
-            onChange={(event) => setValue(path, [...event.target.selectedOptions].map((option) => option.value))}>
-            {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        : <input {...common} id={id} name={path} type={field.type === "number" ? "number" : "text"} value={typeof value === "string" || typeof value === "number" ? value : ""}
-            min={field.validation?.min} max={field.validation?.max} minLength={field.validation?.minLength} maxLength={field.validation?.maxLength}
-            onChange={(event) => setValue(path, event.target.value)} />}
-      {field.helpText === undefined ? null : <p id={`${id}-help`} className="hint">{field.helpText}</p>}
-      {error === undefined ? null : <p id={`${id}-error`} className="field-error" role="alert">Error: {error}</p>}
-    </div>;
-  };
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const payload = content();
-    const nextErrors = Object.fromEntries(validateRuntimeFormPayload(canonicalForm(), payload).map((issue) => [issue.field, issue.message]));
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length === 0) onSubmit(payload);
-  };
-  return <form onSubmit={submit} noValidate>
-    {form.sections.map((section) => section.repeatable === true ? <fieldset key={section.id}>
-      {section.title === undefined ? null : <legend>{section.title}</legend>}
-      {section.description === undefined ? null : <p className="hint">{section.description}</p>}
-      {(Array.isArray(values[section.id]) ? values[section.id] as JsonObject[] : []).map((entry, index) => <fieldset className="repeatable-item" key={index}>
-        <legend>{section.itemLabel ?? "Item"} {index + 1}</legend>
-        {section.fields.map((field) => renderField(field, entry, `${section.id}.${index}.${field.key}`, `${idPrefix}-${form.id}-${section.id}-${index}-${field.key.replaceAll(".", "-")}`))}
-        <button className="btn-secondary" type="button" disabled={disabled || (values[section.id] as JsonObject[]).length <= (section.minItems ?? 0)} onClick={() => {
-          const entries = [...(values[section.id] as JsonObject[])]; entries.splice(index, 1); setValues({ ...values, [section.id]: entries });
-        }}>Remove {section.itemLabel ?? "item"}</button>
-      </fieldset>)}
-      <button className="btn-secondary" type="button" disabled={disabled || (section.maxItems !== undefined && (values[section.id] as JsonObject[]).length >= section.maxItems)} onClick={() => {
-        setValues({ ...values, [section.id]: [...(values[section.id] as JsonObject[]), blankItem(section)] });
-      }}>Add {section.itemLabel ?? "item"}</button>
-      {errors[section.id] === undefined ? null : <p className="field-error" role="alert">Error: {errors[section.id]}</p>}
-    </fieldset> : <fieldset key={section.id}>
-      {section.title === undefined ? null : <legend>{section.title}</legend>}
-      {section.description === undefined ? null : <p className="hint">{section.description}</p>}
-      {section.fields.map((field) => renderField(field, values, field.key, `${idPrefix}-${form.id}-${field.key.replaceAll(".", "-")}`))}
-    </fieldset>)}
-    <button className="btn-primary" type="submit" disabled={disabled}>{submitLabel}</button>
-  </form>;
-}
-
-function CreateTask({ task, disabled, send }: {
-  task: RuntimeCreateTaskV1; disabled: boolean;
-  send(action: RuntimeActionV1, artifact: RuntimeArtifactV1 | null, content?: JsonObject, artifactTypeKey?: string): void;
-}) {
-  return <section className="card" aria-labelledby={`create-${task.artifactTypeKey}`}>
-    <h2 id={`create-${task.artifactTypeKey}`}>{task.title}</h2>
-    <FieldEditor form={task.form} disabled={disabled} submitLabel="Save draft"
-      onSubmit={(content) => send(task.action, null, content, task.artifactTypeKey)} />
-  </section>;
-}
-
-function DisplayFields({ fields, payload }: { fields: RuntimeFormV1["fields"]; payload: JsonObject }) {
-  return <dl className="artifact-content">{fields.map((field) => {
-    const value = runtimeFormValue(payload, field.key);
-    const display = Array.isArray(value) ? value.join(", ") : String(value ?? "Not provided");
-    return <div key={field.key}><dt>{field.label}</dt><dd>{display || "Not provided"}</dd></div>;
-  })}</dl>;
-}
-
-function ArtifactContent({ form, payload }: { form: RuntimeFormV1; payload: JsonObject }) {
-  return <div className="artifact-sections">{form.sections.map((section) => {
-    if (section.repeatable !== true) return <DisplayFields key={section.id} fields={section.fields} payload={payload} />;
-    const entries = Array.isArray(payload[section.id]) ? payload[section.id] as JsonObject[] : [];
-    return <section key={section.id} aria-labelledby={`${form.id}-${section.id}-content`}>
-      {section.title === undefined ? null : <h4 id={`${form.id}-${section.id}-content`}>{section.title}</h4>}
-      {entries.length === 0 ? <p>Not provided</p> : entries.map((entry, index) => <section className="repeatable-item" key={index}>
-        <h5>{section.itemLabel ?? "Item"} {index + 1}</h5>
-        <DisplayFields fields={section.fields} payload={entry} />
-      </section>)}
-    </section>;
-  })}</div>;
-}
-
-function ArtifactCard({ artifact, disabled, send }: {
-  artifact: RuntimeArtifactV1; disabled: boolean;
-  send(action: RuntimeActionV1, artifact: RuntimeArtifactV1, content?: JsonObject): void;
-}) {
-  const edit = artifact.actions.find((action) => action.requiresForm);
-  const actions = artifact.actions.filter((action) => !action.requiresForm);
-  const { rules: _rules, ...formWithoutRules } = artifact.form;
-  const editForm = edit?.editableFieldKeys === undefined ? artifact.form : {
-    ...formWithoutRules,
-    fields: artifact.form.fields.filter((field) => edit.editableFieldKeys?.includes(field.key)),
-    sections: artifact.form.sections.map((section) => ({
-      ...section, fields: section.fields.filter((field) => edit.editableFieldKeys?.includes(field.key))
-    })).filter((section) => section.fields.length > 0)
-  };
-  return <article className="card artifact" aria-labelledby={`artifact-${artifact.id}`}>
-    <div className="card-heading">
-      <div>
-        <h3 id={`artifact-${artifact.id}`}>{artifact.title}</h3>
-      </div>
-      <span className="badge badge-state">{artifact.stateLabel}</span>
-    </div>
-    <dl className="metadata"><div><dt>Version</dt><dd>{artifact.version}</dd></div><div><dt>Form</dt><dd>{artifact.form.formVersion}</dd></div></dl>
-    {edit === undefined ? <ArtifactContent form={artifact.form} payload={artifact.payload} />
-      : <FieldEditor form={editForm} initial={artifact.payload} disabled={disabled} submitLabel={edit.label}
-          onSubmit={(content) => send(edit, artifact, content)} />}
-    {actions.length === 0 ? null : <div className="actions" aria-label={`${artifact.title} workflow actions`}>
-      {actions.map((action, index) => <button key={action.operationType}
-        className={index === 0 ? "btn-primary" : "btn-secondary"} type="button" disabled={disabled}
-        onClick={() => send(action, artifact)}>{action.label}</button>)}
-    </div>}
-  </article>;
-}
-
-type SendInformation = (operationType: string, aggregateId: string, expectedVersion: number, payload: JsonObject) => void;
+type SendInformation = (operationType: string, aggregateId: string, expectedVersion: number, payload: JsonObject) => Promise<CommandReceiptV1 | null>;
 
 function EffectProposalReview({ proposals, disabled, decide }: {
   proposals: EffectProposalV1[];
@@ -916,27 +707,75 @@ function MessageInbox({ module, projection, disabled, send }: {
   module: RuntimeModuleV1; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
 }) {
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [outcome, setOutcome] = useState("");
+  const [selectedRoute, setSelectedRoute] = useState("");
+  const [selectedType, setSelectedType] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const routes = Array.isArray(module.configuration.sendRoutes) ? module.configuration.sendRoutes.flatMap((item) =>
+    typeof item === "object" && item !== null && !Array.isArray(item) && typeof item.routeId === "string" && typeof item.label === "string"
+      ? [{ routeId: item.routeId, label: item.label }] : []) : [];
+  const types = Array.isArray(module.configuration.messageTypes) ? module.configuration.messageTypes.filter((item): item is string => typeof item === "string") : [];
+  const messageType = types.includes(selectedType) ? selectedType : types[0];
+  const selectedRecipient = routes.find((route) => route.routeId === selectedRoute) ?? routes[0];
   const channelIds = Array.isArray(module.configuration.channelIds)
     ? module.configuration.channelIds.filter((id): id is string => typeof id === "string") : [];
-  const routeId = typeof module.configuration.sendRouteId === "string" ? module.configuration.sendRouteId : null;
-  const messages = projection.messages.filter((message) => channelIds.includes(message.channelId));
-  const submit = (event: FormEvent) => {
+  const routeId = selectedRecipient?.routeId ?? (typeof module.configuration.sendRouteId === "string" ? module.configuration.sendRouteId : null);
+  const sources = Array.isArray(module.configuration.sourceArtifactTypeKeys) ? projection.artifacts.filter((artifact) =>
+    (module.configuration.sourceArtifactTypeKeys as unknown[]).includes(artifact.artifactTypeKey)) : [];
+  const messages = projection.messages.filter((message) => channelIds.includes(message.channelId)).slice().reverse();
+  const externalUrl = typeof module.configuration.externalUrl === "string" && module.configuration.externalUrl.startsWith("https://") ? module.configuration.externalUrl : null;
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     const value = text.trim();
-    if (routeId === null || value.length === 0) return;
-    send("message.send", crypto.randomUUID(), 0, { routeId, content: { text: value } });
-    setText("");
+    if (routeId === null || value.length === 0 || sending) return;
+    setSending(true);
+    setOutcome("Sending message…");
+    try {
+      const receipt = await send("message.send", crypto.randomUUID(), 0, { routeId, content: { text: value,
+        ...(messageType === undefined ? {} : { type: messageType }),
+        ...(selectedRecipient === undefined ? {} : { recipientLabel: selectedRecipient.label }),
+        ...(sourceId === "" ? {} : { sourceArtifactId: sourceId }) } });
+      if (receipt?.status === "accepted") { setText(""); setSourceId(""); setOutcome("Message sent."); }
+      else setOutcome("Message was not confirmed. Your text has been kept.");
+    } finally { setSending(false); }
   };
   return <section aria-labelledby={`${module.id}-heading`}>
     <div className="section-heading"><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
+    {externalUrl === null ? null : <p><a className="btn-secondary link-button" href={externalUrl} target="_blank" rel="noopener noreferrer">Open {module.title} website</a></p>}
     {module.mode !== "write" || routeId === null ? null : <form className="card" onSubmit={submit}>
+      {routes.length === 0 ? null : <div className="field"><label htmlFor={`${module.id}-recipient`}>Recipient</label>
+        <select id={`${module.id}-recipient`} value={routeId} disabled={disabled || sending} onChange={(event) => setSelectedRoute(event.target.value)}>
+          {routes.map((route) => <option key={route.routeId} value={route.routeId}>{route.label}</option>)}
+        </select></div>}
+      {types.length === 0 ? null : <div className="field"><label htmlFor={`${module.id}-type`}>Type</label>
+        <select id={`${module.id}-type`} value={messageType} disabled={disabled || sending} onChange={(event) => setSelectedType(event.target.value)}>
+          {types.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select></div>}
+      {Array.isArray(module.configuration.sourceArtifactTypeKeys) ? <div className="field"><label htmlFor={`${module.id}-source`}>Captured observation</label>
+        <select id={`${module.id}-source`} value={sourceId} disabled={disabled || sending} onChange={(event) => {
+          setSourceId(event.target.value);
+          const source = sources.find((source) => source.id === event.target.value);
+          if (source !== undefined) setText(source.form.fields.flatMap((field) => {
+            const value = source.payload[field.key];
+            if (value === undefined || value === "") return [];
+            const label = (value: unknown) => field.options?.find((option) => option.value === value)?.label ?? String(value);
+            return [`${field.label}: ${Array.isArray(value) ? value.map(label).join(", ") : label(value)}`];
+          }).join("\n"));
+        }}><option value="">Write a new update</option>{sources.map((source) => <option key={source.id} value={source.id}>{source.title} — version {source.version}</option>)}</select>
+        <p className="hint">Review the captured text below before publishing it to the selected audience.</p>
+      </div> : null}
       <div className="field"><label htmlFor={`${module.id}-text`}>Message</label>
-        <textarea id={`${module.id}-text`} rows={3} required value={text} disabled={disabled}
+        <textarea id={`${module.id}-text`} rows={3} required value={text} disabled={disabled || sending}
           onChange={(event) => setText(event.target.value)} /></div>
-      <button className="btn-primary" type="submit" disabled={disabled || text.trim().length === 0}>Send Message</button>
+      <button className="btn-primary" type="submit" disabled={disabled || sending || text.trim().length === 0}>{typeof module.configuration.submitLabel === "string" ? module.configuration.submitLabel : "Send Message"}</button>
+      <p role="status">{outcome}</p>
     </form>}
+    {typeof module.configuration.historyLabel === "string" ? <h3>{module.configuration.historyLabel}</h3> : null}
     {messages.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <ol className="event-list">
-      {messages.map((message) => <li key={message.id}><span>{messageSummary(message)}</span>
+      {messages.map((message) => <li key={message.id}><span>
+        {typeof message.content.type === "string" ? <strong>{message.content.type} · </strong> : null}
+        {typeof message.content.recipientLabel === "string" ? <strong>{message.content.recipientLabel} · </strong> : null}{messageSummary(message)}</span>
         <time dateTime={message.sentAt}>{new Date(message.sentAt).toLocaleString()}</time></li>)}
     </ol>}
   </section>;
@@ -973,8 +812,9 @@ function InjectInbox({ module, projection, disabled, send }: {
   </section>;
 }
 
-function ProposalThreadCard({ messages, projection, disabled, send }: {
+function ProposalThreadCard({ messages, projection, disabled, send, readOnly }: {
   messages: RuntimeMessageV1[]; projection: RuntimeProjectionV1; disabled: boolean; send: SendInformation;
+  readOnly: boolean;
 }) {
   const [text, setText] = useState("");
   const latest = messages.at(-1);
@@ -996,7 +836,7 @@ function ProposalThreadCard({ messages, projection, disabled, send }: {
       <span>{messageSummary(message)}{message.approvedAt === null ? " (awaiting Control approval)" : ""}</span>
       <time dateTime={message.sentAt}>{new Date(message.sentAt).toLocaleString()}</time>
     </li>)}</ol>
-    {side === null || latest.threadState === "closed" ? null : <>
+    {readOnly || side === null || latest.threadState === "closed" ? null : <>
       {latest.threadState === "open" ? <div className="field"><label htmlFor={`thread-${latest.threadId}-text`}>Negotiation message</label>
         <textarea id={`thread-${latest.threadId}-text`} rows={3} value={text} disabled={disabled}
           onChange={(event) => setText(event.target.value)} /></div> : null}
@@ -1044,7 +884,7 @@ function ProposalThreads({ module, projection, disabled, send }: {
         Approve {messageSummary(message)}</button>)}
     </div></div>}
     {threads.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <div className="card-grid">
-      {threads.map((thread) => <ProposalThreadCard key={thread[0]?.threadId} messages={thread} projection={projection} disabled={disabled} send={send} />)}
+      {threads.map((thread) => <ProposalThreadCard key={thread[0]?.threadId} messages={thread} projection={projection} disabled={disabled} send={send} readOnly={module.mode !== "write"} />)}
     </div>}
   </section>;
 }
@@ -1103,13 +943,17 @@ function RuntimeView() {
   const [effectProposals, setEffectProposals] = useState<EffectProposalV1[]>([]);
   const [adjudications, setAdjudications] = useState<AdjudicationRequestV1[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string>("");
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const { toasts, notify: setNotice, dismiss: dismissToast, hold: holdToast } = useToasts();
+  const [sidebarPreference, setSidebarPreference] = useState<"auto" | "open" | "closed">("auto");
+  const [refreshing, setRefreshing] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const submissionInFlight = useRef(false);
+  const wideViewport = useWideViewport();
   const [activeNavigationItemId, setActiveNavigationItemId] = useState<string | null>(null);
   const main = useRef<HTMLElement>(null);
   const loadVersion = useRef(0);
   const pending = outbox?.entries.some(({ status }) => status === "local_pending" || status === "received") === true;
-  const submitting = connection === "online" && pending;
+  const submitting = posting || (connection === "online" && pending);
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
@@ -1153,7 +997,8 @@ function RuntimeView() {
           reconciled.rejected === 0 ? "" : `${reconciled.rejected} rejected`,
           reconciled.reconciliation === 0 ? "" : `${reconciled.reconciliation} need reconciliation`
         ].filter(Boolean).join(", ");
-        if (outcomes.length > 0) setNotice(`Reconnect complete: ${outcomes}.`);
+        if (outcomes.length > 0) setNotice(`Reconnect complete: ${outcomes}.`,
+          reconciled.rejected > 0 || reconciled.reconciliation > 0 ? "caution" : "success");
       }
       await offlineStore.save({
         bootstrap: nextBootstrap,
@@ -1207,7 +1052,7 @@ function RuntimeView() {
           setEffectProposals([]);
           setAdjudications([]);
           setConnection("offline");
-          setNotice("Using the protected offline view. Local pending work is not submitted.");
+          setNotice("Using the protected offline view. Local pending work is not submitted.", "caution");
           return;
         }
         if (cached !== null) setOutbox(cached.outbox);
@@ -1218,88 +1063,93 @@ function RuntimeView() {
   }, [deviceId, id, requestedRole]);
 
   useEffect(() => { void load(); }, []); // Initial load owns device registration.
+  const stageClock = useStageClock(projection?.currentStageStatus ?? null, projection?.stageRemainingSeconds ?? null,
+    projection?.stageDeadlineAt ?? null);
   useEffect(() => {
     if (projection === null) return;
     setActiveNavigationItemId(projection.navigation.defaultItemId ?? projection.navigation.items[0]?.id ?? null);
   }, [projection?.interfaceProfileId, projection?.navigation.defaultItemId]);
   useEffect(() => {
     const offline = () => setConnection("offline");
-    const online = () => { setNotice("Connection restored. Refreshing authoritative state."); void load(); };
+    const online = () => { setNotice("Connection restored. Refreshing authoritative state.", "success"); void load(); };
     window.addEventListener("offline", offline);
     window.addEventListener("online", online);
     return () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); };
   }, [load]);
 
   const post = async (command: CommandEnvelopeV1): Promise<CommandReceiptV1 | null> => {
-    if (id === null || bootstrap === null || outbox === null || projection === null) return null;
-    const queueable = canQueueOffline(command, bootstrap);
-    if (!queueable && !navigator.onLine) {
-      setConnection("offline");
-      setNotice("This operation requires the live Session Authority and was not queued.");
-      return null;
-    }
-    let storedOutbox = outbox;
-    if (queueable) {
-      storedOutbox = enqueueOfflineCommand(outbox, command, new Date().toISOString());
-      try {
-        await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: storedOutbox });
-      } catch (cause) {
-        setNotice(cause instanceof Error
-          ? `The Command was not queued because protected device storage failed: ${cause.message}`
-          : "The Command was not queued because protected device storage failed.");
-        return null;
-      }
-      setOutbox(storedOutbox);
-      setNotice("Saved on this device as local pending. It has not been submitted.");
-      if (!navigator.onLine) { setConnection("offline"); return null; }
-    } else setNotice("Submitting a live-only operation. It will not enter the Offline Outbox.");
+    if (id === null || bootstrap === null || outbox === null || projection === null || submissionInFlight.current) return null;
+    submissionInFlight.current = true;
+    setPosting(true);
     try {
-      const response = await fetch(`/v1/sessions/${id}/commands`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command)
-      });
-      const body: unknown = await response.json();
-      if (!isCommandReceipt(body)) {
-        if (typeof body === "object" && body !== null && "error" in body) {
-          throw new ApiError(response.status, body as ErrorEnvelopeV1);
-        }
-        throw new Error(`Command returned an invalid response with status ${response.status}`);
-      }
-      if (queueable) {
-        let resolved = recordOfflineReceipt(storedOutbox, body);
-        if (body.status === "accepted") {
-          resolved = { ...resolved, entries: resolved.entries.filter(({ command: queued }) => queued.commandId !== body.commandId) };
-        }
-        await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: resolved });
-        setOutbox(resolved);
-      }
-      if (body.status === "accepted") setNotice(body.replayed ? "The original server receipt was recovered." : "The server accepted the Command.");
-      else setNotice(body.status === "needs_reconciliation"
-        ? `Authoritative state changed: ${body.message ?? body.errorCode}. Your local draft was kept.`
-        : `Command refused: ${body.message ?? body.errorCode}. Your local draft was kept.`);
-      await load();
-      requestAnimationFrame(() => main.current?.focus());
-      return body;
-    } catch (cause) {
-      if (cause instanceof ApiError) {
-        if (clearsOfflineData(cause)) {
-          await offlineStore.clear(id, bootstrap.deviceId);
-          setBootstrap(null);
-          setOutbox(null);
-          setProjection(null);
-        }
-        setConnection("error");
-        setNotice(`Command failed: ${cause.message}`);
+      const queueable = canQueueOffline(command, bootstrap);
+      if (!queueable && !navigator.onLine) {
+        setConnection("offline");
+        setNotice("This operation requires the live Session Authority and was not queued.", "caution");
         return null;
       }
-      setConnection(navigator.onLine ? "error" : "offline");
-      setNotice(queueable ? "Delivery acknowledgement was lost. This Command is still local pending, not accepted."
-        : "The live-only operation failed without acknowledgement and was not queued.");
-      return null;
-    }
+      let storedOutbox = outbox;
+      if (queueable) {
+        storedOutbox = enqueueOfflineCommand(outbox, command, new Date().toISOString());
+        try {
+          await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: storedOutbox });
+        } catch (cause) {
+          setNotice(cause instanceof Error
+            ? `The Command was not queued because protected device storage failed: ${cause.message}`
+            : "The Command was not queued because protected device storage failed.", "error");
+          return null;
+        }
+        setOutbox(storedOutbox);
+        setNotice("Saved on this device as local pending. It has not been submitted.", "info");
+        if (!navigator.onLine) { setConnection("offline"); return null; }
+      } else setNotice("Submitting a live-only operation. It will not enter the Offline Outbox.", "progress");
+      try {
+        const response = await fetch(`/v1/sessions/${id}/commands`, {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command)
+        });
+        const body: unknown = await response.json();
+        if (!isCommandReceipt(body)) {
+          if (typeof body === "object" && body !== null && "error" in body) {
+            throw new ApiError(response.status, body as ErrorEnvelopeV1);
+          }
+          throw new Error(`Command returned an invalid response with status ${response.status}`);
+        }
+        if (queueable) {
+          let resolved = recordOfflineReceipt(storedOutbox, body);
+          if (body.status === "accepted") {
+            resolved = { ...resolved, entries: resolved.entries.filter(({ command: queued }) => queued.commandId !== body.commandId) };
+          }
+          await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: resolved });
+          setOutbox(resolved);
+        }
+        if (body.status === "accepted") setNotice(body.replayed ? "The original server receipt was recovered." : "The server accepted the Command.", "success");
+        else if (body.status === "needs_reconciliation") setNotice(`Authoritative state changed: ${body.message ?? body.errorCode}. Your local draft was kept.`, "caution");
+        else setNotice(`Command refused: ${body.message ?? body.errorCode}. Your local draft was kept.`, "error");
+        await load();
+        requestAnimationFrame(() => main.current?.focus());
+        return body;
+      } catch (cause) {
+        if (cause instanceof ApiError) {
+          if (clearsOfflineData(cause)) {
+            await offlineStore.clear(id, bootstrap.deviceId);
+            setBootstrap(null);
+            setOutbox(null);
+            setProjection(null);
+          }
+          setConnection("error");
+          setNotice(`Command failed: ${cause.message}`, "error");
+          return null;
+        }
+        setConnection(navigator.onLine ? "error" : "offline");
+        setNotice(queueable ? "Delivery acknowledgement was lost. This Command is still local pending, not accepted."
+          : "The live-only operation failed without acknowledgement and was not queued.", queueable ? "caution" : "error");
+        return null;
+      }
+    } finally { submissionInFlight.current = false; setPosting(false); }
   };
 
-  const send = (action: RuntimeActionV1, artifact: RuntimeArtifactV1 | null, content?: JsonObject, artifactTypeKey?: string) => {
-    if (projection === null || deviceId === null) return;
+  const send = async (action: RuntimeActionV1, artifact: RuntimeArtifactV1 | null, content?: JsonObject, artifactTypeKey?: string): Promise<CommandReceiptV1 | null> => {
+    if (projection === null || deviceId === null) return null;
     const command: CommandEnvelopeV1 = {
       commandId: crypto.randomUUID(),
       deviceId,
@@ -1314,18 +1164,18 @@ function RuntimeView() {
         ...(content === undefined ? {} : { content })
       }
     };
-    void post(command);
+    return post(command);
   };
 
-  const sendInformation: SendInformation = (operationType, aggregateId, expectedAggregateVersion, payload) => {
-    if (projection === null || deviceId === null) return;
+  const sendInformation: SendInformation = async (operationType, aggregateId, expectedAggregateVersion, payload) => {
+    if (projection === null || deviceId === null) return null;
     const publication = operationType === "adjudication.publish";
     if (publication && !navigator.onLine) {
       setConnection("offline");
-      setNotice("Adjudication publication requires the live Session Authority and was not queued.");
-      return;
+      setNotice("Adjudication publication requires the live Session Authority and was not queued.", "caution");
+      return null;
     }
-    void post({
+    return post({
       commandId: crypto.randomUUID(), deviceId, operationType, aggregateId, expectedAggregateVersion,
       governingReleaseId: projection.releaseId, activeSessionRoleId: projection.activeSessionRoleId,
       deviceObservedAt: new Date().toISOString(), payload
@@ -1336,7 +1186,7 @@ function RuntimeView() {
     if (projection === null || deviceId === null) return;
     if (operationType.startsWith("poll.") && !navigator.onLine) {
       setConnection("offline");
-      setNotice("Poll management requires the live Session Authority and was not queued.");
+      setNotice("Poll management requires the live Session Authority and was not queued.", "caution");
       return;
     }
     void post({ commandId: crypto.randomUUID(), deviceId, operationType, aggregateId: poll.id,
@@ -1347,7 +1197,7 @@ function RuntimeView() {
   const sendVoice = async (channel: RuntimeVoiceChannelV1, operationType: string,
     payload: JsonObject = {}): Promise<CommandReceiptV1 | null> => {
     if (projection === null || deviceId === null || !navigator.onLine) {
-      setConnection("offline"); setNotice("Voice needs the live Session Authority and was not queued."); return null;
+      setConnection("offline"); setNotice("Voice needs the live Session Authority and was not queued.", "caution"); return null;
     }
     const receipt = await post({ commandId: crypto.randomUUID(), deviceId, operationType,
       aggregateId: channel.id, expectedAggregateVersion: channel.version, governingReleaseId: channel.governingReleaseId,
@@ -1366,8 +1216,8 @@ function RuntimeView() {
 
   const decideEffect = async (proposal: EffectProposalV1, decision: "approve" | "reject" | "return", reason: string) => {
     if (id === null || projection === null || deviceId === null) return;
-    if (!navigator.onLine) { setConnection("offline"); setNotice("Approval Decisions require a live Session Authority and were not queued."); return; }
-    setNotice("Submitting the Approval Decision to the Session Authority.");
+    if (!navigator.onLine) { setConnection("offline"); setNotice("Approval Decisions require a live Session Authority and were not queued.", "caution"); return; }
+    setNotice("Submitting the Approval Decision to the Session Authority.", "progress");
     try {
       const response = await fetch(`/v1/sessions/${id}/commands`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         commandId: crypto.randomUUID(), deviceId, operationType: `effect_proposal.${decision}`, aggregateId: proposal.id,
@@ -1377,16 +1227,17 @@ function RuntimeView() {
       } satisfies CommandEnvelopeV1) });
       const receipt: unknown = await response.json();
       if (!isCommandReceipt(receipt)) throw new Error(`Approval Decision returned an invalid response with status ${response.status}`);
-      setNotice(receipt.status === "accepted" ? "The server accepted the Command." : receipt.message ?? "The Approval Decision was not accepted.");
+      setNotice(receipt.status === "accepted" ? "The server accepted the Command." : receipt.message ?? "The Approval Decision was not accepted.",
+        receipt.status === "accepted" ? "success" : "error");
       await load();
     } catch (cause) {
-      setNotice(cause instanceof Error ? `Approval Decision was not queued: ${cause.message}` : "Approval Decision was not queued.");
+      setNotice(cause instanceof Error ? `Approval Decision was not queued: ${cause.message}` : "Approval Decision was not queued.", "error");
       await load();
     }
   };
 
   const retryPending = async () => {
-    setNotice("Checking original receipts before ordered reconnect.");
+    setNotice("Checking original receipts before ordered reconnect.", "progress");
     await load();
   };
 
@@ -1395,7 +1246,7 @@ function RuntimeView() {
     const updated = updateOfflineDraft(outbox, commandId, payload);
     await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: updated });
     setOutbox(updated);
-    setNotice("The revised draft is saved on this device. It has not been submitted.");
+    setNotice("The revised draft is saved on this device. It has not been submitted.", "info");
   };
 
   if (projection === null) {
@@ -1405,9 +1256,7 @@ function RuntimeView() {
   }
   const roleContextLabel = projection.activeTeamLabel === null ? projection.activeSessionRoleLabel
     : `${projection.activeTeamLabel} · ${projection.activeSessionRoleLabel}`;
-  const workspaceTitle = projection.sessionTitle ?? projection.simulationTitle ?? "Session workspace";
-  const remainingTime = projection.stageRemainingSeconds === null ? null
-    : `${String(Math.floor(projection.stageRemainingSeconds / 60)).padStart(2, "0")}:${String(projection.stageRemainingSeconds % 60).padStart(2, "0")}`;
+  const sessionTitle = projection.sessionTitle ?? projection.simulationTitle ?? "Session workspace";
   const moduleById = new Map(projection.modules.map((module) => [module.id, module]));
   const regions = projection.regions === undefined || projection.regions.length === 0
     ? [{ id: "main", moduleIds: projection.modules.map((module) => module.id) }]
@@ -1418,25 +1267,93 @@ function RuntimeView() {
   const visibleRegions = projection.layout === "workspace_tabs" && activeNavigationItem?.regionId !== undefined
     ? regions.filter((region) => region.id === activeNavigationItem.regionId)
     : regions;
+  const visibleModules = visibleRegions.flatMap((region) => region.moduleIds.map((moduleId) => moduleById.get(moduleId)))
+    .filter((module): module is RuntimeModuleV1 => module !== undefined);
+  const sidebarVisible = sidebarPreference === "auto" ? wideViewport : sidebarPreference === "open";
+  const moduleCount = (module: RuntimeModuleV1): RuntimeSidebarItem["count"] => {
+    if (module.type === "task_list") return { value: moduleArtifacts(module, projection.artifacts).length, emphasis: false, label: "records" };
+    if (module.type === "inject_inbox") return {
+      value: projection.injects.filter((inject) => inject.state === "released").length, emphasis: true, label: "awaiting acknowledgement"
+    };
+    if (module.type === "message_inbox") {
+      const channelIds = Array.isArray(module.configuration.channelIds)
+        ? module.configuration.channelIds.filter((channelId): channelId is string => typeof channelId === "string") : [];
+      return {
+        value: projection.messages.filter((message) => channelIds.includes(message.channelId) && message.deliveryState !== "read").length,
+        emphasis: true, label: "unread"
+      };
+    }
+    return undefined;
+  };
+  const showModule = (moduleId: string) => {
+    const item = projection.navigation.items.find((candidate) => candidate.moduleId === moduleId ||
+      (candidate.regionId !== undefined && regions.find((region) => region.id === candidate.regionId)?.moduleIds.includes(moduleId)));
+    if (projection.layout === "workspace_tabs" && item !== undefined) setActiveNavigationItemId(item.id);
+    if (!wideViewport) setSidebarPreference("auto");
+    requestAnimationFrame(() => document.getElementById(`runtime-module-${moduleId}`)?.scrollIntoView({ block: "start" }));
+  };
+  const selectNavigationItem = (itemId: string, moduleId: string) => {
+    setActiveNavigationItemId(itemId);
+    if (!wideViewport) setSidebarPreference("auto");
+    requestAnimationFrame(() => {
+      if (projection.layout === "workspace_tabs") main.current?.scrollTo({ top: 0 });
+      else document.getElementById(`runtime-module-${moduleId}`)?.scrollIntoView({ block: "start" });
+    });
+  };
+  const inboxModules = projection.modules.filter((module) => module.configuration.placement !== "header" && (module.type === "message_inbox" || module.type === "inject_inbox"));
+  const unreadCount = inboxModules.reduce((total, module) => total + (moduleCount(module)?.value ?? 0), 0);
+  const firstUnread = inboxModules.find((module) => (moduleCount(module)?.value ?? 0) > 0) ?? inboxModules[0];
+  const sidebarSections: RuntimeSidebarSection[] = [{
+    id: "pages", label: String(visibleModules[0]?.configuration.navigationSection ?? projection.activeSessionRoleLabel), navigationLabel: "Runtime modules",
+    items: projection.navigation.items.map((item) => ({
+      id: item.id, label: item.label, href: `#runtime-module-${item.moduleId}`, current: item.id === activeNavigationItem?.id,
+      icon: RUNTIME_MODULE_ICONS[moduleById.get(item.moduleId)?.type ?? "session_status"],
+      count: moduleById.has(item.moduleId) ? moduleCount(moduleById.get(item.moduleId)!) : undefined,
+      onSelect: () => selectNavigationItem(item.id, item.moduleId)
+    }))
+  }];
+  if (projection.layout !== "workspace_tabs" && visibleModules.length > 1) sidebarSections.push({
+    id: "on-this-page", label: "On this page", navigationLabel: "On this page",
+    items: visibleModules.map((module) => ({
+      id: module.id, label: module.title, href: `#runtime-module-${module.id}`, current: false,
+      icon: RUNTIME_MODULE_ICONS[module.type], count: moduleCount(module), onSelect: () => showModule(module.id)
+    }))
+  });
+  const activeSeat = projection.roleContexts.find((role) => role.sessionRoleId === projection.activeSessionRoleId);
+  const roleSwitchUnavailable = pending || connection !== "online";
   const renderRuntimeModule = (module: RuntimeModuleV1): ReactNode => {
-    if (module.type === "artifact_form") return <section id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
-      <div className="section-heading"><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2></div>
-      {projection.createTasks.length === 0 ? <p className="empty-state">{module.emptyStateText}</p>
-        : <div className="card-grid">{projection.createTasks.map((task) => <CreateTask key={task.artifactTypeKey} task={task}
-            disabled={submitting} send={send} />)}</div>}
+    if (module.type === "session_timeline") return <SessionTimeline firstPage={projection.timeline} online={connection === "online"}
+      loadOlder={async (before) => {
+        const page = await api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection?activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}&timelineBefore=${before}`,
+          { headers: { "x-device-id": deviceId! } });
+        if (page.timeline === undefined) throw new Error("Timeline unavailable");
+        return page.timeline;
+      }} />;
+    if (module.type === "artifact_form") return <section id={`runtime-module-${module.id}`} aria-label={module.title}>
+      {module.configuration.presentation === "capture" ? null : <div className="section-heading"><h2>{module.title}</h2></div>}
+      {moduleArtifacts(module, projection.createTasks).length === 0 ? <p className="empty-state">{module.emptyStateText}</p>
+        : <div className="card-grid">{moduleArtifacts(module, projection.createTasks).map((task) => <CreateTask key={createTaskKey(task)} task={task}
+            disabled={submitting} send={send} compact={module.configuration.presentation === "capture"}
+            submitLabel={typeof module.configuration.submitLabel === "string" ? module.configuration.submitLabel : "Save draft"} />)}</div>}
     </section>;
-    if (module.type === "task_list") return <section id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
-      <div className="section-heading"><h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2></div>
-      {projection.artifacts.length === 0 ? <p className="empty-state">{module.emptyStateText}</p>
-        : <div className="card-grid">{projection.artifacts.map((artifact) => <ArtifactCard key={artifact.id}
-            artifact={artifact} disabled={submitting} send={send} />)}</div>}
-    </section>;
+    if (module.type === "task_list" && module.configuration.presentation === "history") return <RevisionHistory
+      key={`${projection.sessionId}:${projection.activeSessionRoleId}`} module={module} artifacts={projection.artifacts}
+      active={visibleModules.includes(module)} online={connection === "online"} load={(artifactId, before) => api<RuntimeArtifactHistoryV1>(
+        `/v1/sessions/${id}/runtime-artifacts/${artifactId}/history?activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}${before === undefined ? "" : `&beforeVersion=${before}`}`,
+        { headers: { "x-device-id": deviceId! } })} />;
+    if (module.type === "task_list") return <ArtifactWorkspace module={module} artifacts={projection.artifacts}
+      renderArtifact={(artifact) => module.mode === "read" ? <article className="card artifact"><h2>{artifact.title}</h2>
+        <span className="badge badge-state">{artifact.stateLabel}</span><ArtifactContent form={artifact.form} payload={artifact.payload} /></article>
+        : <ArtifactCard key={`${artifact.id}-${artifact.version}`} artifact={artifact} disabled={submitting} send={send} />} />;
     if (module.type === "message_inbox") return <div id={`runtime-module-${module.id}`}><MessageInbox module={module} projection={projection}
       disabled={submitting} send={sendInformation} /></div>;
     if (module.type === "proposal_thread") return <div id={`runtime-module-${module.id}`}><ProposalThreads module={module} projection={projection}
       disabled={submitting} send={sendInformation} /></div>;
     if (module.type === "inject_inbox") return <div id={`runtime-module-${module.id}`}><InjectInbox module={module} projection={projection}
       disabled={submitting} send={sendInformation} /></div>;
+    if (module.type === "session_status" && module.mode === "write") return <SessionSettings module={module} projection={projection} openModule={showModule} operatorWorkspace={(tab) => <OperatorView key={tab} embedded={tab} />}
+      controls={<StageControls module={module} disabled={submitting || connection !== "online"}
+        send={(operation, version, payload) => { if (id !== null) sendInformation(operation, id, version, payload); }} />} />;
     if (module.type === "session_status") return <section className="card curated-runtime-module" id={`runtime-module-${module.id}`}
       aria-labelledby={`runtime-module-${module.id}-title`}>
       <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
@@ -1445,14 +1362,13 @@ function RuntimeView() {
         <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({friendlyReference(projection.currentStageStatus, "Not started")})</dd></div>
         <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
       </dl>
+      <StageControls module={module} disabled={submitting || connection !== "online"}
+        send={(operation, version, payload) => { if (id !== null) sendInformation(operation, id, version, payload); }} />
     </section>;
-    if (module.type === "artifact_presentation") return <section className="card curated-runtime-module runtime-presentation-module"
-      id={`runtime-module-${module.id}`} aria-labelledby={`runtime-module-${module.id}-title`}>
-      <h2 id={`runtime-module-${module.id}-title`}>{module.title}</h2>
-      {projection.artifacts.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <ul className="presentation-artifact-list">
-        {projection.artifacts.map((artifact) => <li key={artifact.id}><strong>{artifact.title}</strong><span>{artifact.stateLabel}</span></li>)}
-      </ul>}
-    </section>;
+    if (module.type === "artifact_presentation") return <ArtifactWorkspace module={module}
+      artifacts={projection.artifacts.filter((artifact) => !Array.isArray(module.configuration.artifactStatuses) || module.configuration.artifactStatuses.includes(artifact.state))}
+      renderArtifact={(artifact) => <article className="card artifact"><h2>{artifact.title}</h2><span className="badge badge-state">{artifact.stateLabel}</span>
+        <ArtifactContent form={artifact.form} payload={artifact.payload} /></article>} />;
     if (module.type === "resource_library") {
       const configuredIds = Array.isArray(module.configuration.resourceIds)
         ? module.configuration.resourceIds.filter((resourceId): resourceId is string => typeof resourceId === "string") : [];
@@ -1485,84 +1401,114 @@ function RuntimeView() {
         className="runtime-deck-frame" src={resourceUrl} title={module.title} loading="lazy" sandbox="allow-scripts" allowFullScreen />}
     </section>;
   };
-  return <Shell connection={connection}
-    brandContent={<a className="runtime-product-brand" href="/" title="Leave Session">
-      <strong>{projection.simulationTitle ?? projection.releaseLabel}</strong><span>{projection.releaseLabel}</span>
-    </a>}
-    headerContent={<div className="header-actions runtime-header-actions">
-      <div className="runtime-stage-summary"><span>{projection.currentStageLabel ?? "Session workspace"}</span>
-        <strong>{remainingTime ?? friendlyReference(projection.currentStageStatus, "Not started")}</strong></div>
-      <span className="runtime-connection"><ConnectionIndicator state={connection} /><span>{connectionLabel(connection)}</span></span>
-      <ThemeToggle />
-      <span className="runtime-role-badge">{roleContextLabel}</span>
-    </div>}>
-    <main id="main-content" className={`runtime-layout family-workspace participant-runtime-workspace layout-${projection.layout}`} ref={main} tabIndex={-1}>
-      <div className="hero family-workspace-header">
-        <p className="runtime-role-context">{roleContextLabel}</p>
-        <h1 id="runtime-title">{workspaceTitle}</h1>
-        <p>{projection.navigation.items[0]?.label ?? "Workspace"} · {projection.currentStageLabel ?? "Session workspace"} · Session {friendlyReference(projection.sessionStatus, "Unavailable")}</p>
-      </div>
-      <nav className="runtime-module-navigation family-workspace-navigation" aria-label="Runtime modules">
-        <button className="runtime-navigation-toggle" type="button" aria-expanded={navigationOpen}
-          aria-controls="runtime-navigation-content" onClick={() => setNavigationOpen((open) => !open)}>
-          {navigationOpen ? "Close workspace navigation" : "Open workspace navigation"}
-        </button>
-        <div id="runtime-navigation-content" className={navigationOpen ? "runtime-navigation-content is-open" : "runtime-navigation-content"}>
-          <h2>{projection.activeSessionRoleLabel}</h2><ul>
-            {projection.navigation.items.map((item) => <li key={item.id}><a href={`#runtime-module-${item.moduleId}`}
-              aria-current={item.id === activeNavigationItem?.id ? "page" : undefined} onClick={() => {
-                setActiveNavigationItemId(item.id);
-                setNavigationOpen(false);
-              }}>{item.label}</a></li>)}
-          </ul>
-          <details className="runtime-context-disclosure"><summary>Session context</summary>
-            <dl className="runtime-status-list">
-              <div><dt>Session</dt><dd>{projection.sessionTitle ?? friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
-              <div><dt>Status</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
-              <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"}</dd></div>
-              <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
-              <div><dt>Connection</dt><dd>{connectionLabel(connection)}</dd></div>
-            </dl>
-          </details>
+  const primaryModule = moduleById.get(activeNavigationItem?.moduleId ?? "");
+  const composers = visibleModules.filter((module) => module.configuration.presentation === "composer");
+  const broadcastModules = projection.modules.filter((module) => module.configuration.placement === "header");
+  return <LocalDraftContext.Provider value={bootstrap === null || deviceId === null || id === null ? null : {
+    store: offlineStore, sessionId: id, deviceId, scope: JSON.stringify([bootstrap.participantId, bootstrap.activeSessionRoleId,
+      bootstrap.seatAssignmentIds.slice().sort(), bootstrap.accessRevision, projection.releaseId, projection.currentStageId])
+  }}><div className="app-frame app-frame-bounded runtime-frame" data-sidebar={sidebarVisible ? "open" : "closed"}>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    {sidebarVisible ? <a className="skip-link" href="#runtime-navigation">Skip to workspace navigation</a> : null}
+    <RuntimeHeader sessionTitle={sessionTitle}
+      sessionMenu={() => <div className="runtime-menu-body">
+        <p className="runtime-menu-title">{sessionTitle}</p>
+        <dl className="runtime-menu-facts">
+          <div><dt>Simulation</dt><dd>{projection.simulationTitle ?? projection.releaseLabel}</dd></div>
+          <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div>
+          <div><dt>Session</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+        </dl>
+        <a className="runtime-menu-link" href="/?workspace=participant"><RuntimeIcon name="list" />All your Sessions</a>
+      </div>}
+      stage={{ label: projection.currentStageLabel, status: projection.currentStageId === null ? null : projection.currentStageStatus, clock: stageClock }}
+      connection={{ state: connection, label: connectionLabel(connection) }}
+      refreshing={refreshing}
+      onRefresh={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)); }}
+      notifications={firstUnread === undefined ? null : {
+        count: unreadCount,
+        label: unreadCount === 0 ? "Notifications: nothing new" : `Notifications: ${unreadCount} new`,
+        onOpen: () => showModule(firstUnread.id)
+      }}
+      themeToggle={<ThemeToggle />}
+      communicationTools={<>
+        {broadcastModules.length === 0 ? null : <SessionTool label="Control Broadcast" icon="broadcast"
+          count={broadcastModules.reduce((total, module) => total + (moduleCount(module)?.value ?? 0), 0)}>
+          {broadcastModules.map((module) => <div key={module.id}>{renderRuntimeModule(module)}</div>)}
+        </SessionTool>}
+        {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <SessionTool label="Voice channels" icon="voice">
+          <p className="hint">Closing this panel keeps your voice connection active. Use Leave voice to disconnect.</p>
+          <VoiceControls projection={projection} online={connection === "online"} disabled={submitting} command={sendVoice} floor={sendFloor} notice={setNotice} />
+        </SessionTool>}
+      </>}
+      roleLabel={projection.activeSessionRoleLabel}
+      roleMenu={(close) => <div className="runtime-menu-body">
+        <p className="runtime-menu-title">{roleContextLabel}</p>
+        <p className="runtime-menu-meta">{activeSeat === undefined ? "Active role context" : `Seat: ${activeSeat.seatLabel}`}</p>
+        {projection.roleContexts.length > 1 ? <div className="runtime-menu-group" role="group" aria-labelledby="runtime-role-switch-title">
+          <h2 id="runtime-role-switch-title">Switch role</h2>
+          {roleSwitchUnavailable ? <p className="runtime-menu-meta">Switching is available when connected and nothing is pending.</p> : null}
+          <ul>{projection.roleContexts.map((role) => {
+            const label = role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`;
+            const current = role.sessionRoleId === projection.activeSessionRoleId;
+            return <li key={`${role.seatLabel}:${role.sessionRoleId}`}><button className="runtime-menu-link" type="button"
+              aria-current={current ? "true" : undefined} disabled={current || roleSwitchUnavailable}
+              onClick={() => { close(); navigateWithLoader(role.runtimeUrl); }}>{label}{current ? <span className="runtime-menu-meta"> · current</span> : null}</button></li>;
+          })}</ul>
+        </div> : null}
+        <a className="runtime-menu-link runtime-menu-exit" href="/"><RuntimeIcon name="exit" />Exit Session</a>
+      </div>} />
+    <div className="runtime-body">
+      {sidebarVisible ? <RuntimeSidebar id="runtime-navigation" sections={sidebarSections}
+        onHide={() => setSidebarPreference(wideViewport ? "closed" : "auto")}
+        startHere={<>
+          <p>You are working as <strong>{roleContextLabel}</strong>. Use the sections above to move between your work.</p>
+          <dl className="runtime-status-list">
+            <div><dt>Session</dt><dd>{sessionTitle}</dd></div>
+            <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({friendlyReference(projection.currentStageStatus, "Not started")})</dd></div>
+            <div><dt>Role</dt><dd>{roleContextLabel}</dd></div>
+            <div><dt>Connection</dt><dd>{connectionLabel(connection)}</dd></div>
+          </dl>
+          <p>Saved work, arrivals and Stage changes appear as brief notices at the bottom of the screen.</p>
+        </>} /> : null}
+      <main id="main-content" className={`runtime-main participant-runtime-workspace layout-${projection.layout}`} ref={main} tabIndex={-1}
+        aria-labelledby="runtime-title">
+        <RuntimePageHeader titleId="runtime-title"
+          eyebrow={projection.activeTeamLabel === null ? projection.activeSessionRoleLabel : `${projection.activeSessionRoleLabel} · ${projection.activeTeamLabel}`}
+          title={primaryModule?.title ?? activeNavigationItem?.label ?? sessionTitle}
+          description={<p>{typeof primaryModule?.configuration.description === "string" ? primaryModule.configuration.description
+            : `${sessionTitle} · ${projection.currentStageLabel ?? "No Stage running"}`}</p>}
+          actions={<>{composers.map((module) => <SessionTool key={module.id} label={module.title} icon="edit" text>
+            <CreateWorkspace tasks={moduleArtifacts(module, projection.createTasks)} disabled={submitting} send={send} />
+            {toasts.length === 0 ? null : <p className="runtime-form-feedback" role="status">{toasts.at(-1)?.message}</p>}
+          </SessionTool>)}</>}
+          navigationToggle={sidebarVisible && wideViewport ? undefined : <RuntimeNavigationToggle controls="runtime-navigation" expanded={sidebarVisible}
+            onToggle={() => setSidebarPreference(sidebarVisible ? (wideViewport ? "closed" : "auto") : (wideViewport ? "auto" : "open"))} />} />
+        <div className="runtime-page-body">
+          {outbox === null ? null : <OfflineOutboxPanel outbox={outbox} retry={() => void retryPending()} saveDraft={saveOfflineDraft} />}
+          <div className="runtime-regions">
+            {regions.filter((region) => region.moduleIds.some((moduleId) => moduleById.get(moduleId)?.configuration.placement !== "header")).map((region) => <div
+              hidden={!visibleRegions.includes(region)} className={`runtime-region runtime-region-${region.id}`} data-region-id={region.id} key={region.id}>
+              {region.moduleIds.map((moduleId) => moduleById.get(moduleId)).filter((module): module is RuntimeModuleV1 => module !== undefined)
+                .filter((module) => module.configuration.presentation !== "composer" && module.configuration.placement !== "header")
+                .map((module) => <div className="runtime-region-module" key={module.id}>{renderRuntimeModule(module)}</div>)}
+            </div>)}
+          </div>
+          {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
+            <div className="section-heading"><h2 id="polls-heading">Polls</h2></div>
+            <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>
+          </section>}
+          <EffectProposalReview proposals={effectProposals} disabled={submitting} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
+          <AdjudicationReview adjudications={adjudications} disabled={submitting} send={sendInformation} />
         </div>
-      </nav>
-      <div className="family-workspace-primary">
-        <div className="runtime-context-actions">
-          {projection.roleContexts.length > 1 ? <label>Active Role Context
-            <select value={projection.activeSessionRoleId} disabled={pending || connection !== "online"} onChange={(event) => {
-              const selected = projection.roleContexts.find((candidate) => candidate.sessionRoleId === event.target.value);
-              if (selected !== undefined) navigateWithLoader(selected.runtimeUrl);
-            }}>{projection.roleContexts.map((role) => <option value={role.sessionRoleId} key={`${role.seatLabel}:${role.sessionRoleId}`}>
-              {role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`}
-            </option>)}</select>
-          </label> : null}
-          <a className="btn-secondary link-button" href="/">Exit Session</a>
-        </div>
-      <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
-      {outbox === null ? null : <OfflineOutboxPanel outbox={outbox} retry={() => void retryPending()} saveDraft={saveOfflineDraft} />}
-      <div className="runtime-regions">
-        {visibleRegions.map((region) => <div className={`runtime-region runtime-region-${region.id}`} data-region-id={region.id} key={region.id}>
-          {region.moduleIds.map((moduleId) => moduleById.get(moduleId)).filter((module): module is RuntimeModuleV1 => module !== undefined)
-            .map((module) => <div className="runtime-region-module" key={module.id}>{renderRuntimeModule(module)}</div>)}
-        </div>)}
-      </div>
-      {projection.polls.length === 0 ? null : <section aria-labelledby="polls-heading">
-        <div className="section-heading"><h2 id="polls-heading">Polls</h2></div>
-        <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>
-      </section>}
-      {projection.voiceChannels.length === 0 || id === null || deviceId === null ? null : <VoiceControls projection={projection}
-        online={connection === "online"} disabled={submitting} command={sendVoice} floor={sendFloor} notice={setNotice} />}
-      <EffectProposalReview proposals={effectProposals} disabled={submitting} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
-      <AdjudicationReview adjudications={adjudications} disabled={submitting} send={sendInformation} />
-      <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
-      </div>
-    </main>
-  </Shell>;
+      </main>
+    </div>
+    <ToastRegion toasts={toasts} dismiss={dismissToast} hold={holdToast} />
+  </div></LocalDraftContext.Provider>;
 }
 
-function OperatorView() {
+function OperatorView({ embedded }: { embedded?: "session" | "participants" | "reports" } = {}) {
   const id = sessionId();
-  const operationView = window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
+  const operationView = embedded === "reports" ? "reports" : window.location.pathname.match(/^\/admin\/sessions\/[0-9a-f-]{36}\/(reports|replay|archive)$/iu)?.[1] ?? null;
   const [connection, setConnection] = useState<ConnectionState>("loading");
   const [projection, setProjection] = useState<OperatorProjectionV1 | null>(null);
   const [readiness, setReadiness] = useState<ReadinessProjectionV1 | null>(null);
@@ -1612,6 +1558,11 @@ function OperatorView() {
   }, [id, operationView]);
   useEffect(() => { void loadOperationContext().catch((cause: unknown) =>
     setOperationNotice(cause instanceof Error ? cause.message : "Operation context did not load.")); }, [loadOperationContext]);
+  const operatorStageClock = useStageClock(projection?.stage?.status ?? null, projection?.stage?.remainingSeconds ?? null, null);
+  const [operatorSidebarPreference, setOperatorSidebarPreference] = useState<"auto" | "open" | "closed">("auto");
+  const operatorWideViewport = useWideViewport();
+  if (projection === null && embedded !== undefined) return <div role="status"><p>{connection === "loading" ? "Loading Session controls…" : error ?? "This view is unavailable."}</p>
+    {connection === "loading" ? null : <button className="btn-secondary" type="button" onClick={() => void load()}>Retry</button>}</div>;
   if (projection === null) return <StatePage connection={connection} title={connection === "loading" ? "Loading operator view" : "Access denied"}
     message={connection === "loading" ? "Reading authoritative Session state." : error ?? "This view is unavailable."}
     {...(connection === "loading" ? {} : { retry: () => void load() })} />;
@@ -1677,27 +1628,94 @@ function OperatorView() {
     } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "Replay is unavailable."); }
     finally { setPending(false); }
   };
-  return <Shell connection={connection}>
-    <main id="main-content" className="runtime-layout family-workspace operator-workspace" tabIndex={-1}>
-      <section className="hero family-workspace-header"><h1>Session control</h1><p><strong>{projection.sessionTitle}</strong> · {projection.releaseLabel} · Session {projection.sessionStatus}</p></section>
-      <nav className="session-operation-navigation family-workspace-navigation" aria-label="Session operations">
-        <a href={`/admin/sessions/${projection.sessionId}#staffing-title`}>Staffing</a>
-        <a href={`/sessions/${projection.sessionId}/runtime`}>Runtime</a>
-        <a href={`/admin/sessions/${projection.sessionId}/reports`}>Reports</a>
-        <a href={`/admin/sessions/${projection.sessionId}/replay`}>Replay</a>
-        <a href={`/admin/sessions/${projection.sessionId}/archive`}>Archive</a>
-        <a href={`/sessions/${projection.sessionId}`}>Session detail</a>
-      </nav>
-      <aside className="family-workspace-inspector" aria-labelledby="operator-context-title">
-        <h2 id="operator-context-title">Control context</h2>
-        <dl className="runtime-status-list"><div><dt>Session</dt><dd>{projection.sessionStatus}</dd></div>
-          <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div>
-          <div><dt>Connection</dt><dd>{connection}</dd></div>
-          <div><dt>Pending action</dt><dd>{pending ? "Submitting" : "None"}</dd></div></dl>
-      </aside>
-      <div className="family-workspace-primary">
-      {operationView === null ? null : <p className="live-region" role="status" aria-live="polite">{operationNotice}</p>}
-      {operationView === "reports" ? <section className="card operation-panel" aria-labelledby="reports-title">
+  const consoleBase = `/admin/sessions/${projection.sessionId}`;
+  const operatorSidebarVisible = operatorSidebarPreference === "auto" ? operatorWideViewport : operatorSidebarPreference === "open";
+  const operatorPageTitle = operationView === "reports" ? "Reports" : operationView === "replay" ? "Replay" : operationView === "archive" ? "Archive" : "Session control";
+  const operatorSections: RuntimeSidebarSection[] = [
+    { id: "main", label: "Main", navigationLabel: "Session operations", items: [
+      { id: "dashboard", label: "Session control", icon: "dashboard", href: consoleBase, current: operationView === null },
+      { id: "staffing", label: "Staffing", icon: "participants", href: operationView === null ? "#staffing-title" : `${consoleBase}#staffing-title`, current: false },
+      { id: "runtime", label: "Participant runtime", icon: "runtime", href: `/sessions/${projection.sessionId}/runtime`, current: false }
+    ] satisfies RuntimeSidebarItem[] },
+    { id: "data", label: "Data", navigationLabel: "Session data", items: [
+      { id: "reports", label: "Reports", icon: "export", href: `${consoleBase}/reports`, current: operationView === "reports" },
+      { id: "replay", label: "Replay", icon: "replay", href: `${consoleBase}/replay`, current: operationView === "replay" }
+    ] satisfies RuntimeSidebarItem[] },
+    { id: "records", label: "Records", navigationLabel: "Session records", items: [
+      { id: "archive", label: "Archive", icon: "archive", href: `${consoleBase}/archive`, current: operationView === "archive" },
+      { id: "detail", label: "Session detail", icon: "detail", href: `/sessions/${projection.sessionId}`, current: false }
+    ] satisfies RuntimeSidebarItem[] }
+  ];
+  const staffing = <>      {readiness === null ? null : <section aria-labelledby="staffing-title">
+        <div className="section-heading"><h2 id="staffing-title">Session staffing</h2></div>
+        <div className="card-grid">
+          <article className="card"><h3>Issue invitation</h3>
+            <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              const personId = String(data.get("personId") ?? "").trim(), seatId = String(data.get("seatId") ?? "");
+              const payload: JsonObject = { expiresInHours: 24 };
+              if (personId !== "") payload.recipientPersonId = personId;
+              if (seatId !== "") payload.seatId = seatId;
+              void send(`/v1/sessions/${id}/invitations`, "invitation.issue", payload, crypto.randomUUID(), 0)
+                .then((result) => setInvitationToken(result !== null && "invitationToken" in result ? result.invitationToken : null)); }}>
+              <details className="provenance-disclosure"><summary>Reserve for a directory person</summary>
+                <div className="field"><label htmlFor="invite-person">Directory person reference <span className="hint">(optional)</span></label>
+                  <input id="invite-person" name="personId" type="text" autoComplete="off" /></div></details>
+              <div className="field"><label htmlFor="invite-seat">Reserved Seat <span className="hint">(optional)</span></label>
+                <select id="invite-seat" name="seatId"><option value="">Any eligible Seat</option>
+                  {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+              <button className="btn-primary" type="submit" disabled={pending}>Issue invitation</button>
+            </form>
+            {invitationToken === null ? null : <p className="credential" role="status">Copy this one-time token now: <code>{invitationToken}</code></p>}
+          </article>
+          <article className="card"><h3>Assign participant</h3><p>Use direct assignment only when an authorized directory reference is available.</p>
+            <details className="provenance-disclosure"><summary>Open direct assignment form</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              void send(`/v1/sessions/${id}/participants`, "participant.assign", {
+                personId: String(data.get("personId")), seatId: String(data.get("seatId")), sessionRoleId: String(data.get("sessionRoleId"))
+              }, crypto.randomUUID()); }}>
+              <div className="field"><label htmlFor="assign-person">Directory person reference</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
+              <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
+                {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+              <div className="field"><label htmlFor="assign-role">Session Role</label><select id="assign-role" name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
+                  {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
+              <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
+            </form></details>
+          </article>
+        </div>
+        <h3>Seat occupancy</h3>
+        <ul className="readiness-list">{readiness.staffing.seats.map((item, index) => <li key={item.seatId}><span><strong>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</strong></span>
+          <span>{item.occupied} / {item.maximum ?? "unlimited"} occupied · minimum {item.minimum}</span></li>)}</ul>
+        <h3>Waiting room</h3>
+        {readiness.staffing.joinRequests.length === 0 ? <p className="empty-state">No pending join requests.</p> : <ul className="readiness-list">
+          {readiness.staffing.joinRequests.map((item) => <li key={`${item.personId}-${item.submittedAt}`}><span><strong>{item.personId}</strong> · {item.status}{item.requestedSeatId === null ? "" : ` · ${item.requestedSeatId}`}</span>
+            <span className="actions"><button className="btn-primary" type="button" disabled={pending}
+              onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/admit`, "participant.admit", {}, item.personId, 0)}>Admit</button>
+              <button className="btn-secondary" type="button" disabled={pending}
+                onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/reject`, "participant.reject", {}, item.personId, 0)}>Reject</button></span></li>)}</ul>}
+        <h3>Roster review</h3>
+        {readiness.staffing.rosterReview.length === 0 ? <p className="empty-state">No ambiguous roster rows.</p> : <ul className="readiness-list">
+          {readiness.staffing.rosterReview.map((item) => <li key={item.rowId}><span><strong>Row {item.rowNumber}</strong> · {item.personId ?? "Unresolved person"} · {item.seatId ?? "No Seat"}</span>
+            <span>{item.reasons.join(", ")}</span></li>)}</ul>}
+        <h3>Active assignments</h3>
+        {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
+          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
+            <details className="provenance-disclosure"><summary>Assignment references</summary><code>{item.personId} · {item.seatAssignmentId}</code></details>
+            <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+              void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
+                previousSeatAssignmentId: item.seatAssignmentId, newSeatId: String(data.get("seatId")),
+                newSessionRoleId: String(data.get("sessionRoleId")), reason: String(data.get("reason")),
+                exposureAcknowledged: data.get("exposureAcknowledged") === "on"
+              }, item.participantId, item.accessRevision); }}>
+              <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
+                {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+              <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role</label><select id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
+                {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
+              <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
+              <label className="choice"><input name="exposureAcknowledged" type="checkbox" /> I acknowledge that previously viewed information cannot be withdrawn.</label>
+              <button className="btn-primary" type="submit" disabled={pending}>Reassign</button>
+            </form></details></li>)}</ul>}
+      </section>}
+</>;
+  const reports = <>      {operationView === "reports" ? <section className="card operation-panel" aria-labelledby="reports-title">
         <h2 id="reports-title">Generate a Session report</h2>
         <form onSubmit={(event) => void generateReport(event)}>
           <div className="field"><label htmlFor="report-kind">Report</label><select id="report-kind" name="reportKind" defaultValue="after_action">
@@ -1727,6 +1745,9 @@ function OperatorView() {
               {artifact.purgedAt === null ? <a className="btn-secondary link-button" href={`/v1/report-artifacts/${artifact.artifactId}`}>Download report</a> : <span>Purged under retention policy</span>}</li>)}</ul>}
         </section>
       </section> : null}
+</>;
+  const content = <>      {operationView === null ? null : <p className="live-region" role="status" aria-live="polite">{operationNotice}</p>}
+      {reports}
       {operationView === "replay" ? <section className="card operation-panel" aria-labelledby="replay-title">
         <h2 id="replay-title">Replay Session evidence</h2>
         <p>Replay compares authoritative Evidence against the configured deterministic adapter without changing Session state.</p>
@@ -1843,74 +1864,7 @@ function OperatorView() {
             </button>
           </li>)}</ul>}
       </section>
-      {readiness === null ? null : <section aria-labelledby="staffing-title">
-        <div className="section-heading"><h2 id="staffing-title">Session staffing</h2></div>
-        <div className="card-grid">
-          <article className="card"><h3>Issue invitation</h3>
-            <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
-              const personId = String(data.get("personId") ?? "").trim(), seatId = String(data.get("seatId") ?? "");
-              const payload: JsonObject = { expiresInHours: 24 };
-              if (personId !== "") payload.recipientPersonId = personId;
-              if (seatId !== "") payload.seatId = seatId;
-              void send(`/v1/sessions/${id}/invitations`, "invitation.issue", payload, crypto.randomUUID(), 0)
-                .then((result) => setInvitationToken(result !== null && "invitationToken" in result ? result.invitationToken : null)); }}>
-              <details className="provenance-disclosure"><summary>Reserve for a directory person</summary>
-                <div className="field"><label htmlFor="invite-person">Directory person reference <span className="hint">(optional)</span></label>
-                  <input id="invite-person" name="personId" type="text" autoComplete="off" /></div></details>
-              <div className="field"><label htmlFor="invite-seat">Reserved Seat <span className="hint">(optional)</span></label>
-                <select id="invite-seat" name="seatId"><option value="">Any eligible Seat</option>
-                  {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
-              <button className="btn-primary" type="submit" disabled={pending}>Issue invitation</button>
-            </form>
-            {invitationToken === null ? null : <p className="credential" role="status">Copy this one-time token now: <code>{invitationToken}</code></p>}
-          </article>
-          <article className="card"><h3>Assign participant</h3><p>Use direct assignment only when an authorized directory reference is available.</p>
-            <details className="provenance-disclosure"><summary>Open direct assignment form</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
-              void send(`/v1/sessions/${id}/participants`, "participant.assign", {
-                personId: String(data.get("personId")), seatId: String(data.get("seatId")), sessionRoleId: String(data.get("sessionRoleId"))
-              }, crypto.randomUUID()); }}>
-              <div className="field"><label htmlFor="assign-person">Directory person reference</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
-              <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
-              <div className="field"><label htmlFor="assign-role">Session Role</label><select id="assign-role" name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
-                  {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
-              <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
-            </form></details>
-          </article>
-        </div>
-        <h3>Seat occupancy</h3>
-        <ul className="readiness-list">{readiness.staffing.seats.map((item, index) => <li key={item.seatId}><span><strong>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</strong></span>
-          <span>{item.occupied} / {item.maximum ?? "unlimited"} occupied · minimum {item.minimum}</span></li>)}</ul>
-        <h3>Waiting room</h3>
-        {readiness.staffing.joinRequests.length === 0 ? <p className="empty-state">No pending join requests.</p> : <ul className="readiness-list">
-          {readiness.staffing.joinRequests.map((item) => <li key={`${item.personId}-${item.submittedAt}`}><span><strong>{item.personId}</strong> · {item.status}{item.requestedSeatId === null ? "" : ` · ${item.requestedSeatId}`}</span>
-            <span className="actions"><button className="btn-primary" type="button" disabled={pending}
-              onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/admit`, "participant.admit", {}, item.personId, 0)}>Admit</button>
-              <button className="btn-secondary" type="button" disabled={pending}
-                onClick={() => void send(`/v1/sessions/${id}/join-requests/${item.personId}/reject`, "participant.reject", {}, item.personId, 0)}>Reject</button></span></li>)}</ul>}
-        <h3>Roster review</h3>
-        {readiness.staffing.rosterReview.length === 0 ? <p className="empty-state">No ambiguous roster rows.</p> : <ul className="readiness-list">
-          {readiness.staffing.rosterReview.map((item) => <li key={item.rowId}><span><strong>Row {item.rowNumber}</strong> · {item.personId ?? "Unresolved person"} · {item.seatId ?? "No Seat"}</span>
-            <span>{item.reasons.join(", ")}</span></li>)}</ul>}
-        <h3>Active assignments</h3>
-        {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
-          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
-            <details className="provenance-disclosure"><summary>Assignment references</summary><code>{item.personId} · {item.seatAssignmentId}</code></details>
-            <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
-              void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
-                previousSeatAssignmentId: item.seatAssignmentId, newSeatId: String(data.get("seatId")),
-                newSessionRoleId: String(data.get("sessionRoleId")), reason: String(data.get("reason")),
-                exposureAcknowledged: data.get("exposureAcknowledged") === "on"
-              }, item.participantId, item.accessRevision); }}>
-              <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
-              <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role</label><select id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
-                {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
-              <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
-              <label className="choice"><input name="exposureAcknowledged" type="checkbox" /> I acknowledge that previously viewed information cannot be withdrawn.</label>
-              <button className="btn-primary" type="submit" disabled={pending}>Reassign</button>
-            </form></details></li>)}</ul>}
-      </section>}
+      {staffing}
       {readiness === null ? null : <section aria-labelledby="readiness-title">
         <div className="section-heading"><h2 id="readiness-title">Operator readiness</h2><p>Release and assignment version {readiness.assignmentVersion}</p></div>
         <div className="live-region" aria-live="polite" aria-atomic="true">{notice}</div>
@@ -1937,11 +1891,61 @@ function OperatorView() {
         {projection.recentEvents.length === 0 ? <p className="empty-state">No Session events recorded.</p> : <ol className="event-list">
           {projection.recentEvents.map((event, index) => <li key={`${event.type}-${event.recordedAt}-${index}`}><span>{event.type}</span><time dateTime={event.recordedAt}>{new Date(event.recordedAt).toLocaleString()}</time></li>)}</ol>}
       </section>
-      <button className="btn-secondary refresh" type="button" onClick={() => void load()}>Refresh authoritative state</button>
       </> : null}
+</>;
+  if (embedded !== undefined) return <div className="embedded-session-controls">
+    <p className="live-region" role="status">{notice || operationNotice}</p>
+    {embedded === "participants" ? staffing : embedded === "reports" ? reports : content}
+  </div>;
+  return <div className="app-frame app-frame-bounded runtime-frame" data-sidebar={operatorSidebarVisible ? "open" : "closed"}>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    {operatorSidebarVisible ? <a className="skip-link" href="#operator-navigation">Skip to Session operations</a> : null}
+    <RuntimeHeader sessionTitle={projection.sessionTitle}
+      sessionMenu={() => <div className="runtime-menu-body">
+        <p className="runtime-menu-title">{projection.sessionTitle}</p>
+        <dl className="runtime-menu-facts">
+          <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div>
+          <div><dt>Session</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+          <div><dt>Connected</dt><dd>{projection.connectedParticipantCount} / {projection.participantCount}</dd></div>
+          <div><dt>Seats occupied</dt><dd>{projection.occupiedSeatCount} / {projection.totalSeatCount}</dd></div>
+        </dl>
+        <a className="runtime-menu-link" href="/?workspace=lifecycle"><RuntimeIcon name="list" />All Sessions</a>
+      </div>}
+      stage={{ label: projection.stage?.label ?? null, status: projection.stage?.status ?? null, clock: operatorStageClock }}
+      connection={{ state: connection, label: connectionLabel(connection) }}
+      refreshing={pending}
+      onRefresh={() => void load()}
+      notifications={null}
+      themeToggle={<ThemeToggle />}
+      roleLabel="Operator"
+      roleMenu={() => <div className="runtime-menu-body">
+        <p className="runtime-menu-title">Operator console</p>
+        <p className="runtime-menu-meta">Session control without a Participant Seat.</p>
+        <a className="runtime-menu-link runtime-menu-exit" href="/"><RuntimeIcon name="exit" />Exit console</a>
+      </div>} />
+    <div className="runtime-body">
+      {operatorSidebarVisible ? <RuntimeSidebar id="operator-navigation" sections={operatorSections}
+        onHide={() => setOperatorSidebarPreference(operatorWideViewport ? "closed" : "auto")}
+        startHere={<section aria-labelledby="operator-context-title">
+          <h2 id="operator-context-title" className="visually-hidden">Control context</h2>
+          <p>Every control records your reason, the before and after state, the Release and the server time.</p>
+          <dl className="runtime-status-list"><div><dt>Session</dt><dd>{friendlyReference(projection.sessionStatus, "Unavailable")}</dd></div>
+            <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div>
+            <div><dt>Connection</dt><dd>{connectionLabel(connection)}</dd></div>
+            <div><dt>Pending action</dt><dd>{pending ? "Submitting" : "None"}</dd></div></dl>
+        </section>} /> : null}
+      <main id="main-content" className="runtime-main operator-workspace" tabIndex={-1} aria-labelledby="operator-title">
+        <RuntimePageHeader titleId="operator-title" eyebrow="Operator console" title={operatorPageTitle}
+          description={<p>{projection.sessionTitle} · {projection.releaseLabel} · Session {friendlyReference(projection.sessionStatus, "Unavailable")}</p>}
+          navigationToggle={operatorSidebarVisible && operatorWideViewport ? undefined : <RuntimeNavigationToggle controls="operator-navigation"
+            expanded={operatorSidebarVisible}
+            onToggle={() => setOperatorSidebarPreference(operatorSidebarVisible ? (operatorWideViewport ? "closed" : "auto") : (operatorWideViewport ? "auto" : "open"))} />} />
+      <div className="runtime-page-body">
+      {content}
       </div>
-    </main>
-  </Shell>;
+      </main>
+    </div>
+  </div>;
 }
 
 export function App() {

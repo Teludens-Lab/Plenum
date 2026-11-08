@@ -317,6 +317,7 @@ export function App() {
             <details className="issue-technical"><summary>Technical location</summary><code>{issue.path}</code></details></li>;
         })}</ul>
       </>}
+    <p className="hint">Draft generation {state.generation}</p>
   </section>;
   const reviewPublishWorkspace = <section id="review-publish" className="card publish-card" aria-labelledby="publish-title">
     <h2 id="publish-title" tabIndex={-1}>Review and publish</h2>
@@ -379,6 +380,12 @@ export function App() {
         <svg className="product-header-separator" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7" /></svg>
         <h1 className="product-header-title" title={coreDesignTitle}>{coreDesignTitle}</h1>
       </div>
+      <div className="studio-draft-status" role="group" aria-label="Draft status">
+        <span>{saveStateLabel(state.saveState)}</span>
+        {state.unsynchronizedChanges === 0 ? null : <span>{state.unsynchronizedChanges} change{state.unsynchronizedChanges === 1 ? "" : "s"} waiting to synchronize</span>}
+        <span className={`badge ${valid ? "badge-online" : state.validation === null ? "badge-info" : "badge-error"}`}>{validationLabel}</span>
+        <button className="studio-undo" type="button" aria-label="Undo last change" onClick={() => client.undo()}>Undo</button>
+      </div>
       <div className="header-actions product-header-actions">
         <span className={`connection-indicator connection-indicator-${state.connected ? "online" : "offline"}`} role="status" aria-live="polite" aria-label={`Plenum status: ${state.connected ? "Connected" : "Offline"}`}>
           <span className="visually-hidden">{state.connected ? "Connected" : "Offline"}</span>
@@ -405,11 +412,6 @@ export function App() {
       </div>
     </header>
     <main id="main-content" className="studio-layout">
-      <section className="studio-state-strip" aria-label="Draft status">
-        <div><span className={`status-dot ${state.connected ? "is-online" : "is-offline"}`} aria-hidden="true" /><strong>{saveStateLabel(state.saveState)}</strong><span>{state.unsynchronizedChanges === 0 ? "All changes received by the server" : `${state.unsynchronizedChanges} change${state.unsynchronizedChanges === 1 ? "" : "s"} waiting to synchronize`}</span></div>
-        <div><strong>{validationLabel}</strong><span>{valid ? "Publication checks passed" : "Publication remains unavailable"}</span></div>
-        <details><summary>Sync details</summary><span>Draft generation {state.generation}</span></details>
-      </section>
       <p className="live-region" aria-live="polite">{publishMessage ?? state.message}</p>
       {materialization.coreDesign === undefined || materialization.scenario === undefined ? <PlenumLoader label="Loading synchronized Core Design Draft" /> :
         <VisualCoreDesignEditor projectId={projectId} client={client} core={materialization.coreDesign} scenario={materialization.scenario} inspector={validationPanel}

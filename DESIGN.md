@@ -14,9 +14,9 @@ colors:
 typography:
   entryDisplay:
     fontFamily: "Iowan Old Style, Palatino Linotype, Book Antiqua, Palatino, Georgia, serif"
-    fontSize: "min(5.8vw, 5.75rem)"
+    fontSize: "clamp(2.75rem, 4.4vw, 4.5rem)"
     fontWeight: 400
-    lineHeight: 0.98
+    lineHeight: 1.04
   headline:
     fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "2rem"
@@ -59,7 +59,7 @@ components:
     rounded: "{rounded.md}"
     padding: "0.5rem 1.25rem"
   input:
-    backgroundColor: "{colors.surface-recessed}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.graphite}"
     rounded: "{rounded.md}"
     padding: "0.75rem"
@@ -101,7 +101,7 @@ Mineral Sage carries selection and decision; Graphite carries subject and readin
 - **Graphite** (`--text-primary`, `#1c241f`): subjects, actions, and primary copy.
 - **Secondary Graphite** (`--text-secondary`, `#3b4740`): metadata and annotation.
 
-**The Decision Accent Rule.** Mineral Sage marks selection, focus, and the single primary action. It is not decoration.
+**The Decision Accent Rule.** Mineral Sage marks selection, focus, and the single primary action. It is not decoration. Text links use the Teludens info signal so they stay distinct from decisions.
 
 ## Typography
 
@@ -109,16 +109,17 @@ Mineral Sage carries selection and decision; Graphite carries subject and readin
 **Body Font:** Inter with system UI fallbacks  
 **Label/Mono Font:** Inter for labels; JetBrains Mono/SFMono/Consolas only for genuine identifiers and code
 
-The unauthenticated entry surface is the deliberate exception: its single question, “What happens next?”, uses a restrained old-style serif stack on one continuous line. It is an editorial invitation into the simulation system, not an application workspace heading. All authenticated work surfaces retain the Teludens Inter hierarchy.
+The public landing page is the deliberate exception: its headline uses the serif display stack (`--font-display`). Every signed-in surface, including Studio and portal titles, stays in Inter.
 
 **Character:** neutral, precise, and editorial through proportion rather than a second display typeface. Weight and spacing establish hierarchy; uppercase tracked labels are short annotations, never substitute headlines.
 
 ### Hierarchy
 
-- **Workspace headline** (`--text-2xl`, `--weight-semibold`): one per work view.
+- **Workspace headline** (`--text-xl`, `--weight-semibold`): one per work view.
 - **Portal title** (`--text-xl`, `--weight-semibold`): the subject inside the work region only when it adds information beyond the workspace title.
 - **Section title** (`--text-lg`, `--weight-semibold`): registry, operations, evidence, or task section.
-- **Object title** (`--text-md`, `--weight-semibold`): Project, Release, Session, or record identity.
+- **Object title** (`--text-base`, `--weight-medium`): Project, Release, Session, or record identity.
+- **Header title** (`--text-sm`, `--weight-medium`): the current workspace in the product header, read as location rather than headline.
 - **Body** (`--text-base`, `--weight-regular`, `--leading-base`): actions, consequences, and guidance; prose stays concise and uses a readable measure.
 - **Annotation** (`--text-sm`/`--text-xs`): metadata, counts, and optional explanation.
 
@@ -134,11 +135,11 @@ Operational surfaces use the standard or operations Teludens density. Whitespace
 
 ### Public entry surface
 
-The public root is a quiet off-white paper field with the supplied all-caps geometric PLENUM wordmark, one continuous-line question, one sentence, and one primary entry action. It intentionally carries no branch illustration. The simulation topology belongs to motion and identity resolution: context paths converge on a dark-green current-state marker and split into named future scenarios behind the local human-test role chooser and in the transition/loading layer between entry, identity selection, and the resolved workspace. Small state signals continue through its active route. Entry transitions use a short continuity curve: the old surface recedes slightly, the topology resolves in coordinated stages, and the next same-origin document settles in without bounce or blur. Reduced motion presents the complete static topology immediately and removes transition delays.
+The public root is a flat Canvas field, never a paper or grain texture. It carries the approved wordmark and descriptor, one headline (“Design, deliver and audit governed simulations.”), one primary action, and the chamber line art (`/branding/plenum-chamber.webp`), which is pure ink on transparency and inverts in dark theme. It is a single viewport with no further sections. The primary action is the same Mineral Sage control as the workspace.
 
 ## Elevation & Depth
 
-The system is flat by default. Borders and tonal surfaces communicate structure. `--shadow-sm` is reserved for temporary modal sheets or genuinely raised layers, never combined with a structural border merely to decorate a card.
+The system is flat by default. Signed-in work sits on a Canvas ground: Surface navigation with line icons, a Surface header, and one level of bordered Surface cards with a titled header row. A card never holds another card; repeated items inside one are divided rows. `--shadow-sm` is reserved for temporary modal sheets or genuinely raised layers, never combined with a structural border merely to decorate a card.
 
 **The Temporary Elevation Rule.** Persistent regions use boundaries; temporary regions use elevation.
 
@@ -163,14 +164,14 @@ Corners are quiet and compact: `--radius-sm` for small details, `--radius-md` fo
 
 ### Inputs / Fields
 
-- Visible label, recessed material, standard boundary, and token focus ring.
+- Visible label, surface material, hairline boundary with a stronger lower edge for 3:1 control contrast, and token focus ring.
 - Error text is linked programmatically and preserved with the user’s input.
 - Disabled controls expose the prerequisite in text and to assistive technology.
 
 ### Navigation
 
 - Goal/object labels lead; short annotations appear only where they improve current-location recognition.
-- Current location uses `aria-current`, selection material, and a decision boundary.
+- Current location uses `aria-current` and soft decision material with decision text. Each item carries a 1.6-stroke line icon. Editor groups use short uppercase labels; navigation carries no title above its first group.
 - Narrow navigation is a labeled disclosure; opening it preserves the work beneath it.
 
 ### Catalog Row
@@ -189,6 +190,7 @@ Corners are quiet and compact: `--radius-sm` for small details, `--radius-md` fo
 - **Do** preserve focus, selection, scroll ownership, and URL-restorable context.
 - **Do** use only Teludens tokens and official Plenum assets.
 - **Do** keep motion interruptible, causally meaningful, and reduced-motion safe.
+- **Do** change Studio sections and same-page workspaces immediately with a `--motion-view` crossfade, and reserve the full-page white petal loader for a change of surface (sign-in, entering Studio, leaving Studio, Administration).
 
 ### Don't:
 

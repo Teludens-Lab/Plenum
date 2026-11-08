@@ -4,6 +4,7 @@ import {
   type JsonValue,
   type RuntimeActionV1,
   type RuntimeArtifactV1,
+  type RuntimeArtifactHistoryV1,
   type RuntimeCreateTaskV1,
   type RuntimeFormV1,
   type RuntimeModuleV1,
@@ -13,6 +14,8 @@ import {
   RUNTIME_PROJECTION_CONTRACT_ID
 } from "@plenum/event-contracts";
 import { randomUUID } from "node:crypto";
+import { stageControlPresentation } from "./stage-control-presentation.js";
+import { readParticipantTimeline } from "./participant-timeline.js";
 import type { Pool, PoolClient } from "pg";
 import { audienceAllows, type FieldAudience } from "@plenum/policy-engine";
 import { runtimeFormValue, setRuntimeFormValue, validateRuntimeFormPayload, type AutomationActionV1, type GateV1,
@@ -51,8 +54,10 @@ interface RuntimeFieldDefinition {
   requiredWhen?: RuntimeFieldConditionV1;
   visibleWhen?: RuntimeFieldConditionV1;
   helpText?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: NonNullable<RuntimeFormV1["fields"][number]["options"]>;
+  control?: NonNullable<RuntimeFormV1["fields"][number]["control"]>;
   readOnly?: boolean;
+  optionSource?: { kind: "team_cells"; teamId: string; cellKind: string };
   validation?: RuntimeFieldValidationV1;
 }
 
@@ -60,10 +65,12 @@ interface RuntimeFormDefinition {
   id: string;
   name: string;
   formVersion: string;
+  layout?: NonNullable<RuntimeFormV1["layout"]>;
   fields: RuntimeFieldDefinition[];
   sections: Array<{
     id: string; title?: string; description?: string; fields: RuntimeFieldDefinition[];
     repeatable?: boolean; itemLabel?: string; itemKeyField?: string; minItems?: number; maxItems?: number;
+    page?: number; columns?: 2 | 3 | 4; collapsed?: boolean; table?: NonNullable<RuntimeFormV1["sections"][number]["table"]>;
   }>;
   rules?: Array<{ kind: "distinct"; fields: string[]; message: string }>;
 }
@@ -129,7 +136,7 @@ export interface RuntimeInterfaceProjectionProfile {
 
 interface RuntimeDefinition {
   teams: Array<{ id: string; name: string }>;
-  teamCells?: Array<{ id: string; teamId: string; kind: string; enabled: boolean }>;
+  teamCells?: Array<{ id: string; name?: string; teamId: string; kind: string; enabled: boolean }>;
   sessionRoles: Array<{ id: string; name: string; capabilities?: Array<{ capability: string }>; isControlRole?: boolean }>;
   seats: Array<{ id: string; sessionRoleIds: string[]; teamId?: string }>;
   informationPolicies: Array<{ id: string; grants: Array<{ audience: FieldAudience; fieldsExcluded?: string[] }> }>;
@@ -574,7 +581,7 @@ function actionLabel(transition: WorkflowTransitionDefinition): string {
   return `${action[0]?.toUpperCase() ?? ""}${action.slice(1).replaceAll("_", " ")}`;
 }
 
-function asForm(form: RuntimeFormDefinition): RuntimeFormV1 {
+function asForm(form: RuntimeFormDefinition, cells: NonNullable<RuntimeDefinition["teamCells"]> = []): RuntimeFormV1 {
   const field = (item: RuntimeFieldDefinition): RuntimeFormV1["fields"][number] => ({
     key: item.key,
     label: item.label,
@@ -583,7 +590,10 @@ function asForm(form: RuntimeFormDefinition): RuntimeFormV1 {
     ...(item.requiredWhen === undefined ? {} : { requiredWhen: item.requiredWhen }),
     ...(item.visibleWhen === undefined ? {} : { visibleWhen: item.visibleWhen }),
     ...(item.helpText === undefined ? {} : { helpText: item.helpText }),
-    ...(item.options === undefined ? {} : { options: item.options }),
+    ...(item.control === undefined ? {} : { control: item.control }),
+    ...(item.optionSource === undefined ? item.options === undefined ? {} : { options: item.options }
+      : { options: cells.filter((cell) => cell.enabled && cell.teamId === item.optionSource?.teamId && cell.kind === item.optionSource.cellKind)
+        .map((cell) => ({ value: cell.id, label: cell.name ?? cell.id })) }),
     ...(item.readOnly === undefined ? {} : { readOnly: item.readOnly }),
     ...(item.validation === undefined ? {} : { validation: item.validation })
   });
@@ -591,11 +601,16 @@ function asForm(form: RuntimeFormDefinition): RuntimeFormV1 {
     id: form.id,
     name: form.name,
     formVersion: form.formVersion,
+    ...(form.layout === undefined ? {} : { layout: form.layout }),
     fields: form.fields.map(field),
     sections: form.sections.map((section) => ({
       id: section.id,
       ...(section.title === undefined ? {} : { title: section.title }),
       ...(section.description === undefined ? {} : { description: section.description }),
+      ...(section.page === undefined ? {} : { page: section.page }),
+      ...(section.columns === undefined ? {} : { columns: section.columns }),
+      ...(section.collapsed === undefined ? {} : { collapsed: section.collapsed }),
+      ...(section.table === undefined ? {} : { table: section.table }),
       ...(section.repeatable === undefined ? {} : { repeatable: section.repeatable }),
       ...(section.itemLabel === undefined ? {} : { itemLabel: section.itemLabel }),
       ...(section.itemKeyField === undefined ? {} : { itemKeyField: section.itemKeyField }),
@@ -1220,6 +1235,59 @@ export interface RuntimeProjectionInput {
   deviceId: string;
   correlationId: string;
   activeSessionRoleId?: string;
+  timelineBefore?: number;
+}
+
+export async function getRuntimeArtifactHistory(input: RuntimeProjectionInput & { artifactId: string; beforeVersion?: number }): Promise<RuntimeArtifactHistoryV1> {
+  return withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
+    const context = await resolveSessionAccessContext(client, input.principal, {
+      sessionId: input.sessionId, deviceId: input.deviceId, correlationId: input.correlationId,
+      ...(input.activeSessionRoleId === undefined ? {} : { activeSessionRoleId: input.activeSessionRoleId })
+    });
+    const { definition } = await readRelease(client, context.organizationId, context.activeReleaseId, input.correlationId);
+    const actor = actorFor(definition, context);
+    const stage = await client.query<{ stage_id: string }>(`SELECT stage_id FROM runtime.session_stage_state WHERE organization_id=$1 AND session_id=$2`, [context.organizationId, context.sessionId]);
+    const profile = resolveRuntimeInterfaceProfile(definition, context.activeSessionRoleId, stage.rows[0]?.stage_id ?? null, input.correlationId, actor?.teamId ?? null);
+    const history = profile?.modules.find((module) => module.configuration.presentation === "history");
+    const states = history?.configuration.historyStates;
+    const result = await client.query<ArtifactRow>(`SELECT * FROM runtime.artifact_instances WHERE organization_id=$1 AND session_id=$2 AND id=$3`,
+      [context.organizationId, context.sessionId, input.artifactId]);
+    const artifact = result.rows[0];
+    const type = artifact === undefined ? undefined : typeFor(definition, artifact.artifact_type_key);
+    const keys = history?.configuration.artifactTypeKeys;
+    if (!actor?.isControlRole || !Array.isArray(states) || !states.every((state) => typeof state === "string") ||
+      artifact === undefined || type === undefined || (Array.isArray(keys) && !keys.includes(artifact.artifact_type_key)) ||
+      !artifact.visible_role_ids.includes(context.activeSessionRoleId) || !artifactAllowed(definition, type, context, artifact.owner_team_id, artifact.payload, actor)) {
+      throw authorizationError("PERMISSION_DENIED", "Revision history is unavailable in this role context.", input.correlationId);
+    }
+    const rows = await client.query<{ artifact_version: string; governing_release_id: string; state: string; payload: JsonObject; author_display_name: string; created_at: Date }>(
+      `SELECT artifact_version,governing_release_id,state,payload,author_display_name,created_at FROM runtime.artifact_revisions revision
+        WHERE organization_id=$1 AND session_id=$2 AND artifact_id=$3 AND state=ANY($4::text[])
+          AND ($5::bigint IS NULL OR artifact_version<$5)
+          AND EXISTS (SELECT 1 FROM evidence.events event WHERE event.organization_id=revision.organization_id
+            AND event.session_id=revision.session_id AND event.aggregate_id=revision.artifact_id
+            AND event.aggregate_version=revision.artifact_version
+            AND event.event_type IN ('artifact.forwarded','artifact.returned','artifact.accepted','artifact.created'))
+        ORDER BY artifact_version DESC LIMIT 51`,
+      [context.organizationId, context.sessionId, input.artifactId, states, input.beforeVersion ?? null]);
+    const releases = new Map<string, RuntimeDefinition>([[context.activeReleaseId, definition]]);
+    const revisions: RuntimeArtifactHistoryV1["revisions"] = [];
+    for (const row of rows.rows.slice(0, 50)) {
+      let revisionDefinition = releases.get(row.governing_release_id);
+      if (revisionDefinition === undefined) {
+        revisionDefinition = (await readRelease(client, context.organizationId, row.governing_release_id, input.correlationId)).definition;
+        releases.set(row.governing_release_id, revisionDefinition);
+      }
+      const revisionType = typeFor(revisionDefinition, artifact.artifact_type_key);
+      if (revisionType === undefined) continue;
+      revisions.push({ version: Number(row.artifact_version), state: row.state,
+        stateLabel: workflowFor(revisionDefinition, revisionType).states.find((state) => state.key === row.state)?.label ?? row.state,
+        payload: row.payload, form: asForm(formFor(revisionDefinition, revisionType), revisionDefinition.teamCells),
+        authorDisplayName: row.author_display_name, recordedAt: row.created_at.toISOString() });
+    }
+    return { artifactId: input.artifactId, revisions,
+      nextBeforeVersion: rows.rows.length > 50 ? Number(rows.rows[49]!.artifact_version) : null };
+  });
 }
 
 export async function getRuntimeProjection(input: RuntimeProjectionInput): Promise<RuntimeProjectionV1> {
@@ -1278,7 +1346,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
         payload: artifact.payload,
         version: Number(artifact.version),
         governingReleaseId: artifact.governing_release_id,
-        form: asForm(formFor(definition, artifactType)),
+        form: asForm(formFor(definition, artifactType), definition.teamCells),
         createdByMe,
         actions: actionsFor(workflow, artifact.state, context.activeSessionRoleId, createdByMe,
           actor.isControlRole || actor.teamId === artifact.owner_team_id)
@@ -1291,12 +1359,20 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       const workflow = workflowFor(definition, artifactType);
       const transition = workflow.transitions.find((candidate) => candidate.from === null &&
         candidate.allowedSessionRoleIds.includes(context.activeSessionRoleId));
-      return transition === undefined ? [] : [{
+      if (transition === undefined) return [];
+      const form = asForm(formFor(definition, artifactType), definition.teamCells);
+      const task: RuntimeCreateTaskV1 = {
         artifactTypeKey: artifactType.key,
         title: artifactType.name,
         action: asAction(transition),
-        form: asForm(formFor(definition, artifactType))
-      }];
+        form
+      };
+      const scoped = profile.modules.some((module) => Array.isArray(module.configuration.scopedModalArtifacts) &&
+        module.configuration.scopedModalArtifacts.some((entry) => isRecord(entry) && entry.artifactTypeId === artifactType.id && entry.oneModalPerScope === true));
+      const scopeField = form.fields.find((field) => field.key === "industryCellId" && field.readOnly);
+      return scoped && scopeField !== undefined ? (scopeField.options ?? []).map((option) => ({
+        ...task, title: `${task.title} · ${option.label}`, initialValues: { industryCellId: option.value }
+      })) : [task];
     });
     const role = definition.sessionRoles.find((candidate) => candidate.id === context.activeSessionRoleId);
     if (role === undefined) throw new Error(`Release lacks Session Role ${context.activeSessionRoleId}`);
@@ -1322,6 +1398,12 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       "SELECT title FROM runtime.sessions WHERE organization_id=$1 AND id=$2",
       [context.organizationId, context.sessionId]
     );
+    const operatorAccess = profile.modules.some((module) => module.type === "session_status" && module.mode === "write")
+      ? await client.query(`SELECT 1 FROM runtime.session_operators operator
+          JOIN identity.memberships membership ON membership.organization_id=operator.organization_id AND membership.person_id=operator.person_id
+          WHERE operator.organization_id=$1 AND operator.session_id=$2 AND operator.person_id=$3
+            AND operator.revoked_at IS NULL AND membership.organization_role='operator' LIMIT 1`,
+        [context.organizationId, context.sessionId, input.principal.principalId]) : null;
     return {
       contractId: RUNTIME_PROJECTION_CONTRACT_ID,
       sessionId: context.sessionId,
@@ -1363,11 +1445,20 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       },
       regions: profile.regions,
       roleContexts,
-      modules: profile.modules,
+      modules: profile.modules.map((module) => module.type !== "session_status" ? module : {
+        ...module, configuration: { ...module.configuration,
+          operatorAccess: input.principal.organizationRoles.includes("operator") && operatorAccess?.rowCount === 1,
+          stageSchedule: definition.stages.map((item) => ({ id: item.id, label: item.label ?? item.name ?? item.id, durationSeconds: item.durationSeconds ?? null })),
+          stageControl: stageControlPresentation(role.capabilities ?? [], stage, stageState?.status ?? "not_started",
+            Number(stageState?.version ?? 0), definition.stages) }
+      }),
       resources,
       createTasks,
       artifacts,
       ...information,
+      ...(profile.modules.some((module) => module.type === "session_timeline") ? {
+        timeline: await readParticipantTimeline(client, context.organizationId, context.sessionId, { artifacts, ...information }, definition.stages, input.timelineBefore)
+      } : {}),
       polls,
       voiceChannels
     };

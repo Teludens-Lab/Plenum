@@ -25,12 +25,16 @@ test("PS-770 Runtime Interface Profiles preserve authored role navigation and re
   const scribe = resolveRuntimeInterfaceProfile(fracturedOrderRelease, "scribe", "orientation", "correlation", "blue");
   const facilitator = resolveRuntimeInterfaceProfile(fracturedOrderRelease, "facilitator", "orientation", "correlation", "blue");
   const control = resolveRuntimeInterfaceProfile(fracturedOrderRelease, "white_cell", "orientation", "correlation", null);
-  assert.deepEqual(scribe?.navigationItems.map(({ label }) => label), ["Work"]);
-  assert.deepEqual(scribe?.regions.map(({ id }) => id), ["main", "sidebar"]);
-  assert.deepEqual(scribe?.regions[0]?.moduleIds, ["artifact-form", "task-list"]);
-  assert.deepEqual(facilitator?.navigationItems.map(({ label }) => label), ["Review", "Present"]);
-  assert.deepEqual(facilitator?.regions.map(({ id }) => id), ["main", "presentation"]);
-  assert.deepEqual(control?.navigationItems.map(({ label }) => label), ["Control"]);
+  assert.deepEqual(scribe?.navigationItems.map(({ label }) => label), ["Actions", "RFIs", "Responses", "Received Proposals", "Notifications", "Quick Capture", "Session Timeline", "Tribe Street Journal", "Verba AI Population Sentiments"]);
+  assert.deepEqual(scribe?.regions[0]?.moduleIds, ["task-list", "orientation-form", "artifact-form"]);
+  assert.deepEqual(facilitator?.navigationItems.map(({ label }) => label), ["Team Action Review", "RFIs", "Communications", "Received Proposals", "Deck", "Present", "Notifications", "Session Timeline", "Tribe Street Journal", "Verba AI Population Sentiments"]);
+  assert.deepEqual(facilitator?.regions.find(({ id }) => id === "presentation")?.moduleIds, ["artifact-presentation"]);
+  assert.equal(control?.navigationItems[0]?.label, "Simulation Settings");
+  for (const resolved of [scribe, facilitator, control]) {
+    const authored = fracturedOrderRelease.coreDesign.interfaces.find(({ id }) => id === resolved.id);
+    assert.deepEqual(resolved.regions.map(({ id }) => id), authored.layout.regions.map(({ id }) => id));
+    assert.equal(resolved.defaultNavigationItemId, authored.navigation.defaultItemId);
+  }
 });
 
 function request(url, headers = {}, remoteAddress = "192.0.2.10") {

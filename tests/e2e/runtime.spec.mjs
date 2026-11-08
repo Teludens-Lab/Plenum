@@ -181,19 +181,18 @@ async function createDraft(page, description) {
 }
 
 async function fillBlueAction(page, title) {
-  const create = page.getByRole("region", { name: "Blue Action" });
-  await create.getByLabel("Action title").fill(title);
-  await create.getByLabel("Goal").fill("Protect allied capacity and continuity");
-  await create.getByLabel("Objective").fill("Reduce strategic dependency this move");
-  await create.getByLabel("Instruments").selectOption(["economic"]);
-  await create.getByLabel("Policy levers").selectOption(["industrial_policy"]);
-  await create.getByLabel("Focus sectors").selectOption(["agriculture"]);
-  await create.getByLabel("Supply-chain focus?").selectOption("no");
-  await create.getByLabel("Implementation path").selectOption("executive_order");
-  await create.getByLabel("Focus countries").fill("Allied partner economies");
-  await create.getByLabel("Coordinated action?").selectOption("no");
-  await create.getByLabel("Who was informed or engaged?").selectOption(["allies"]);
-  await create.getByLabel("Expected outcomes").fill("More resilient supply and credible coordination");
+  await page.getByRole("button", { name: "Take Action", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "Take Action" });
+  await create.getByLabel(/^Action title/).fill(title);
+  await create.getByLabel(/^Objective/).fill("Reduce strategic dependency this move");
+  await create.getByRole("group", { name: "Instrument of Power" }).getByLabel("Economic", { exact: true }).check();
+  await create.getByRole("button", { name: "Next", exact: true }).click();
+  await create.getByRole("radiogroup", { name: /Does this action/ }).getByLabel("No", { exact: true }).check();
+  await create.getByRole("group", { name: "Sectors" }).getByLabel("Agriculture", { exact: true }).check();
+  await create.getByRole("button", { name: "Next", exact: true }).click();
+  await create.getByLabel("Implementation *", { exact: true }).selectOption("executive_order");
+  await create.getByRole("group", { name: "Focus countries" }).getByLabel("EU", { exact: true }).check();
+  await create.getByLabel(/^Expected outcomes/).fill("More resilient supply and credible coordination");
   return create;
 }
 
@@ -274,6 +273,28 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     );
     await database.end();
     expect(committed.rows[0].count).toBe(1);
+
+    await restored.route("**/v1/sessions/*/sync/bootstrap*", (route) => route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ error: {
+        code: "ACCESS_REVOKED",
+        message: "Session access was revoked for the managed device exercise.",
+        correlationId: "82000000-0000-4000-8000-000000000020"
+      } })
+    }));
+    await restored.reload();
+    await expect(restored.getByText("Session access was revoked for the managed device exercise. Protected offline data was cleared.")).toBeVisible();
+    const protectedCacheEntries = await restored.evaluate(async () => new Promise((resolve, reject) => {
+      const open = indexedDB.open("plenum-offline-v1");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const getAll = open.result.transaction("runtime").objectStore("runtime").getAll();
+        getAll.onerror = () => reject(getAll.error);
+        getAll.onsuccess = () => resolve(getAll.result);
+      };
+    }));
+    expect(protectedCacheEntries).toEqual([]);
     await context.close();
   });
 
@@ -944,7 +965,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
         title: "Changed on another connection", goal: "Protect allied capacity and continuity",
         objective: "Reduce strategic dependency this move", instruments: ["economic"], levers: ["industrial_policy"],
         sectors: ["agriculture"], supplyChainFocusDecision: "no", implementationPath: "executive_order",
-        focusCountries: "Allied partner economies", coordinatedDecision: "no", informedEngagedDecision: ["allies"],
+        focusCountries: ["EU"], coordinatedDecision: "no", informedEngagedDecision: ["allies"],
         expectedOutcomes: "More resilient supply and credible coordination"
       } }
     } });
@@ -1431,7 +1452,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(second.page.getByText("Synchronized", { exact: true })).toBeVisible({ timeout: 120_000 });
     await expect(first.page.getByLabel("Scenario description")).toHaveValue("Offline visual-form edit merged after reconnect.", { timeout: 20_000 });
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
-    await expect(first.page.locator(".studio-state-strip").getByText("Ready for review", { exact: true })).toBeVisible();
+    await expect(first.page.locator(".studio-draft-status").getByText("Ready for review", { exact: true })).toBeVisible();
     await expect(first.page.getByText("Synchronized", { exact: true })).toBeVisible();
 
     const polls = await openStudioWorkspace(first.page, "Polls");

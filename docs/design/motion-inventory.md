@@ -15,7 +15,7 @@ Motion explains input, state change, spatial relationship or major causality. It
 | MOT-005 | inspector context changes without replacing the shell | `--motion-selection` | instant content swap with heading/focus continuity | exported |
 | MOT-006 | modal opens/closes around a consequential decision | catalog `motion.modal` -> production semantic token | no scale/travel; short opacity only | production token gap |
 | MOT-007 | popover/command surface appears near its invoker | catalog `motion.popover` -> production semantic token | immediate appearance | production token gap |
-| MOT-008 | route/work-region context changes while shell remains stable | catalog `motion.view` -> production semantic token | instant work-region swap | production token gap |
+| MOT-008 | route/work-region context changes while shell remains stable | `--motion-view` (catalog `motion.view`, 260ms) | instant work-region swap | implemented: Studio sections and same-page workspaces crossfade with no input delay or overlay; a change of surface uses the full-page loader |
 | MOT-009 | local pending becomes server confirmed | `--motion-selection` | status/icon replacement without travel | exported |
 | MOT-010 | remote update briefly identifies changed content | proposed semantic remote-update token | persistent non-color marker, then immediate clear | authority gap; candidate OPEN |
 | MOT-011 | Stage/phase advance explains a major causal transition | catalog `motion.majorCausal` -> production semantic token | heading/status change; no travel | production token gap |

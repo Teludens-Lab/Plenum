@@ -21,6 +21,7 @@
     "reconcile:reports": "npm run build --silent && node --test tests/reporting/report-reconciliation.test.mjs",
     "test:airgap": "npm run build --silent && node scripts/test-airgap.mjs",
     "test:deployment": "npm run build --silent && node scripts/test-deployment.mjs",
+    "test:clean-install": "npm run build --silent && node scripts/test-clean-install.mjs",
     "test:oci-plan": "node --test tests/deployment/oci-plan-package.test.mjs tests/deployment/secret-entrypoint.test.mjs",
     "test:aws-plan": "node --test tests/deployment/aws-plan-package.test.mjs tests/deployment/aws-secret-installer.test.mjs tests/deployment/secret-entrypoint.test.mjs",
     "test:offline-bundle": "npm run build --silent && node scripts/test-offline-bundle.mjs",
@@ -60,7 +61,9 @@
     "audit:product-completeness": "node scripts/audit-product-completeness.mjs",
     "audit:teludens-ui": "node scripts/audit-teludens-ui.mjs",
     "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web && npm run build:web --workspace @plenum/studio",
-    "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs"
+    "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs",
+    "test:participant-interfaces": "npm run build --silent && node --test tests/platform/participant-interfaces.test.mjs && node tests/e2e/participant-interfaces.mjs",
+    "test:e2e:participant": "npm run build --silent && playwright test --config tests/e2e/playwright.participant.config.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

@@ -172,7 +172,7 @@
             }
           ],
           "interfaceProfileIds": [
-            "participant-author"
+            "participant-capture"
           ],
           "allowedTeamIds": [
             "blue",
@@ -901,17 +901,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "blue-red-forecast",
@@ -922,17 +926,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "blue-forecast-action",
@@ -967,17 +975,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "red-rationale",
@@ -999,17 +1011,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "red-green-ap-forecast",
@@ -1020,17 +1036,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "red-green-eu-forecast",
@@ -1041,17 +1061,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 }
               ]
             }
@@ -1092,17 +1116,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "green-own",
@@ -1113,17 +1141,21 @@
                   "options": [
                     {
                       "value": "pressure",
-                      "label": "Pressure"
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
                     },
                     {
                       "value": "stabilization",
-                      "label": "Stabilization"
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
                     },
                     {
                       "value": "reframe",
-                      "label": "Reframe"
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
                     }
-                  ]
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "green-strategy",
@@ -1146,36 +1178,9 @@
           "formVersion": "2",
           "sections": [
             {
-              "id": "forecast",
-              "title": "Strategic Orientation",
-              "fields": [
-                {
-                  "id": "industry-blue-forecast",
-                  "key": "blueForecast",
-                  "label": "Forecast Blue orientation",
-                  "type": "single_select",
-                  "required": true,
-                  "options": [
-                    {
-                      "value": "pressure",
-                      "label": "Pressure"
-                    },
-                    {
-                      "value": "stabilization",
-                      "label": "Stabilization"
-                    },
-                    {
-                      "value": "reframe",
-                      "label": "Reframe"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "id": "industry-plan",
-              "title": "Industry Strategic Plan",
-              "description": "One separate Strategic Orientation is completed and submitted for the selected configured Industry cell.",
+              "id": "industry",
+              "title": "Select Industry",
+              "page": 0,
               "fields": [
                 {
                   "id": "industry-cell",
@@ -1194,18 +1199,58 @@
                     "teamId": "industry",
                     "cellKind": "industry_sector"
                   }
+                }
+              ]
+            },
+            {
+              "id": "forecast",
+              "title": "Opening Read of the Environment",
+              "page": 1,
+              "fields": [
+                {
+                  "id": "industry-blue-forecast",
+                  "key": "blueForecast",
+                  "label": "Forecast Blue orientation",
+                  "type": "single_select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "pressure",
+                      "label": "Pressure",
+                      "description": "Focus on affecting PRC GDP growth"
+                    },
+                    {
+                      "value": "stabilization",
+                      "label": "Stabilization",
+                      "description": "Achieve normalization with partners and existing relationships"
+                    },
+                    {
+                      "value": "reframe",
+                      "label": "Reframe",
+                      "description": "Develop new alliance and partnership structures"
+                    }
+                  ],
+                  "control": "cards"
                 },
                 {
                   "id": "industry-sector-overview",
                   "key": "businessOverview",
                   "label": "Business overview",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "risks-0",
+              "title": "Risk 1",
+              "page": 2,
+              "columns": 4,
+              "fields": [
                 {
                   "id": "industry-risk-1-type",
                   "key": "risks.0.type",
@@ -1249,7 +1294,8 @@
                       "value": "other",
                       "label": "Other"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-1-other",
@@ -1286,7 +1332,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-1-impact",
@@ -1307,7 +1354,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-1-cell",
@@ -1328,8 +1376,17 @@
                       "value": "green",
                       "label": "Green"
                     }
-                  ]
-                },
+                  ],
+                  "control": "select"
+                }
+              ]
+            },
+            {
+              "id": "risks-1",
+              "title": "Risk 2",
+              "page": 2,
+              "columns": 4,
+              "fields": [
                 {
                   "id": "industry-risk-2-type",
                   "key": "risks.1.type",
@@ -1373,7 +1430,8 @@
                       "value": "other",
                       "label": "Other"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-2-other",
@@ -1410,7 +1468,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-2-impact",
@@ -1431,7 +1490,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-2-cell",
@@ -1452,8 +1512,17 @@
                       "value": "green",
                       "label": "Green"
                     }
-                  ]
-                },
+                  ],
+                  "control": "select"
+                }
+              ]
+            },
+            {
+              "id": "risks-2",
+              "title": "Risk 3",
+              "page": 2,
+              "columns": 4,
+              "fields": [
                 {
                   "id": "industry-risk-3-type",
                   "key": "risks.2.type",
@@ -1497,7 +1566,8 @@
                       "value": "other",
                       "label": "Other"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-3-other",
@@ -1534,7 +1604,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-3-impact",
@@ -1555,7 +1626,8 @@
                       "value": "high",
                       "label": "High"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "industry-risk-3-cell",
@@ -1576,8 +1648,16 @@
                       "value": "green",
                       "label": "Green"
                     }
-                  ]
-                },
+                  ],
+                  "control": "select"
+                }
+              ]
+            },
+            {
+              "id": "red-priorities",
+              "title": "Red Priorities",
+              "page": 2,
+              "fields": [
                 {
                   "id": "industry-red-priorities",
                   "key": "redPriorities",
@@ -1588,20 +1668,60 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "partners",
+              "title": "Additional partner context",
+              "page": 3,
+              "table": {
+                "columns": [
+                  "Partner",
+                  "Why they matter",
+                  "What they likely want"
+                ],
+                "rows": [
+                  {
+                    "label": "Partner 1",
+                    "fields": [
+                      "partners.0.partner",
+                      "partners.0.whyTheyMatter",
+                      "partners.0.likelyWant"
+                    ]
+                  },
+                  {
+                    "label": "Partner 2",
+                    "fields": [
+                      "partners.1.partner",
+                      "partners.1.whyTheyMatter",
+                      "partners.1.likelyWant"
+                    ]
+                  },
+                  {
+                    "label": "Partner 3",
+                    "fields": [
+                      "partners.2.partner",
+                      "partners.2.whyTheyMatter",
+                      "partners.2.likelyWant"
+                    ]
+                  }
+                ]
+              },
+              "fields": [
                 {
                   "id": "industry-partner-1-name",
                   "key": "partners.0.partner",
                   "label": "Partner 1",
                   "type": "short_text",
-                  "required": true
+                  "required": false
                 },
                 {
                   "id": "industry-partner-1-why",
                   "key": "partners.0.whyTheyMatter",
                   "label": "Why partner 1 matters",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
@@ -1612,7 +1732,7 @@
                   "key": "partners.0.likelyWant",
                   "label": "What partner 1 likely wants",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
@@ -1623,14 +1743,14 @@
                   "key": "partners.1.partner",
                   "label": "Partner 2",
                   "type": "short_text",
-                  "required": true
+                  "required": false
                 },
                 {
                   "id": "industry-partner-2-why",
                   "key": "partners.1.whyTheyMatter",
                   "label": "Why partner 2 matters",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
@@ -1641,7 +1761,7 @@
                   "key": "partners.1.likelyWant",
                   "label": "What partner 2 likely wants",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
@@ -1652,14 +1772,14 @@
                   "key": "partners.2.partner",
                   "label": "Partner 3",
                   "type": "short_text",
-                  "required": true
+                  "required": false
                 },
                 {
                   "id": "industry-partner-3-why",
                   "key": "partners.2.whyTheyMatter",
                   "label": "Why partner 3 matters",
                   "type": "long_text",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
@@ -1670,12 +1790,110 @@
                   "key": "partners.2.likelyWant",
                   "label": "What partner 3 likely wants",
                   "type": "long_text",
+                  "required": false,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              ],
+              "collapsed": true
+            },
+            {
+              "id": "priorities-0",
+              "title": "Priority 1",
+              "page": 3,
+              "columns": 2,
+              "fields": [
+                {
+                  "id": "industry-priority-1",
+                  "key": "strategicPriorities.0.priority",
+                  "label": "Strategic priority 1",
+                  "type": "long_text",
                   "required": true,
                   "validation": {
                     "minLength": 1,
                     "maxLength": 4000
                   }
                 },
+                {
+                  "id": "industry-priority-1-success",
+                  "key": "strategicPriorities.0.successLooksLike",
+                  "label": "Strategic priority 1 success measure",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "priorities-1",
+              "title": "Priority 2",
+              "page": 3,
+              "columns": 2,
+              "fields": [
+                {
+                  "id": "industry-priority-2",
+                  "key": "strategicPriorities.1.priority",
+                  "label": "Strategic priority 2",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "industry-priority-2-success",
+                  "key": "strategicPriorities.1.successLooksLike",
+                  "label": "Strategic priority 2 success measure",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "priorities-2",
+              "title": "Priority 3",
+              "page": 3,
+              "columns": 2,
+              "fields": [
+                {
+                  "id": "industry-priority-3",
+                  "key": "strategicPriorities.2.priority",
+                  "label": "Strategic priority 3",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "industry-priority-3-success",
+                  "key": "strategicPriorities.2.successLooksLike",
+                  "label": "Strategic priority 3 success measure",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "ambassador",
+              "title": "First Ambassador Target",
+              "page": 3,
+              "fields": [
                 {
                   "id": "industry-ambassador-cell",
                   "key": "firstAmbassadorTarget.cell",
@@ -1707,73 +1925,15 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
-                {
-                  "id": "industry-priority-1",
-                  "key": "strategicPriorities.0.priority",
-                  "label": "Strategic priority 1",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "industry-priority-1-success",
-                  "key": "strategicPriorities.0.successLooksLike",
-                  "label": "Strategic priority 1 success measure",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "industry-priority-2",
-                  "key": "strategicPriorities.1.priority",
-                  "label": "Strategic priority 2",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "industry-priority-2-success",
-                  "key": "strategicPriorities.1.successLooksLike",
-                  "label": "Strategic priority 2 success measure",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "industry-priority-3",
-                  "key": "strategicPriorities.2.priority",
-                  "label": "Strategic priority 3",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "industry-priority-3-success",
-                  "key": "strategicPriorities.2.successLooksLike",
-                  "label": "Strategic priority 3 success measure",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
+                }
+              ],
+              "columns": 2
+            },
+            {
+              "id": "stance",
+              "title": "Strategic Stance and Red Line",
+              "page": 4,
+              "fields": [
                 {
                   "id": "industry-stance",
                   "key": "strategicStance",
@@ -1784,7 +1944,9 @@
                     "min": 1,
                     "max": 5,
                     "integer": true
-                  }
+                  },
+                  "control": "cards",
+                  "helpText": "1 = maximize the business even against Blue's wishes · 3 = balanced · 5 = align with Blue even at real cost"
                 },
                 {
                   "id": "industry-red-line",
@@ -1809,16 +1971,28 @@
               "restoreFocusOnClose": true,
               "escapeCloses": true
             }
+          },
+          "layout": {
+            "pages": [
+              "Select Industry",
+              "Opening Read of the Environment",
+              "Top Three Risk Factors",
+              "Strategic Priorities",
+              "Strategic Stance and Red Line",
+              "Review Strategic Plan"
+            ],
+            "review": true
           }
         },
         {
           "id": "form-blue-action",
-          "name": "Blue Action",
-          "formVersion": "1",
+          "name": "Blue Action Builder",
+          "formVersion": "2",
           "sections": [
             {
               "id": "intent",
-              "title": "Intent",
+              "title": "Action intent",
+              "page": 0,
               "fields": [
                 {
                   "id": "blue-action-title",
@@ -1831,23 +2005,9 @@
                   }
                 },
                 {
-                  "id": "blue-action-goal",
-                  "key": "goal",
-                  "label": "Goal",
-                  "type": "long_text",
-                  "required": true
-                },
-                {
-                  "id": "blue-action-objective",
-                  "key": "objective",
-                  "label": "Objective",
-                  "type": "long_text",
-                  "required": true
-                },
-                {
                   "id": "blue-instruments",
                   "key": "instruments",
-                  "label": "Instruments",
+                  "label": "Instrument of Power",
                   "type": "multi_select",
                   "required": true,
                   "validation": {
@@ -1878,11 +2038,392 @@
                   ]
                 },
                 {
+                  "id": "blue-instrumentOther",
+                  "key": "instrumentOther",
+                  "label": "Other Instrument of Power",
+                  "type": "short_text",
+                  "visibleWhen": {
+                    "field": "instruments",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "requiredWhen": {
+                    "field": "instruments",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "validation": {
+                    "maxLength": 120
+                  }
+                },
+                {
+                  "id": "blue-action-objective",
+                  "key": "objective",
+                  "label": "Objective",
+                  "type": "long_text",
+                  "required": true,
+                  "helpText": "What you intend this action to achieve."
+                }
+              ]
+            },
+            {
+              "id": "supply",
+              "title": "Supply Chain Focus",
+              "page": 1,
+              "fields": [
+                {
+                  "id": "blue-supply",
+                  "key": "supplyChainFocusDecision",
+                  "label": "Does this action have a supply chain focus?",
+                  "type": "single_select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "yes",
+                      "label": "Yes"
+                    },
+                    {
+                      "value": "no",
+                      "label": "No"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-angles",
+                  "key": "supplyChainAngles",
+                  "label": "Action Angle",
+                  "type": "multi_select",
+                  "visibleWhen": {
+                    "field": "supplyChainFocusDecision",
+                    "operator": "equals",
+                    "value": "yes"
+                  },
+                  "requiredWhen": {
+                    "field": "supplyChainFocusDecision",
+                    "operator": "equals",
+                    "value": "yes"
+                  },
+                  "options": [
+                    {
+                      "value": "build_resilience",
+                      "label": "Build resilience"
+                    },
+                    {
+                      "value": "disrupt_red",
+                      "label": "Disrupt Red"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-areas",
+                  "key": "supplyChainAreas",
+                  "label": "Supply Chain Area",
+                  "type": "multi_select",
+                  "visibleWhen": {
+                    "field": "supplyChainFocusDecision",
+                    "operator": "equals",
+                    "value": "yes"
+                  },
+                  "requiredWhen": {
+                    "field": "supplyChainFocusDecision",
+                    "operator": "equals",
+                    "value": "yes"
+                  },
+                  "options": [
+                    {
+                      "value": "extraction",
+                      "label": "Extraction"
+                    },
+                    {
+                      "value": "refinement",
+                      "label": "Refinement"
+                    },
+                    {
+                      "value": "distribution",
+                      "label": "Distribution"
+                    },
+                    {
+                      "value": "advanced_manufacturing",
+                      "label": "Advanced manufacturing"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-sectors",
+                  "key": "sectors",
+                  "label": "Focus sectors",
+                  "type": "multi_select",
+                  "required": true,
+                  "validation": {
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "options": [
+                    {
+                      "value": "biotechnology",
+                      "label": "Biotechnology"
+                    },
+                    {
+                      "value": "agriculture",
+                      "label": "Agriculture"
+                    },
+                    {
+                      "value": "telecommunications",
+                      "label": "Telecommunications"
+                    },
+                    {
+                      "value": "other",
+                      "label": "Other"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-sectorOther",
+                  "key": "sectorOther",
+                  "label": "Other Sector",
+                  "type": "short_text",
+                  "visibleWhen": {
+                    "field": "sectors",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "requiredWhen": {
+                    "field": "sectors",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "validation": {
+                    "maxLength": 120
+                  }
+                }
+              ]
+            },
+            {
+              "id": "implementation",
+              "title": "Implementation and outcomes",
+              "page": 2,
+              "fields": [
+                {
+                  "id": "blue-implementation",
+                  "key": "implementationPath",
+                  "label": "Implementation",
+                  "type": "single_select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "legislative",
+                      "label": "Legislative"
+                    },
+                    {
+                      "value": "executive_order",
+                      "label": "Executive Order"
+                    },
+                    {
+                      "value": "other",
+                      "label": "Other"
+                    }
+                  ],
+                  "control": "select"
+                },
+                {
+                  "id": "blue-implementationOther",
+                  "key": "implementationOther",
+                  "label": "Other Implementation",
+                  "type": "short_text",
+                  "visibleWhen": {
+                    "field": "implementationPath",
+                    "operator": "equals",
+                    "value": "other"
+                  },
+                  "requiredWhen": {
+                    "field": "implementationPath",
+                    "operator": "equals",
+                    "value": "other"
+                  },
+                  "validation": {
+                    "maxLength": 120
+                  }
+                },
+                {
+                  "id": "blue-legislative",
+                  "key": "legislativeVehicle",
+                  "label": "Legislative Route",
+                  "type": "multi_select",
+                  "visibleWhen": {
+                    "field": "implementationPath",
+                    "operator": "equals",
+                    "value": "legislative"
+                  },
+                  "required": false,
+                  "options": [
+                    {
+                      "value": "existing",
+                      "label": "Existing legislation/policy"
+                    },
+                    {
+                      "value": "new",
+                      "label": "Proposing new legislation/policy"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-countries",
+                  "key": "focusCountries",
+                  "label": "Focus countries",
+                  "type": "multi_select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "U.S",
+                      "label": "U.S"
+                    },
+                    {
+                      "value": "PRC",
+                      "label": "PRC"
+                    },
+                    {
+                      "value": "Russia",
+                      "label": "Russia"
+                    },
+                    {
+                      "value": "EU",
+                      "label": "EU"
+                    },
+                    {
+                      "value": "France",
+                      "label": "France"
+                    },
+                    {
+                      "value": "UK",
+                      "label": "UK"
+                    },
+                    {
+                      "value": "BRICS+",
+                      "label": "BRICS+"
+                    },
+                    {
+                      "value": "ROK",
+                      "label": "ROK"
+                    },
+                    {
+                      "value": "ASEAN",
+                      "label": "ASEAN"
+                    },
+                    {
+                      "value": "Japan",
+                      "label": "Japan"
+                    },
+                    {
+                      "value": "other",
+                      "label": "Other"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-focusCountryOther",
+                  "key": "focusCountryOther",
+                  "label": "Other Focus Country",
+                  "type": "short_text",
+                  "visibleWhen": {
+                    "field": "focusCountries",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "requiredWhen": {
+                    "field": "focusCountries",
+                    "operator": "includes",
+                    "value": "other"
+                  },
+                  "validation": {
+                    "maxLength": 120
+                  }
+                },
+                {
+                  "id": "blue-outcomes",
+                  "key": "expectedOutcomes",
+                  "label": "Expected outcomes",
+                  "type": "long_text",
+                  "required": true,
+                  "helpText": "What you anticipate will actually happen as a result, including effects you don't control."
+                },
+                {
+                  "id": "blue-notify",
+                  "key": "notificationTeams",
+                  "label": "Teams to inform",
+                  "type": "multi_select",
+                  "options": [
+                    {
+                      "value": "green",
+                      "label": "Green"
+                    },
+                    {
+                      "value": "industry",
+                      "label": "Industry"
+                    }
+                  ]
+                },
+                {
+                  "id": "blue-notify-note",
+                  "key": "notificationNote",
+                  "label": "Clarifying note",
+                  "type": "long_text",
+                  "requiredWhen": {
+                    "field": "notificationTeams",
+                    "operator": "present"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "accepted-proposal-engagement",
+              "title": "Accepted proposal engagement evidence",
+              "page": 2,
+              "fields": [
+                {
+                  "id": "accepted-proposal-evidence",
+                  "key": "engagement.acceptedProposalIds",
+                  "label": "Accepted proposal terms being actioned",
+                  "type": "artifact_reference",
+                  "required": false,
+                  "helpText": "Choose accepted Green or Industry proposal threads for the active Blue or Red Team. Plenum preserves the accepted proposal version, final terms, negotiation history and acceptance receipt with this Action for White Cell adjudication.",
+                  "reference": {
+                    "sourceArtifactTypeIds": [
+                      "green-proposal",
+                      "industry-turn-sheet"
+                    ],
+                    "requiredOutcome": "accepted_terms",
+                    "relationship": "active_team_is_recipient",
+                    "multiple": true,
+                    "snapshotFields": [
+                      "proposal_version",
+                      "proposal_details",
+                      "accepted_terms",
+                      "negotiation_history",
+                      "acceptance_receipt"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "coordination",
+              "title": "Additional coordination details",
+              "page": 2,
+              "collapsed": true,
+              "fields": [
+                {
+                  "id": "blue-action-goal",
+                  "key": "goal",
+                  "label": "Goal",
+                  "type": "long_text",
+                  "required": false
+                },
+                {
                   "id": "blue-levers",
                   "key": "levers",
                   "label": "Policy levers",
                   "type": "multi_select",
-                  "required": true,
+                  "required": false,
                   "validation": {
                     "minItems": 1,
                     "uniqueItems": true
@@ -1939,173 +2480,11 @@
                   ]
                 },
                 {
-                  "id": "blue-sectors",
-                  "key": "sectors",
-                  "label": "Focus sectors",
-                  "type": "multi_select",
-                  "required": true,
-                  "validation": {
-                    "minItems": 1,
-                    "uniqueItems": true
-                  },
-                  "options": [
-                    {
-                      "value": "biotechnology",
-                      "label": "Biotechnology"
-                    },
-                    {
-                      "value": "agriculture",
-                      "label": "Agriculture"
-                    },
-                    {
-                      "value": "telecommunications",
-                      "label": "Telecommunications"
-                    },
-                    {
-                      "value": "other",
-                      "label": "Other"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "id": "supply",
-              "title": "Supply chain",
-              "fields": [
-                {
-                  "id": "blue-supply",
-                  "key": "supplyChainFocusDecision",
-                  "label": "Supply-chain focus?",
-                  "type": "single_select",
-                  "required": true,
-                  "options": [
-                    {
-                      "value": "yes",
-                      "label": "Yes"
-                    },
-                    {
-                      "value": "no",
-                      "label": "No"
-                    }
-                  ]
-                },
-                {
-                  "id": "blue-angles",
-                  "key": "supplyChainAngles",
-                  "label": "Supply-chain angles",
-                  "type": "multi_select",
-                  "visibleWhen": {
-                    "field": "supplyChainFocusDecision",
-                    "operator": "equals",
-                    "value": "yes"
-                  },
-                  "requiredWhen": {
-                    "field": "supplyChainFocusDecision",
-                    "operator": "equals",
-                    "value": "yes"
-                  },
-                  "options": [
-                    {
-                      "value": "build_resilience",
-                      "label": "Build resilience"
-                    },
-                    {
-                      "value": "disrupt_red",
-                      "label": "Disrupt Red"
-                    }
-                  ]
-                },
-                {
-                  "id": "blue-areas",
-                  "key": "supplyChainAreas",
-                  "label": "Supply-chain areas",
-                  "type": "multi_select",
-                  "visibleWhen": {
-                    "field": "supplyChainFocusDecision",
-                    "operator": "equals",
-                    "value": "yes"
-                  },
-                  "requiredWhen": {
-                    "field": "supplyChainFocusDecision",
-                    "operator": "equals",
-                    "value": "yes"
-                  },
-                  "options": [
-                    {
-                      "value": "extraction",
-                      "label": "Extraction"
-                    },
-                    {
-                      "value": "refinement",
-                      "label": "Refinement"
-                    },
-                    {
-                      "value": "distribution",
-                      "label": "Distribution"
-                    },
-                    {
-                      "value": "advanced_manufacturing",
-                      "label": "Advanced manufacturing"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "id": "implementation",
-              "title": "Implementation and coordination",
-              "fields": [
-                {
-                  "id": "blue-implementation",
-                  "key": "implementationPath",
-                  "label": "Implementation path",
-                  "type": "single_select",
-                  "required": true,
-                  "options": [
-                    {
-                      "value": "legislative",
-                      "label": "Legislative"
-                    },
-                    {
-                      "value": "executive_order",
-                      "label": "Executive Order"
-                    },
-                    {
-                      "value": "other",
-                      "label": "Other"
-                    }
-                  ]
-                },
-                {
-                  "id": "blue-legislative",
-                  "key": "legislativeVehicle",
-                  "label": "Legislative vehicle",
-                  "type": "short_text",
-                  "visibleWhen": {
-                    "field": "implementationPath",
-                    "operator": "equals",
-                    "value": "legislative"
-                  },
-                  "requiredWhen": {
-                    "field": "implementationPath",
-                    "operator": "equals",
-                    "value": "legislative"
-                  }
-                },
-                {
-                  "id": "blue-countries",
-                  "key": "focusCountries",
-                  "label": "Focus countries",
-                  "type": "long_text",
-                  "required": true
-                },
-                {
                   "id": "blue-coordinated",
                   "key": "coordinatedDecision",
                   "label": "Coordinated action?",
                   "type": "single_select",
-                  "required": true,
+                  "required": false,
                   "options": [
                     {
                       "value": "yes",
@@ -2127,11 +2506,6 @@
                     "operator": "equals",
                     "value": "yes"
                   },
-                  "requiredWhen": {
-                    "field": "coordinatedDecision",
-                    "operator": "equals",
-                    "value": "yes"
-                  },
                   "options": [
                     {
                       "value": "legislative",
@@ -2141,14 +2515,15 @@
                       "value": "executive_order",
                       "label": "Executive Order"
                     }
-                  ]
+                  ],
+                  "required": false
                 },
                 {
                   "id": "blue-informed",
                   "key": "informedEngagedDecision",
                   "label": "Who was informed or engaged?",
                   "type": "multi_select",
-                  "required": true,
+                  "required": false,
                   "options": [
                     {
                       "value": "industry",
@@ -2163,74 +2538,17 @@
                       "label": "Neither"
                     }
                   ]
-                },
-                {
-                  "id": "blue-notify",
-                  "key": "notificationTeams",
-                  "label": "Notify Teams",
-                  "type": "multi_select",
-                  "options": [
-                    {
-                      "value": "green",
-                      "label": "Green"
-                    },
-                    {
-                      "value": "industry",
-                      "label": "Industry"
-                    }
-                  ]
-                },
-                {
-                  "id": "blue-notify-note",
-                  "key": "notificationNote",
-                  "label": "Notification note",
-                  "type": "long_text",
-                  "requiredWhen": {
-                    "field": "notificationTeams",
-                    "operator": "present"
-                  }
-                },
-                {
-                  "id": "blue-outcomes",
-                  "key": "expectedOutcomes",
-                  "label": "Expected outcomes",
-                  "type": "long_text",
-                  "required": true
-                }
-              ]
-            },
-            {
-              "id": "accepted-proposal-engagement",
-              "title": "Accepted proposal engagement evidence",
-              "description": "Optional. Binding an accepted proposal demonstrates engagement with Green or Industry and gives White Cell the complete terms during adjudication.",
-              "fields": [
-                {
-                  "id": "accepted-proposal-evidence",
-                  "key": "engagement.acceptedProposalIds",
-                  "label": "Accepted proposal terms being actioned",
-                  "type": "artifact_reference",
-                  "required": false,
-                  "helpText": "Choose accepted Green or Industry proposal threads for the active Blue or Red Team. Plenum preserves the accepted proposal version, final terms, negotiation history and acceptance receipt with this Action for White Cell adjudication.",
-                  "reference": {
-                    "sourceArtifactTypeIds": [
-                      "green-proposal",
-                      "industry-turn-sheet"
-                    ],
-                    "requiredOutcome": "accepted_terms",
-                    "relationship": "active_team_is_recipient",
-                    "multiple": true,
-                    "snapshotFields": [
-                      "proposal_version",
-                      "proposal_details",
-                      "accepted_terms",
-                      "negotiation_history",
-                      "acceptance_receipt"
-                    ]
-                  }
                 }
               ]
             }
-          ]
+          ],
+          "layout": {
+            "pages": [
+              "Action intent",
+              "Supply chain and sectors",
+              "Implementation and outcomes"
+            ]
+          }
         },
         {
           "id": "form-red-move-response",
@@ -2462,7 +2780,13 @@
                       "label": "Red"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "focus",
+              "title": "Sector and Supply Chain Focus",
+              "fields": [
                 {
                   "id": "green-sectors",
                   "key": "focusSectors",
@@ -2578,7 +2902,13 @@
                   "label": "Country focus",
                   "type": "long_text",
                   "required": true
-                },
+                }
+              ]
+            },
+            {
+              "id": "activity",
+              "title": "Proposed Activity",
+              "fields": [
                 {
                   "id": "green-activity",
                   "key": "proposedActivity",
@@ -2621,7 +2951,8 @@
           "sections": [
             {
               "id": "context",
-              "title": "Proposal context",
+              "title": "Industry and Strategic Plan",
+              "page": 0,
               "fields": [
                 {
                   "id": "its-industry-cell",
@@ -2647,41 +2978,13 @@
                   "label": "Completed Industry Strategic Plan ID",
                   "type": "short_text",
                   "required": true
-                },
-                {
-                  "id": "its-priorities",
-                  "key": "linkedStrategicPriorityIds",
-                  "label": "Linked strategic priority IDs (one per line)",
-                  "type": "long_text",
-                  "required": true
-                },
-                {
-                  "id": "its-recipients",
-                  "key": "recipientTeams",
-                  "label": "Intended recipient Teams",
-                  "type": "multi_select",
-                  "required": true,
-                  "options": [
-                    {
-                      "value": "blue",
-                      "label": "Blue"
-                    },
-                    {
-                      "value": "red",
-                      "label": "Red"
-                    }
-                  ],
-                  "validation": {
-                    "minItems": 1,
-                    "uniqueItems": true
-                  },
-                  "helpText": "White Cell approves and forwards each selected recipient independently."
                 }
               ]
             },
             {
-              "id": "environment",
-              "title": "Environment read",
+              "id": "environment-blue",
+              "title": "Environment Read — Blue",
+              "page": 0,
               "fields": [
                 {
                   "id": "its-blue-codes",
@@ -2849,7 +3152,14 @@
                       "label": "No"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "environment-red_china",
+              "title": "Environment Read — Red (China)",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-red_china-codes",
                   "key": "environment.actors.red_china.actionCodes",
@@ -3016,7 +3326,14 @@
                       "label": "No"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "environment-green_asia_pacific",
+              "title": "Environment Read — Green (Asia Pacific)",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-green_asia_pacific-codes",
                   "key": "environment.actors.green_asia_pacific.actionCodes",
@@ -3183,7 +3500,14 @@
                       "label": "No"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "environment-green_europe",
+              "title": "Environment Read — Green (Europe)",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-green_europe-codes",
                   "key": "environment.actors.green_europe.actionCodes",
@@ -3350,7 +3674,14 @@
                       "label": "No"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "surprise",
+              "title": "Biggest Surprise",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-surprise",
                   "key": "environment.biggestSurprise",
@@ -3365,8 +3696,9 @@
               ]
             },
             {
-              "id": "supply-chain",
-              "title": "Supply chain exposure",
+              "id": "supply-raw_inputs",
+              "title": "Supply Chain Exposure — Raw Inputs",
+              "page": 0,
               "fields": [
                 {
                   "id": "its-raw_inputs-where",
@@ -3485,7 +3817,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "supply-refinement_processing",
+              "title": "Supply Chain Exposure — Refinement / Processing",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-refinement_processing-where",
                   "key": "supplyChain.stages.refinement_processing.whereWho",
@@ -3603,7 +3942,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "supply-manufacturing_production",
+              "title": "Supply Chain Exposure — Manufacturing / Production",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-manufacturing_production-where",
                   "key": "supplyChain.stages.manufacturing_production.whereWho",
@@ -3721,7 +4067,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "supply-distribution_logistics",
+              "title": "Supply Chain Exposure — Distribution / Logistics",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-distribution_logistics-where",
                   "key": "supplyChain.stages.distribution_logistics.whereWho",
@@ -3839,7 +4192,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "supply-end_market_customers",
+              "title": "Supply Chain Exposure — End Market / Customers",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-end_market_customers-where",
                   "key": "supplyChain.stages.end_market_customers.whereWho",
@@ -3957,7 +4317,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "supply-summary",
+              "title": "Supply Chain Outlook",
+              "page": 0,
+              "fields": [
                 {
                   "id": "its-weakest-link",
                   "key": "supplyChain.weakestLink",
@@ -3994,7 +4361,8 @@
             },
             {
               "id": "decision",
-              "title": "Decision",
+              "title": "Proposal",
+              "page": 1,
               "fields": [
                 {
                   "id": "its-coordinated",
@@ -4339,6 +4707,82 @@
                   }
                 },
                 {
+                  "id": "its-intended-effect",
+                  "key": "decision.intendedEffect",
+                  "label": "Intended effect",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "its-rationale",
+                  "key": "decision.rationale",
+                  "label": "Rationale",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "its-implementation",
+                  "key": "decision.implementation",
+                  "label": "Implementation",
+                  "type": "long_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "recipients",
+              "title": "Recipients and Strategic Priority Alignment",
+              "page": 1,
+              "fields": [
+                {
+                  "id": "its-recipients",
+                  "key": "recipientTeams",
+                  "label": "Intended recipient Teams",
+                  "type": "multi_select",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "blue",
+                      "label": "Blue"
+                    },
+                    {
+                      "value": "red",
+                      "label": "Red"
+                    }
+                  ],
+                  "validation": {
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "helpText": "White Cell approves and forwards each selected recipient independently."
+                },
+                {
+                  "id": "its-priorities",
+                  "key": "linkedStrategicPriorityIds",
+                  "label": "Linked strategic priority IDs (one per line)",
+                  "type": "long_text",
+                  "required": true
+                }
+              ]
+            },
+            {
+              "id": "value-blue",
+              "title": "Stakeholder Value — Blue",
+              "page": 1,
+              "fields": [
+                {
                   "id": "its-blue-gain",
                   "key": "decision.stakeholderValue.blue.gain",
                   "label": "Blue: what they gain",
@@ -4380,7 +4824,14 @@
                       "label": "negative"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "value-counterparty",
+              "title": "Stakeholder Value — Counterparty",
+              "page": 1,
+              "fields": [
                 {
                   "id": "its-counterparty-gain",
                   "key": "decision.stakeholderValue.counterparty.gain",
@@ -4423,7 +4874,14 @@
                       "label": "negative"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "value-other",
+              "title": "Stakeholder Value — Other",
+              "page": 1,
+              "fields": [
                 {
                   "id": "its-stakeholder-other-name",
                   "key": "decision.stakeholderValue.other.name",
@@ -4473,45 +4931,60 @@
                       "label": "negative"
                     }
                   ]
-                },
-                {
-                  "id": "its-intended-effect",
-                  "key": "decision.intendedEffect",
-                  "label": "Intended effect",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "its-rationale",
-                  "key": "decision.rationale",
-                  "label": "Rationale",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
-                },
-                {
-                  "id": "its-implementation",
-                  "key": "decision.implementation",
-                  "label": "Implementation",
-                  "type": "long_text",
-                  "required": true,
-                  "validation": {
-                    "minLength": 1,
-                    "maxLength": 4000
-                  }
                 }
               ]
             },
             {
               "id": "effects",
-              "title": "Expected effects and escalation",
+              "title": "Expected Effects",
+              "page": 1,
+              "table": {
+                "columns": [
+                  "Direction",
+                  "Magnitude",
+                  "Timing",
+                  "Pattern"
+                ],
+                "rows": [
+                  {
+                    "label": "Firm Revenue",
+                    "fields": [
+                      "expectedEffects.firmRevenue.direction",
+                      "expectedEffects.firmRevenue.magnitude",
+                      "expectedEffects.firmRevenue.timing",
+                      "expectedEffects.firmRevenue.pattern"
+                    ]
+                  },
+                  {
+                    "label": "Operating Cost",
+                    "fields": [
+                      "expectedEffects.operatingCost.direction",
+                      "expectedEffects.operatingCost.magnitude",
+                      "expectedEffects.operatingCost.timing",
+                      "expectedEffects.operatingCost.pattern"
+                    ]
+                  },
+                  {
+                    "label": "U.S. Jobs",
+                    "fields": [
+                      "expectedEffects.usJobs.direction",
+                      "expectedEffects.usJobs.magnitude",
+                      "expectedEffects.usJobs.timing",
+                      "expectedEffects.usJobs.pattern"
+                    ]
+                  },
+                  {
+                    "label": "Capacity / Supply Security",
+                    "fields": [
+                      "expectedEffects.capacitySupplySecurity.direction",
+                      "expectedEffects.capacitySupplySecurity.magnitude",
+                      "expectedEffects.capacitySupplySecurity.timing",
+                      "expectedEffects.capacitySupplySecurity.pattern"
+                    ]
+                  }
+                ],
+                "editor": "groups"
+              },
               "fields": [
                 {
                   "id": "its-firmRevenue-direction",
@@ -4540,7 +5013,8 @@
                       "value": "not_applicable",
                       "label": "Not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-firmRevenue-magnitude",
@@ -4569,7 +5043,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-firmRevenue-timing",
@@ -4606,7 +5081,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-firmRevenue-pattern",
@@ -4635,7 +5111,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-operatingCost-direction",
@@ -4664,7 +5141,8 @@
                       "value": "not_applicable",
                       "label": "Not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-operatingCost-magnitude",
@@ -4693,7 +5171,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-operatingCost-timing",
@@ -4730,7 +5209,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-operatingCost-pattern",
@@ -4759,7 +5239,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-usJobs-direction",
@@ -4788,7 +5269,8 @@
                       "value": "not_applicable",
                       "label": "Not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-usJobs-magnitude",
@@ -4817,7 +5299,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-usJobs-timing",
@@ -4854,7 +5337,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-usJobs-pattern",
@@ -4883,7 +5367,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-capacitySupplySecurity-direction",
@@ -4912,7 +5397,8 @@
                       "value": "not_applicable",
                       "label": "Not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-capacitySupplySecurity-magnitude",
@@ -4941,7 +5427,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-capacitySupplySecurity-timing",
@@ -4978,7 +5465,8 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
+                  ],
+                  "control": "select"
                 },
                 {
                   "id": "its-capacitySupplySecurity-pattern",
@@ -5007,8 +5495,16 @@
                       "value": "not_applicable",
                       "label": "not applicable"
                     }
-                  ]
-                },
+                  ],
+                  "control": "select"
+                }
+              ]
+            },
+            {
+              "id": "escalation",
+              "title": "Escalation Markers",
+              "page": 1,
+              "fields": [
                 {
                   "id": "its-escalation",
                   "key": "escalationMarkers",
@@ -5057,7 +5553,8 @@
             },
             {
               "id": "engagement",
-              "title": "Engagement, risk, security and outlook",
+              "title": "Engagement",
+              "page": 2,
               "fields": [
                 {
                   "id": "its-outbound-engaged",
@@ -5163,7 +5660,14 @@
                       "label": "No"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "risk-0",
+              "title": "Move-Level Risk 1",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-move-risk-1-type",
                   "key": "risks.0.type",
@@ -5302,7 +5806,14 @@
                       "label": "materialized"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "risk-1",
+              "title": "Move-Level Risk 2",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-move-risk-2-type",
                   "key": "risks.1.type",
@@ -5441,7 +5952,14 @@
                       "label": "materialized"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "risk-2",
+              "title": "Move-Level Risk 3",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-move-risk-3-type",
                   "key": "risks.2.type",
@@ -5580,7 +6098,14 @@
                       "label": "materialized"
                     }
                   ]
-                },
+                }
+              ]
+            },
+            {
+              "id": "security",
+              "title": "Security and Spillover",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-ip-effect",
                   "key": "ipSecurityEffect",
@@ -5789,7 +6314,14 @@
                     "operator": "equals",
                     "value": "yes"
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "stance",
+              "title": "Strategic Stance",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-stance",
                   "key": "stance",
@@ -5846,7 +6378,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "forecast-blue",
+              "title": "Next-Move Forecast — Blue",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-forecast-blue-codes",
                   "key": "nextMoveForecasts.blue.actionCodes",
@@ -5942,7 +6481,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "forecast-red_china",
+              "title": "Next-Move Forecast — Red (China)",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-forecast-red_china-codes",
                   "key": "nextMoveForecasts.red_china.actionCodes",
@@ -6038,7 +6584,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "forecast-green_asia_pacific",
+              "title": "Next-Move Forecast — Green (Asia Pacific)",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-forecast-green_asia_pacific-codes",
                   "key": "nextMoveForecasts.green_asia_pacific.actionCodes",
@@ -6134,7 +6687,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "forecast-green_europe",
+              "title": "Next-Move Forecast — Green (Europe)",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-forecast-green_europe-codes",
                   "key": "nextMoveForecasts.green_europe.actionCodes",
@@ -6230,7 +6790,14 @@
                     "minLength": 1,
                     "maxLength": 4000
                   }
-                },
+                }
+              ]
+            },
+            {
+              "id": "outlook",
+              "title": "Outlook",
+              "page": 2,
+              "fields": [
                 {
                   "id": "its-position-trigger",
                   "key": "positionChangeTrigger",
@@ -6261,6 +6828,15 @@
               "restoreFocusOnClose": true,
               "escapeCloses": true
             }
+          },
+          "layout": {
+            "pages": [
+              "Environment & Supply Chain",
+              "Proposal & Expected Effects",
+              "Engagement, Risks & Outlook",
+              "Review Proposal"
+            ],
+            "review": true
           }
         },
         {
@@ -6352,18 +6928,153 @@
         },
         {
           "id": "form-note",
-          "name": "Note",
-          "formVersion": "1",
+          "name": "Observation",
+          "formVersion": "2",
           "sections": [
             {
               "id": "main",
               "fields": [
                 {
+                  "id": "capture-kind",
+                  "key": "kind",
+                  "label": "Type",
+                  "type": "single_select",
+                  "options": [
+                    {
+                      "value": "note",
+                      "label": "Note"
+                    },
+                    {
+                      "value": "moment",
+                      "label": "Key Moment"
+                    },
+                    {
+                      "value": "quote",
+                      "label": "Quote"
+                    }
+                  ]
+                },
+                {
                   "id": "note",
                   "key": "note",
-                  "label": "Note",
+                  "label": "Content",
                   "type": "long_text",
-                  "required": true
+                  "required": true,
+                  "helpText": "Each capture is saved as a separate record. Saving here does not replace another observation."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "form-team-dynamics",
+          "name": "Team Dynamics",
+          "formVersion": "1",
+          "sections": [
+            {
+              "id": "leadership",
+              "title": "Leadership Observations",
+              "fields": [
+                {
+                  "id": "emergingLeaders",
+                  "key": "emergingLeaders",
+                  "label": "Emerging Leaders",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "decisionStyle",
+                  "key": "decisionStyle",
+                  "label": "Decision Making Style",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "friction",
+              "title": "Friction Points",
+              "fields": [
+                {
+                  "id": "frictionLevel",
+                  "key": "frictionLevel",
+                  "label": "Friction Level (1–10)",
+                  "type": "number",
+                  "validation": {
+                    "min": 1,
+                    "max": 10
+                  },
+                  "control": "range"
+                },
+                {
+                  "id": "frictionSources",
+                  "key": "frictionSources",
+                  "label": "Friction Sources",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            },
+            {
+              "id": "consensus",
+              "title": "Consensus Building",
+              "fields": [
+                {
+                  "id": "consensusLevel",
+                  "key": "consensusLevel",
+                  "label": "Consensus Level (1–10)",
+                  "type": "number",
+                  "validation": {
+                    "min": 1,
+                    "max": 10
+                  },
+                  "control": "range"
+                },
+                {
+                  "id": "dynamicsSummary",
+                  "key": "dynamicsSummary",
+                  "label": "Summary Notes",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "form-alliance-tracking",
+          "name": "Alliance Tracking",
+          "formVersion": "1",
+          "sections": [
+            {
+              "id": "external",
+              "title": "External Factors",
+              "fields": [
+                {
+                  "id": "allianceNotes",
+                  "key": "allianceNotes",
+                  "label": "Alliance Coordination Notes",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
+                },
+                {
+                  "id": "externalPressures",
+                  "key": "externalPressures",
+                  "label": "External Pressures",
+                  "type": "long_text",
+                  "validation": {
+                    "maxLength": 4000
+                  }
                 }
               ]
             }
@@ -6681,6 +7392,48 @@
             "industry"
           ],
           "exportable": true
+        },
+        {
+          "id": "team-dynamics",
+          "key": "team_dynamics",
+          "name": "Team Dynamics",
+          "formId": "form-team-dynamics",
+          "workflowId": "workflow-note",
+          "ownership": "team",
+          "decisionBearing": false,
+          "versioning": "draft_versions",
+          "informationPolicyId": "policy-team-control",
+          "allowedCreatorSessionRoleIds": [
+            "notetaker"
+          ],
+          "allowedTeamIds": [
+            "blue",
+            "red",
+            "green",
+            "industry"
+          ],
+          "exportable": true
+        },
+        {
+          "id": "alliance-tracking",
+          "key": "alliance_tracking",
+          "name": "Alliance Tracking",
+          "formId": "form-alliance-tracking",
+          "workflowId": "workflow-note",
+          "ownership": "team",
+          "decisionBearing": false,
+          "versioning": "draft_versions",
+          "informationPolicyId": "policy-team-control",
+          "allowedCreatorSessionRoleIds": [
+            "notetaker"
+          ],
+          "allowedTeamIds": [
+            "blue",
+            "red",
+            "green",
+            "industry"
+          ],
+          "exportable": true
         }
       ],
       "workflows": [
@@ -6756,7 +7509,8 @@
                 "scribe"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ]
             },
             {
@@ -6769,7 +7523,8 @@
                 "facilitator"
               ],
               "notifySessionRoleIds": [
-                "white_cell"
+                "white_cell",
+                "notetaker"
               ]
             },
             {
@@ -6791,6 +7546,9 @@
               "to": "completed",
               "allowedSessionRoleIds": [
                 "white_cell"
+              ],
+              "notifySessionRoleIds": [
+                "notetaker"
               ]
             },
             {
@@ -6825,7 +7583,8 @@
                 "scribe"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ]
             }
           ]
@@ -7034,7 +7793,8 @@
                 "scribe"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ]
             },
             {
@@ -7047,7 +7807,10 @@
               "allowedSessionRoleIds": [
                 "facilitator"
               ],
-              "contentOnly": true
+              "contentOnly": true,
+              "notifySessionRoleIds": [
+                "notetaker"
+              ]
             },
             {
               "id": "action-forward",
@@ -7059,7 +7822,8 @@
                 "facilitator"
               ],
               "notifySessionRoleIds": [
-                "white_cell"
+                "white_cell",
+                "notetaker"
               ]
             },
             {
@@ -7070,6 +7834,9 @@
               "to": "completed",
               "allowedSessionRoleIds": [
                 "white_cell"
+              ],
+              "notifySessionRoleIds": [
+                "notetaker"
               ]
             },
             {
@@ -7107,7 +7874,8 @@
                 "facilitator"
               ],
               "notifySessionRoleIds": [
-                "white_cell"
+                "white_cell",
+                "notetaker"
               ]
             }
           ],
@@ -7200,7 +7968,8 @@
                 "scribe"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ]
             },
             {
@@ -7213,7 +7982,8 @@
                 "facilitator"
               ],
               "notifySessionRoleIds": [
-                "white_cell"
+                "white_cell",
+                "notetaker"
               ]
             },
             {
@@ -7237,7 +8007,8 @@
                 "white_cell"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ],
               "precondition": "Each selected recipient Team is approved independently."
             },
@@ -7273,7 +8044,8 @@
                 "scribe"
               ],
               "notifySessionRoleIds": [
-                "facilitator"
+                "facilitator",
+                "notetaker"
               ]
             },
             {
@@ -7285,7 +8057,10 @@
               "allowedSessionRoleIds": [
                 "white_cell"
               ],
-              "precondition": "Every named recipient has an explicitly closed append-only thread."
+              "precondition": "Every named recipient has an explicitly closed append-only thread.",
+              "notifySessionRoleIds": [
+                "notetaker"
+              ]
             }
           ]
         }
@@ -7300,7 +8075,8 @@
                 "ownerTeam": true,
                 "sessionRoleIds": [
                   "scribe",
-                  "facilitator"
+                  "facilitator",
+                  "notetaker"
                 ]
               }
             },
@@ -7320,7 +8096,8 @@
                 "ownerTeam": true,
                 "sessionRoleIds": [
                   "scribe",
-                  "facilitator"
+                  "facilitator",
+                  "notetaker"
                 ]
               }
             },
@@ -7524,6 +8301,22 @@
             "type": "team_message",
             "supportsAttachments": false,
             "supportsThreading": true
+          },
+          {
+            "id": "tribe-street-journal",
+            "name": "Tribe Street Journal",
+            "type": "broadcast",
+            "supportsAttachments": false,
+            "supportsThreading": false,
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "verba",
+            "name": "Verba AI Population Sentiments",
+            "type": "broadcast",
+            "supportsAttachments": false,
+            "supportsThreading": false,
+            "informationPolicyId": "policy-public"
           }
         ],
         "routes": [
@@ -7614,6 +8407,878 @@
               ]
             },
             "informationPolicyId": "policy-proposal-thread"
+          },
+          {
+            "id": "control-tribe-street-journal",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "public": true
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "public": true
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-all",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue",
+                "red",
+                "green",
+                "industry"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-blue",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-blue-scribe",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-blue-facilitator",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-blue-notetaker",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-red",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-red-scribe",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-red-facilitator",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-red-notetaker",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-green",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-green-scribe",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-green-facilitator",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-green-notetaker",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-industry",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-industry-scribe",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-industry-facilitator",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-communication-industry-notetaker",
+            "channelId": "team-message",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-blue",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-blue-scribe",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-blue-facilitator",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-blue-notetaker",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-red",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-red-scribe",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-red-facilitator",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-red-notetaker",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-green",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-green-scribe",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-green-facilitator",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-green-notetaker",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-industry",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-industry-scribe",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-industry-facilitator",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-tribe-street-journal-industry-notetaker",
+            "channelId": "tribe-street-journal",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-blue",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-blue-scribe",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-blue-facilitator",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-blue-notetaker",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "blue"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-red",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-red-scribe",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-red-facilitator",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-red-notetaker",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "red"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-green",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-green-scribe",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-green-facilitator",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-green-notetaker",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "green"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-industry",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-industry-scribe",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "scribe"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-industry-facilitator",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "facilitator"
+              ]
+            },
+            "informationPolicyId": "policy-public"
+          },
+          {
+            "id": "control-verba-industry-notetaker",
+            "channelId": "verba",
+            "sender": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "recipient": {
+              "teamIds": [
+                "industry"
+              ],
+              "sessionRoleIds": [
+                "notetaker"
+              ]
+            },
+            "informationPolicyId": "policy-public"
           }
         ],
         "voiceChannels": [
@@ -7623,12 +9288,31 @@
             "mode": "radio_ptt",
             "capacity": 200,
             "priorityPolicy": [
-              { "sessionRoleId": "white_cell", "priority": 100 },
-              { "sessionRoleId": "facilitator", "priority": 10 }
+              {
+                "sessionRoleId": "white_cell",
+                "priority": 100
+              },
+              {
+                "sessionRoleId": "facilitator",
+                "priority": 10
+              }
             ],
-            "canListen": { "public": true },
-            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
-            "canModerate": { "sessionRoleIds": ["white_cell"] },
+            "canListen": {
+              "public": true
+            },
+            "canTransmit": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator",
+                "scribe",
+                "notetaker"
+              ]
+            },
+            "canModerate": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
             "radio": {
               "floorLeaseMs": 5000,
               "queuePolicy": "priority",
@@ -7645,9 +9329,28 @@
             "name": "Team open room",
             "mode": "open_room",
             "capacity": 50,
-            "canListen": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
-            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator", "scribe", "notetaker"] },
-            "canModerate": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "canListen": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator",
+                "scribe",
+                "notetaker"
+              ]
+            },
+            "canTransmit": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator",
+                "scribe",
+                "notetaker"
+              ]
+            },
+            "canModerate": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator"
+              ]
+            },
             "recordingPolicy": "off",
             "transcriptionPolicy": "off",
             "mediaProviderAdapterBindingId": "local-media-v1"
@@ -7657,10 +9360,29 @@
             "name": "Private consultation",
             "mode": "private_call",
             "capacity": 8,
-            "canListen": { "sessionRoleIds": ["white_cell", "facilitator"] },
-            "canTransmit": { "sessionRoleIds": ["white_cell", "facilitator"] },
-            "canModerate": { "sessionRoleIds": ["white_cell"] },
-            "canInvite": { "sessionRoleIds": ["white_cell", "facilitator"] },
+            "canListen": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator"
+              ]
+            },
+            "canTransmit": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator"
+              ]
+            },
+            "canModerate": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "canInvite": {
+              "sessionRoleIds": [
+                "white_cell",
+                "facilitator"
+              ]
+            },
             "recordingPolicy": "off",
             "transcriptionPolicy": "off",
             "mediaProviderAdapterBindingId": "local-media-v1"
@@ -7670,9 +9392,19 @@
             "name": "Control broadcast",
             "mode": "broadcast",
             "capacity": 200,
-            "canListen": { "public": true },
-            "canTransmit": { "sessionRoleIds": ["white_cell"] },
-            "canModerate": { "sessionRoleIds": ["white_cell"] },
+            "canListen": {
+              "public": true
+            },
+            "canTransmit": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
+            "canModerate": {
+              "sessionRoleIds": [
+                "white_cell"
+              ]
+            },
             "recordingPolicy": "off",
             "transcriptionPolicy": "off",
             "mediaProviderAdapterBindingId": "local-media-v1"
@@ -7757,26 +9489,53 @@
       "interfaces": [
         {
           "id": "participant-author",
-          "name": "Participant author",
+          "name": "Scribe workspace",
           "selectors": {
             "sessionRoleIds": [
-              "scribe",
-              "notetaker"
+              "scribe"
             ]
           },
           "layout": {
-            "template": "main_sidebar",
+            "template": "workspace",
             "regions": [
               {
-                "id": "main",
+                "id": "work",
                 "modules": [
                   {
-                    "id": "artifact-form",
+                    "id": "task-list",
+                    "moduleType": "task_list",
+                    "title": "Strategic Actions",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No strategic actions yet.",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan",
+                        "blue_action",
+                        "red_move_response",
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "presentation": "records",
+                      "description": "Draft actions, forward them to the Facilitator, and track White Cell deliberation after facilitator submission.",
+                      "navigationSection": "Team work"
+                    }
+                  },
+                  {
+                    "id": "orientation-form",
                     "moduleType": "artifact_form",
-                    "title": "Create an Artifact",
+                    "title": "Strategic Orientation",
                     "configuration": {
                       "mode": "write",
                       "emptyStateText": "No Artifact Types are available in this Stage.",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan"
+                      ],
                       "scopedModalArtifacts": [
                         {
                           "artifactTypeId": "industry-strategic-plan",
@@ -7788,53 +9547,230 @@
                           "scope": "all_enabled_industry_sector_cells",
                           "oneModalPerScope": true
                         }
-                      ]
+                      ],
+                      "presentation": "composer",
+                      "navigationSection": "Team work"
                     }
                   },
                   {
-                    "id": "task-list",
-                    "moduleType": "task_list",
-                    "title": "Your workflow",
+                    "id": "artifact-form",
+                    "moduleType": "artifact_form",
+                    "title": "Take Action",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "No Artifacts have been created yet."
+                      "emptyStateText": "No Artifact Types are available in this Stage.",
+                      "artifactTypeKeys": [
+                        "blue_action",
+                        "red_move_response",
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "scopedModalArtifacts": [
+                        {
+                          "artifactTypeId": "industry-strategic-plan",
+                          "scope": "all_enabled_industry_sector_cells",
+                          "oneModalPerScope": true
+                        },
+                        {
+                          "artifactTypeId": "industry-turn-sheet",
+                          "scope": "all_enabled_industry_sector_cells",
+                          "oneModalPerScope": true
+                        }
+                      ],
+                      "presentation": "composer",
+                      "navigationSection": "Team work"
                     }
                   }
                 ]
               },
               {
-                "id": "sidebar",
+                "id": "rfis",
                 "modules": [
                   {
-                    "id": "session-status",
-                    "moduleType": "session_status",
-                    "title": "Session status",
+                    "id": "rfi-records",
+                    "moduleType": "task_list",
+                    "title": "RFIs",
                     "configuration": {
-                      "mode": "read",
-                      "emptyStateText": "Session status is unavailable."
+                      "mode": "write",
+                      "emptyStateText": "No rfis yet.",
+                      "artifactTypeKeys": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Team work"
                     }
                   },
+                  {
+                    "id": "rfi-messages",
+                    "moduleType": "message_inbox",
+                    "title": "RFI responses",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No rfi responses yet.",
+                      "channelIds": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Team work"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "inbox",
+                "modules": [
                   {
                     "id": "message-inbox",
                     "moduleType": "message_inbox",
-                    "title": "Messages",
+                    "title": "Communications",
                     "configuration": {
                       "mode": "read",
+                      "emptyStateText": "No communications yet.",
                       "channelIds": [
-                        "broadcast",
-                        "rfi",
                         "team-message"
                       ],
-                      "emptyStateText": "No Messages have been received."
+                      "navigationSection": "Team work"
                     }
-                  },
+                  }
+                ]
+              },
+              {
+                "id": "injects",
+                "modules": [
                   {
                     "id": "inject-inbox",
                     "moduleType": "inject_inbox",
-                    "title": "Injects",
+                    "title": "Notifications",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "No Injects have been released."
+                      "emptyStateText": "No Injects have been released.",
+                      "navigationSection": "Team work"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "capture",
+                "modules": [
+                  {
+                    "id": "capture-form",
+                    "moduleType": "artifact_form",
+                    "title": "Quick Capture",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No quick capture yet.",
+                      "artifactTypeKeys": [
+                        "note"
+                      ],
+                      "presentation": "capture",
+                      "submitLabel": "Save Observation",
+                      "description": "Capture observations, key moments and quotes for your team and White Cell.",
+                      "navigationSection": "Team work"
+                    }
+                  },
+                  {
+                    "id": "recent-captures",
+                    "moduleType": "task_list",
+                    "title": "Recent captures",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No recent captures yet.",
+                      "artifactTypeKeys": [
+                        "note"
+                      ],
+                      "presentation": "recent",
+                      "navigationSection": "Team work"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "broadcast",
+                "modules": [
+                  {
+                    "id": "control-broadcast-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Control Broadcast",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No control broadcast yet.",
+                      "placement": "header",
+                      "channelIds": [
+                        "broadcast"
+                      ],
+                      "navigationSection": "Team work"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "proposals",
+                "modules": [
+                  {
+                    "id": "proposal-thread",
+                    "moduleType": "proposal_thread",
+                    "title": "Received Proposals",
+                    "configuration": {
+                      "mode": "read",
+                      "channelId": "proposal-thread",
+                      "actorMode": "participant",
+                      "navigationSection": "Team work",
+                      "emptyStateText": "No proposal threads are available."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "timeline",
+                "modules": [
+                  {
+                    "id": "timeline-module",
+                    "moduleType": "session_timeline",
+                    "title": "Session Timeline",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No session timeline yet.",
+                      "navigationSection": "Session",
+                      "description": "Follow visible actions, saved captures, published updates, and stage changes."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "tribe-street-journal",
+                "modules": [
+                  {
+                    "id": "tribe-street-journal-module",
+                    "moduleType": "message_inbox",
+                    "title": "Tribe Street Journal",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No tribe street journal yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "tribe-street-journal"
+                      ],
+                      "externalUrl": "https://tribestreetjournal.com/",
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "verba",
+                "modules": [
+                  {
+                    "id": "verba-module",
+                    "moduleType": "message_inbox",
+                    "title": "Verba AI Population Sentiments",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No verba ai population sentiments yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "verba"
+                      ],
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
                     }
                   }
                 ]
@@ -7845,11 +9781,75 @@
             "items": [
               {
                 "id": "work",
-                "label": "Work",
+                "label": "Actions",
                 "target": {
-                  "regionId": "main"
+                  "regionId": "work"
                 },
                 "order": 1
+              },
+              {
+                "id": "rfis",
+                "label": "RFIs",
+                "target": {
+                  "regionId": "rfis"
+                },
+                "order": 2
+              },
+              {
+                "id": "inbox",
+                "label": "Responses",
+                "target": {
+                  "regionId": "inbox"
+                },
+                "order": 3
+              },
+              {
+                "id": "proposals",
+                "label": "Received Proposals",
+                "target": {
+                  "regionId": "proposals"
+                },
+                "order": 4
+              },
+              {
+                "id": "injects",
+                "label": "Notifications",
+                "target": {
+                  "regionId": "injects"
+                },
+                "order": 5
+              },
+              {
+                "id": "capture",
+                "label": "Quick Capture",
+                "target": {
+                  "regionId": "capture"
+                },
+                "order": 6
+              },
+              {
+                "id": "timeline",
+                "label": "Session Timeline",
+                "target": {
+                  "regionId": "timeline"
+                },
+                "order": 7
+              },
+              {
+                "id": "tribe-street-journal",
+                "label": "Tribe Street Journal",
+                "target": {
+                  "regionId": "tribe-street-journal"
+                },
+                "order": 8
+              },
+              {
+                "id": "verba",
+                "label": "Verba AI Population Sentiments",
+                "target": {
+                  "regionId": "verba"
+                },
+                "order": 9
               }
             ],
             "defaultItemId": "work"
@@ -7857,7 +9857,7 @@
         },
         {
           "id": "participant-review",
-          "name": "Participant review",
+          "name": "Facilitator workspace",
           "selectors": {
             "sessionRoleIds": [
               "facilitator"
@@ -7867,49 +9867,98 @@
             "template": "workspace",
             "regions": [
               {
-                "id": "main",
+                "id": "review",
                 "modules": [
                   {
-                    "id": "artifact-form",
+                    "id": "task-list",
+                    "moduleType": "task_list",
+                    "title": "Team Action Review",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No team action review yet.",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan",
+                        "blue_action",
+                        "red_move_response",
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "presentation": "review",
+                      "description": "Live team decisions, reviewed one record at a time.",
+                      "navigationSection": "Inbox & actions"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "rfis",
+                "modules": [
+                  {
+                    "id": "rfi-form",
                     "moduleType": "artifact_form",
                     "title": "Create an RFI",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "RFIs are not available in this Stage."
+                      "emptyStateText": "No create an rfi yet.",
+                      "artifactTypeKeys": [
+                        "rfi"
+                      ],
+                      "presentation": "composer",
+                      "navigationSection": "Inbox & actions"
                     }
                   },
                   {
-                    "id": "task-list",
+                    "id": "rfi-records",
                     "moduleType": "task_list",
-                    "title": "Review tasks",
+                    "title": "RFIs",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "No Artifacts currently require your review."
+                      "emptyStateText": "No rfis yet.",
+                      "artifactTypeKeys": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Inbox & actions"
                     }
                   },
                   {
-                    "id": "session-status",
-                    "moduleType": "session_status",
-                    "title": "Session status",
+                    "id": "rfi-messages",
+                    "moduleType": "message_inbox",
+                    "title": "RFI responses",
                     "configuration": {
                       "mode": "read",
-                      "emptyStateText": "Session status is unavailable."
+                      "emptyStateText": "No rfi responses yet.",
+                      "channelIds": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Inbox & actions"
                     }
-                  },
+                  }
+                ]
+              },
+              {
+                "id": "inbox",
+                "modules": [
                   {
                     "id": "message-inbox",
                     "moduleType": "message_inbox",
-                    "title": "Messages",
+                    "title": "Communications",
                     "configuration": {
                       "mode": "read",
+                      "emptyStateText": "No communications yet.",
                       "channelIds": [
-                        "broadcast",
-                        "rfi",
                         "team-message"
                       ],
-                      "emptyStateText": "No Messages have been received."
+                      "navigationSection": "Inbox & actions"
                     }
-                  },
+                  }
+                ]
+              },
+              {
+                "id": "proposals",
+                "modules": [
                   {
                     "id": "proposal-thread",
                     "moduleType": "proposal_thread",
@@ -7918,16 +9967,8 @@
                       "mode": "write",
                       "channelId": "proposal-thread",
                       "actorMode": "participant",
-                      "emptyStateText": "No proposal threads are available."
-                    }
-                  },
-                  {
-                    "id": "inject-inbox",
-                    "moduleType": "inject_inbox",
-                    "title": "Injects",
-                    "configuration": {
-                      "mode": "write",
-                      "emptyStateText": "No Injects have been released."
+                      "emptyStateText": "No proposal threads are available.",
+                      "navigationSection": "Inbox & actions"
                     }
                   }
                 ]
@@ -7982,9 +10023,15 @@
                         "autoAdvance": false,
                         "reducedMotion": "respect_user_preference",
                         "styling": "release_design_tokens_only"
-                      }
+                      },
+                      "navigationSection": "Inbox & actions"
                     }
-                  },
+                  }
+                ]
+              },
+              {
+                "id": "deck",
+                "modules": [
                   {
                     "id": "session-slide-deck",
                     "moduleType": "slide_deck",
@@ -7996,7 +10043,99 @@
                         "session_upload"
                       ],
                       "openInPresentationMode": true,
-                      "samePresentationControlsAs": "artifact-presentation"
+                      "samePresentationControlsAs": "artifact-presentation",
+                      "navigationSection": "Inbox & actions"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "injects",
+                "modules": [
+                  {
+                    "id": "inject-inbox",
+                    "moduleType": "inject_inbox",
+                    "title": "Notifications",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No Injects have been released.",
+                      "navigationSection": "Inbox & actions"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "broadcast",
+                "modules": [
+                  {
+                    "id": "control-broadcast-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Control Broadcast",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No control broadcast yet.",
+                      "placement": "header",
+                      "channelIds": [
+                        "broadcast"
+                      ],
+                      "navigationSection": "Inbox & actions"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "timeline",
+                "modules": [
+                  {
+                    "id": "timeline-module",
+                    "moduleType": "session_timeline",
+                    "title": "Session Timeline",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No session timeline yet.",
+                      "navigationSection": "Session",
+                      "description": "Follow visible actions, saved captures, published updates, and stage changes."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "tribe-street-journal",
+                "modules": [
+                  {
+                    "id": "tribe-street-journal-module",
+                    "moduleType": "message_inbox",
+                    "title": "Tribe Street Journal",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No tribe street journal yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "tribe-street-journal"
+                      ],
+                      "externalUrl": "https://tribestreetjournal.com/",
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "verba",
+                "modules": [
+                  {
+                    "id": "verba-module",
+                    "moduleType": "message_inbox",
+                    "title": "Verba AI Population Sentiments",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No verba ai population sentiments yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "verba"
+                      ],
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
                     }
                   }
                 ]
@@ -8007,69 +10146,463 @@
             "items": [
               {
                 "id": "review",
-                "label": "Review",
+                "label": "Team Action Review",
                 "target": {
-                  "regionId": "main"
+                  "regionId": "review"
                 },
                 "order": 1
               },
               {
-                "id": "present",
+                "id": "rfis",
+                "label": "RFIs",
+                "target": {
+                  "regionId": "rfis"
+                },
+                "order": 2
+              },
+              {
+                "id": "inbox",
+                "label": "Communications",
+                "target": {
+                  "regionId": "inbox"
+                },
+                "order": 3
+              },
+              {
+                "id": "proposals",
+                "label": "Received Proposals",
+                "target": {
+                  "regionId": "proposals"
+                },
+                "order": 4
+              },
+              {
+                "id": "deck",
+                "label": "Deck",
+                "target": {
+                  "regionId": "deck"
+                },
+                "order": 5
+              },
+              {
+                "id": "presentation",
                 "label": "Present",
                 "target": {
                   "regionId": "presentation"
                 },
-                "order": 2
+                "order": 6
+              },
+              {
+                "id": "injects",
+                "label": "Notifications",
+                "target": {
+                  "regionId": "injects"
+                },
+                "order": 7
+              },
+              {
+                "id": "timeline",
+                "label": "Session Timeline",
+                "target": {
+                  "regionId": "timeline"
+                },
+                "order": 8
+              },
+              {
+                "id": "tribe-street-journal",
+                "label": "Tribe Street Journal",
+                "target": {
+                  "regionId": "tribe-street-journal"
+                },
+                "order": 9
+              },
+              {
+                "id": "verba",
+                "label": "Verba AI Population Sentiments",
+                "target": {
+                  "regionId": "verba"
+                },
+                "order": 10
               }
             ],
             "defaultItemId": "review"
           }
         },
         {
+          "id": "participant-capture",
+          "name": "Notetaker workspace",
+          "selectors": {
+            "sessionRoleIds": [
+              "notetaker"
+            ]
+          },
+          "layout": {
+            "template": "workspace",
+            "regions": [
+              {
+                "id": "capture",
+                "modules": [
+                  {
+                    "id": "capture-form",
+                    "moduleType": "artifact_form",
+                    "title": "Quick Capture",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No quick capture yet.",
+                      "artifactTypeKeys": [
+                        "note"
+                      ],
+                      "presentation": "capture",
+                      "submitLabel": "Save Observation",
+                      "description": "Capture observations, key moments and quotes for your team and White Cell.",
+                      "navigationSection": "Capture"
+                    }
+                  },
+                  {
+                    "id": "recent-captures",
+                    "moduleType": "task_list",
+                    "title": "Recent captures",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No recent captures yet.",
+                      "artifactTypeKeys": [
+                        "note"
+                      ],
+                      "presentation": "recent",
+                      "navigationSection": "Capture"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "inbox",
+                "modules": [
+                  {
+                    "id": "message-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Communications",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No communications yet.",
+                      "channelIds": [
+                        "team-message"
+                      ],
+                      "navigationSection": "Capture"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "injects",
+                "modules": [
+                  {
+                    "id": "inject-inbox",
+                    "moduleType": "inject_inbox",
+                    "title": "Notifications",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No Injects have been released.",
+                      "navigationSection": "Capture"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "broadcast",
+                "modules": [
+                  {
+                    "id": "control-broadcast-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Control Broadcast",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No control broadcast yet.",
+                      "placement": "header",
+                      "channelIds": [
+                        "broadcast"
+                      ],
+                      "navigationSection": "Capture"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "team-dynamics",
+                "modules": [
+                  {
+                    "id": "team-dynamics-form",
+                    "moduleType": "artifact_form",
+                    "title": "Team Dynamics",
+                    "configuration": {
+                      "mode": "write",
+                      "presentation": "capture",
+                      "artifactTypeKeys": [
+                        "team_dynamics"
+                      ],
+                      "submitLabel": "Save Dynamics",
+                      "navigationSection": "Capture",
+                      "description": "Save a separate snapshot for your team and White Cell. Other notetakers keep their own records."
+                    }
+                  },
+                  {
+                    "id": "team-dynamics-records",
+                    "moduleType": "task_list",
+                    "title": "Saved snapshots",
+                    "configuration": {
+                      "mode": "read",
+                      "artifactTypeKeys": [
+                        "team_dynamics"
+                      ],
+                      "presentation": "recent",
+                      "emptyStateText": "Your saved snapshots will appear here."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "alliance-tracking",
+                "modules": [
+                  {
+                    "id": "alliance-tracking-form",
+                    "moduleType": "artifact_form",
+                    "title": "Alliance Tracking",
+                    "configuration": {
+                      "mode": "write",
+                      "presentation": "capture",
+                      "artifactTypeKeys": [
+                        "alliance_tracking"
+                      ],
+                      "submitLabel": "Save Alliance",
+                      "navigationSection": "Capture",
+                      "description": "Save a separate snapshot for your team and White Cell. Other notetakers keep their own records."
+                    }
+                  },
+                  {
+                    "id": "alliance-tracking-records",
+                    "moduleType": "task_list",
+                    "title": "Saved snapshots",
+                    "configuration": {
+                      "mode": "read",
+                      "artifactTypeKeys": [
+                        "alliance_tracking"
+                      ],
+                      "presentation": "recent",
+                      "emptyStateText": "Your saved snapshots will appear here."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "timeline",
+                "modules": [
+                  {
+                    "id": "timeline-module",
+                    "moduleType": "session_timeline",
+                    "title": "Session Timeline",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No session timeline yet.",
+                      "navigationSection": "Session",
+                      "description": "Follow visible actions, saved captures, published updates, and stage changes."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "tribe-street-journal",
+                "modules": [
+                  {
+                    "id": "tribe-street-journal-module",
+                    "moduleType": "message_inbox",
+                    "title": "Tribe Street Journal",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No tribe street journal yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "tribe-street-journal"
+                      ],
+                      "externalUrl": "https://tribestreetjournal.com/",
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "verba",
+                "modules": [
+                  {
+                    "id": "verba-module",
+                    "moduleType": "message_inbox",
+                    "title": "Verba AI Population Sentiments",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No verba ai population sentiments yet.",
+                      "navigationSection": "Session",
+                      "channelIds": [
+                        "verba"
+                      ],
+                      "description": "Read updates published by White Cell for this Session.",
+                      "settingsGroup": "plugins"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "view-actions",
+                "modules": [
+                  {
+                    "id": "view-actions-module",
+                    "moduleType": "task_list",
+                    "title": "View Actions",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No view actions yet.",
+                      "navigationSection": "Session",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan",
+                        "blue_action",
+                        "red_move_response",
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "presentation": "review",
+                      "description": "Read your team’s submitted actions. Authoring and review remain with the Scribe and Facilitator."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "navigation": {
+            "items": [
+              {
+                "id": "capture",
+                "label": "Quick Capture",
+                "target": {
+                  "regionId": "capture"
+                },
+                "order": 1
+              },
+              {
+                "id": "view-actions",
+                "label": "View Actions",
+                "target": {
+                  "regionId": "view-actions"
+                },
+                "order": 2
+              },
+              {
+                "id": "team-dynamics",
+                "label": "Team Dynamics",
+                "target": {
+                  "regionId": "team-dynamics"
+                },
+                "order": 3
+              },
+              {
+                "id": "alliance-tracking",
+                "label": "Alliance Tracking",
+                "target": {
+                  "regionId": "alliance-tracking"
+                },
+                "order": 4
+              },
+              {
+                "id": "inbox",
+                "label": "Inbox",
+                "target": {
+                  "regionId": "inbox"
+                },
+                "order": 5
+              },
+              {
+                "id": "injects",
+                "label": "Notifications",
+                "target": {
+                  "regionId": "injects"
+                },
+                "order": 6
+              },
+              {
+                "id": "tribe-street-journal",
+                "label": "Tribe Street Journal",
+                "target": {
+                  "regionId": "tribe-street-journal"
+                },
+                "order": 7
+              },
+              {
+                "id": "verba",
+                "label": "Verba AI Population Sentiments",
+                "target": {
+                  "regionId": "verba"
+                },
+                "order": 8
+              },
+              {
+                "id": "timeline",
+                "label": "Session Timeline",
+                "target": {
+                  "regionId": "timeline"
+                },
+                "order": 9
+              }
+            ],
+            "defaultItemId": "capture"
+          }
+        },
+        {
           "id": "control",
-          "name": "Control",
+          "name": "White Cell workspace",
           "selectors": {
             "sessionRoleIds": [
               "white_cell"
             ]
           },
           "layout": {
-            "template": "dashboard",
+            "template": "workspace",
             "regions": [
               {
-                "id": "main",
+                "id": "control",
                 "modules": [
                   {
                     "id": "task-list",
                     "moduleType": "task_list",
-                    "title": "Control tasks",
+                    "title": "Actions",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "No control tasks are pending."
-                    }
-                  },
-                  {
-                    "id": "session-status",
-                    "moduleType": "session_status",
-                    "title": "Session status",
-                    "configuration": {
-                      "mode": "read",
-                      "emptyStateText": "Session status is unavailable."
-                    }
-                  },
-                  {
-                    "id": "message-inbox",
-                    "moduleType": "message_inbox",
-                    "title": "Messages",
-                    "configuration": {
-                      "mode": "write",
-                      "channelIds": [
-                        "broadcast",
-                        "rfi",
-                        "team-message"
+                      "emptyStateText": "No actions yet.",
+                      "artifactTypeKeys": [
+                        "blue_action"
                       ],
-                      "sendRouteId": "control-broadcast",
-                      "emptyStateText": "No Messages have been sent or received."
+                      "presentation": "review",
+                      "description": "Review team submissions, return work for revision, and record White Cell decisions.",
+                      "navigationSection": "Control"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "proposals",
+                "modules": [
+                  {
+                    "id": "proposal-records",
+                    "moduleType": "task_list",
+                    "title": "Proposals",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No proposals yet.",
+                      "artifactTypeKeys": [
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "presentation": "review",
+                      "navigationSection": "Control"
                     }
                   },
                   {
@@ -8080,16 +10613,502 @@
                       "mode": "write",
                       "channelId": "proposal-thread",
                       "actorMode": "custodian",
-                      "emptyStateText": "No proposal threads are available."
+                      "emptyStateText": "No proposal threads are available.",
+                      "navigationSection": "Control"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "rfis",
+                "modules": [
+                  {
+                    "id": "rfi-records",
+                    "moduleType": "task_list",
+                    "title": "RFIs",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No rfis yet.",
+                      "artifactTypeKeys": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Control"
                     }
                   },
                   {
-                    "id": "inject-inbox",
-                    "moduleType": "inject_inbox",
-                    "title": "Injects",
+                    "id": "rfi-messages",
+                    "moduleType": "message_inbox",
+                    "title": "RFI responses",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No rfi responses yet.",
+                      "channelIds": [
+                        "rfi"
+                      ],
+                      "navigationSection": "Control"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "inbox",
+                "modules": [
+                  {
+                    "id": "message-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Communications",
                     "configuration": {
                       "mode": "write",
-                      "emptyStateText": "No Injects have been released."
+                      "emptyStateText": "No communications yet.",
+                      "channelIds": [
+                        "team-message"
+                      ],
+                      "navigationSection": "Control",
+                      "sendRoutes": [
+                        {
+                          "routeId": "control-communication-all",
+                          "label": "All Teams"
+                        },
+                        {
+                          "routeId": "control-communication-blue",
+                          "label": "Blue (all roles)"
+                        },
+                        {
+                          "routeId": "control-communication-blue-scribe",
+                          "label": "Blue Scribe"
+                        },
+                        {
+                          "routeId": "control-communication-blue-facilitator",
+                          "label": "Blue Facilitator"
+                        },
+                        {
+                          "routeId": "control-communication-blue-notetaker",
+                          "label": "Blue Notetaker"
+                        },
+                        {
+                          "routeId": "control-communication-red",
+                          "label": "Red (all roles)"
+                        },
+                        {
+                          "routeId": "control-communication-red-scribe",
+                          "label": "Red Scribe"
+                        },
+                        {
+                          "routeId": "control-communication-red-facilitator",
+                          "label": "Red Facilitator"
+                        },
+                        {
+                          "routeId": "control-communication-red-notetaker",
+                          "label": "Red Notetaker"
+                        },
+                        {
+                          "routeId": "control-communication-green",
+                          "label": "Green (all roles)"
+                        },
+                        {
+                          "routeId": "control-communication-green-scribe",
+                          "label": "Green Scribe"
+                        },
+                        {
+                          "routeId": "control-communication-green-facilitator",
+                          "label": "Green Facilitator"
+                        },
+                        {
+                          "routeId": "control-communication-green-notetaker",
+                          "label": "Green Notetaker"
+                        },
+                        {
+                          "routeId": "control-communication-industry",
+                          "label": "Industry (all roles)"
+                        },
+                        {
+                          "routeId": "control-communication-industry-scribe",
+                          "label": "Industry Scribe"
+                        },
+                        {
+                          "routeId": "control-communication-industry-facilitator",
+                          "label": "Industry Facilitator"
+                        },
+                        {
+                          "routeId": "control-communication-industry-notetaker",
+                          "label": "Industry Notetaker"
+                        }
+                      ],
+                      "messageTypes": [
+                        "Inject",
+                        "Announcement",
+                        "Guidance"
+                      ],
+                      "submitLabel": "Send Communication",
+                      "historyLabel": "Communication History"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "injects",
+                "modules": [
+                  {
+                    "id": "inject-inbox",
+                    "moduleType": "inject_inbox",
+                    "title": "Notifications",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No Injects have been released.",
+                      "navigationSection": "Control"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "status",
+                "modules": [
+                  {
+                    "id": "session-status",
+                    "moduleType": "session_status",
+                    "title": "Simulation Settings",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No session status yet.",
+                      "navigationSection": "Control",
+                      "deckLabel": "Scribe Decks"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "broadcast",
+                "modules": [
+                  {
+                    "id": "control-broadcast-inbox",
+                    "moduleType": "message_inbox",
+                    "title": "Control Broadcast",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No control broadcast yet.",
+                      "placement": "header",
+                      "channelIds": [
+                        "broadcast"
+                      ],
+                      "sendRouteId": "control-broadcast",
+                      "navigationSection": "Control"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "timeline",
+                "modules": [
+                  {
+                    "id": "timeline-module",
+                    "moduleType": "session_timeline",
+                    "title": "Session Timeline",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No session timeline yet.",
+                      "navigationSection": "Control",
+                      "description": "Follow visible actions, saved captures, published updates, and stage changes."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "tribe-street-journal",
+                "modules": [
+                  {
+                    "id": "tribe-street-journal-module",
+                    "moduleType": "message_inbox",
+                    "title": "Tribe Street Journal",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No tribe street journal yet.",
+                      "navigationSection": "Control",
+                      "channelIds": [
+                        "tribe-street-journal"
+                      ],
+                      "sendRouteId": "control-tribe-street-journal",
+                      "submitLabel": "Publish update",
+                      "description": "Review captured notes and observations, then publish an update to the Session.",
+                      "settingsGroup": "plugins",
+                      "sourceArtifactTypeKeys": [
+                        "note",
+                        "team_dynamics",
+                        "alliance_tracking"
+                      ],
+                      "sendRoutes": [
+                        {
+                          "routeId": "control-tribe-street-journal",
+                          "label": "All Teams"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-blue",
+                          "label": "Blue (all roles)"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-blue-scribe",
+                          "label": "Blue Scribe"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-blue-facilitator",
+                          "label": "Blue Facilitator"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-blue-notetaker",
+                          "label": "Blue Notetaker"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-red",
+                          "label": "Red (all roles)"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-red-scribe",
+                          "label": "Red Scribe"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-red-facilitator",
+                          "label": "Red Facilitator"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-red-notetaker",
+                          "label": "Red Notetaker"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-green",
+                          "label": "Green (all roles)"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-green-scribe",
+                          "label": "Green Scribe"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-green-facilitator",
+                          "label": "Green Facilitator"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-green-notetaker",
+                          "label": "Green Notetaker"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-industry",
+                          "label": "Industry (all roles)"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-industry-scribe",
+                          "label": "Industry Scribe"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-industry-facilitator",
+                          "label": "Industry Facilitator"
+                        },
+                        {
+                          "routeId": "control-tribe-street-journal-industry-notetaker",
+                          "label": "Industry Notetaker"
+                        }
+                      ],
+                      "historyLabel": "Published Journal Updates"
+                    }
+                  },
+                  {
+                    "id": "captured-observations",
+                    "moduleType": "task_list",
+                    "title": "Captured Notes and Observations",
+                    "configuration": {
+                      "mode": "read",
+                      "artifactTypeKeys": [
+                        "note",
+                        "team_dynamics",
+                        "alliance_tracking"
+                      ],
+                      "presentation": "review",
+                      "emptyStateText": "No notes or observations have been captured yet."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "verba",
+                "modules": [
+                  {
+                    "id": "verba-module",
+                    "moduleType": "message_inbox",
+                    "title": "Verba AI Population Sentiments",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No verba ai population sentiments yet.",
+                      "navigationSection": "Control",
+                      "channelIds": [
+                        "verba"
+                      ],
+                      "sendRouteId": "control-verba",
+                      "submitLabel": "Publish update",
+                      "description": "Publish an update to every participant in this Session.",
+                      "settingsGroup": "plugins",
+                      "sendRoutes": [
+                        {
+                          "routeId": "control-verba",
+                          "label": "All Teams"
+                        },
+                        {
+                          "routeId": "control-verba-blue",
+                          "label": "Blue (all roles)"
+                        },
+                        {
+                          "routeId": "control-verba-blue-scribe",
+                          "label": "Blue Scribe"
+                        },
+                        {
+                          "routeId": "control-verba-blue-facilitator",
+                          "label": "Blue Facilitator"
+                        },
+                        {
+                          "routeId": "control-verba-blue-notetaker",
+                          "label": "Blue Notetaker"
+                        },
+                        {
+                          "routeId": "control-verba-red",
+                          "label": "Red (all roles)"
+                        },
+                        {
+                          "routeId": "control-verba-red-scribe",
+                          "label": "Red Scribe"
+                        },
+                        {
+                          "routeId": "control-verba-red-facilitator",
+                          "label": "Red Facilitator"
+                        },
+                        {
+                          "routeId": "control-verba-red-notetaker",
+                          "label": "Red Notetaker"
+                        },
+                        {
+                          "routeId": "control-verba-green",
+                          "label": "Green (all roles)"
+                        },
+                        {
+                          "routeId": "control-verba-green-scribe",
+                          "label": "Green Scribe"
+                        },
+                        {
+                          "routeId": "control-verba-green-facilitator",
+                          "label": "Green Facilitator"
+                        },
+                        {
+                          "routeId": "control-verba-green-notetaker",
+                          "label": "Green Notetaker"
+                        },
+                        {
+                          "routeId": "control-verba-industry",
+                          "label": "Industry (all roles)"
+                        },
+                        {
+                          "routeId": "control-verba-industry-scribe",
+                          "label": "Industry Scribe"
+                        },
+                        {
+                          "routeId": "control-verba-industry-facilitator",
+                          "label": "Industry Facilitator"
+                        },
+                        {
+                          "routeId": "control-verba-industry-notetaker",
+                          "label": "Industry Notetaker"
+                        }
+                      ],
+                      "historyLabel": "Population Sentiment Updates"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "scribe-decks",
+                "modules": [
+                  {
+                    "id": "scribe-decks-module",
+                    "moduleType": "slide_deck",
+                    "title": "Scribe Decks",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No scribe decks yet.",
+                      "navigationSection": "Inbox & actions",
+                      "releaseResourceId": "fractured-order-session-deck",
+                      "sourceTypes": [
+                        "release_resource",
+                        "session_upload"
+                      ],
+                      "openInPresentationMode": true,
+                      "samePresentationControlsAs": "artifact-presentation"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "strategic-orientation",
+                "modules": [
+                  {
+                    "id": "strategic-orientation-module",
+                    "moduleType": "task_list",
+                    "title": "Strategic Orientation",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No strategic orientation yet.",
+                      "navigationSection": "Control",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan"
+                      ],
+                      "presentation": "review"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "red-responses",
+                "modules": [
+                  {
+                    "id": "red-responses-module",
+                    "moduleType": "task_list",
+                    "title": "Red Actions/Responses",
+                    "configuration": {
+                      "mode": "write",
+                      "emptyStateText": "No red actions/responses yet.",
+                      "navigationSection": "Control",
+                      "artifactTypeKeys": [
+                        "red_move_response"
+                      ],
+                      "presentation": "review"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "revision-history",
+                "modules": [
+                  {
+                    "id": "revision-history-module",
+                    "moduleType": "task_list",
+                    "title": "Returned/Revision History",
+                    "configuration": {
+                      "mode": "read",
+                      "emptyStateText": "No returned/revision history yet.",
+                      "navigationSection": "Control",
+                      "artifactTypeKeys": [
+                        "blue_strategic_orientation",
+                        "red_strategic_orientation",
+                        "green_strategic_orientation",
+                        "industry_strategic_plan",
+                        "blue_action",
+                        "red_move_response",
+                        "green_proposal",
+                        "industry_turn_sheet"
+                      ],
+                      "presentation": "history",
+                      "historyStates": [
+                        "with_white_cell",
+                        "returned",
+                        "completed",
+                        "recipient_threads"
+                      ]
                     }
                   }
                 ]
@@ -8099,14 +11118,111 @@
           "navigation": {
             "items": [
               {
-                "id": "control",
-                "label": "Control",
+                "id": "status",
+                "label": "Simulation Settings",
                 "target": {
-                  "regionId": "main"
+                  "regionId": "status"
                 },
                 "order": 1
+              },
+              {
+                "id": "strategic-orientation",
+                "label": "Strategic Orientation",
+                "target": {
+                  "regionId": "strategic-orientation"
+                },
+                "order": 2
+              },
+              {
+                "id": "control",
+                "label": "Actions",
+                "target": {
+                  "regionId": "control"
+                },
+                "order": 3
+              },
+              {
+                "id": "proposals",
+                "label": "Proposals",
+                "target": {
+                  "regionId": "proposals"
+                },
+                "order": 4
+              },
+              {
+                "id": "red-responses",
+                "label": "Red Actions/Responses",
+                "target": {
+                  "regionId": "red-responses"
+                },
+                "order": 5
+              },
+              {
+                "id": "revision-history",
+                "label": "Returned/Revision History",
+                "target": {
+                  "regionId": "revision-history"
+                },
+                "order": 6
+              },
+              {
+                "id": "tribe-street-journal",
+                "label": "Tribe Street Journal",
+                "target": {
+                  "regionId": "tribe-street-journal"
+                },
+                "order": 7
+              },
+              {
+                "id": "verba",
+                "label": "Verba AI Population Sentiments",
+                "target": {
+                  "regionId": "verba"
+                },
+                "order": 8
+              },
+              {
+                "id": "rfis",
+                "label": "RFIs",
+                "target": {
+                  "regionId": "rfis"
+                },
+                "order": 9
+              },
+              {
+                "id": "inbox",
+                "label": "Communications",
+                "target": {
+                  "regionId": "inbox"
+                },
+                "order": 10
+              },
+              {
+                "id": "timeline",
+                "label": "Session Timeline",
+                "target": {
+                  "regionId": "timeline"
+                },
+                "order": 11
+              },
+              {
+                "id": "injects",
+                "label": "Injects",
+                "target": {
+                  "regionId": "injects"
+                },
+                "order": 12
+              },
+              {
+                "id": "scribe-decks",
+                "label": "Scribe Decks",
+                "target": {
+                  "regionId": "scribe-decks"
+                },
+                "order": 13
               }
-            ]
+            ],
+            "defaultItemId": "status"
           }
         }
       ],
@@ -8146,9 +11262,39 @@
           "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
           "kind": "media_provider",
           "voiceCapabilities": [
-            { "profile": "cloud", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false },
-            { "profile": "institutional", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false },
-            { "profile": "air_gapped", "modes": ["radio_ptt", "open_room", "private_call", "broadcast"], "recording": false, "transcription": false }
+            {
+              "profile": "cloud",
+              "modes": [
+                "radio_ptt",
+                "open_room",
+                "private_call",
+                "broadcast"
+              ],
+              "recording": false,
+              "transcription": false
+            },
+            {
+              "profile": "institutional",
+              "modes": [
+                "radio_ptt",
+                "open_room",
+                "private_call",
+                "broadcast"
+              ],
+              "recording": false,
+              "transcription": false
+            },
+            {
+              "profile": "air_gapped",
+              "modes": [
+                "radio_ptt",
+                "open_room",
+                "private_call",
+                "broadcast"
+              ],
+              "recording": false,
+              "transcription": false
+            }
           ]
         }
       ],

@@ -238,7 +238,8 @@ export interface RuntimeFormFieldDefinitionV1 {
   dataClassification?: RuntimeDataClassificationV1;
   reportingLabel?: string;
   editableBySessionRoleIds?: string[];
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; description?: string }>;
+  control?: "cards" | "select" | "range";
   optionSource?: RuntimeFieldOptionSourceV1;
   reference?: RuntimeArtifactReferenceV1;
   readOnly?: boolean;
@@ -249,10 +250,15 @@ export interface RuntimeFormDefinitionV1 {
   id: string;
   name: string;
   formVersion: string;
+  layout?: { pages: string[]; review?: boolean };
   sections: Array<{
     id: string;
     title?: string;
     description?: string;
+    page?: number;
+    columns?: 2 | 3 | 4;
+    collapsed?: boolean;
+    table?: { columns: string[]; rows: Array<{ label: string; fields: string[] }>; editor?: "groups" };
     fields: RuntimeFormFieldDefinitionV1[];
     repeatable?: boolean;
     itemLabel?: string;
@@ -1721,6 +1727,24 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       }
     }
     for (const rule of form.rules ?? []) rule.fields.forEach((key) => reference(keys, key, `Form ${form.id} rule`));
+    if (form.layout !== undefined && (form.layout.pages.length < 2 || form.layout.pages.some((title) => title.trim() === ""))) {
+      throw new Error(`Form ${form.id} needs at least two named pages`);
+    }
+    for (const section of form.sections) {
+      if (section.columns !== undefined && ![2, 3, 4].includes(section.columns)) throw new Error(`Form ${form.id} section ${section.id} has invalid columns`);
+      if (section.page !== undefined && (!Number.isInteger(section.page) || section.page < 0 || section.page >= (form.layout?.pages.length ?? 0))) {
+        throw new Error(`Form ${form.id} section ${section.id} references an invalid page`);
+      }
+      if (section.table !== undefined) {
+        if (section.repeatable || section.table.columns.length === 0) throw new Error(`Form ${form.id} section ${section.id} has an invalid table`);
+        const tableKeys = section.table.rows.flatMap((row) => {
+          if (row.fields.length !== section.table!.columns.length) throw new Error(`Form ${form.id} section ${section.id} has an incomplete table row`);
+          return row.fields;
+        });
+        uniqueIds(tableKeys.map((id) => ({ id })), `Form ${form.id} section ${section.id} table field`);
+        tableKeys.forEach((key) => reference(new Set(section.fields.map((field) => field.key)), key, `Form ${form.id} section ${section.id} table`));
+      }
+    }
     if (form.presentation !== undefined) reference(keys, form.presentation.scopeField, `Form ${form.id} presentation`);
   }
   for (const type of runtime.artifactTypes) {

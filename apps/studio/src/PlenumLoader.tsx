@@ -43,7 +43,8 @@ export function PlatformNavigationLoader() {
       const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
       if (anchor === null || anchor.target === "_blank" || anchor.hasAttribute("download") || anchor.hasAttribute("data-no-page-transition") || anchor.getAttribute("aria-disabled") === "true") return;
       const destination = new URL(anchor.href, location.href);
-      if (destination.origin !== location.origin || (destination.pathname === location.pathname && destination.search === location.search)) return;
+      // Workspaces on the same page crossfade through the document view transition; only a change of surface uses the full-page loader.
+      if (destination.origin !== location.origin || destination.pathname === location.pathname) return;
       event.preventDefault();
       navigate(destination.href);
     };

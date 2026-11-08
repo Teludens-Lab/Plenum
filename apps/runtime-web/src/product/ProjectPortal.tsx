@@ -205,7 +205,7 @@ export function ProjectPortal() {
     </form>
 
     {portal.permissions.canCreateProject ? <form className="card project-create teludens-path" onSubmit={(event) => void create(event)}>
-      <p className="eyebrow">Start work</p><h3>Create a Project</h3>
+      <h3>Create a Project</h3>
       <fieldset><legend>Starting point</legend>
         <label className="choice"><input type="radio" name="startingPoint" value="blank" checked={mode === "blank"} onChange={() => { setMode("blank"); setSelectedTemplateId(""); setIncludeScenario(false); }} />Blank Core Design</label>
         <label className="choice"><input type="radio" name="startingPoint" value="template" checked={mode === "template"} onChange={() => setMode("template")} disabled={(templates?.templates.length ?? 0) === 0} />Simulation Template</label>
@@ -221,7 +221,7 @@ export function ProjectPortal() {
     </form> : <section className="card portal-readonly"><p className="eyebrow">Read-only</p><h3>Review access</h3><p>Your Organization Role can inspect Project status and open review work, but cannot create, archive, or reopen Projects.</p></section>}
 
     <section aria-labelledby="recent-projects-title">
-      <div className="section-heading"><p className="eyebrow">Recent work</p><h3 id="recent-projects-title">{status === "active" ? "Active Projects" : status === "archived" ? "Archived Projects" : "All Projects"}</h3></div>
+      <div className="section-heading"><h3 id="recent-projects-title">{status === "active" ? "Active Projects" : status === "archived" ? "Archived Projects" : "All Projects"}</h3></div>
       {portal.projects.length === 0 ? <div className="empty-state"><h4>{query.trim() !== "" ? "No matching Projects" : status === "archived" ? "No archived Projects" : "No active Projects yet"}</h4>
         <p>{query.trim() !== "" ? `No Project name matches “${query.trim()}” in the selected status.` : status === "archived" ? "Archived Projects will appear here and can be reopened." : portal.permissions.canCreateProject ? "Create a blank Project or start from a Simulation Template." : "There are no active Projects available to review."}</p>
         {query.trim() === "" && status === "active" ? null : <button className="btn-secondary" type="button" onClick={clearProjectFilters}>Show active Projects</button>}</div> :
@@ -247,11 +247,11 @@ export function ProjectPortal() {
       {nextCursor === null ? null : <button className="btn-secondary" type="button" disabled={pending} onClick={() => void load({ cursor: nextCursor, append: true })}>Load more Projects</button>}
     </section>
 
-    <section aria-labelledby="templates-title"><div className="section-heading"><p className="eyebrow">Organization library</p><h3 id="templates-title">Simulation Templates</h3></div>
+    <section aria-labelledby="templates-title"><div className="section-heading"><h3 id="templates-title">Simulation Templates</h3></div>
       {(templates?.templates.length ?? 0) === 0 ? <div className="empty-state"><h4>No Simulation Templates available</h4><p>No Templates are published to this Organization library. You can still start with a blank Core Design.</p></div> : <ul className="template-list">{templates?.templates.map((template) => <li className="card template-row" key={template.id}><div><h4>{template.title}</h4><p>{template.summary || "Reusable Core Design"}</p><p className="hint">Published {formatDate(template.publishedAt)}. {template.includesOptionalScenario ? "Optional Scenario content is available." : "Core Design only."}</p></div>
         {portal.permissions.canCreateProject ? <button className="btn-secondary" type="button" onClick={() => chooseTemplate(template.id)}>Start from Template</button> : null}</li>)}</ul>}
     </section>
 
-    {portal.permissions.canViewMembers && portal.members !== undefined ? <section className="card organization-members" aria-labelledby="members-title"><p className="eyebrow">Admin view</p><h3 id="members-title">Organization members and roles</h3><ul>{portal.members.map((member) => <li key={member.id}><span>{member.displayName}</span><span>{member.roles.join(", ")}</span></li>)}</ul></section> : null}
+    {portal.permissions.canViewMembers && portal.members !== undefined ? <section className="card organization-members" aria-labelledby="members-title"><h3 id="members-title">Organization members and roles</h3><ul>{portal.members.map((member) => <li key={member.id}><span>{member.displayName}</span><span>{member.roles.join(", ")}</span></li>)}</ul></section> : null}
   </section>;
 }

@@ -17,12 +17,17 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
   const [microphone, setMicrophone] = useState<"muted" | "ready" | "transmitting">("muted");
   const [remoteAudioCount, setRemoteAudioCount] = useState(0);
   const [floorLease, setFloorLease] = useState<FloorLeaseV1 | null>(null);
+  const [joining, setJoining] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const joinVersion = useRef(0);
   const audio = useRef<HTMLDivElement>(null);
   const connectionId = useRef(crypto.randomUUID());
 
   useEffect(() => () => { room?.disconnect(); }, [room]);
+  useEffect(() => () => { joinVersion.current++; }, []);
   useEffect(() => {
     if (online) return;
+    joinVersion.current++; setJoining(null);
     room?.disconnect();
     setRoom(null); setChannelId(null); setFloorLease(null); setMicrophone("muted"); setRemoteAudioCount(0);
     connectionId.current = crypto.randomUUID();
@@ -49,22 +54,33 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
 
   const join = async (channel: RuntimeVoiceChannelV1) => {
     if (!online) { notice("Voice needs a live connection and was not queued."); return; }
-    const receipt = await command(channel, "voice_channel.join") as VoiceCommandReceiptV1 | null;
-    if (receipt?.status !== "accepted" || receipt.mediaCredential === null) return;
+    if (joining !== null || room !== null) return;
+    const version = ++joinVersion.current;
+    setJoining(channel.id); setMediaError(null);
     try {
+      const receipt = await command(channel, "voice_channel.join") as VoiceCommandReceiptV1 | null;
+      if (version !== joinVersion.current) return;
+      if (receipt?.status !== "accepted" || receipt.mediaCredential == null) {
+        setMediaError(receipt?.message ?? "The channel could not be joined. Refresh the Session and try again."); return;
+      }
       if (audio.current === null) throw new Error("The audio output is unavailable");
       const { connectMediaCredential } = await import("@plenum/media-adapter/browser");
       const next = await connectMediaCredential(receipt.mediaCredential, audio.current, {
         disconnected: () => {
+          if (version !== joinVersion.current) return;
           setRoom(null); setChannelId(null); setFloorLease(null); setMicrophone("muted"); setRemoteAudioCount(0);
         },
         remoteAudioCount: setRemoteAudioCount
       });
+      if (version !== joinVersion.current) { await next.disconnect(); return; }
       setRoom(next); setChannelId(channel.id); setMicrophone(channel.canTransmit ? "ready" : "muted");
       notice(`Joined ${channel.name}. Microphone is ${channel.canTransmit ? "ready but muted" : "unavailable"}.`);
     } catch {
-      notice("Voice media is unavailable. Nothing was queued.");
-    }
+      if (version === joinVersion.current) {
+        setMediaError("Voice media could not connect. Check your connection and try Join voice again. Nothing was queued.");
+        notice("Voice media is unavailable. Nothing was queued.");
+      }
+    } finally { if (version === joinVersion.current) setJoining(null); }
   };
   const release = async (channel: RuntimeVoiceChannelV1) => {
     await room?.setMicrophoneEnabled(false); setMicrophone("ready");
@@ -125,6 +141,9 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
   return <section aria-labelledby="voice-heading">
     <div className="section-heading"><h2 id="voice-heading">Voice Channels</h2></div>
     <p className="hint">Voice is live-only. Use Join, then explicitly enable the microphone. Push-to-talk: hold Space, Enter, or the Floor button; release it to stop.</p>
+    {joining === null ? null : <p role="status">Connecting to {projection.voiceChannels.find((channel) => channel.id === joining)?.name ?? "voice"}…</p>}
+    {mediaError === null ? null : <p className="field-error" role="alert">{mediaError}</p>}
+    {channelId === null ? null : <p className="hint">Leave your current channel before joining another.</p>}
     <div ref={audio} className="voice-audio" aria-hidden="true" />
     <div className="card-grid">{projection.voiceChannels.map((channel) => <article className="card voice-card" key={channel.id} aria-labelledby={`voice-${channel.id}`}>
       <div className="card-heading"><div><h3 id={`voice-${channel.id}`}>{channel.name}</h3><p className="hint">{channel.mode.replaceAll("_", " ")}</p></div>
@@ -148,7 +167,7 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
       {channelId === channel.id ? <p className="hint" role="status" aria-live="polite">{remoteAudioCount === 0
         ? "No remote audio streams." : `Receiving ${remoteAudioCount} remote audio ${remoteAudioCount === 1 ? "stream" : "streams"}.`}</p> : null}
       <div className="actions">{channelId !== channel.id
-        ? <button className="btn-primary" type="button" disabled={disabled || !online} onClick={() => void join(channel)}>Join voice</button>
+        ? <button className="btn-primary" type="button" disabled={disabled || !online || joining !== null || channelId !== null} onClick={() => void join(channel)}>Join voice</button>
         : <><button className="btn-secondary" type="button" onClick={() => void room?.startAudio()}>Enable audio playback</button>
           {channel.mode === "radio_ptt" ? <button className="btn-primary floor-control" type="button" disabled={!channel.canTransmit}
             aria-label={`Hold to talk in ${channel.name}; microphone ${microphone}`} onKeyDown={(event) => keyDown(event, channel)}

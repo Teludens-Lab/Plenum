@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Children, isValidElement, useEffect, useMemo, useRef, useState } from "react";
+import { SectionIcon } from "./SectionIcon.js";
 import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type ContentLibraryItemV1, type ContentLibraryV1,
   type RolePreviewV1, type StudioRehearsalV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
 import type {
@@ -14,7 +15,6 @@ import { PluginCatalogEditor } from "../plugins/PluginCatalogEditor.js";
 import { CompositionEditor } from "../compositions/CompositionEditor.js";
 import { AdvancedLogicEditor } from "../advanced-logic/AdvancedLogicEditor.js";
 import { AdjudicationEditor } from "../adjudication/AdjudicationEditor.js";
-import { PlenumLoader } from "../PlenumLoader.js";
 import {
   FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
   basicWorkflow, coreArray, dec42Workflow, defaultGrant, identifier
@@ -119,9 +119,20 @@ export function ItemActions({ path, index, count, client, label, duplicate }: {
   </div>;
 }
 
+/** Starts a new card at each direct h3, so every editor gets titled cards from its existing heading order. */
+function workspaceCards(children: React.ReactNode): React.ReactNode[] {
+  const cards: React.ReactNode[][] = [];
+  for (const child of Children.toArray(children)) {
+    if (cards.length === 0 || (isValidElement(child) && child.type === "h3")) cards.push([]);
+    cards[cards.length - 1]?.push(child);
+  }
+  return cards.map((card, index) => <div className="workspace-card" key={index}>{card}</div>);
+}
+
 export function Workspace({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
-  return <section id={id} className="editor-workspace card" aria-labelledby={`${id}-title`}><div className="workspace-heading">
-    <div><h2 id={`${id}-title`} tabIndex={-1}>{title}</h2><p>{intro}</p></div></div>{children}</section>;
+  return <section id={id} className="editor-workspace" aria-labelledby={`${id}-title`}><div className="workspace-heading">
+    <span className="workspace-icon"><SectionIcon id={id} /></span>
+    <div><h2 id={`${id}-title`} tabIndex={-1}>{title}</h2><p>{intro}</p></div></div>{workspaceCards(children)}</section>;
 }
 
 export function AddButton({ label, onClick, disabled = false }: { label: string; onClick(): void; disabled?: boolean }) {
@@ -1177,40 +1188,28 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
   reviewWorkspace: React.ReactNode; liveChangesWorkspace: React.ReactNode;
 }) {
   const [activeSection, setActiveSection] = useState<EditorSectionId>(() => editorSectionIdForTarget(location.hash.slice(1)));
-  const [sectionTransitioning, setSectionTransitioning] = useState(false);
   const focusActiveHeading = useRef(false);
-  const sectionTransitionTimer = useRef<number | null>(null);
+  const canvas = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleHashChange = () => setActiveSection(editorSectionIdForTarget(location.hash.slice(1)));
     window.addEventListener("hashchange", handleHashChange);
-    return () => {
-      window.removeEventListener("hashchange", handleHashChange);
-      if (sectionTransitionTimer.current !== null) window.clearTimeout(sectionTransitionTimer.current);
-    };
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
   useEffect(() => {
     if (!focusActiveHeading.current) return;
     focusActiveHeading.current = false;
-    requestAnimationFrame(() => document.getElementById(`${activeSection}-title`)?.focus());
+    canvas.current?.scrollTo({ top: 0 });
+    document.getElementById(`${activeSection}-title`)?.focus({ preventScroll: true });
   }, [activeSection]);
 
   function activateSection(id: EditorSectionId): void {
     if (id === activeSection) return;
     focusActiveHeading.current = true;
-    const commit = () => {
-      setActiveSection(id);
-      location.hash = id;
-      requestAnimationFrame(() => setSectionTransitioning(false));
-    };
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      commit();
-      return;
-    }
-    if (sectionTransitionTimer.current !== null) window.clearTimeout(sectionTransitionTimer.current);
-    setSectionTransitioning(true);
-    sectionTransitionTimer.current = window.setTimeout(commit, 160);
+    setActiveSection(id);
+    // pushState keeps Back/Forward history without the browser's anchor jump; hashchange still restores them.
+    history.pushState(null, "", `#${id}`);
   }
 
   const workspaces: readonly (readonly [EditorSectionId, React.ReactNode])[] = [
@@ -1251,7 +1250,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
       </select>
     </div>
     <nav className="editor-nav" aria-label="Design workspaces">
-      <div className="editor-nav-heading"><h2>Draft map</h2><button className="btn-secondary compact" type="button" onClick={() => client.undo()}>Undo last change</button></div>
+      <h2 className="visually-hidden">Design workspaces</h2>
       {SECTION_GROUPS.map((group) => <section className="editor-nav-group" aria-labelledby={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`} key={group.label}>
         <h3 id={`nav-${group.label.replaceAll(" ", "-").toLowerCase()}`}>{group.label}</h3>
         <ul>{group.sections.map(([id, label]) => <li key={id}><a href={`#${id}`} aria-current={id === activeSection ? "page" : undefined}
@@ -1259,14 +1258,13 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
             if (!isEditorSectionId(id)) return;
             event.preventDefault();
             activateSection(id);
-          }}>{label}</a></li>)}</ul>
+          }}><SectionIcon id={id} />{label}</a></li>)}</ul>
       </section>)}
     </nav>
-    <div className="editor-canvas" aria-label={`${editorSectionLabel(activeSection)} workspace`}>
-      <div className="active-workspace-path" aria-live="polite"><span>Core Design</span><strong>{editorSectionLabel(activeSection)}</strong></div>
+    <div ref={canvas} className="editor-canvas" aria-label={`${editorSectionLabel(activeSection)} workspace`}>
+      <p className="visually-hidden" aria-live="polite">Core Design: {editorSectionLabel(activeSection)}</p>
       {workspaces.map(([id, workspace]) => <div className="editor-workspace-slot" hidden={id !== activeSection} key={id}>{workspace}</div>)}
     </div>
     <aside className="editor-inspector" aria-label="Draft guidance">{inspector}</aside>
-    <PlenumLoader label="Loading design workspace" overlay visible={sectionTransitioning} />
   </div>;
 }

@@ -111,13 +111,15 @@ test("SYNC-10 minimizes cached projections to offline drafting and eligible Ball
     createTasks: [], artifacts: [], messages: [{ secret: "other-role content" }], injects: [{ secret: "hidden" }],
     polls: [{ id: "open", status: "open", eligible: true, hasVoted: false, canManage: true, canCertify: true, tally: { secret: true }, certification: { secret: true } },
       { id: "closed", status: "closed", eligible: true, hasVoted: false }],
-    voiceChannels: [{ token: "must-not-cache" }]
+    voiceChannels: [{ token: "must-not-cache" }],
+    timeline: { entries: [{ title: "Live timeline metadata" }], nextBefore: null }
   };
   const minimized = minimizeOfflineProjection(projection);
   assert.deepEqual(minimized.modules.map(({ type }) => type), ["artifact_form"]);
   assert.deepEqual(minimized.messages, []);
   assert.deepEqual(minimized.injects, []);
   assert.deepEqual(minimized.voiceChannels, []);
+  assert.equal(minimized.timeline, undefined);
   assert.deepEqual(minimized.polls.map(({ id }) => id), ["open"]);
   assert.equal(minimized.polls[0].canManage, false);
   assert.equal(JSON.stringify(minimized).includes("other-role content"), false);

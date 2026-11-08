@@ -63,7 +63,7 @@ import {
   type IdentityMetadataFetcher,
   type StageOrganizationIdentityProviderInput
 } from "../identity/organization-providers.js";
-import { getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
+import { getRuntimeArtifactHistory, getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
 import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
 import { getAdjudications } from "../adjudication/service.js";
 import { getRuntimeBootstrap, getRuntimeDeltas, getRuntimeSnapshot, getRuntimeSse } from "../sync/runtime-sync.js";
@@ -1557,12 +1557,29 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           options.replayAdapter, correlationId));
         return true;
       }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-artifacts\/([^/]+)\/history$/u))) {
+        const before = url.searchParams.get("beforeVersion");
+        if (before !== null && (!/^\d+$/u.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
+          throw authorizationError("VALIDATION_FAILED", "beforeVersion must be a positive safe integer.", correlationId);
+        }
+        send(response, 200, await getRuntimeArtifactHistory({ pool: options.pool, principal,
+          sessionId: pathId(match[1], correlationId), artifactId: pathId(match[2], correlationId), deviceId: deviceHeader(request, correlationId), correlationId,
+          ...(before === null ? {} : { beforeVersion: Number(before) }),
+          ...(url.searchParams.get("activeSessionRoleId") === null ? {} : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! })
+        }));
+        return true;
+      }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-projection$/u))) {
+        const timelineBefore = url.searchParams.get("timelineBefore");
+        if (timelineBefore !== null && (!/^\d+$/u.test(timelineBefore) || !Number.isSafeInteger(Number(timelineBefore)) || Number(timelineBefore) < 1)) {
+          throw authorizationError("VALIDATION_FAILED", "timelineBefore must be a positive safe integer.", correlationId);
+        }
         send(response, 200, await getRuntimeProjection({
           pool: options.pool,
           principal,
           sessionId: pathId(match[1], correlationId),
           deviceId: deviceHeader(request, correlationId),
+          ...(timelineBefore === null ? {} : { timelineBefore: Number(timelineBefore) }),
           ...(url.searchParams.get("activeSessionRoleId") === null ? {}
             : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }),
           correlationId

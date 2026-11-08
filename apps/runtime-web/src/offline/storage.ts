@@ -2,6 +2,7 @@ import {
   OFFLINE_OUTBOX_CONTRACT_ID,
   SYNC_BOOTSTRAP_CONTRACT_ID,
   type OfflineOutboxV1,
+  type JsonObject,
   type RuntimeProjectionV1,
   type SyncBootstrapV1
 } from "@plenum/event-contracts";
@@ -63,6 +64,7 @@ function isCache(value: unknown, sessionId: string, deviceId: string): value is 
 }
 
 export class OfflineRuntimeStore {
+  private readonly clearedDraftScopes = new Set<string>();
   private readonly database = new Promise<IDBDatabase>((resolve, reject) => {
     const open = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     open.onupgradeneeded = () => {
@@ -111,12 +113,43 @@ export class OfflineRuntimeStore {
     const transaction = database.transaction("runtime", "readwrite");
     transaction.objectStore("runtime").put({ id, sealed } satisfies StoredCache);
     await transactionComplete(transaction);
+    this.clearedDraftScopes.delete(id);
   }
 
   async clear(sessionId: string, deviceId: string): Promise<void> {
+    this.clearedDraftScopes.add(cacheId(sessionId, deviceId));
     const database = await this.database;
     const transaction = database.transaction("runtime", "readwrite");
     transaction.objectStore("runtime").delete(cacheId(sessionId, deviceId));
+    const cursor = transaction.objectStore("runtime").openCursor();
+    cursor.onsuccess = () => {
+      const item = cursor.result;
+      if (item === null) return;
+      if (String(item.key).startsWith(`draft:${cacheId(sessionId, deviceId)}:`)) item.delete();
+      item.continue();
+    };
+    await transactionComplete(transaction);
+  }
+
+  async loadDraft(sessionId: string, deviceId: string, scope: string): Promise<JsonObject | null> {
+    const database = await this.database;
+    const id = `draft:${cacheId(sessionId, deviceId)}:${scope}`;
+    const stored = await request(database.transaction("runtime").objectStore("runtime").get(id)) as StoredCache | undefined;
+    if (stored === undefined) return null;
+    const value = await openOfflineData(stored.sealed, await this.key(deviceId), id);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("The local draft could not be restored.");
+    return value as JsonObject;
+  }
+
+  async saveDraft(sessionId: string, deviceId: string, scope: string, content: JsonObject | null): Promise<void> {
+    const database = await this.database;
+    const id = `draft:${cacheId(sessionId, deviceId)}:${scope}`;
+    if (content !== null && JSON.stringify(content).length > 262_144) throw new Error("This draft is too large to save on this device.");
+    const sealed = content === null ? null : await sealOfflineData(content, await this.key(deviceId), id);
+    if (this.clearedDraftScopes.has(cacheId(sessionId, deviceId))) throw new Error("Session access was cleared. The draft was not saved.");
+    const transaction = database.transaction("runtime", "readwrite");
+    if (sealed === null) transaction.objectStore("runtime").delete(id);
+    else transaction.objectStore("runtime").put({ id, sealed } satisfies StoredCache);
     await transactionComplete(transaction);
   }
 }

@@ -972,7 +972,8 @@ export interface RuntimeFormFieldV1 {
   requiredWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
   visibleWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
   helpText?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; description?: string }>;
+  control?: "cards" | "select" | "range";
   readOnly?: boolean;
   validation?: { minLength?: number; maxLength?: number; min?: number; max?: number; integer?: boolean; minItems?: number; maxItems?: number; uniqueItems?: boolean };
 }
@@ -981,11 +982,16 @@ export interface RuntimeFormV1 {
   id: string;
   name: string;
   formVersion: string;
+  layout?: { pages: string[]; review?: boolean };
   fields: RuntimeFormFieldV1[];
   sections: Array<{
     id: string;
     title?: string;
     description?: string;
+    page?: number;
+    columns?: 2 | 3 | 4;
+    collapsed?: boolean;
+    table?: { columns: string[]; rows: Array<{ label: string; fields: string[] }>; editor?: "groups" };
     fields: RuntimeFormFieldV1[];
     repeatable?: boolean;
     itemLabel?: string;
@@ -1001,6 +1007,13 @@ export interface RuntimeActionV1 {
   label: string;
   requiresForm: boolean;
   editableFieldKeys?: string[];
+}
+
+export interface RuntimeArtifactHistoryV1 {
+  artifactId: string;
+  revisions: Array<{ version: number; state: string; stateLabel: string; payload: JsonObject; form: RuntimeFormV1;
+    authorDisplayName: string; recordedAt: string }>;
+  nextBeforeVersion: number | null;
 }
 
 export interface RuntimeArtifactV1 {
@@ -1022,12 +1035,14 @@ export interface RuntimeCreateTaskV1 {
   title: string;
   action: RuntimeActionV1;
   form: RuntimeFormV1;
+  /** Server-resolved values for a scoped form, such as an enabled Industry cell. */
+  initialValues?: JsonObject;
 }
 
 export interface RuntimeModuleV1 {
   id: string;
   type: "session_status" | "artifact_form" | "task_list" | "artifact_presentation" | "slide_deck" |
-    "resource_library" | "message_inbox" | "proposal_thread" | "inject_inbox";
+    "resource_library" | "message_inbox" | "proposal_thread" | "inject_inbox" | "session_timeline";
   title: string;
   mode: "read" | "write";
   emptyStateText: string;
@@ -1186,6 +1201,12 @@ export interface VoiceCommandReceiptV1 extends CommandReceiptV1 {
   mediaCredential: MediaCredentialV1 | null;
 }
 
+export interface RuntimeTimelineV1 {
+  entries: Array<{ id: string; sequence: number; occurredAt: string; category: "artifact" | "message" | "stage" | "inject";
+    title: string; activity: string; aggregateId: string; version: number | null }>;
+  nextBefore: number | null;
+}
+
 export interface RuntimeProjectionV1 {
   contractId: typeof RUNTIME_PROJECTION_CONTRACT_ID;
   sessionId: string;
@@ -1219,6 +1240,7 @@ export interface RuntimeProjectionV1 {
   injects: RuntimeInjectV1[];
   polls: RuntimePollV1[];
   voiceChannels: RuntimeVoiceChannelV1[];
+  timeline?: RuntimeTimelineV1;
 }
 
 export interface OperatorProjectionV1 {
@@ -2366,7 +2388,8 @@ export const runtimeProjectionV1Schema = {
     messages: { type: "array", items: { type: "object" } },
     injects: { type: "array", items: { type: "object" } },
     polls: { type: "array", items: { type: "object" } },
-    voiceChannels: { type: "array", items: { type: "object" } }
+    voiceChannels: { type: "array", items: { type: "object" } },
+    timeline: { type: "object" }
   }
 } as const satisfies ContractSchema<RuntimeProjectionV1>;
 

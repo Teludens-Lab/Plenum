@@ -21,7 +21,7 @@ test("PS-200-T01 compiles the complete Fractured Order Runtime configuration", (
   assert.deepEqual(compiled.release.coreDesign.artifactTypes.map(({ id }) => id), [
     "blue-strategic-orientation", "red-strategic-orientation", "green-strategic-orientation",
     "industry-strategic-plan", "blue-action", "red-move-response", "green-proposal",
-    "industry-turn-sheet", "rfi", "note"
+    "industry-turn-sheet", "rfi", "note", "team-dynamics", "alliance-tracking"
   ]);
   assert.equal(compiled.release.coreDesign.seats.length, 13);
   assert.equal(compiled.release.coreDesign.identity.developer, "Statecraft Simulation Group");
@@ -48,8 +48,8 @@ test("PS-200-T01 compiles the complete Fractured Order Runtime configuration", (
     assert.equal(artifactType.informationPolicyId, "policy-proposal");
   }
   assert.deepEqual(compiled.release.coreDesign.informationPolicies.find(({ id }) => id === "policy-team-workflow").grants,
-    [{ audience: { ownerTeam: true, sessionRoleIds: ["scribe", "facilitator"] } }, { audience: { includeControlRoles: true } }]);
-  assert.equal(compiled.release.coreDesign.communications.messageChannels.length, 4);
+    [{ audience: { ownerTeam: true, sessionRoleIds: ["scribe", "facilitator", "notetaker"] } }, { audience: { includeControlRoles: true } }]);
+  assert.equal(compiled.release.coreDesign.communications.messageChannels.length, 6);
   const proposalProtocol = compiled.release.coreDesign.communications.messageChannels
     .find(({ id }) => id === "proposal-thread").threadProtocol;
   assert.equal(proposalProtocol.isolation, "one_thread_per_recipient");
@@ -115,7 +115,8 @@ test("PS-200-T03 rejects invalid report roles and incomplete readiness definitio
 test("PS-200-T01 gives every configured Industry its own complete modal contracts", async () => {
   const forms = authoringSource.materialization.coreDesign.forms;
   const plan = forms.find(({ id }) => id === "form-industry-orientation");
-  const industryPlan = plan.sections.find(({ id }) => id === "industry-plan");
+  const industryPlan = { fields: plan.sections.flatMap(section => section.fields), repeatable: undefined };
+  assert.equal(plan.sections.some(section => section.repeatable), false);
   assert.equal(industryPlan.repeatable, undefined);
   assert.equal(plan.presentation.mode, "modal_per_scope");
   assert.ok(industryPlan.fields.length >= 35);
@@ -127,7 +128,7 @@ test("PS-200-T01 gives every configured Industry its own complete modal contract
   const scopeField = industryPlan.fields.find(({ key }) => key === "industryCellId");
   assert.deepEqual(scopeField.optionSource, { kind: "team_cells", teamId: "industry", cellKind: "industry_sector" });
   assert.deepEqual(source.materialization.coreDesign.forms.find(({ id }) => id === plan.id)
-    .sections.find(({ id }) => id === "industry-plan").fields.find(({ key }) => key === "industryCellId").options.map(({ label }) => label),
+    .sections.flatMap(section => section.fields).find(({ key }) => key === "industryCellId").options.map(({ label }) => label),
   ["Agriculture", "Telecommunications", "Biotechnology"]);
 
   const turn = forms.find(({ id }) => id === "form-industry-turn-sheet");
@@ -158,7 +159,9 @@ test("PS-200-T03 validates each scoped Industry Strategic Orientation", () => {
     blueForecast: "pressure"
   });
   assert.ok(issues.some(({ field }) => field === "industryCellId"));
-  assert.ok(issues.some(({ field }) => field === "businessOverview"));
+  assert.ok(issues.some(({ field }) => field === "risks.0.type"));
+  assert.ok(issues.some(({ field }) => field === "redLine"));
+  assert.equal(issues.some(({ field }) => field === "businessOverview"), false, "Legacy business context is optional in the reference form");
 });
 
 test("PS-410 makes Facilitator-owned Action revision/resubmission and accepted-proposal evidence explicit", () => {
@@ -224,7 +227,9 @@ test("PARITY-SCENARIO-01 packages hashed scenario media for only its configured 
   const missing = structuredClone(source);
   missing.materialization.coreDesign.resources = missing.materialization.coreDesign.resources.filter(({ id }) => id !== deck.id);
   assert.throws(() => compileRelease(missing), /missing identifier|missing Resource/u);
-  assert.equal(JSON.stringify(compileRelease(source).release).includes("https://"), false);
+  assert.equal(JSON.stringify(compileRelease(source).release.coreDesign.resources).includes("https://"), false);
+  assert.equal(modules(core.interfaces.find(({ id }) => id === "control"))
+    .some(({ configuration }) => configuration.releaseResourceId === deck.id), true);
 });
 
 test("ROLE-RESOURCE-01 validates governed role resource libraries", () => {
@@ -269,7 +274,7 @@ test("PS-200-T03 enforces conditional choices and bounded artifact fields", () =
   const issues = validateRuntimeFormPayload(form, {
     title: "Supply resilience", goal: "Protect capacity", objective: "Reduce dependency",
     instruments: ["economic"], levers: ["not-a-choice"], sectors: ["agriculture"],
-    supplyChainFocusDecision: "yes", implementationPath: "legislative", focusCountries: "Allies",
+    supplyChainFocusDecision: "yes", implementationPath: "legislative", legislativeVehicle: ["not-a-route"], focusCountries: ["EU"],
     coordinatedDecision: "no", informedEngagedDecision: ["allies"], expectedOutcomes: "More resilience"
   });
   assert.ok(issues.some(({ field }) => field === "levers"));

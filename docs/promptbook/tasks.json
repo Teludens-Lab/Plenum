@@ -6387,7 +6387,7 @@
       "Exercise real invitation delivery, bounce, duplicate callback, revocation, reissue and expiry through controlled inboxes",
       "Force safe partial failures and prove telemetry, bounded retry, reconciliation, provider rollback, SCIM credential rotation and emergency Platform Administrator access",
       "Rehearse the workforce migration against representative existing Organization data and verify the documented recovery procedure",
-      "Run the supported Windows, macOS, iOS and Android task matrix with keyboard, touch, zoom, forced colors, reduced motion and named screen readers",
+      "Run the supported Windows and macOS desktop-browser task matrix with keyboard, pointer, 200% browser zoom, forced colors, reduced motion and named desktop screen readers; mobile and touch-device acceptance are not applicable",
       "Close defects, consolidate sanitized evidence and obtain named engineering, security, accessibility, operations and product approval for the identity/workforce subsystem"
     ],
     "deliverables": [
@@ -6420,7 +6420,7 @@
       "Real invitations are delivered, bounced, revoked, reissued and expired with duplicate provider events handled idempotently",
       "Suspension and deprovisioning terminate active sessions and future entry while preserving governed and immutable audit records",
       "Provider rollback, emergency Platform Administrator access, SCIM credential rotation and representative migration recovery succeed",
-      "Authorized human testers complete the control-plane workflows on the supported device and assistive-technology matrix with no unresolved task-blocking defect",
+      "Authorized human testers complete the control-plane workflows on the supported desktop-browser and assistive-technology matrix with no unresolved task-blocking defect",
       "Every required gate is PASS and named accountable approvers bind the subsystem decision to the exact tested artifacts"
     ],
     "regression_quality_gates": [
@@ -6457,10 +6457,16 @@
       "clean-install-evidence-v1",
       "institutional-acceptance-v1"
     ],
-    "evidence": [],
+    "evidence": [
+      "docs/release-evidence/PS-820-index.md",
+      "docs/operations/PS-820-INSTALL-UPGRADE-RECOVERY.md",
+      "docs/design/user-test/PS-820-script.md",
+      "test-results/clean-install/ps-820-clean-install.json",
+      "test-results/recovery/ps-530-restore.json"
+    ],
     "risk": "high",
     "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
-    "implementation_state": "planned",
+    "implementation_state": "in_progress",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
       "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",

@@ -127,8 +127,9 @@ export function updateOfflineDraft(
 }
 
 export function minimizeOfflineProjection(projection: RuntimeProjectionV1): RuntimeProjectionV1 {
+  const { timeline: _timeline, ...offlineProjection } = projection;
   return {
-    ...projection,
+    ...offlineProjection,
     modules: projection.modules.filter(({ type }) => ["session_status", "artifact_form", "task_list"].includes(type)),
     createTasks: projection.createTasks.filter((task) =>
       OFFLINE_QUEUEABLE_OPERATION_TYPES.includes(

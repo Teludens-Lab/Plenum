@@ -118,7 +118,7 @@ const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
-const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8" };
+const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
 const securityHeaders = buildSecurityHeaders({ publicBaseUrl, mediaUrl });
 const serviceStartedAt = Date.now();
 let retentionLastSucceededAt;
@@ -202,13 +202,17 @@ const server = createServer(async (request, response) => {
     }
     if (await api(request, response, telemetryContext.correlationId)) return;
     const studio = url.pathname.startsWith("/studio/");
-    const relative = url.pathname.startsWith("/assets/") ? normalize(url.pathname.slice(1)) :
+    const relative = url.pathname.startsWith("/assets/") || url.pathname.startsWith("/branding/") ? normalize(url.pathname.slice(1)) :
       studio && url.pathname.startsWith("/studio/assets/") ? normalize(url.pathname.slice("/studio/".length)) : "index.html";
     if (relative.startsWith("..")) throw new Error("Unsafe static path");
     const file = await readFile(join(studio ? studioRoot : webRoot, relative));
     response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream" });
     response.end(file);
-  } catch {
+  } catch (error) {
+    if (error?.code === "ENOENT" && !response.headersSent) {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+      response.end("Not found\n"); return;
+    }
     telemetry.emit({ event: "service.request_failed", severity: "error", outcome: "failed",
       correlationId: telemetryContext.correlationId, traceId: telemetryContext.traceId,
       method: telemetryContext.method, route: telemetryContext.route, category: "unhandled" });

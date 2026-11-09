@@ -83,6 +83,7 @@ test("public edge emits one HSTS value while retaining direct-service transport 
 
 test("staging DAST dispatch and guard allow only the approved target", async () => {
   const dast = await readFile(resolve(root, ".github/workflows/staging-dast.yml"), "utf8");
+  assert.match(dast, /^    environment:\n      name: staging-security\n      deployment: false$/mu);
   const input = dast.match(/^      target:\n([\s\S]*?)(?=^\S)/mu)?.[1];
   assert.ok(input, "staging target input must exist");
   assert.match(input, /^        default: https:\/\/plenum-stage-01\.duckdns\.org$/mu);

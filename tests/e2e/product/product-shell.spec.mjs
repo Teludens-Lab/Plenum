@@ -1120,6 +1120,7 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
   await release.getByLabel("Session name").fill(title);
   await release.getByRole("button", { name: "Create configured Session" }).click();
   await expect(admin.page).toHaveURL(/\/sessions\/[0-9a-f-]{36}$/u);
+  await mkdir("test-results/golden-journey", { recursive: true });
   await writeFile("test-results/golden-journey/checkpoint-e-published-session.json", JSON.stringify({ title,
     sessionPath: new URL(admin.page.url()).pathname, studioPath: new URL(studioUrl).pathname,
     provenance: "Created, authored, reviewed, published and configured through product controls in PS-830-T06." }, null, 2));

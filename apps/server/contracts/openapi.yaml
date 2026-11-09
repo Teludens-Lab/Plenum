@@ -413,7 +413,7 @@ paths:
       x-authorized-organization-roles: [admin, publisher]
       security: [{ SessionCookie: [] }]
       responses:
-        "200": { description: Plugin Artifact lifecycle, digest, publisher, installation, binding, and supply-chain provenance. }
+        "200": { description: Plugin Artifact lifecycle, digest, publisher, installation, binding, supply-chain provenance and signed manifest requestedPermissions for named permission choices. }
   /v1/operations/data-policy:
     get:
       operationId: getDataPolicyOperations
@@ -421,7 +421,7 @@ paths:
       x-authorized-organization-role: admin
       security: [{ SessionCookie: [] }]
       responses:
-        "200": { description: Versioned retention policies, legal holds, corrections, and portable import history. }
+        "200": { description: Versioned retention policies, legal holds, corrections, portable import history and Organization-scoped targets (id, scopeType, label). Targets include this Organization and at most 200 Sessions, Projects and exports each. Named targets are revalidated transactionally on mutation. }
   /v1/research/reportable-sessions:
     get:
       operationId: listResearchReportableSessions
@@ -1071,6 +1071,7 @@ paths:
               additionalProperties: false
               required: [pluginId, license, termsDigest]
               properties:
+                artifactId: { type: string, format: uuid, description: Optional selected Artifact; when present its Organization and pluginId are revalidated before acceptance. Legacy offline pre-intake acceptance remains supported. }
                 pluginId: { type: string, minLength: 1 }
                 license: { type: string, minLength: 1 }
                 termsDigest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }

@@ -250,7 +250,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       .getByText("Saved on this device as local pending. It has not been submitted.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Close Strategic Orientation", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Offline Outbox" })).toBeVisible();
-    await expect(page.getByText("local pending", { exact: true })).toBeVisible();
+    await expect(page.getByText("Saved on this device", { exact: true })).toBeVisible();
     const rawStorage = await page.evaluate(async () => new Promise((resolve, reject) => {
       const open = indexedDB.open("plenum-offline-v1");
       open.onerror = () => reject(open.error);
@@ -336,7 +336,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await latePoll.getByLabel("No").check();
     await latePoll.getByRole("button", { name: "Cast Ballot" }).click();
     await expect(lateParticipant.page.getByRole("list", { name: "Session messages", exact: true })).toContainText("Saved on this device as local pending. It has not been submitted.");
-    await expect(lateParticipant.page.getByText("local pending", { exact: true })).toBeVisible();
+    await expect(lateParticipant.page.getByText("Saved on this device", { exact: true })).toBeVisible();
     await lateParticipant.page.close();
 
     await participant.page.goto(runtimeUrl());
@@ -353,7 +353,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await control.context.setOffline(true);
     await managed.getByRole("button", { name: "Close Poll" }).click();
     await expect(control.page.getByText("Poll management requires the live Session Authority and was not queued.")).toBeVisible();
-    await expect(managed.getByText("open", { exact: true })).toBeVisible();
+    await expect(managed.getByText("Open", { exact: true })).toBeVisible();
     await control.context.setOffline(false);
     await managed.getByRole("button", { name: "Close Poll" }).click();
     await expect(managed.getByRole("button", { name: "Compute Tally" })).toBeVisible({ timeout: commandTimeout });
@@ -363,7 +363,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await lateReconnect.goto(runtimeUrl());
     await expect(lateReconnect.getByRole("list", { name: "Session messages", exact: true })).toContainText("Reconnect complete: 1 rejected.", { timeout: 20_000 });
     await expect(lateReconnect.getByText("The Poll is not accepting Ballots.")).toBeVisible();
-    await expect(lateReconnect.getByText("rejected", { exact: true })).toBeVisible();
+    await expect(lateReconnect.getByText("Rejected", { exact: true })).toBeVisible();
     await expect(lateReconnect.getByLabel("Editable local draft")).toBeVisible();
 
     await managed.getByRole("button", { name: "Compute Tally" }).click();
@@ -866,10 +866,10 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(operator.page.getByText("No ambiguous roster rows.")).toBeVisible();
     await expect(operator.page.getByRole("heading", { level: 2, name: "Operator readiness" })).toBeVisible();
     await expect(operator.page.getByRole("heading", { level: 2, name: "Runtime deliveries" })).toBeVisible();
-    await expect(operator.page.getByText("1 dead-lettered")).toBeVisible();
+    await expect(operator.page.getByText("Needs attention: 1", { exact: false })).toBeVisible();
     await operator.page.getByRole("button", { name: "Retry delivery" }).click();
     await expect(operator.page.getByText("Delivery returned to the pending queue.")).toBeVisible();
-    await expect(operator.page.getByText("No dead-lettered deliveries.")).toBeVisible();
+    await expect(operator.page.getByText("No deliveries need attention.")).toBeVisible();
     await expect(operator.page.getByText("Current governing Release is pinned")).toBeVisible();
     expect((await new AxeBuilder({ page: operator.page }).analyze()).violations).toEqual([]);
     await expect(operator.page.locator(".status-list li").filter({ hasText: "completed" })).toContainText("1");
@@ -1268,7 +1268,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       }
     }
     await control.page.goto(runtimeUrl());
-    const controlNavigation = control.page.getByRole("navigation", { name: "Runtime modules" });
+    const controlNavigation = control.page.locator("#runtime-navigation");
     await controlNavigation.getByRole("link", { name: "Communications", exact: true }).click();
     await expect(control.page.getByRole("heading", { name: "Communications", level: 2 })).toBeVisible();
     await controlNavigation.getByRole("link", { name: /^Injects\b/u }).click();
@@ -1276,7 +1276,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await controlNavigation.getByRole("link", { name: /^Proposals\b/u }).click();
     await expect(control.page.getByRole("heading", { name: "Proposal custody", level: 2 })).toBeVisible({ timeout: 15_000 });
     await source.page.goto(runtimeUrl());
-    await source.page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: /^Received Proposals\b/u }).click();
+    await source.page.locator("#runtime-navigation").getByRole("link", { name: /^Received Proposals\b/u }).click();
     await expect(source.page.getByRole("heading", { name: "Proposal negotiations", level: 2 })).toBeVisible({ timeout: 15_000 });
     for (const page of [control.page, source.page]) {
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -1308,7 +1308,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     } });
     expect(opened.status()).toBe(200);
     await recipient.page.goto(runtimeUrl());
-    await recipient.page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: /^Received Proposals\b/u }).click();
+    await recipient.page.locator("#runtime-navigation").getByRole("link", { name: /^Received Proposals\b/u }).click();
     await expect(recipient.page.getByRole("heading", { name: "Proposal negotiations", level: 2 })).toBeVisible({ timeout: 15_000 });
     expect((await new AxeBuilder({ page: recipient.page }).analyze()).violations).toEqual([]);
     expect((await projection(source, devices[1])).messages).toContainEqual(expect.objectContaining({
@@ -1444,22 +1444,23 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await teams.getByLabel("Team name").last().fill("Browser-created Team");
 
     const roles = await openStudioWorkspace(first.page, "Session Roles");
-    await roles.locator("details").first().locator("summary").click();
+    await roles.locator("details").first().locator(":scope > summary").click();
     await roles.getByLabel("Description").first().fill("Configured by the PS-350 visual proof.");
     const stages = await openStudioWorkspace(first.page, "Stages");
-    await stages.locator("details[id^='stages-']").first().locator("summary").click();
+    await stages.locator("details[id^='stages-']").first().locator(":scope > summary").click();
     await stages.getByLabel("Duration in seconds (0 for untimed)").first().fill("1799");
-    const forms = await openStudioWorkspace(first.page, "Forms & Artifacts", "Forms & Artifact Types");
+    const forms = await openStudioWorkspace(first.page, "Forms & Artifacts");
     await forms.locator("details[id^='forms-']").first().locator("summary").first().click();
     await forms.getByLabel("Form name").first().fill("PS-350 browser-configured form");
     const workflows = await openStudioWorkspace(first.page, "Workflows");
-    await workflows.locator("details[id^='workflows-']").first().locator("summary").click();
+    await workflows.locator("details[id^='workflows-']").first().locator(":scope > summary").click();
     await workflows.getByLabel("Workflow name").first().fill("PS-350 DEC-42 review workflow");
     await expect(first.page.getByText("Synchronized", { exact: true })).toBeVisible({ timeout: 40_000 });
 
     const firstOverview = await openStudioWorkspace(first.page, "Overview & Scenario");
     await firstOverview.getByLabel("Scenario name").fill("Browser convergence proof");
     await expect(first.page.getByText("Synchronized", { exact: true })).toBeVisible({ timeout: 40_000 });
+    await openStudioWorkspace(second.page, "Overview & Scenario");
     await expect(second.page.getByLabel("Scenario name")).toHaveValue("Browser convergence proof", { timeout: 20_000 });
     await second.context.setOffline(true);
     await second.page.evaluate(() => window.dispatchEvent(new Event("offline")));
@@ -1476,15 +1477,15 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText("Synchronized", { exact: true })).toBeVisible();
 
     const polls = await openStudioWorkspace(first.page, "Polls");
-    await polls.locator("details").filter({ hasText: "Adopt the synthetic accessibility resolution?" }).locator("summary").click();
+    await polls.locator("details").filter({ hasText: "Adopt the synthetic accessibility resolution?" }).locator(":scope > summary").click();
     await expect(polls.getByText(/Counting rule: Count accepted ballots using simple majority over valid votes/u)).toBeVisible();
     await expect(polls.getByText(/Electorate preview: Everyone/u)).toBeVisible();
     const voice = await openStudioWorkspace(first.page, "Voice Channels");
-    await voice.locator("details").filter({ hasText: "Team open room" }).locator("summary").click();
+    await voice.locator("details").filter({ hasText: "Team open room" }).locator(":scope > summary").click();
     await expect(voice.getByRole("table", { name: "Selected adapter capability by target profile" })).toBeVisible();
     await expect(voice.getByRole("table", { name: "Effective configured permissions. Public access, when selected, applies to every row." })).toBeVisible();
 
-    const preview = await openStudioWorkspace(first.page, "Role walkthrough", "Role & Stage preview");
+    const preview = await openStudioWorkspace(first.page, "Role walkthrough");
     await preview.getByRole("combobox", { name: "Session Role", exact: true }).selectOption("scribe");
     await preview.getByRole("combobox", { name: "Stage", exact: true }).selectOption("orientation");
     await preview.getByRole("combobox", { name: "Team", exact: true }).selectOption("blue");
@@ -1493,7 +1494,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(preview.getByLabel("Scribe interface preview")).toBeVisible({ timeout: serverTimeout });
     await expect(preview.getByRole("heading", { name: "Opening brief" })).toBeVisible();
 
-    const publication = await openStudioWorkspace(first.page, "Review & publish", "Review and publish");
+    const publication = await openStudioWorkspace(first.page, "Review & publish");
     await publication.getByLabel("Release label").fill("PS-300 browser proof");
     await publication.getByLabel("Semantic version").fill("3.0.0");
     await publication.getByLabel("Release notes").fill("Collaborative browser acceptance proof.");
@@ -1506,7 +1507,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText(/is frozen and ready for Reviewer approval/u)).toBeVisible({ timeout: serverTimeout });
     const reviewer = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1024, height: 768 }, reducedMotion: "reduce" });
     await reviewer.page.goto(studioUrl());
-    const reviewerPublication = await openStudioWorkspace(reviewer.page, "Review & publish", "Review and publish");
+    const reviewerPublication = await openStudioWorkspace(reviewer.page, "Review & publish");
     await expect(reviewerPublication.getByRole("button", { name: "Approve freeze" })).toBeEnabled({ timeout: serverTimeout });
     await reviewerPublication.getByLabel("Methodology review notes").fill("Synthetic independent methodology review.");
     await reviewerPublication.getByRole("button", { name: "Approve freeze" }).click();
@@ -1573,7 +1574,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     const stageCards = stages.locator("details[id^='stages-']");
     await expect(stageCards).toHaveCount(16, { timeout: 20_000 });
     const stageIdsBefore = await stageCards.evaluateAll((items) => items.map(({ id }) => id));
-    await stageCards.nth(1).locator("summary").click();
+    await stageCards.nth(1).locator(":scope > summary").click();
     await stageCards.nth(1).getByRole("button", { name: "Earlier" }).click();
     const expectedStageIds = [stageIdsBefore[1], stageIdsBefore[0], ...stageIdsBefore.slice(2)];
     await expect.poll(() => stageCards.evaluateAll((items) => items.map(({ id }) => id))).toEqual(expectedStageIds);
@@ -1596,27 +1597,27 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(catalogCards).toHaveCount(2);
     await catalogCards.nth(0).getByRole("button", { name: "Bind installed Plugin" }).click();
     await catalogCards.nth(1).getByRole("button", { name: "Bind installed Plugin" }).click();
-    const effectBinding = plugins.locator("details").filter({ hasText: "org.ssg.fixtures.effect 1.0.0" });
-    await effectBinding.locator("summary").click();
+    const effectBinding = plugins.locator('details[id^="pluginBindings-"]').filter({ hasText: "org.ssg.fixtures.effect 1.0.0" });
+    await effectBinding.locator(":scope > summary").click();
     await effectBinding.getByRole("button", { name: "Add input port" }).click();
     await expect(effectBinding.getByRole("group", { name: "Input ports" }).getByLabel("Port label")).toHaveValue("Input 1");
     await expect(designer.page.getByText("Synchronized", { exact: true })).toBeVisible({ timeout: 40_000 });
 
     const compositions = await openStudioWorkspace(designer.page, "Model Compositions");
     await compositions.getByRole("button", { name: "Add Model Composition" }).click();
-    const composition = compositions.locator("details").last();
-    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "org.ssg.fixtures.analysis 1.0.0" });
+    const composition = compositions.locator('details[id^="compositions-"]').last();
+    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "Org ssg fixtures analysis 1.0.0" });
     await composition.getByRole("button", { name: "Add model node" }).click();
-    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "org.ssg.fixtures.effect 1.0.0" });
+    await composition.getByLabel("Approved Plugin Binding").selectOption({ label: "Org ssg fixtures effect 1.0.0" });
     await composition.getByRole("button", { name: "Add model node" }).click();
     await composition.getByRole("button", { name: "Add approval gate" }).click();
     await composition.getByRole("button", { name: "Add output" }).click();
 
     const edgeBuilder = composition.getByRole("group", { name: "Connect typed ports" });
-    await edgeBuilder.getByLabel("Output port").selectOption({ label: "org.ssg.fixtures.analysis 1.0.0: Result · number · unitless · internal" });
-    await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "org.ssg.fixtures.effect 1.0.0: Input 1 · ceiling internal" });
+    await edgeBuilder.getByLabel("Output port").selectOption({ label: "Org ssg fixtures analysis 1.0.0: Result · number · unitless · internal" });
+    await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "Org ssg fixtures effect 1.0.0: Input 1 · ceiling internal" });
     await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
-    await edgeBuilder.getByLabel("Output port").selectOption({ label: "org.ssg.fixtures.effect 1.0.0: Effect Proposals · effect proposal · unitless · internal" });
+    await edgeBuilder.getByLabel("Output port").selectOption({ label: "Org ssg fixtures effect 1.0.0: Effect Proposals · effect proposal · unitless · internal" });
     await edgeBuilder.getByLabel("Compatible input port").selectOption({ label: "Mandatory approval: Effect Proposals · ceiling internal" });
     await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
     await edgeBuilder.getByLabel("Output port").selectOption({ label: "Mandatory approval: Effect Proposals · effect proposal · unitless · internal" });
@@ -1624,7 +1625,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await edgeBuilder.getByRole("button", { name: "Connect ports" }).click();
     await expect(designer.page.getByText("Synchronized", { exact: true })).toBeVisible({ timeout: 40_000 });
     await composition.getByRole("button", { name: "Run fixture without state change" }).click();
-    await expect(composition.getByText("Status: completed")).toBeVisible({ timeout: 20_000 });
+    await expect(composition.getByText("Status: Completed")).toBeVisible({ timeout: 20_000 });
     await expect(composition.getByText("State changes: 0")).toBeVisible();
     expect((await new AxeBuilder({ page: designer.page }).include("#plugins").include("#compositions").analyze()).violations).toEqual([]);
     await designer.context.close();
@@ -1694,12 +1695,12 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 40_000 });
 
     const stages = await openStudioWorkspace(designer.page, "Stages");
-    await stages.locator("details[id^='stages-']").first().locator("summary").click();
+    await stages.locator("details[id^='stages-']").first().locator(":scope > summary").click();
     await expect(stages.getByLabel("Outgoing branch behavior").first()).toHaveValue("exclusive");
     await expect(stages.getByLabel("Incoming merge behavior").first()).toHaveValue("");
 
     const workflows = await openStudioWorkspace(designer.page, "Workflows");
-    await workflows.locator("details[id^='workflows-']").first().locator("summary").click();
+    await workflows.locator("details[id^='workflows-']").first().locator(":scope > summary").click();
     await expect(workflows.getByRole("button", { name: "Add Workflow transition" }).first()).toBeVisible();
 
     const advanced = await openStudioWorkspace(designer.page, "Advanced logic & world state");
@@ -1708,10 +1709,11 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await advanced.getByLabel("Capability mode").last().selectOption("counted");
     await advanced.getByLabel("Renew on Stage type").last().check();
     await expect(advanced.getByLabel("Renew quantity").last()).toHaveValue("1");
+    await advanced.getByText("Conditional Workflow transitions", { exact: true }).click();
     await expect(advanced.getByLabel("Branch priority").first()).toBeVisible();
 
     const inject = advanced.locator("details").filter({ hasText: "Opening briefing" });
-    await inject.locator("summary").click();
+    await inject.locator(":scope > summary").click();
     await inject.getByRole("button", { name: "Add State Effect" }).click();
     await inject.getByLabel("Delay in seconds").last().fill("30");
     await expect(inject.getByLabel("Delay in seconds").last()).toHaveValue("30");
@@ -1745,7 +1747,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
 
       const reviewer = await actor(browser, fixture.tokens.finalReviewer, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
       await reviewer.page.goto(studioUrl());
-      const reviewChanges = await openStudioWorkspace(reviewer.page, "Live Changes", "Activate a Release");
+      const reviewChanges = await openStudioWorkspace(reviewer.page, "Live Changes");
       await reviewChanges.getByLabel("Session").selectOption(fixture.sessionId);
       await reviewChanges.getByLabel("Candidate Release").selectOption(fixture.activationReleaseId);
       await reviewChanges.getByRole("button", { name: "Preview impact" }).click();
@@ -1761,7 +1763,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
 
       const operator = await actor(browser, fixture.tokens.operator, { viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
       await operator.page.goto(studioUrl());
-      const liveChanges = await openStudioWorkspace(operator.page, "Live Changes", "Activate a Release");
+      const liveChanges = await openStudioWorkspace(operator.page, "Live Changes");
       await liveChanges.getByLabel("Session").selectOption(fixture.sessionId);
       await liveChanges.getByLabel("Candidate Release").selectOption(fixture.activationReleaseId);
       await liveChanges.getByRole("button", { name: "Preview impact" }).click();

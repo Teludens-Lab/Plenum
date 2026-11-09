@@ -1,0 +1,708 @@
+{
+  "releaseId": "10000000-0000-4000-8000-000000842431",
+  "projectId": "20000000-0000-4000-8000-000000000431",
+  "definitionRevisionId": "30000000-0000-4000-8000-000000842431",
+  "releaseLabel": "Crisis Response Validation 1.0.1",
+  "semanticVersion": "1.0.1",
+  "methodologyVersion": "1.3.1",
+  "publishedBy": "40000000-0000-4000-8000-000000000431",
+  "approvedBy": [
+    "50000000-0000-4000-8000-000000000431"
+  ],
+  "publishedAt": "2026-10-23T12:05:00.000Z",
+  "releaseNotes": "PS-842 synthetic interface candidate. Publication and activation evidence is recorded separately; existing Releases remain unchanged.",
+  "validationReportId": "60000000-0000-4000-8000-000000842431",
+  "materialization": {
+    "coreDesign": {
+      "teams": [
+        {
+          "id": "emergency-operations",
+          "name": "Emergency Operations",
+          "objectiveIds": [],
+          "enabled": true
+        },
+        {
+          "id": "hospital-network",
+          "name": "Hospital Network",
+          "objectiveIds": [],
+          "enabled": true
+        }
+      ],
+      "sessionRoles": [
+        {
+          "id": "field-coordinator",
+          "name": "Field Coordinator",
+          "capabilities": [
+            {
+              "capability": "artifact.create"
+            },
+            {
+              "capability": "artifact.submit"
+            }
+          ],
+          "interfaceProfileIds": [
+            "field-workspace"
+          ],
+          "isControlRole": false,
+          "enabled": true
+        },
+        {
+          "id": "operations-lead",
+          "name": "Operations Lead",
+          "capabilities": [
+            {
+              "capability": "artifact.accept"
+            },
+            {
+              "capability": "stage.advance"
+            }
+          ],
+          "interfaceProfileIds": [
+            "operations-workspace"
+          ],
+          "isControlRole": true,
+          "enabled": true
+        }
+      ],
+      "seats": [
+        {
+          "id": "field-coordinator",
+          "name": "Field Coordinator",
+          "sessionRoleIds": [
+            "field-coordinator"
+          ],
+          "teamId": "emergency-operations",
+          "minOccupancy": 1,
+          "maxOccupancy": 1,
+          "required": true,
+          "joinMode": "operator_assignment"
+        },
+        {
+          "id": "operations-lead",
+          "name": "Operations Lead",
+          "sessionRoleIds": [
+            "operations-lead"
+          ],
+          "minOccupancy": 1,
+          "maxOccupancy": 1,
+          "required": true,
+          "joinMode": "operator_assignment"
+        }
+      ],
+      "stageGroups": [],
+      "stages": [
+        {
+          "id": "alert",
+          "name": "Alert",
+          "stageType": "phase",
+          "durationSeconds": 60,
+          "timerMode": "countdown",
+          "allowedActivityIds": [],
+          "transitions": [
+            {
+              "id": "alert-to-mobilization",
+              "targetStageId": "mobilization",
+              "mode": "automatic",
+              "gate": {
+                "operator": "all",
+                "conditions": [
+                  {
+                    "fact": "state.incident-severity",
+                    "operator": "greater_or_equal",
+                    "value": 3
+                  }
+                ]
+              }
+            }
+          ],
+          "onEnter": [
+            {
+              "type": "apply_effect",
+              "parameters": {
+                "stateVariableId": "incident-severity",
+                "operation": "increment",
+                "value": 1,
+                "rationale": "Synthetic sensor escalation"
+              }
+            }
+          ],
+          "operatorControls": {
+            "allowStart": true,
+            "allowEnd": true,
+            "allowReopen": false,
+            "allowExtend": true,
+            "allowSkip": false,
+            "allowReturnToPrevious": false,
+            "requireReason": true
+          }
+        },
+        {
+          "id": "mobilization",
+          "name": "Mobilization",
+          "stageType": "phase",
+          "durationSeconds": 120,
+          "timerMode": "countdown",
+          "allowedActivityIds": [
+            "resource-allocation"
+          ],
+          "completionGate": {
+            "operator": "all",
+            "conditions": [
+              {
+                "fact": "state.hospital-load",
+                "operator": "greater_or_equal",
+                "value": 65
+              }
+            ]
+          },
+          "transitions": [
+            {
+              "id": "mobilization-to-triage",
+              "targetStageId": "triage",
+              "mode": "manual"
+            }
+          ],
+          "onEnter": [
+            {
+              "type": "apply_effect",
+              "parameters": {
+                "stateVariableId": "hospital-load",
+                "operation": "increment",
+                "value": 25,
+                "rationale": "Synthetic casualty arrivals"
+              }
+            }
+          ],
+          "operatorControls": {
+            "allowStart": true,
+            "allowEnd": true,
+            "allowReopen": false,
+            "allowExtend": true,
+            "allowSkip": false,
+            "allowReturnToPrevious": false,
+            "requireReason": true
+          }
+        },
+        {
+          "id": "triage",
+          "name": "Triage",
+          "stageType": "phase",
+          "durationSeconds": 120,
+          "timerMode": "countdown",
+          "allowedActivityIds": [
+            "resource-allocation"
+          ],
+          "completionGate": {
+            "operator": "all",
+            "conditions": [
+              {
+                "fact": "state.shelter-ready",
+                "operator": "equals",
+                "value": true
+              }
+            ]
+          },
+          "transitions": [
+            {
+              "id": "triage-to-stabilized",
+              "targetStageId": "stabilized",
+              "mode": "manual"
+            }
+          ],
+          "onEnter": [
+            {
+              "type": "apply_effect",
+              "parameters": {
+                "stateVariableId": "shelter-ready",
+                "operation": "set",
+                "value": true,
+                "rationale": "Synthetic shelter activation"
+              }
+            },
+            {
+              "type": "apply_effect",
+              "parameters": {
+                "stateVariableId": "incident-severity",
+                "operation": "decrement",
+                "value": 1,
+                "rationale": "Synthetic response effect"
+              }
+            }
+          ],
+          "operatorControls": {
+            "allowStart": true,
+            "allowEnd": true,
+            "allowReopen": false,
+            "allowExtend": true,
+            "allowSkip": false,
+            "allowReturnToPrevious": false,
+            "requireReason": true
+          }
+        },
+        {
+          "id": "stabilized",
+          "name": "Stabilized",
+          "stageType": "phase",
+          "timerMode": "none",
+          "allowedActivityIds": [],
+          "transitions": [],
+          "operatorControls": {
+            "allowStart": true,
+            "allowEnd": true,
+            "allowReopen": false,
+            "allowExtend": false,
+            "allowSkip": false,
+            "allowReturnToPrevious": false,
+            "requireReason": true
+          }
+        }
+      ],
+      "artifactTypes": [
+        {
+          "id": "resource-allocation",
+          "key": "resourceAllocation",
+          "name": "Resource Allocation",
+          "formId": "resource-allocation-form",
+          "workflowId": "resource-allocation-workflow",
+          "informationPolicyId": "policy-response-team",
+          "allowedCreatorSessionRoleIds": [
+            "field-coordinator"
+          ],
+          "allowedTeamIds": [
+            "emergency-operations"
+          ],
+          "availableStageIds": [
+            "mobilization",
+            "triage"
+          ],
+          "ownership": "team",
+          "decisionBearing": false,
+          "versioning": "full_history",
+          "exportable": true
+        }
+      ],
+      "activities": [
+        {
+          "id": "resource-allocation",
+          "name": "Resource allocation",
+          "sessionRoleIds": [
+            "field-coordinator"
+          ],
+          "artifactTypeIds": [
+            "resource-allocation"
+          ],
+          "required": false
+        }
+      ],
+      "forms": [
+        {
+          "id": "resource-allocation-form",
+          "name": "Resource Allocation",
+          "formVersion": "1",
+          "sections": [
+            {
+              "id": "allocation",
+              "title": "Allocation",
+              "fields": [
+                {
+                  "id": "destination",
+                  "key": "destination",
+                  "label": "Destination",
+                  "type": "short_text",
+                  "required": true,
+                  "validation": {
+                    "minLength": 3,
+                    "maxLength": 120
+                  }
+                },
+                {
+                  "id": "quantity",
+                  "key": "quantity",
+                  "label": "Medical supply units",
+                  "type": "number",
+                  "required": true,
+                  "validation": {
+                    "min": 1,
+                    "max": 100,
+                    "integer": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "workflows": [
+        {
+          "id": "resource-allocation-workflow",
+          "key": "resourceAllocationReview",
+          "name": "Resource allocation review",
+          "initialState": "draft",
+          "states": [
+            {
+              "key": "draft",
+              "label": "Draft",
+              "kind": "draft",
+              "holderRelation": "creator"
+            },
+            {
+              "key": "in_review",
+              "label": "In review",
+              "kind": "review",
+              "holderSessionRoleIds": [
+                "operations-lead"
+              ]
+            },
+            {
+              "key": "approved",
+              "label": "Approved",
+              "kind": "terminal"
+            }
+          ],
+          "transitions": [
+            {
+              "id": "allocation-create",
+              "from": null,
+              "command": "artifact.create",
+              "to": "draft",
+              "allowedSessionRoleIds": [
+                "field-coordinator"
+              ]
+            },
+            {
+              "id": "allocation-submit",
+              "from": "draft",
+              "command": "artifact.submit",
+              "to": "in_review",
+              "allowedSessionRoleIds": [
+                "field-coordinator"
+              ]
+            },
+            {
+              "id": "allocation-accept",
+              "from": "in_review",
+              "command": "artifact.accept",
+              "to": "approved",
+              "allowedSessionRoleIds": [
+                "operations-lead"
+              ]
+            }
+          ]
+        }
+      ],
+      "informationPolicies": [
+        {
+          "id": "policy-public",
+          "name": "Public",
+          "classification": "public",
+          "grants": [
+            {
+              "audience": {
+                "public": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "policy-response-team",
+          "name": "Response team",
+          "classification": "internal",
+          "grants": [
+            {
+              "audience": {
+                "sessionRoleIds": [
+                  "field-coordinator",
+                  "operations-lead"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "policy-control",
+          "name": "Operations control",
+          "classification": "restricted",
+          "grants": [
+            {
+              "audience": {
+                "sessionRoleIds": [
+                  "operations-lead"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "communications": {
+        "messageChannels": [],
+        "routes": [],
+        "voiceChannels": []
+      },
+      "interfaces": [
+        {
+          "id": "field-workspace",
+          "name": "Field workspace",
+          "selectors": {
+            "sessionRoleIds": [
+              "field-coordinator"
+            ]
+          },
+          "layout": {
+            "template": "workspace_tabs",
+            "regions": [
+              {
+                "id": "create",
+                "modules": [
+                  {
+                    "id": "p-field-workspace-create",
+                    "moduleType": "artifact_form",
+                    "title": "Resource Allocation",
+                    "configuration": {
+                      "mode": "write",
+                      "artifactTypeKeys": [
+                        "resourceAllocation"
+                      ],
+                      "navigationSection": "Work",
+                      "emptyStateText": "No forms are available in the current Stage."
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "records",
+                "modules": [
+                  {
+                    "id": "field-workspace-records",
+                    "moduleType": "task_list",
+                    "title": "Your records",
+                    "configuration": {
+                      "mode": "read",
+                      "artifactTypeKeys": [
+                        "resourceAllocation"
+                      ],
+                      "presentation": "review",
+                      "navigationSection": "Work",
+                      "emptyStateText": "Records will appear here when available."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "navigation": {
+            "defaultItemId": "create",
+            "items": [
+              {
+                "id": "create",
+                "label": "Resource Allocation",
+                "order": 1,
+                "target": {
+                  "regionId": "create"
+                }
+              },
+              {
+                "id": "records",
+                "label": "Your records",
+                "order": 2,
+                "target": {
+                  "regionId": "records"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "operations-workspace",
+          "name": "Operations workspace",
+          "selectors": {
+            "sessionRoleIds": [
+              "operations-lead"
+            ]
+          },
+          "layout": {
+            "template": "workspace_tabs",
+            "regions": [
+              {
+                "id": "records",
+                "modules": [
+                  {
+                    "id": "operations-workspace-records",
+                    "moduleType": "task_list",
+                    "title": "Review records",
+                    "configuration": {
+                      "mode": "read",
+                      "artifactTypeKeys": [
+                        "resourceAllocation"
+                      ],
+                      "presentation": "review",
+                      "navigationSection": "Work",
+                      "emptyStateText": "Records will appear here when available."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "navigation": {
+            "defaultItemId": "records",
+            "items": [
+              {
+                "id": "records",
+                "label": "Review records",
+                "order": 1,
+                "target": {
+                  "regionId": "records"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "reports": [],
+      "stateVariables": [
+        {
+          "id": "incident-severity",
+          "name": "Incident severity",
+          "scope": "global",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "informationPolicyId": "policy-public",
+          "historyMode": "full",
+          "display": "gauge"
+        },
+        {
+          "id": "hospital-load",
+          "name": "Hospital load",
+          "scope": "global",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "informationPolicyId": "policy-response-team",
+          "historyMode": "full",
+          "display": "progress_bar"
+        },
+        {
+          "id": "shelter-ready",
+          "name": "Shelter ready",
+          "scope": "global",
+          "type": "boolean",
+          "informationPolicyId": "policy-public",
+          "historyMode": "full",
+          "display": "status_label"
+        }
+      ],
+      "capabilities": [
+        {
+          "id": "rapid-transport",
+          "name": "Rapid transport",
+          "ownerTeamId": "emergency-operations",
+          "states": [
+            "available",
+            "committed",
+            "exhausted"
+          ],
+          "initialState": "available",
+          "mode": "counted",
+          "initialQuantity": 3,
+          "maximumQuantity": 5,
+          "consumable": true,
+          "informationPolicyId": "policy-response-team"
+        }
+      ],
+      "resourceDefinitions": [
+        {
+          "id": "medical-supplies",
+          "name": "Medical supplies",
+          "unit": "kits",
+          "ownership": "team",
+          "informationPolicyId": "policy-response-team"
+        }
+      ],
+      "pluginBindings": []
+    },
+    "scenario": {
+      "id": "synthetic-crisis-response",
+      "name": "Synthetic Crisis Response",
+      "description": "A rapidly escalating incident requiring conditional response and resource allocation.",
+      "deliveryModes": [
+        "in_person",
+        "virtual"
+      ],
+      "tags": [
+        "synthetic",
+        "validation",
+        "crisis-response"
+      ],
+      "content": [
+        {
+          "id": "sensor-alert",
+          "title": "Sensor alert",
+          "type": "rich_text",
+          "body": "Synthetic monitoring shows an escalating incident.",
+          "informationPolicyId": "policy-control",
+          "version": "1"
+        }
+      ],
+      "injects": [
+        {
+          "id": "conditional-sensor-alert",
+          "title": "Conditional sensor alert",
+          "contentId": "sensor-alert",
+          "recipients": {
+            "sessionRoleIds": [
+              "operations-lead"
+            ]
+          },
+          "releaseMode": "gate",
+          "releaseGate": {
+            "operator": "all",
+            "conditions": [
+              {
+                "fact": "state.incident-severity",
+                "operator": "greater_or_equal",
+                "value": 3
+              }
+            ]
+          },
+          "effects": [
+            {
+              "stateVariableId": "incident-severity",
+              "operation": "increment",
+              "value": 1,
+              "rationale": "Synthetic follow-on escalation"
+            }
+          ]
+        }
+      ],
+      "initialState": [
+        {
+          "stateVariableId": "incident-severity",
+          "value": 2
+        },
+        {
+          "stateVariableId": "hospital-load",
+          "value": 40
+        },
+        {
+          "stateVariableId": "shelter-ready",
+          "value": false
+        }
+      ],
+      "initialCapabilities": [
+        {
+          "capabilityId": "rapid-transport",
+          "state": "available",
+          "quantity": 3
+        }
+      ],
+      "initialResources": [
+        {
+          "resourceId": "medical-supplies",
+          "scopeReference": "emergency-operations",
+          "balance": 100
+        }
+      ]
+    }
+  }
+}

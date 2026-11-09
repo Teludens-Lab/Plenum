@@ -63,10 +63,6 @@ export function ArtifactWorkspace({ module, artifacts, renderArtifact }: {
     {filtered.length === 0 ? <div className="artifact-empty"><RuntimeIcon name={recent ? "edit" : "list"} />
       <h3>{recent ? "No captures yet" : "No records yet"}</h3><p>{module.emptyStateText}</p></div>
       : review && selected !== undefined ? <div className="artifact-review-layout">
-        <nav aria-label="Choose a record" className="artifact-record-index">{filtered.map((record) => <button key={record.id} type="button"
-          aria-current={record.id === selected.id ? "true" : undefined} onClick={() => setSelectedId(record.id)}>
-          <strong>{typeof record.payload.title === "string" ? record.payload.title : record.title}</strong><span>{record.stateLabel}</span>
-        </button>)}</nav>
         <div className="artifact-review-detail">
           <div className="artifact-pager" role="group" aria-label="Record navigation">
             {presenting ? <button className="btn-secondary" type="button" disabled={index <= 0} onClick={() => setSelectedId(filtered[0]!.id)}>First</button> : null}

@@ -1,3 +1,4 @@
+import { formatDate, displayStatus, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import type {
@@ -24,7 +25,28 @@ export function humanize(value: string): string {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge platform-status platform-status-${status}`}>{humanize(status)}</span>;
+  return <span className={statusClass(status)}>{displayStatus(status)}</span>;
+}
+
+const defaultCapabilities = ["studio_authoring", "session_delivery"];
+
+function selectedCapabilities(data: FormData): string[] {
+  const selected = [...data.getAll("entitlements").map(String),
+    ...String(data.get("additionalEntitlements") ?? "").split(",").map((value) => value.trim()).filter(Boolean)];
+  if (selected.length === 0) throw new PlatformRequestError("Select at least one capability.");
+  return selected;
+}
+
+function CapabilityChoices({ selected = defaultCapabilities }: { selected?: string[] }) {
+  return <fieldset className="field"><legend>Enabled capabilities</legend>
+    <div className="role-checkboxes">{[...new Set([...defaultCapabilities, ...selected])].map((key) =>
+      <label className="choice" key={key}><input type="checkbox" name="entitlements" value={key} defaultChecked={selected.includes(key)} />{humanize(key)}</label>)}</div>
+    <p className="field-hint">Select at least one contracted capability.</p>
+    <details className="technical-details"><summary>Advanced capability configuration</summary>
+      <label>Additional contracted capability keys<input name="additionalEntitlements" /></label>
+      <p className="field-hint">Custom contracted keys remain supported. Separate multiple keys with commas.</p>
+    </details>
+  </fieldset>;
 }
 
 function ProvisionOrganizationForm({ onCreated, setNotice }: {
@@ -44,7 +66,7 @@ function ProvisionOrganizationForm({ onCreated, setNotice }: {
           name: String(data.get("name")), slug: String(data.get("slug")), legalName: String(data.get("legalName")),
           countryCode: String(data.get("countryCode")), timeZone: String(data.get("timeZone")),
           deploymentProfile: String(data.get("deploymentProfile")), dataResidencyRegion: String(data.get("dataResidencyRegion")),
-          entitlements: String(data.get("entitlements")).split(",").map((value) => value.trim()).filter(Boolean),
+          entitlements: selectedCapabilities(data),
           supportContact: String(data.get("supportContact")), securityContact: String(data.get("securityContact"))
         })
       });
@@ -79,9 +101,7 @@ function ProvisionOrganizationForm({ onCreated, setNotice }: {
         <div className="field"><label htmlFor="platform-region">Data residency region</label>
           <input id="platform-region" name="dataResidencyRegion" required defaultValue="af-south" /></div>
       </div>
-      <div className="field"><label htmlFor="platform-entitlements">Enabled capabilities</label>
-        <input id="platform-entitlements" name="entitlements" required defaultValue="studio_authoring, session_delivery" />
-        <p className="field-hint">Comma-separated contracted capability keys.</p></div>
+      <CapabilityChoices />
       <div className="platform-form-grid">
         <div className="field"><label htmlFor="platform-support-contact">Support contact</label>
           <input id="platform-support-contact" name="supportContact" type="email" required autoComplete="email" /></div>
@@ -171,7 +191,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
           legalName: String(data.get("legalName")), countryCode: String(data.get("countryCode")),
           timeZone: String(data.get("timeZone")), deploymentProfile: String(data.get("deploymentProfile")),
           dataResidencyRegion: String(data.get("dataResidencyRegion")),
-          entitlements: String(data.get("entitlements")).split(",").map((value) => value.trim()).filter(Boolean),
+          entitlements: selectedCapabilities(data),
           supportContact: String(data.get("supportContact")), securityContact: String(data.get("securityContact"))
         })
       });
@@ -200,7 +220,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
   };
   return <section className="platform-organization-detail" aria-labelledby="platform-organization-title">
     <div className="workspace-heading platform-detail-heading"><div><a className="back-link" href="/platform/organizations">Organizations</a>
-      <h1 id="platform-organization-title">{organization.name}</h1><p>{organization.legalName}</p></div>
+      <h1 id="platform-organization-title">{organization.name}</h1>{organization.legalName === organization.name ? null : <p>{organization.legalName}</p>}</div>
       <StatusBadge status={organization.lifecycleStatus} /></div>
     <section className="platform-readiness" aria-labelledby="platform-readiness-title">
       <div className="section-heading"><h2 id="platform-readiness-title">Activation readiness</h2>
@@ -220,7 +240,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
           <div className="field"><label htmlFor="reconcile-profile">Deployment profile</label><select id="reconcile-profile" name="deploymentProfile" defaultValue="cloud"><option value="cloud">Plenum cloud</option><option value="self_hosted">Self-hosted</option><option value="air_gapped">Air-gapped</option></select></div>
           <div className="field"><label htmlFor="reconcile-region">Data residency region</label><input id="reconcile-region" name="dataResidencyRegion" required /></div>
         </div>
-        <div className="field"><label htmlFor="reconcile-entitlements">Enabled capabilities</label><input id="reconcile-entitlements" name="entitlements" required defaultValue="studio_authoring, session_delivery" /><p className="field-hint">Comma-separated contracted capability keys.</p></div>
+        <CapabilityChoices selected={organization.entitlements.length > 0 ? organization.entitlements : defaultCapabilities} />
         <div className="platform-form-grid"><div className="field"><label htmlFor="reconcile-support">Support contact</label><input id="reconcile-support" name="supportContact" type="email" required /></div>
           <div className="field"><label htmlFor="reconcile-security">Security contact <span className="optional">Optional</span></label><input id="reconcile-security" name="securityContact" type="email" /></div></div>
         <button className="btn-primary" type="submit" disabled={pending}>{pending ? "Savingâ€¦" : "Confirm provisioning profile"}</button>
@@ -231,10 +251,10 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
         <p>Only verified domains can receive the first Admin invitation.</p></div>
         {detail.domains.length === 0 ? <p className="empty-state">No domain has been added.</p> : <ul className="platform-record-list">
           {detail.domains.map((domain) => <li className="platform-domain-record" key={domain.id}><div><strong>{domain.domain}</strong>
-            <span>{domain.verifiedAt === null ? domain.challenge?.failure ?? "Verification pending" : `Verified ${new Date(domain.verifiedAt).toLocaleDateString()}`}</span></div>
+            <span>{domain.verifiedAt === null ? domain.challenge?.failure ?? "Verification pending" : `Verified ${formatDate(domain.verifiedAt)}`}</span></div>
             {domain.verifiedAt === null && domain.challenge !== null ? <div className="platform-domain-challenge">
               <dl><div><dt>Record</dt><dd>TXT</dd></div><div><dt>Name</dt><dd><code>{domain.challenge.name}</code></dd></div>
-                <div><dt>Value</dt><dd><code>{domain.challenge.value}</code></dd></div><div><dt>Expires</dt><dd>{new Date(domain.challenge.expiresAt).toLocaleString()}</dd></div></dl>
+                <div><dt>Value</dt><dd><code>{domain.challenge.value}</code></dd></div><div><dt>Expires</dt><dd>{formatDate(domain.challenge.expiresAt)}</dd></div></dl>
               <div className="actions"><button className="btn-primary" type="button" disabled={pending}
                 onClick={() => void mutate(`/v1/platform/organizations/${organization.id}/domains/${domain.id}/verify`, {}, `${domain.domain} is verified.`)}>Check DNS</button>
                 <button className="btn-secondary" type="button" disabled={pending}
@@ -251,7 +271,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
         <p>This invitation grants Organization authority only.</p></div>
         {detail.firstAdminInvitation === null ? <p className="empty-state">No first Admin invitation has been issued.</p> :
           <div className="platform-admin-status"><strong>{detail.firstAdminInvitation.email}</strong>
-            <StatusBadge status={detail.firstAdminInvitation.status} /><span>Expires {new Date(detail.firstAdminInvitation.expiresAt).toLocaleString()}</span>
+            <StatusBadge status={detail.firstAdminInvitation.status} /><span>Expires {formatDate(detail.firstAdminInvitation.expiresAt)}</span>
             {detail.firstAdminInvitation.delivery === null ? null : <span>Delivery: {humanize(detail.firstAdminInvitation.delivery.status)}{detail.firstAdminInvitation.delivery.failureReason === null ? "" : ` â€” ${detail.firstAdminInvitation.delivery.failureReason}`}</span>}
             {detail.firstAdminInvitation.status === "accepted" ? <span>{detail.firstAdminInvitation.identityLinkedAt === null ? "Identity link completes on the first verified-email sign-in after activation." : "Identity provider linked."}</span> : null}</div>}
         {invitationUrl === null ? null : <div className="platform-invitation-result" role="status"><label htmlFor="platform-invitation-url">One-time invitation link</label>
@@ -285,7 +305,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
             <div><strong>{provider.displayName}</strong><StatusBadge status={provider.status} /></div>
             <span>{provider.protocol === "saml" ? "SAML through the approved OIDC broker" : "OpenID Connect"} · revision {provider.version}</span>
             <span>{provider.domains.join(", ")}</span></div>
-            <dl className="platform-provider-facts"><div><dt>Preflight</dt><dd>{provider.preflightedAt === null ? provider.preflightFailure ?? "Required" : new Date(provider.preflightedAt).toLocaleString()}</dd></div>
+            <dl className="platform-provider-facts"><div><dt>Preflight</dt><dd>{provider.preflightedAt === null ? provider.preflightFailure ?? "Required" : formatDate(provider.preflightedAt)}</dd></div>
               <div><dt>Test sign-in</dt><dd>{provider.testedAt === null ? "Required" : "Passed"}</dd></div>
               <div><dt>Admin approval</dt><dd>{provider.approvedAt === null ? "Required" : "Approved"}</dd></div></dl>
             {nextAction === null ? <p className="platform-row-prerequisite">{provider.status === "preflight_passed" ? "An Organization Admin must complete test sign-in." :
@@ -356,7 +376,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
       <p>Immutable records of provisioning and lifecycle authority.</p></div>
       {detail.auditRecords.length === 0 ? <p className="empty-state">No platform audit record is available.</p> : <ol className="platform-audit-list">
         {detail.auditRecords.map((record) => <li key={record.id}><div><strong>{humanize(record.action.replace("platform.", ""))}</strong>
-          <span>{record.actorDisplayName}</span></div><time dateTime={record.recordedAt}>{new Date(record.recordedAt).toLocaleString()}</time></li>)}</ol>}
+          <span>{record.actorDisplayName}</span></div><time dateTime={record.recordedAt}>{formatDate(record.recordedAt)}</time></li>)}</ol>}
     </section>
   </section>;
 }
@@ -376,7 +396,7 @@ export function PlatformOrganizationsPortal() {
     {detail === null ? <PlenumLoader label="Loading Organization provisioning" /> : <OrganizationDetail detail={detail} onChange={setDetail} setNotice={setNotice} />}</div>;
   return <section className="portal-workspace platform-control-plane" aria-labelledby="platform-organizations-title">
     <PlatformControlNavigation current="organizations" />
-    <div className="workspace-heading platform-catalog-heading"><div><h1 id="platform-organizations-title">Organization provisioning</h1>
+    <div className="workspace-heading platform-catalog-heading"><div><h1 id="platform-organizations-title">Organizations</h1>
       <p>Create and govern Organization access without entering customer workspaces.</p></div>
       <ProvisionOrganizationForm onCreated={(created) => { setDetail(created); window.location.assign(`/platform/organizations/${created.organization.id}`); }} setNotice={setNotice} /></div>
     <p className="live-region portal-notice" role={notice.alert ? "alert" : "status"} aria-live="polite">{notice.message}</p>

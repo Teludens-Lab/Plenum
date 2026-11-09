@@ -72,7 +72,7 @@ export function dec42Workflow(sessionRoleIds: readonly string[]): RuntimeWorkflo
     extra: Partial<RuntimeWorkflowTransitionV1> = {}): RuntimeWorkflowTransitionV1 =>
     ({ id: identifier(), from, command, label, to, allowedSessionRoleIds: roles.filter(Boolean), ...extra });
   return {
-    id: identifier(), key: `dec42_${identifier()}`, name: "DEC-42 reference review", initialState: "draft",
+    id: identifier(), key: `dec42_${identifier()}`, name: "Reference review", initialState: "draft",
     description: "The author drafts and submits; the intermediate reviewer forwards or returns; Control accepts or returns; returned work resubmits through the intermediate reviewer.",
     states: [
       { key: "draft", label: "Draft", kind: "draft", holderSessionRoleIds: [author].filter(Boolean) },

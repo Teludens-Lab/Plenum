@@ -32,3 +32,9 @@ All canonical states apply as marked for Lifecycle in `../state-inventory.md`. V
 
 Tier behavior: 1920/1440 retain navigation, work region and inspector; 1280x720/600 keep catalogs primary and collapse inspector; 1024x768 uses compact navigation plus inspector sheet; 768x1024 and 390x844 use a drawer/sheet sequence with one visible work region and persistent context header. At 200%/320px, content is one column with no two-dimensional page scroll.
 
+
+## PS-842 candidate contract
+
+The catalog uses one H1, and Release/Session details use the object title with status below it. Publisher-only authority sees Releases. Your Sessions retains Workspaces for multi-role users; the account chip shows all projected Organization roles and platform authority.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

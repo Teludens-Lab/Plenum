@@ -1,6 +1,6 @@
-# PS-800 route inventory
+# Plenum route inventory
 
-Status: Checkpoint A inventory complete; route implementation and visual evidence are pending.
+PS-842 reconciles the routes and visible names below. Candidate verification and remaining human evidence are recorded in [the interface consistency ledger](../acceptance/PS-842-interface-consistency.md); this inventory is not an acceptance result.
 
 ## Route model
 
@@ -21,14 +21,24 @@ The route families below are the canonical audit units. Parameter examples use `
 | Replay/archive | `/admin/sessions/:id/replay` | Operator, Reviewer | captured/reconstructed replay | Raw difference codes/digests dominate | Timeline, divergence explanation and immutable evidence drill-down |
 | Replay/archive | `/admin/sessions/:id/archive` | Operator, Admin | retention, hold, correction and archive | Consequence-heavy operations need hierarchy | Policy summary, reversible preparation and explicit irreversible confirmation |
 | Organization administration | `/admin/members` | Admin | members and Organization roles | Dense transactional management | Semantic roster, role replacement and final-Admin/stale recovery |
+| Organization administration | `/admin/identity` | Admin | Identity provider | Provider configuration and delivery diagnostics | Named provider configuration with technical evidence disclosed on demand |
 | Organization administration | `/admin/plugins` | Admin, Publisher | Plugin governance/lifecycle | Technical trust/provenance details compete with decisions | Governed catalog with compatibility/status first and evidence on demand |
 | Organization administration | `/admin/deployment` | Admin | deployment posture | Operational data can read like raw diagnostics | Posture, required action and bounded diagnostics |
 | Organization administration | `/admin/data-policy` | Admin | retention/hold/export policy | UUID and JSON-shaped inputs are exposed | Typed policy controls, semantic scope selection and consequence preview |
-| Organization administration | other `/admin/*` | Operator/Admin as authorized | fallback operational view | Prefix fallback can hide an unknown route | Explicit not-found/unauthorized behavior; no silent fallback |
+| Unknown route | other `/admin/*` and unmatched paths | all | Page not found | Must remain distinct from denied access and offline | Explicit not-found state and visible return action |
+| Platform control plane | `/platform/organizations` | Platform Administrator | Organizations | Platform authority is distinct from Organization membership | One secondary navigation and readiness-aware list |
+| Platform control plane | `/platform/organizations/:id` | Platform Administrator | named Organization | Provisioning and lifecycle consequences | One object heading and progressively disclosed technical evidence |
+| Platform control plane | `/platform/administrators` | Platform Administrator | Platform administrators | Privilege changes | Named workforce and explicit consequence controls |
+| Invitations | `/organization/invitations/:token` | invited Organization member | workforce invitation | Expired or invalid token | Clear acceptance or recovery state |
+| Invitations | `/platform/invitations/:token` | invited first Admin | Organization onboarding | Bootstrap authority | Invitation-scoped acceptance only |
+| Invitations | `/platform/administrator-invitations/:token` | invited Platform Administrator | platform invitation | Platform authority | Invitation-scoped acceptance only |
+| Project demo | `/projects/:id/demo` | authorized Project roles | synthetic demonstration | Confusion with a live Session | Explicit demo state and visible Project return |
 
 ## Studio section inventory
 
-The Studio route must retain all existing capabilities while replacing the single-scroll presentation. The 27 canonical sections are: Overview, Methodology, Teams, Roles, Seats, Activities, Stages, Forms, Workflows, Policies, Communications, Injects, Content Library, Advanced Logic, Adjudication, Polls, Voice, Plugins, Compositions, Interfaces, Research, Measurements & Reports, Access, Preview, Test & Validate, Review & Publish, and Live Changes.
+Menu labels and section headings share `SECTIONS` in `apps/studio/src/core-design/Editor.tsx`. Sentence case preserves capitalized domain names. The 27 sections, in order, are: Overview & Scenario, Methodology, Teams, Session Roles, Seats, Activities, Stages, Forms & Artifacts, Workflows, Information Policy, Communications, Injects, Content Library, Advanced logic & world state, Adjudication Models, Polls, Voice Channels, Plugin catalog & bindings, Model Compositions, Interfaces, Research, Measurements & reports, Access & readiness, Role walkthrough, Test & validate, Review & publish, and Live Changes.
+
+The six groups are Set the foundation; Define people and work; Design information flow; Model decisions and systems; Shape the experience; Verify and release.
 
 ## Global shell requirements
 
@@ -41,5 +51,7 @@ The Studio route must retain all existing capabilities while replacing the singl
 
 ## Audit evidence plan
 
-Each row will be checked in light/dark themes at the canonical viewport matrix in `state-inventory.md`, with automated axe, keyboard smoke, 200%/320 CSS px reflow, reduced motion and forced-colors checks. Screenshots are planned under `tests/visual/ps-800/<view-family>/`; no PS-800 route screenshot is claimed at Checkpoint A.
+PS-842 checks 1440x900, the supported 1024x768 desktop minimum and its 200% equivalent (512x384 CSS pixels), in explicit light/dark themes. Keyboard, reduced motion, forced colors and named desktop assistive technology remain separate evidence dimensions. Mobile/touch acceptance remains N/A under the approved scope. Current captures and machine results live under `output/playwright/ps-842/`; human results must identify the reviewer and exact candidate.
 
+
+Legacy Session links at `/?sessionId=`, `/app/dashboard?sessionId=` and `/admin/dashboard?sessionId=` redirect to the canonical participant or Operator Session route, retaining the remaining query and fragment. Unknown dashboard suffixes remain not-found.

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import type { CommandReceiptV1, JsonObject, RuntimeFormV1, RuntimeActionV1, RuntimeArtifactV1, RuntimeCreateTaskV1 } from "@plenum/event-contracts";
 import { StructuredForm, FormField, type FieldEditorProps } from "./StructuredForm.js";
 import { FormTableSummary, FormValue } from "./FormTableSummary.js";
@@ -124,7 +125,7 @@ export function CreateTask({ task, disabled, send, submitLabel = "Save draft", c
   send(action: RuntimeActionV1, artifact: RuntimeArtifactV1 | null, content?: JsonObject, artifactTypeKey?: string): Promise<CommandReceiptV1 | null>;
 }) {
   const headingId = useId();
-  return <section className="card" aria-labelledby={headingId}>
+  return <section className="workspace-section" aria-labelledby={headingId}>
     <h2 id={headingId} className={compact ? "visually-hidden" : undefined}>{task.title}</h2>
     <LocalDraft draftKey={`${createTaskKey(task)}:${task.form.id}:${task.form.formVersion}`} {...(task.initialValues === undefined ? {} : { initial: task.initialValues })}>
       {(initial, changed, accepted, reset) => <FieldEditor key={reset} form={task.form} {...(initial === undefined ? {} : { initial })}
@@ -145,7 +146,7 @@ function DisplayFields({ fields, payload }: { fields: RuntimeFormV1["fields"]; p
 export function ArtifactContent({ form, payload }: { form: RuntimeFormV1; payload: JsonObject }) {
   return <div className="artifact-sections">{form.sections.map((section) => {
     if (section.repeatable !== true) return <section key={section.id}>
-      {section.title === undefined ? null : <h4>{section.title}</h4>}
+      {section.title === undefined || form.sections.length === 1 ? null : <h4>{section.title}</h4>}
       <DisplayFields fields={section.fields.filter((field) => runtimeFieldConditionMatches(field.visibleWhen, payload)
         && !section.table?.rows.some((row) => row.fields.includes(field.key)))} payload={payload} />
       <FormTableSummary section={section} payload={payload} /></section>;
@@ -181,7 +182,7 @@ export function ArtifactCard({ artifact, disabled, send, download }: {
       <div>
         <h3 id={`artifact-${artifact.id}`}>{artifact.title}</h3>
       </div>
-      <span className={`badge ${["completed", "accepted"].includes(artifact.state) ? "badge-success" : "badge-state"}`}>{artifact.stateLabel}</span>
+      <span className={statusClass(artifact.state)}>{artifact.stateLabel}</span>
     </div>
     <ArtifactContent form={artifact.form} payload={artifact.payload} />
     {edit === undefined ? null : <details className="artifact-edit"><summary>{edit.label}</summary>

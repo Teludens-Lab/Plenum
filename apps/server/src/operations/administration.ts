@@ -8,6 +8,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { replaceWorkforceMemberRoles } from "../identity/organization-workforce.js";
+import { listReportingTargets, type ReportingTarget } from "../reporting/targets.js";
 
 const approvedRoles: readonly OrganizationRole[] = [
   "admin", "designer", "publisher", "operator", "reviewer", "research_analyst"
@@ -102,7 +103,7 @@ export interface PluginOperationsV1 {
   artifacts: Array<{
     artifactId: string; pluginId: string; version: string; digest: string; bundleDigest: string;
     lifecycleStatus: string; publisherName: string; submittedAt: string; approvedAt: string | null;
-    revokedAt: string | null; installationCount: number; bindingCount: number; supplyChain: JsonObject;
+    revokedAt: string | null; installationCount: number; bindingCount: number; supplyChain: JsonObject; requestedPermissions: string[];
   }>;
   governance: {
     publisherMembers: Array<{ personId: string; displayName: string }>;
@@ -124,11 +125,11 @@ export async function listPluginOperations(
     const result = await client.query<{
       artifact_id: string; plugin_id: string; version: string; digest: string; bundle_digest: string;
       lifecycle_status: string; publisher_name: string; submitted_at: Date; approved_at: Date | null;
-      revoked_at: Date | null; installation_count: string; binding_count: string; supply_chain: JsonObject;
+      revoked_at: Date | null; installation_count: string; binding_count: string; supply_chain: JsonObject; requested_permissions: string[];
     }>(
       `SELECT artifact.id AS artifact_id,artifact.plugin_id,artifact.version,artifact.digest,artifact.bundle_digest,
               artifact.lifecycle_status,publisher.display_name AS publisher_name,artifact.submitted_at,
-              artifact.approved_at,artifact.revoked_at,artifact.supply_chain,
+              artifact.approved_at,artifact.revoked_at,artifact.supply_chain,artifact.manifest->'requestedPermissions' AS requested_permissions,
               count(DISTINCT installation.id)::text AS installation_count,
               count(DISTINCT binding.id)::text AS binding_count
          FROM extension.plugin_artifacts artifact
@@ -164,7 +165,7 @@ export async function listPluginOperations(
       permissions: { canSubmit: principal.organizationRoles.includes("publisher"), canApprove: admin, canInstall: admin, canRevoke: admin },
       artifacts: result.rows.map((row) => ({ artifactId: row.artifact_id, pluginId: row.plugin_id,
         version: row.version, digest: row.digest, bundleDigest: row.bundle_digest,
-        lifecycleStatus: row.lifecycle_status, publisherName: row.publisher_name,
+        lifecycleStatus: row.lifecycle_status, publisherName: row.publisher_name, requestedPermissions: row.requested_permissions,
         submittedAt: row.submitted_at.toISOString(), approvedAt: row.approved_at?.toISOString() ?? null,
         revokedAt: row.revoked_at?.toISOString() ?? null, installationCount: Number(row.installation_count),
         bindingCount: Number(row.binding_count), supplyChain: row.supply_chain })),
@@ -188,6 +189,7 @@ export async function listPluginOperations(
 
 export interface DataPolicyOperationsV1 {
   contractId: typeof OPERATIONS_ADMIN_CONTRACT_ID;
+  targets: ReportingTarget[];
   retentionPolicies: Array<{ id: string; key: string; version: number; scopeType: string; scopeReference: string;
     periodDays: number; legalHoldBehavior: string; expiryAction: string; archiveDestination: string; approvalRequired: boolean; createdAt: string }>;
   legalHolds: Array<{ holdId: string; scopeType: string; scopeReference: string; reason: string; placedAt: string; releasedAt: string | null }>;
@@ -202,6 +204,7 @@ export async function getDataPolicyOperations(
 ): Promise<DataPolicyOperationsV1> {
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentRole(client, principal, ["admin"], correlationId);
+    const targets = await listReportingTargets(client, principal.organizationId);
     const [policies, holds, corrections, imports] = await Promise.all([
       client.query<{ id: string; policy_key: string; version: number; scope_type: string; scope_reference: string;
         period_days: number; legal_hold_behavior: string; expiry_action: string; archive_destination: string;
@@ -224,7 +227,7 @@ export async function getDataPolicyOperations(
           WHERE organization_id=$1 ORDER BY imported_at DESC,id`, [principal.organizationId])
     ]);
     return { contractId: OPERATIONS_ADMIN_CONTRACT_ID,
-      retentionPolicies: policies.rows.map((row) => ({ id: row.id, key: row.policy_key, version: row.version,
+      targets, retentionPolicies: policies.rows.map((row) => ({ id: row.id, key: row.policy_key, version: row.version,
         scopeType: row.scope_type, scopeReference: row.scope_reference, periodDays: row.period_days,
         legalHoldBehavior: row.legal_hold_behavior, expiryAction: row.expiry_action,
         archiveDestination: row.archive_destination, approvalRequired: row.approval_required,

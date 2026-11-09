@@ -160,7 +160,7 @@ export function VoiceControls({ projection, online, disabled, command, floor, no
               : <button className="btn-secondary" type="button" disabled={disabled || !online} onClick={() => void consentAction(channel, kind, "give")}>Give {kind} consent</button>}
               {channel.canModerate && <button className="btn-secondary" type="button" disabled={disabled || !online} onClick={() => void mediaAction(channel, kind, state.active ? "stop" : "start")}>{state.active ? "Stop" : "Start"} {kind}</button>}
             </div>}
-            {state.policy === "on" && <p className="hint">Production recording is unavailable pending OPEN-027.</p>}
+            {state.policy === "on" && <p className="hint">Production recording is unavailable under the current recording policy.</p>}
           </div>;
         })}
       </div>

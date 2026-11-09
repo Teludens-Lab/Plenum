@@ -34,3 +34,9 @@ All Operator states apply, including locked, delayed delivery, partial fan-out, 
 
 Tier behavior: 1920/1440 show timeline/control, queues and inspector; 1280x720/600 keep current Stage/timer and safety actions visible while secondary evidence becomes a sheet; 1024x768 stacks queues below primary control; 768x1024 and 390x844 expose one operational region at a time with persistent Session/Stage/clock status. At 200%/320px, no critical action requires horizontal scroll.
 
+
+## PS-842 candidate contract
+
+The console has one lifecycle control surface, a stable Staffing anchor and distinct Adjudication status. Timer extension is Additional minutes, converted exactly to seconds. Counts are contextual text rather than decision-free tiles. Lifecycle/Stage versions belong in technical provenance.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

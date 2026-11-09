@@ -1,3 +1,4 @@
+import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useState } from "react";
 import {
   COMPOSITION_DEFINITION_CONTRACT_ID,
@@ -31,7 +32,7 @@ function fixtureValue(dataType: CompositionDataTypeV1): unknown {
 }
 
 function modelNode(binding: PluginBindingV1): CompositionNodeV1 {
-  return { id: identifier(), name: `${binding.pluginId} ${binding.pluginVersion}`, kind: "model", bindingId: binding.id,
+  return { id: identifier(), name: `${displayStatus(binding.pluginId.replaceAll(".", " "))} ${binding.pluginVersion}`, kind: "model", bindingId: binding.id,
     inputPorts: structuredClone(binding.inputPorts ?? []), outputPorts: structuredClone(binding.outputPorts ?? []) };
 }
 
@@ -76,7 +77,7 @@ function NodePortEditor({ compositionIndex, node, nodeIndex, direction, client }
       <TextField id={`node-port-label-${item.id}`} label="Label" value={item.label} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "label"]} client={client} />
       <SelectField id={`node-port-type-${item.id}`} label="Type" value={item.dataType} options={dataTypes.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "dataType"]} client={client} />
       <TextField id={`node-port-unit-${item.id}`} label="Unit" value={item.unit} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "unit"]} client={client} />
-      <SelectField id={`node-port-classification-${item.id}`} label="Classification" value={item.classification} options={classifications.map((value) => ({ value, label: value }))} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "classification"]} client={client} />
+      <SelectField id={`node-port-classification-${item.id}`} label="Classification" value={item.classification} options={classifications.map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "classification"]} client={client} />
       <CheckField id={`node-port-required-${item.id}`} label="Required" checked={item.required} path={["coreDesign", "compositions", compositionIndex, "nodes", nodeIndex, direction, index, "required"]} client={client} />
     </div>)}
   </fieldset>;
@@ -144,10 +145,10 @@ function CompositionItem({ projectId, composition, index, count, bindings, roles
       client.removeAtPath(["coreDesign", "compositions", index, "nodes"], nodeIndex);
     });
   }
-  return <details className="editor-item" id={`compositions-${composition.id}`} open><summary><span>{composition.name}</span><span className="item-id">{composition.id}</span></summary><div className="item-body">
+  return <details className="editor-item" id={`compositions-${composition.id}`} open><summary><span>{composition.name}</span></summary><details className="technical-details"><summary>Technical reference</summary><code>{composition.id}</code></details><div className="item-body">
     <div className="grid-fields"><TextField id={`composition-name-${composition.id}`} label="Composition name" value={composition.name} path={["coreDesign", "compositions", index, "name"]} client={client} />
       <TextField id={`composition-version-${composition.id}`} label="Version" value={composition.version} path={["coreDesign", "compositions", index, "version"]} client={client} /></div>
-    <div className="node-toolbar"><label>Approved Plugin Binding<select value={selectedBinding} onChange={(event) => setSelectedBinding(event.target.value)}>{bindings.map((binding) => <option key={binding.id} value={binding.id}>{binding.pluginId} {binding.pluginVersion}</option>)}</select></label>
+    <div className="node-toolbar"><label>Approved Plugin Binding<select value={selectedBinding} onChange={(event) => setSelectedBinding(event.target.value)}>{bindings.map((binding) => <option key={binding.id} value={binding.id}>{displayStatus(binding.pluginId.replaceAll(".", " "))} {binding.pluginVersion}</option>)}</select></label>
       <AddButton label="Add model node" disabled={bindings.length === 0} onClick={addModel} />
       {(["transform", "fan_out", "join", "approval_gate", "output"] as const).map((kind) => <AddButton key={kind} label={`Add ${kind.replaceAll("_", " ")}`} onClick={() => client.appendAtPath(["coreDesign", "compositions", index, "nodes"], utilityNode(kind, roles))} />)}</div>
     <div className="composition-nodes">{composition.nodes.map((node, nodeIndex) => <article className="composition-node" key={node.id}><div className="card-heading"><h3>{node.name}</h3><span className="badge badge-info">{node.kind.replaceAll("_", " ")}</span></div>
@@ -161,7 +162,7 @@ function CompositionItem({ projectId, composition, index, count, bindings, roles
     <h3>Edges</h3>{composition.edges.length === 0 ? <p>No typed connections yet.</p> : <ul className="edge-list">{composition.edges.map((edge, edgeIndex) => <li key={edge.id}><code>{edge.fromNodeId}.{edge.fromPortId}</code> → <code>{edge.toNodeId}.{edge.toPortId}</code><button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "compositions", index, "edges"], edgeIndex)}>Remove</button></li>)}</ul>}
     <section className="fixture-preview" aria-labelledby={`fixture-${composition.id}`}><h3 id={`fixture-${composition.id}`}>Fixture run</h3><p>Uses synthetic declared model outputs to test routing, joins, failure handling, and approval paths. It cannot mutate Session state.</p>
       <button className="btn-primary" type="button" disabled={fixture === undefined} onClick={() => void runFixture()}>Run fixture without state change</button><p aria-live="polite">{message}</p>
-      {preview === null ? null : <div><p><strong>Status: {preview.status}</strong> · State changes: {preview.stateChanges?.length ?? 0}</p><ol>{preview.nodes?.map((node) => <li key={node.nodeId}>{node.nodeId}: {node.status}. {node.message}</li>)}</ol></div>}
+      {preview === null ? null : <div><p><strong>Status: {displayStatus(preview.status)}</strong> · State changes: {preview.stateChanges?.length ?? 0}</p><ol>{preview.nodes?.map((node) => <li key={node.nodeId}>{node.nodeId}: {displayStatus(node.status)}. {node.message}</li>)}</ol></div>}
     </section>
     <ItemActions path={["coreDesign", "compositions"]} index={index} count={count} client={client} label={composition.name} />
   </div></details>;

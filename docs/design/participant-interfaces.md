@@ -1,5 +1,17 @@
 # Participant session interfaces
 
+## PS-842 candidate reconciliation — 2026-11-09
+
+The owner delegated the seven interface choices and authorized implementation while previous human evidence remains pending. This section supersedes the earlier embedding and vocabulary descriptions below for the new 1.0.1 candidate only. It does not transfer historical PASS results.
+
+Navigation labels and first module titles agree. Shared concepts use Communications, Proposals, Injects and RFIs with consistent icons and relative order. Work, Communications and Session resources are stable groups authored in each Interface Profile. Scribe retains team-specific forms for Blue, Red, Green and Industry. Record workspaces use one paged review surface; Present adds keyboard/full-screen presentation. A label or grouping is never an authorization grant.
+
+White Cell Simulation Settings links to the existing Operator console, Staffing and Reports only when the server projects Operator access. Those endpoints retain their Session assignment and role checks. Both timer surfaces use Additional minutes and the same exact conversion to authoritative seconds. The Runtime header carries the approved theme-safe Plenum wordmark, visible Refresh/Injects labels and a menu exposing the full Session title.
+
+The theme follows the operating system until the user explicitly chooses a theme. The existing chamber landing, Canvas and authored Session imagery remain the first-run direction. Desktop acceptance covers 1440x900, 1024x768 and equivalent 200% zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains approved N/A.
+
+New source/compiled pairs are `definitions/fractured-order/fractured-order-interface-release{-source,}.json` and `definitions/validation/{crisis-response,policy-negotiation}/interface-release{-source,}.json`. Earlier Release files remain unchanged. Compilation is not publication or activation evidence. Current results, limitations and human gates are authoritative in [PS-842's ledger](../acceptance/PS-842-interface-consistency.md).
+
 The saved boards in `references/participant interfaces/Plenum Header Options (3).html` are the visual reference for participant workspaces. The adjacent Fractured-Order implementation supplies form and workflow context. References remain unchanged.
 
 Plenum uses the reference header, stage clock, role menu, navigation rail, page band and focused work area. Control Broadcast and Voice channels open from labeled header icons. Voice stays mounted when its panel closes; leaving a channel remains an explicit action. Forms and messages remain mounted during local navigation. Broadcast text is cleared only after an accepted receipt.

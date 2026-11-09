@@ -1,3 +1,4 @@
+import { formatDate } from "../../../../packages/design-system/src/presentation.mjs";
 import { useEffect, useId, useRef, useState } from "react";
 import type { RuntimeArtifactHistoryV1, RuntimeArtifactV1, RuntimeModuleV1 } from "@plenum/event-contracts";
 import { ArtifactContent } from "./ArtifactForms.js";
@@ -50,7 +51,7 @@ export function RevisionHistory({ module, artifacts, active, online, load }: {
     {history?.revisions.length === 0 ? <p>No submitted revisions are available yet.</p> : null}
     {history?.revisions.map((revision) => <details key={revision.version} className="artifact-edit">
       <summary>Version {revision.version} — {revision.stateLabel}</summary>
-      <p className="hint">{revision.authorDisplayName} · <time dateTime={revision.recordedAt}>{new Date(revision.recordedAt).toLocaleString()}</time></p>
+      <p className="hint">{revision.authorDisplayName} · <time dateTime={revision.recordedAt}>{formatDate(revision.recordedAt)}</time></p>
       <ArtifactContent form={revision.form} payload={revision.payload} />
     </details>)}
     {history?.nextBeforeVersion == null ? null : <button className="btn-secondary" type="button" disabled={pending || !online} onClick={() => void older()}>Load older revisions</button>}

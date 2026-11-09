@@ -1,0 +1,368 @@
+/* Approved reference: references/plenum-landing-v12.html. Scoped to the public landing. */
+
+  /* TeX Gyre Pagella (GUST Font License), Latin subset, bundled so the serif is the same on every device */
+  @font-face {
+    font-family: "Plenum Serif";
+    src: url("/branding/plenum-serif.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* ---------- Tokens: Teludens Graphite / Mineral Sage, from packages/design-system/src/tokens.css ---------- */
+  .entry-v12 {
+    --bg: var(--material-canvas);            /* --material-canvas */
+    --ink: var(--text-primary);           /* --text-primary */
+    --muted: var(--text-secondary);         /* --text-secondary */
+    --line: var(--boundary-standard);          /* --boundary-standard */
+    --line-subtle: var(--boundary-subtle);   /* --boundary-subtle */
+    --accent: var(--signal-decision);        /* --signal-decision */
+    --accent-ink: var(--text-inverse);    /* --text-inverse */
+    --accent-hover: var(--signal-decision-strong);  /* --signal-decision-strong */
+    --focus-ring: #344d3b;
+    --fog: rgb(245 247 244 / 0.82);
+    --art-filter: none;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "Plenum Serif", Georgia, serif;
+    --sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --radius-md: 0.3125rem;
+    --control-height: 3rem;
+    --motion-press: 80ms;
+    --motion-hover: 110ms;
+    --motion-panel: 220ms;
+    --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+    --easing-continuity: cubic-bezier(0.32, 0.72, 0, 1);
+    --gutter: clamp(1.25rem, 3.2vw, 3.5rem);
+    --header-h: 56px;
+    --art-src: url("/branding/plenum-landing-v12.webp");
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] .entry-v12 {
+    --bg: var(--material-canvas);
+    --ink: var(--text-primary);
+    --muted: var(--text-secondary);
+    --line: var(--boundary-standard);
+    --line-subtle: var(--boundary-subtle);
+    --accent: var(--signal-decision);
+    --accent-ink: var(--text-inverse);
+    --accent-hover: var(--signal-decision-strong);
+    --focus-ring: #d1decf;
+    --fog: rgb(20 23 21 / 0.82);
+    /* The chamber line art is pure ink on transparency and inverts in dark theme */
+    --art-filter: invert(1) brightness(0.86);
+    color-scheme: dark;
+  }
+
+  .entry-v12 *, .entry-v12 *::before, .entry-v12 *::after { box-sizing: border-box; }
+  .entry-v12 { -webkit-text-size-adjust: 100%; }
+  .entry-v12 {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .3s ease, color .3s ease;
+  }
+  .entry-v12 img, .entry-v12 svg { display: block; }
+
+  .entry-v12 a { color: inherit; }
+  .entry-v12 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 2px; }
+
+  .entry-v12 .skip-link {
+    transform: none;
+    position: absolute; left: var(--gutter); top: -3rem;
+    background: var(--ink); color: var(--bg);
+    padding: .5rem .75rem; font-size: .875rem; z-index: 100;
+  }
+  .entry-v12 .skip-link:focus { top: .5rem; }
+
+  /* ---------- Header ---------- */
+  .entry-v12 .site-header {
+    position: sticky; top: 0; z-index: 20;
+    height: var(--header-h);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 var(--gutter);
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    transition: background-color .3s ease, border-color .3s ease;
+  }
+  .entry-v12 .brand { display: flex; align-items: center; gap: 1rem; font: inherit; letter-spacing: normal; text-decoration: none; transition: opacity .35s ease, visibility .35s ease; }
+  .entry-v12 .site-header:not(.is-past-hero) { border-bottom-color: transparent; }
+  .entry-v12 .site-header:not(.is-past-hero) .brand { opacity: 0; visibility: hidden; }
+  .entry-v12 .wordmark { height: 20px; width: auto; color: var(--ink); }
+  .entry-v12 .brand__divider { width: 1px; height: 18px; background: var(--line); }
+  .entry-v12 .brand__tagline {
+    font-size: .75rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); white-space: nowrap;
+  }
+  .entry-v12 .site-nav { display: flex; align-items: center; gap: 1.25rem; }
+  .entry-v12 .site-nav__link {
+    display: inline-flex; align-items: center; min-height: 2.75rem;
+    font-size: .875rem; color: var(--ink); text-decoration: none;
+    transition: opacity var(--motion-hover) var(--easing-default);
+  }
+  .entry-v12 .site-nav__link:hover { opacity: .78; }
+  .entry-v12 .theme-toggle {
+    display: grid; place-items: center;
+    width: 2.75rem; height: 2.75rem; min-height: 0; padding: 0;
+    background: transparent; border: 1px solid var(--line); border-radius: var(--radius-md);
+    color: var(--ink); cursor: pointer;
+    transition: border-color var(--motion-hover) var(--easing-default);
+  }
+  .entry-v12 .theme-toggle:hover { border-color: var(--muted); }
+  .entry-v12 .theme-toggle svg, .entry-v12 .site-nav__link { flex: none; }
+  .entry-v12 .theme-toggle svg { width: 18px; height: 18px; }
+  .entry-v12 .theme-toggle .icon-moon { display: none; }
+  :root[data-theme="dark"] .entry-v12 .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="dark"] .entry-v12 .theme-toggle .icon-moon { display: block; }
+
+  /* ---------- Shared: the drawing ---------- */
+  .entry-v12 .art {
+    width: 100%; height: 100%;
+    background: var(--art-src) center / 100% 100% no-repeat;
+    filter: var(--art-filter);
+  }
+  .entry-v12 .fog {
+    position: absolute; inset: 0;
+    opacity: 0; pointer-events: none;
+    transition: opacity .45s ease;
+  }
+  /* A: the table and chairs */
+  .entry-v12 .fog--design { background: radial-gradient(ellipse 13% 17% at 46.5% 62.5%, transparent 0 68%, var(--fog) 100%); }
+  /* B: the tiers where delegations sit */
+  .entry-v12 .fog--deliver { background: radial-gradient(ellipse 45.5% 50% at 49% 56.5%, var(--fog) 0 34%, transparent 44% 88%, var(--fog) 98%); }
+  /* C: the outer wall and gallery */
+  .entry-v12 .fog--audit { background: radial-gradient(ellipse 52% 58% at 49% 56.5%, var(--fog) 0 74%, transparent 84%); }
+  .entry-v12 [data-ring="design"] .fog--design,
+  .entry-v12 [data-ring="deliver"] .fog--deliver,
+  .entry-v12 [data-ring="audit"] .fog--audit { opacity: 1; }
+
+  /* Open arc: the P's open bowl, used as a recurring mark */
+  .entry-v12 .arc { width: 22px; height: 22px; color: var(--muted); flex: none; }
+
+  /* ---------- Hero ---------- */
+  .entry-v12 .hero {
+    position: relative;
+    margin: 0; border: 0;
+    min-height: calc(100svh - var(--header-h));
+    display: flex; align-items: center; justify-content: center;
+    padding: 4rem var(--gutter);
+    text-align: center;
+  }
+  .entry-v12 .hero__copy { display: flex; flex-direction: column; align-items: center; max-width: 46rem; }
+  .entry-v12 .hero__title { margin: 0; font-size: 2em; line-height: 0; }
+  .entry-v12 .hero__wordmark {
+    width: clamp(16rem, 34vw, 38rem);
+    height: auto;
+    color: var(--ink);
+  }
+  .entry-v12 .hero__lede {
+    margin: 2rem 0 0;
+    max-width: 42rem;
+    font-size: clamp(1.125rem, 1.3vw, 1.375rem);
+    line-height: 1.45;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  @media (max-width: 600px) { .entry-v12 .hero__break { display: none; } }
+  .entry-v12 .hero__actions { margin-top: 2.25rem; display: flex; align-items: center; justify-content: center; gap: 1.5rem; flex-wrap: wrap; }
+  .entry-v12 .hero__title,
+  .entry-v12 .hero__lede,
+  .entry-v12 .hero__actions { animation: rise .9s cubic-bezier(.2,.7,.2,1) both; }
+  .entry-v12 .hero__title { animation-delay: .1s; }
+  .entry-v12 .hero__lede { animation-delay: .3s; }
+  .entry-v12 .hero__actions { animation-delay: .45s; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .entry-v12 .button {
+    display: inline-flex; align-items: center; justify-content: center; gap: .75rem;
+    min-height: calc(var(--control-height) + .25rem);
+    padding: 0 1.25rem;
+    border: 1px solid var(--accent); border-radius: var(--radius-md);
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 1rem; font-weight: 500; text-decoration: none;
+    transition: background-color var(--motion-hover) var(--easing-default), border-color var(--motion-hover) var(--easing-default), transform var(--motion-press) var(--easing-default);
+  }
+  .entry-v12 .button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .entry-v12 .button:active { transform: scale(.985); }
+
+  /* Scroll cue: points down into the room */
+  .entry-v12 .hero__cue {
+    position: absolute; left: 50%; bottom: clamp(7.5rem, 17vh, 11rem);
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: .625rem;
+    font-size: .75rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); text-decoration: none;
+    transition: color var(--motion-hover) var(--easing-default);
+  }
+  .entry-v12 .hero__cue:hover { color: var(--ink); }
+  .entry-v12 .hero__cue .arc { animation: cue-drift 2.8s ease-in-out infinite; }
+  @keyframes cue-drift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(5px); }
+  }
+
+  /* The table, peeking up from the bottom of the hero; scrolling carries it into the room */
+  .entry-v12 .peek {
+    position: fixed; left: 0; top: 0; z-index: 5;
+    aspect-ratio: 1080 / 600;
+    transform-origin: 46.5% 61%;
+    pointer-events: none;
+    opacity: 0; visibility: hidden;
+    will-change: transform, opacity;
+  }
+  .entry-v12 .peek .art {
+    -webkit-mask-image:
+      radial-gradient(ellipse 13% 17% at 46.5% 62.5%, #000 68%, rgb(0 0 0 / var(--outside, 0)) 100%),
+      radial-gradient(ellipse 22% 30% at 46.5% 61%, #000 55%, transparent 100%);
+    -webkit-mask-composite: source-in;
+            mask-image:
+      radial-gradient(ellipse 13% 17% at 46.5% 62.5%, #000 68%, rgb(0 0 0 / var(--outside, 0)) 100%),
+      radial-gradient(ellipse 22% 30% at 46.5% 61%, #000 55%, transparent 100%);
+            mask-composite: intersect;
+  }
+  /* ---------- The room (scroll story) ---------- */
+  .entry-v12 .room { position: relative; height: 320vh; }
+  .entry-v12 .room__sticky {
+    position: sticky; top: var(--header-h);
+    height: calc(100svh - var(--header-h));
+    display: grid;
+    grid-template-columns: minmax(18rem, 1fr) 1.45fr;
+    align-items: center;
+    gap: clamp(1.5rem, 4vw, 4rem);
+    padding: 0 var(--gutter);
+    overflow: hidden;
+  }
+  .entry-v12 .room__title {
+    margin: 0 0 2rem;
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(2rem, 3.2vw, 3.25rem); line-height: 1.04; letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+  .entry-v12 .steps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .entry-v12 .step { padding-left: 1.25rem; border-left: 1px solid var(--line); margin-bottom: 1.5rem; }
+  .entry-v12 .step__crop { display: none; }
+  .entry-v12 .step__title { margin: 0 0 .5rem; font-family: var(--sans); font-weight: 650; font-size: 1.25rem; line-height: 1.35; letter-spacing: -0.005em; }
+  .entry-v12 .step__body { margin: 0; color: var(--muted); max-width: 30rem; line-height: 1.5; text-wrap: pretty; }
+  .entry-v12 .steps { min-height: 13rem; }
+  .entry-v12 .step {
+    position: absolute; top: 0; left: 0; right: 0;
+    margin: 0;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .45s ease, transform .45s ease;
+  }
+  .entry-v12 .step.is-active { opacity: 1; transform: none; border-left-color: var(--accent); }
+
+  /* Progress through the room: a thin line that fills, with a stop at each ring */
+  .entry-v12 .room__meter {
+    position: relative;
+    width: min(16rem, 100%); height: 1px;
+    margin-top: 2.5rem;
+    background: var(--line);
+  }
+  .entry-v12 .room__meter-fill {
+    position: absolute; inset: 0;
+    background: var(--accent);
+    transform-origin: left center;
+    transform: scaleX(0);
+  }
+  .entry-v12 .room__tick {
+    position: absolute; top: -3px;
+    width: 7px; height: 7px; margin-left: -3.5px;
+    border: 1px solid var(--line); border-radius: 50%;
+    background: var(--bg);
+    transition: background-color .3s ease, border-color .3s ease;
+  }
+  .entry-v12 .room__tick.is-reached { background: var(--accent); border-color: var(--accent); }
+
+  .entry-v12 .room__stage {
+    position: relative;
+    height: min(76svh, 760px);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    /* soft edges so the zoomed drawing fades out instead of being cut */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+    -webkit-mask-composite: source-in;
+            mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+            mask-composite: intersect;
+  }
+  .entry-v12 .room__frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1080 / 600;
+    transform-origin: 46.5% 61%;
+    will-change: transform;
+    flex: none;
+  }
+
+  /* ---------- Closing ---------- */
+  /* Fills the screen below the header; heading, text and button sit in the exact centre */
+  .entry-v12 .closing {
+    min-height: calc(100svh - var(--header-h));
+    padding: 4rem var(--gutter);
+    display: grid; align-content: center; justify-items: center; gap: 1.5rem;
+    text-align: center;
+  }
+  .entry-v12 .closing__title {
+    margin: 0;
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(2.25rem, 4vw, 4rem); line-height: 1.04; letter-spacing: -0.025em;
+  }
+  .entry-v12 .closing__body { margin: 0; max-width: 32rem; color: var(--muted); font-size: 1.0625rem; text-wrap: balance; }
+  .entry-v12 .closing .button { margin-top: .75rem; }
+
+  /* ---------- Footer ---------- */
+  .entry-v12 .site-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    padding: 1.5rem var(--gutter);
+    border-top: 1px solid var(--line);
+    font-size: .8125rem; color: var(--muted);
+  }
+  .entry-v12 .site-footer .wordmark { height: 14px; }
+
+  /* ---------- Small screens ---------- */
+  @media (max-width: 900px) {
+    .entry-v12 .brand__divider, .entry-v12 .brand__tagline { display: none; }
+    .entry-v12 .room { height: auto; }
+    .entry-v12 .room__sticky {
+      position: static; height: auto;
+      grid-template-columns: 1fr;
+      padding: 4rem var(--gutter);
+    }
+    .entry-v12 .room__stage { display: none; }
+    .entry-v12 .step__crop {
+      display: block;
+      width: 100%; height: auto;
+      aspect-ratio: 16 / 9;
+      margin: 0 0 1rem;
+      background-repeat: no-repeat;
+      -webkit-mask-image: radial-gradient(ellipse 60% 62% at 50% 50%, #000 62%, transparent 100%);
+              mask-image: radial-gradient(ellipse 60% 62% at 50% 50%, #000 62%, transparent 100%);
+    }
+    /* framing in percent of the drawing, chosen so each crop centres on its ring */
+    .entry-v12 .step__crop--design { background-size: 300% auto; background-position: 44.75% 68.9%; }
+    .entry-v12 .step__crop--deliver { background-size: 170% auto; background-position: 47.6% 8%; }
+    .entry-v12 .step__crop--audit { background-size: 200% auto; background-position: 100% 70%; }
+    .entry-v12 .steps { min-height: 0; }
+    .entry-v12 .step { position: static; opacity: 1; transform: none; margin-bottom: 1.5rem; }
+    .entry-v12 .room__meter { display: none; }
+    .entry-v12 .hero__cue { bottom: 2.5rem; }
+  }
+
+  /* ---------- Reduced motion ---------- */
+  /* Keep the reference's scroll cue clear of the entry action at desktop zoom. */
+  @media (max-height: 600px) {
+    .entry-v12 .hero { flex-direction: column; gap: 2.5rem; }
+    .entry-v12 .hero__cue { position: static; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .entry-v12 .fog, .entry-v12 .step, .entry-v12 .room__tick { transition: none; }
+    .entry-v12 .room__frame { will-change: auto; }
+    .entry-v12 .hero__cue .arc { animation: none; }
+    .entry-v12 .hero__title, .entry-v12 .hero__lede, .entry-v12 .hero__actions { animation: none; }
+    .entry-v12 .brand { transition: none; }
+  }

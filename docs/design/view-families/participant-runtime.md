@@ -34,3 +34,9 @@ All Runtime states apply, especially local pending, ordered reconnect, duplicate
 
 Tier behavior: 1920/1440 show configured navigation and authored regions; 1280x720/600 prioritize the main region; 1024x768 compacts context into disclosure; 768x1024 and 390x844 use labeled collapsed navigation without icon-only destinations. At 200%/320px, module controls stack in reading order and status remains before actions.
 
+
+## PS-842 candidate contract
+
+Shared Communications, Proposals, Injects and RFIs names/icons/order are authored in new Release Interface Profiles. Stable Work, Communications and Session resources groups do not change access policy. One paged review pattern owns record navigation. White Cell links to the existing authorized Operator console; it does not embed another copy.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

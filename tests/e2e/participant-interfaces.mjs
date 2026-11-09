@@ -1,3 +1,4 @@
+import { interfaceFindings } from "./interface-consistency/assertions.mjs";
 // Browser-level interface evidence using the real Release definitions and explicit in-memory API fixtures.
 // Does not substitute for database-backed authorization or media integration tests.
 import assert from 'node:assert/strict';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
 import { stageControlPresentation } from '../../apps/server/dist/runtime/stage-control-presentation.js';
-const core=JSON.parse(fs.readFileSync('definitions/fractured-order/fractured-order-release-source.json','utf8')).materialization.coreDesign;
+const core=JSON.parse(fs.readFileSync('definitions/fractured-order/fractured-order-interface-release-source.json','utf8')).materialization.coreDesign;
 const dist=path.resolve('apps/runtime-web/dist/web');
 const out='output/playwright/participant-interfaces';
 fs.mkdirSync(out,{recursive:true});
@@ -63,6 +64,7 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
       }
       return json({commandId:command.commandId,status:'accepted',replayed:false});
     }
+    if(url.pathname.includes('/runtime-resources/'))return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Synthetic deck</title><p>Synthetic deck content</p>'});
     const file=path.join(dist,url.pathname);
     return route.fulfill({status:200,contentType:mime[path.extname(file)]??'text/html',body:fs.existsSync(file)&&fs.statSync(file).isFile()?fs.readFileSync(file):fs.readFileSync(path.join(dist,'index.html'))});
   });
@@ -207,7 +209,7 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
   if(roleId==='notetaker'){
     await page.getByLabel('Quote',{exact:true}).check();
     await page.getByLabel(/^Content/).fill('Synthetic observation from a notetaker.');
-    await page.getByRole('link',{name:'Inbox',exact:true}).click();
+    await page.getByRole('link',{name:'Communications',exact:true}).click();
     await page.getByRole('link',{name:'Quick Capture',exact:true}).click();
     assert.equal(await page.getByLabel(/^Content/).inputValue(),'Synthetic observation from a notetaker.');
     await page.getByRole('button',{name:'Save Observation'}).click();
@@ -230,7 +232,7 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
   if(roleId==='white_cell'){
     await page.getByLabel('Action',{exact:true}).selectOption('stage.resume:');
     await page.getByLabel('Reason for this change').fill('Synthetic test resumes the current stage.');
-    await page.getByRole('button',{name:'Apply control',exact:true}).click();
+    await page.getByRole('button',{name:'Apply Stage control',exact:true}).click();
     await page.getByText('The server accepted the Command.',{exact:false}).last().waitFor();
     assert.equal(commands[0].operationType,'stage.resume');
     assert.equal(commands[0].expectedAggregateVersion,4);
@@ -275,7 +277,7 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
     assert.equal(commands[0].aggregateId,'record-1');
     assert.equal(commands[0].expectedAggregateVersion,1);
     await page.getByRole('link',{name:'Present',exact:true}).click();
-    assert.ok(await page.getByRole('region',{name:'Present submitted artifacts',exact:true}).getByRole('article').getByText('Synthetic team forecast for interface verification.',{exact:true}).isVisible());
+    assert.ok(await page.getByRole('region',{name:'Present',exact:true}).getByRole('article').getByText('Synthetic team forecast for interface verification.',{exact:true}).isVisible());
     await page.getByRole('button',{name:'Enter full screen',exact:true}).click();
     await page.waitForFunction(()=>document.fullscreenElement!==null);
     await page.keyboard.press('End');
@@ -291,16 +293,38 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
     await page.screenshot({path:`${out}/voice-error.png`});
     await voice.getByRole('button',{name:'Close Voice channels',exact:true}).click();
   }
+  const consistency=[];
+  for(const viewport of [{width:1440,height:900},{width:1024,height:768},{width:512,height:384}])for(const theme of ['light','dark']){
+    await page.setViewportSize(viewport);
+    await page.waitForFunction(()=>document.querySelector('.runtime-frame')?.getAttribute('data-sidebar')===(matchMedia('(min-width: 52.01rem)').matches?'open':'closed'));
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;localStorage.setItem('plenum.theme',theme);},theme);
+    for(const item of profile.navigation.items){
+      const toggle=page.getByRole('button',{name:'Open workspace navigation',exact:true});
+      if(viewport.width<833){await toggle.waitFor();await toggle.click();}
+      await page.locator('#runtime-navigation a').filter({has:page.getByText(item.label,{exact:true})}).click();
+      const heading=page.getByRole('heading',{level:1});
+      assert.equal((await heading.innerText()).trim(),item.label);
+      consistency.push({item:item.id,viewport,theme,findings:await interfaceFindings(page)});
+    }
+  }
+  fs.writeFileSync(`${out}/${scenario}-consistency.json`,JSON.stringify(consistency,null,2));
+  assert.deepEqual(consistency.flatMap(row=>row.findings.map(f=>row.item+': '+f)),[]);
+  await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});
+  assert.deepEqual(await interfaceFindings(page),[]);
+  await page.screenshot({path:`${out}/${scenario}-forced-colors.png`});
+  await page.emulateMedia({forcedColors:'none'});
+  await page.setViewportSize({width:1440,height:900});
   const axe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze();
   assert.deepEqual(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
-  await page.setViewportSize({width:390,height:844});
+  await page.setViewportSize({width:1024,height:768});
   await page.screenshot({path:`${out}/${scenario}-mobile.png`});
   assert.equal(await page.locator('html').evaluate(el=>el.scrollWidth>el.clientWidth),false);
-  await page.getByRole('button',{name:'Open workspace navigation'}).click();
-  assert.ok(await page.getByRole('navigation',{name:'Runtime modules',exact:true}).isVisible());
-  await page.setViewportSize({width:320,height:720});
+  const navigationToggle=page.getByRole('button',{name:'Open workspace navigation'});
+  if(await navigationToggle.isVisible())await navigationToggle.click();
+  assert.ok(await page.getByRole('navigation',{name:'Work navigation',exact:true}).isVisible());
+  await page.setViewportSize({width:512,height:384});
   await page.emulateMedia({reducedMotion:'reduce'});
-  await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+
   await page.screenshot({path:`${out}/${scenario}-320-zoom.png`});
   const overflow=await page.locator('html').evaluate(el=>el.scrollWidth>el.clientWidth);
   if(overflow)console.log(await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1&&el.getBoundingClientRect().width>0).slice(-12).map(el=>({tag:el.tagName,class:el.className,text:el.textContent.slice(0,60),right:el.getBoundingClientRect().right}))));

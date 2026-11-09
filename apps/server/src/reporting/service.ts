@@ -16,6 +16,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { requireCurrentOrganizationRole } from "../research/evidence.js";
+import { assertReportingTarget } from "./targets.js";
 import { createStoredZip, createTextPdf, csvCell, encodeJson, escapeHtml, sha256 } from "./formats.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -183,6 +184,7 @@ export async function createRetentionPolicy(
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+    await assertReportingTarget(client, principal.organizationId, input.scopeType, input.scopeReference, correlationId);
     const policyId = randomUUID();
     await client.query(
       `INSERT INTO reporting.retention_policies
@@ -224,6 +226,7 @@ export async function placeLegalHold(
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`attachment-retention:${principal.organizationId}`]);
+    await assertReportingTarget(client, principal.organizationId, input.scopeType, scopeReference, correlationId);
     const holdId = randomUUID();
     const result = await client.query<{ recorded_at: Date }>(
       `INSERT INTO reporting.legal_hold_events
@@ -389,6 +392,8 @@ export async function recordCorrection(
   }
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+    const selected = input.targetReference.match(/^(session|project|export|organization):(.+)$/u);
+    if (selected) await assertReportingTarget(client, principal.organizationId, selected[1]!, selected[2]!, correlationId);
     const correctionId = randomUUID();
     const result = await client.query<{ corrected_at: Date }>(
       `INSERT INTO reporting.corrections

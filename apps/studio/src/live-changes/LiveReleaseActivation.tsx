@@ -143,7 +143,7 @@ export function LiveReleaseActivation({ projectId }: { projectId: string }) {
   }
 
   return <section id="live-changes" className="card live-changes" aria-labelledby="live-changes-title">
-    <div className="card-heading"><h2 id="live-changes-title" tabIndex={-1}>Activate a Release</h2>{impact === null ? null : <span className="badge badge-info">{impact.report.classification.replaceAll("_", " ")}</span>}</div>
+    <div className="card-heading"><h2 id="live-changes-title" tabIndex={-1}>Live Changes</h2>{impact === null ? null : <span className="badge badge-info">{impact.report.classification.replaceAll("_", " ")}</span>}</div>
     <p className="hint">Activation applies the candidate Release to new work only. Existing workflow instances, open Polls, and in-flight Model Compositions keep their governing Release.</p>
     <p role="status" aria-live="polite">{status}</p>
     <form className="live-change-form" onSubmit={(event) => void preview(event)}>

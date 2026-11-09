@@ -291,7 +291,7 @@ export async function listFormRetentionPolicies(pool: Pool, principal: Authentic
         WHERE organization_id=$1 AND expiry_action='delete' AND approval_required=false
           AND ((scope_type='organization' AND scope_reference IN ('*',$1::text)) OR (scope_type='project' AND scope_reference=$2) OR scope_type='artifact_type')
         ORDER BY policy_key,version DESC LIMIT 200`, [principal.organizationId, projectId]);
-    return result.rows.map((row) => ({ id: row.id, label: `${row.policy_key} · version ${row.version} · delete after ${row.period_days} days`,
+    return result.rows.map((row) => ({ id: row.id, label: `${row.policy_key} · version ${row.version} · delete after ${row.period_days} ${row.period_days === 1 ? "day" : "days"}`,
       ...(row.scope_type === "artifact_type" ? { artifactTypeId: row.scope_reference } : {}) }));
   });
 }

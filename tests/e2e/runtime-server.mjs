@@ -97,7 +97,13 @@ const localPersonas = {
   finalReviewer: { label: "Reviewer", description: "Open assigned Project review work without mutation controls." },
   portalOperator: { label: "Operator only", description: "Find Releases, create configured Sessions, and verify Project data remains denied." },
   publisher: { label: "Publisher", description: "Find immutable Releases and verify Package export and import." },
-  invitedParticipant: { label: "Invited Participant", description: "Accept an invitation, choose an eligible Seat, and enter the role-scoped Runtime." }
+  invitedParticipant: { label: "Invited Participant", description: "Accept an invitation, choose an eligible Seat, and enter the role-scoped Runtime." },
+  author: { label: "Blue Scribe", description: "Enter the assigned Blue Scribe workspace." },
+  redAuthor: { label: "Red Scribe", description: "Enter the assigned Red Scribe workspace." },
+  reviewer: { label: "Blue Facilitator", description: "Enter the assigned Blue Facilitator workspace." },
+  redReviewer: { label: "Red Facilitator", description: "Enter the assigned Red Facilitator workspace." },
+  greenReviewer: { label: "Green Facilitator", description: "Enter the assigned Green Facilitator workspace." },
+  blueNotetaker: { label: "Blue Notetaker", description: "Enter the assigned Blue Notetaker workspace." }
 };
 const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, token]) => [token, {
   authenticationSessionId: fixture.authenticationSessions[key],

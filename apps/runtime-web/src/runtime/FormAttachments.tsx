@@ -1,3 +1,4 @@
+import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useEffect, useId, useRef, useState } from "react";
 import type { CommandEnvelopeV1, CommandReceiptV1, FormAttachmentV1, RuntimeArtifactV1 } from "@plenum/event-contracts";
 import { FORM_LIMITS, formAttachmentMediaTypeLabel } from "@plenum/simulation-schema";
@@ -63,7 +64,7 @@ export function FormAttachments({ artifact, sessionId, deviceId, activeSessionRo
   };
   return <section className="card" aria-labelledby={`${id}-heading`}><h3 id={`${id}-heading`}>Attachments for {artifact.title}</h3>
     <p>10 files maximum · 20 MB each · 100 MB total. Files use this record’s access and retention rules. Scanning failures and infected files remain unavailable.</p>
-    {files.length ? <ul className="runtime-resource-list">{files.map((item) => <li key={item.id}><div><strong>{item.fileName}</strong><span>{item.sizeBytes.toLocaleString()} bytes · {item.scanStatus}</span></div>
+    {files.length ? <ul className="runtime-resource-list">{files.map((item) => <li key={item.id}><div><strong>{item.fileName}</strong><span>{item.sizeBytes.toLocaleString()} bytes · {displayStatus(item.scanStatus)}</span></div>
       <div><button type="button" className="btn-secondary" aria-label={`Download ${item.fileName}`} disabled={disabled || busy || !item.available} onClick={async () => {
         setBusy(true);
         try {

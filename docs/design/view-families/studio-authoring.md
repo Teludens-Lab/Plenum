@@ -34,3 +34,9 @@ All canonical states apply. Additional mandatory states: collaborator joined/lef
 
 Tier behavior: 1920/1440 show navigator, canvas and inspector; 1280x720/600 retain navigator/canvas and overlay the inspector; 1024x768 collapses navigator and inspector to labeled sheets; 768x1024 and 390x844 show one region at a time with persistent Project/section/sync context. At 200%/320px, every graph operation has a non-spatial list/form equivalent.
 
+
+## PS-842 candidate contract
+
+The 27 section labels and headings share the SECTIONS catalog; the exact list and six groups are in ../route-inventory.md. Use sentence case while preserving domain names. Technical keys and provenance use labeled disclosures. Compact lists do not create additional nested scroll owners.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

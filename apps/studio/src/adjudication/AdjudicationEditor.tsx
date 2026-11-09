@@ -1,3 +1,4 @@
+import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useState } from "react";
 import { ADJUDICATION_MODEL_EDITOR_CONTRACT_ID } from "@plenum/event-contracts";
 import type { AdjudicationModelDefinitionV1, CoreDesignV1, GateConditionV1, RuntimeScalarV1, ScenarioV1 } from "@plenum/simulation-schema";
@@ -130,7 +131,7 @@ function AdjudicationItem({ model, index, count, core, scenario, client }: {
         <fieldset className="nested-editor"><legend>Policy-filtered input mappings</legend>{(model.inputMappings ?? []).map((mapping, mappingIndex) => <div className="field-row" key={`${model.id}-mapping-${mappingIndex}`}>
           <TextField id={`mapping-source-${model.id}-${mappingIndex}`} label="Authorized source" value={mapping.source} path={[...base, "inputMappings", mappingIndex, "source"]} client={client} />
           <TextField id={`mapping-target-${model.id}-${mappingIndex}`} label="Plugin input" value={mapping.target} path={[...base, "inputMappings", mappingIndex, "target"]} client={client} />
-          <SelectField id={`mapping-class-${model.id}-${mappingIndex}`} label="Classification ceiling" value={mapping.maxClassification} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={[...base, "inputMappings", mappingIndex, "maxClassification"]} client={client} />
+          <SelectField id={`mapping-class-${model.id}-${mappingIndex}`} label="Classification ceiling" value={mapping.maxClassification} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: displayStatus(value) }))} path={[...base, "inputMappings", mappingIndex, "maxClassification"]} client={client} />
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath([...base, "inputMappings"], mappingIndex)}>Remove mapping</button>
         </div>)}<AddButton label="Add input mapping" onClick={() => client.appendAtPath([...base, "inputMappings"], { source: "state.authorized", target: "input", maxClassification: "internal" })} /></fieldset>
       </fieldset>}
@@ -145,7 +146,7 @@ function AdjudicationItem({ model, index, count, core, scenario, client }: {
         <MultiCheck legend="Follow-on Injects" values={output.followOnInjectIds} options={injects.map(({ id, title }) => ({ value: id, label: title }))} path={[...base, "output", "followOnInjectIds"]} client={client} />
         <fieldset className="nested-editor"><legend>State Effects</legend>{output.stateEffects.map((effect, effectIndex) => <div className="field-row" key={`${model.id}-effect-${effectIndex}`}>
           <SelectField id={`output-effect-target-${model.id}-${effectIndex}`} label="State Value" value={effect.stateVariableId} options={numericVariables.map(({ id, name }) => ({ value: id, label: name }))} path={[...base, "output", "stateEffects", effectIndex, "stateVariableId"]} client={client} />
-          <SelectField id={`output-effect-operation-${model.id}-${effectIndex}`} label="Operation" value={effect.operation} options={["set", "increment", "decrement", "multiply"].map((value) => ({ value, label: value }))} path={[...base, "output", "stateEffects", effectIndex, "operation"]} client={client} />
+          <SelectField id={`output-effect-operation-${model.id}-${effectIndex}`} label="Operation" value={effect.operation} options={["set", "increment", "decrement", "multiply"].map((value) => ({ value, label: displayStatus(value) }))} path={[...base, "output", "stateEffects", effectIndex, "operation"]} client={client} />
           <TextField id={`output-effect-value-${model.id}-${effectIndex}`} label="Value" type="number" value={typeof effect.value === "number" ? effect.value : 0} path={[...base, "output", "stateEffects", effectIndex, "value"]} client={client} />
           <TextField id={`output-effect-rationale-${model.id}-${effectIndex}`} label="Effect rationale" value={effect.rationale ?? ""} path={[...base, "output", "stateEffects", effectIndex, "rationale"]} client={client} />
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath([...base, "output", "stateEffects"], effectIndex)}>Remove Effect</button>

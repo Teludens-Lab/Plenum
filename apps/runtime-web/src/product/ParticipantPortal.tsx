@@ -1,3 +1,4 @@
+import { displayStatus, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type {
   CommandEnvelopeV1, CommandReceiptV1, ParticipantEntryV1, ParticipantSeatChoiceV1, ParticipantSessionEntryV1
@@ -32,9 +33,6 @@ function command(entry: ParticipantSessionEntryV1, deviceId: string, operationTy
   };
 }
 
-function displayStatus(value: string): string {
-  return value.replaceAll("_", " ").replace(/^./u, (character) => character.toUpperCase());
-}
 
 const teamOf = (seat: ParticipantSeatChoiceV1): string => seat.teamLabel ?? seat.seatLabel;
 
@@ -174,7 +172,7 @@ export function ParticipantPortal({ displayName }: { displayName: string }) {
     <SessionVisual session={focused} />
     <div className="participant-entry-panel">
       <div className="participant-entry-intro">
-        <h2 id="participant-sessions-title">Join a session</h2>
+        <h1 id="participant-sessions-title">Your Sessions</h1>
         <p>Enter your code and choose your seat.</p>
       </div>
       <form className="participant-join-form" onSubmit={(event) => void joinByCode(event)}>
@@ -192,10 +190,10 @@ export function ParticipantPortal({ displayName }: { displayName: string }) {
       <p className="live-region participant-entry-notice" role="status" aria-live="polite">{message}</p>
       {entry === null ? <PlenumLoader label="Loading your authorized Sessions" /> : null}
       {entry !== null && sessions.length === 0 ? <div className="participant-entry-empty">
-        <h3>No sessions are linked yet</h3><p>Enter a Session code above, or return when your simulation team sends an invitation.</p>
+        <h2>No sessions are linked yet</h2><p>Enter a Session code above, or return when your simulation team sends an invitation.</p>
       </div> : null}
       {sessions.length > 1 ? <nav className="participant-session-switcher" aria-label="Your Sessions">
-        <h3>Your sessions</h3>
+        <h2>Your sessions</h2>
         <ul>{sessions.map((session) => <li key={session.sessionId}>
           <button type="button" aria-current={session === focused ? "true" : undefined} onClick={() => setFocusedSessionId(session.sessionId)}>
             <span>{session.branding?.title ?? session.title}</span><small>{session.title} · {displayStatus(session.entryState)}</small>
@@ -204,9 +202,9 @@ export function ParticipantPortal({ displayName }: { displayName: string }) {
       </nav> : null}
       {focused === undefined ? null : <article className="participant-session participant-session-entry" aria-label={focused.title}>
         <div className="participant-session-heading">
-          <div><h3>{focused.roleContexts.length > 0 ? "Enter your workspace" : "Choose your seat"}</h3>
+          <div><h2>{focused.roleContexts.length > 0 ? "Enter your workspace" : "Choose your seat"}</h2>
             <p>{focused.title} · {focused.releaseLabel}</p></div>
-          <span className="badge badge-state">{displayStatus(focused.status)}</span>
+          <span className={statusClass(focused.status)}>{displayStatus(focused.status)}</span>
         </div>
         {focused.entryState === "invited" && focused.invitationId !== null ? <div className="participant-primary-step">
           <p>This organization invited you to join. Accepting confirms access without revealing role-scoped content.</p>
@@ -217,11 +215,11 @@ export function ParticipantPortal({ displayName }: { displayName: string }) {
         {focused.entryState === "waiting_room" ? <p className="status-notice">Waiting for an Operator to admit you. Refresh after admission.</p> : null}
         {focused.entryState === "assignment_pending" && focused.eligibleSeats.length === 0
           ? <p className="status-notice">Access is confirmed. An Operator must assign your seat before you can enter.</p> : null}
-        {focused.eligibleSeats.length === 0 ? null : <SeatChoice key={focused.sessionId} session={focused} pending={pending}
+        {focused.eligibleSeats.length === 0 || focused.roleContexts.length > 0 ? null : <SeatChoice key={focused.sessionId} session={focused} pending={pending}
           claim={(seat) => void submit(focused, `/v1/sessions/${focused.sessionId}/seats/${encodeURIComponent(seat.seatId)}/claim`,
             "seat.claim", crypto.randomUUID(), { seatId: seat.seatId, sessionRoleId: seat.sessionRoleId })} />}
         {focused.roleContexts.length === 0 ? null : <div className="role-entry-list">
-          <h4>Enter as</h4>
+          <h3>Your assigned roles</h3>
           {focused.roleContexts.map((role) => <a className="btn-primary link-button" href={role.runtimeUrl}
             key={`${role.seatLabel}:${role.sessionRoleId}`}>
             {role.teamLabel === null ? role.sessionRoleLabel : `${role.teamLabel} ${role.sessionRoleLabel}`}

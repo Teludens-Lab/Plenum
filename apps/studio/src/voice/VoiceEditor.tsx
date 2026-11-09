@@ -44,7 +44,8 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
   const [targetProfile, setTargetProfile] = useState<(typeof profiles)[number]>("institutional");
 
   return <Workspace id="voice" title="Voice Channels" intro="Configure voice permissions and provider capability by deployment profile. Every channel also provides non-audio instructions.">
-    <p className="rule-sentence"><strong>Version 1 privacy restriction:</strong> resolved OPEN-027 requires production recording and transcription to remain off. A future enablement needs a new approved legal, consent, retention, access, export, and provider decision.</p>
+    <p className="rule-sentence"><strong>Version 1 privacy restriction:</strong> Production recording and transcription remain off. A future enablement needs a new approved legal, consent, retention, access, export, and provider decision.</p>
+    <details className="technical-details"><summary>Policy provenance</summary><p>OPEN-027: version 1 recording and transcription restriction.</p></details>
     <div className="preview-controls"><label>Target deployment profile<select value={targetProfile} onChange={(event) => setTargetProfile(event.target.value as (typeof profiles)[number])}>{profiles.map((profile) => <option key={profile} value={profile}>{words(profile)}</option>)}</select></label></div>
     <div className="editor-list" data-contract-id={VOICE_DEFINITION_CONTRACT_ID}>{channels.map((channel, index) => {
       const base = ["coreDesign", "communications", "voiceChannels", index] as const;
@@ -58,7 +59,7 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
         ...(channel.transcriptionPolicy !== "off" ? ["Transcription is disabled in the version 1 production profile."] : [])
       ];
       return <details className="editor-item" id={`voice-${channel.id}`} key={channel.id}>
-        <summary><span>{channel.name || "Untitled Voice Channel"}</span><span className="item-id">{channel.id}</span></summary>
+        <summary><span>{channel.name || "Untitled Voice Channel"}</span></summary><details className="technical-details"><summary>Technical reference</summary><code>{channel.id}</code></details>
         <div className="item-body grid-fields">
           <TextField id={`voice-name-${channel.id}`} label="Channel name" value={channel.name} path={[...base, "name"]} client={client} />
           <SelectField id={`voice-mode-${channel.id}`} label="Mode" value={channel.mode} options={["radio_ptt", "open_room", "private_call", "broadcast"].map((value) => ({ value, label: words(value) }))} path={[...base, "mode"]} client={client} />
@@ -84,7 +85,7 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
 
           <SelectField id={`voice-recording-${channel.id}`} label="Recording policy" value={channel.recordingPolicy} options={["off", "on", "with_consent"].map((value) => ({ value, label: words(value) }))} path={[...base, "recordingPolicy"]} client={client} />
           <SelectField id={`voice-transcription-${channel.id}`} label="Transcription policy" value={channel.transcriptionPolicy} options={["off", "with_consent"].map((value) => ({ value, label: words(value) }))} path={[...base, "transcriptionPolicy"]} client={client} />
-          {(channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") && <p className="status-error">Production publication is blocked by the version 1 restriction recorded in resolved OPEN-027. Every active participant must consent in any future approved profile; withdrawal must stop the relevant process immediately.</p>}
+          {(channel.recordingPolicy !== "off" || channel.transcriptionPolicy !== "off") && <p className="status-error">Production publication is blocked by the version 1 restriction for recording and transcription. Every active participant must consent in any future approved profile; withdrawal must stop the relevant process immediately.</p>}
           <TextField id={`voice-retention-${channel.id}`} label="Retention policy ID (required when enabled)" value={channel.retentionPolicyId ?? ""} path={[...base, "retentionPolicyId"]} client={client} transform={(value) => value || undefined} />
           <SelectField id={`voice-adapter-${channel.id}`} label="Media provider adapter" value={channel.mediaProviderAdapterBindingId} options={[{ value: "", label: "Select adapter" }, ...adapters.map(({ id }) => ({ value: id, label: id }))]} path={[...base, "mediaProviderAdapterBindingId"]} client={client} />
           <div className={targetReasons.length === 0 ? "rule-sentence" : "status-error"} role="status"><strong>{words(targetProfile)} compatibility:</strong> {targetReasons.length === 0 ? "Available with the pinned adapter; permissions still fail closed at Runtime." : targetReasons.join(" ")}</div>

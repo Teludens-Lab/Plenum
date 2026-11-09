@@ -1,5 +1,9 @@
 # Contract compatibility matrix
 
+PS-842 extends existing `/v1` projections with Organization-scoped named reporting targets (`id`, `scopeType`, `label`, at most 200 per kind) and signed-manifest `requestedPermissions`. Plugin license acceptance accepts optional `artifactId`; when supplied, it must belong to the current Organization and match `pluginId`. Existing callers may omit it. Retention/hold targets for known Organization, Session, Project and export scopes, and typed correction references, are revalidated in the existing transaction. Legacy opaque correction references and existing wildcard semantics remain supported. This adds no authority or persistence model. OpenAPI remains authoritative for transport details; integration r6 records positive and cross-Organization negative checks in the [PS-842 ledger](../acceptance/PS-842-interface-consistency.md).
+
+PS-842 presentation names and navigation ship in new immutable interface Release version 1.0.1 for Fractured Order and both validation definitions. Existing published bytes and Session Governing Release pins remain unchanged. Theme preference, display formatters and exact minutes-to-integral-seconds input conversion do not alter Command/event contracts. Platform capability selection still submits the existing string-array contract, including custom contracted keys. Rollback retains previous Releases and reverts the bounded application slice; no schema migration.
+
 OPEN-012 is resolved by the fail-closed policy below. Exact versions remain the default; broader support requires an explicit, tested adapter rather than inference.
 
 | Contract | Producer | Consumers | Pin | Breaking-change rule | Persistence impact | Test owner |

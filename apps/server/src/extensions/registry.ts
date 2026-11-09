@@ -273,7 +273,7 @@ export async function importPluginRevocations(
 export async function acceptPluginLicense(
   pool: Pool,
   principal: AuthenticatedPrincipal,
-  input: { acceptanceId: string; pluginId: string; license: string; termsDigest: string; correlationId: string }
+  input: { acceptanceId: string; pluginId: string; artifactId?: string; license: string; termsDigest: string; correlationId: string }
 ): Promise<void> {
   requireRole(principal, ["admin"], input.correlationId);
   if (!uuidPattern.test(input.acceptanceId) || !/^sha256:[0-9a-f]{64}$/u.test(input.termsDigest) || input.pluginId.length === 0 || input.license.length === 0) {
@@ -281,6 +281,11 @@ export async function acceptPluginLicense(
   }
   await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentRole(client, principal, ["admin"], input.correlationId);
+    if (input.artifactId !== undefined) {
+      const selected = await client.query("SELECT 1 FROM extension.plugin_artifacts WHERE organization_id=$1 AND id::text=$2 AND plugin_id=$3",
+        [principal.organizationId, input.artifactId, input.pluginId]);
+      if (selected.rowCount !== 1) throw authorizationError("PERMISSION_DENIED", "The selected Plugin is unavailable in this Organization.", input.correlationId);
+    }
     await client.query(
       `INSERT INTO extension.license_acceptances
          (id,organization_id,plugin_id,license,terms_digest,accepted_by)

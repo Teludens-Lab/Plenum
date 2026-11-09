@@ -1,6 +1,8 @@
+import { formatDate, displayStatus, plural, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { ErrorEnvelopeV1, JsonObject, OrganizationIdentityProviderV1, OrganizationWorkforceV1 } from "@plenum/event-contracts";
 import { PlenumLoader } from "../PlenumLoader.js";
+import { SecondaryNavigation } from "./SecondaryNavigation.js";
 
 type OrganizationRole = "admin" | "designer" | "publisher" | "operator" | "reviewer" | "research_analyst";
 
@@ -22,7 +24,7 @@ type PluginOperations = {
   permissions: { canSubmit: boolean; canApprove: boolean; canInstall: boolean; canRevoke: boolean };
   artifacts: Array<{ artifactId: string; pluginId: string; version: string; digest: string; bundleDigest: string;
     lifecycleStatus: string; publisherName: string; submittedAt: string; approvedAt: string | null;
-    revokedAt: string | null; installationCount: number; bindingCount: number; supplyChain: JsonObject }>;
+    revokedAt: string | null; installationCount: number; bindingCount: number; supplyChain: JsonObject; requestedPermissions: string[] }>;
   governance: {
     publisherMembers: Array<{ personId: string; displayName: string }>;
     publishers: Array<{ publisherId: string; principalId: string; displayName: string; signatureKeyId: string; status: string; approvedAt: string }>;
@@ -33,6 +35,7 @@ type PluginOperations = {
 };
 
 type DataPolicyOperations = {
+  targets: Array<{ id: string; scopeType: string; label: string }>;
   retentionPolicies: Array<{ id: string; key: string; version: number; scopeType: string; scopeReference: string;
     periodDays: number; legalHoldBehavior: string; expiryAction: string; archiveDestination: string;
     approvalRequired: boolean; createdAt: string }>;
@@ -47,15 +50,18 @@ const roleLabels: Record<OrganizationRole, string> = {
   reviewer: "Reviewer", research_analyst: "Research Analyst"
 };
 
+async function publicKeyFile(data: FormData, name: string): Promise<string> {
+  const file = data.get(name);
+  if (!(file instanceof File) || file.size === 0 || file.size > 64 * 1024) throw new Error("Choose a public key file smaller than 64 KB.");
+  return file.text();
+}
+
 function AdministrationNavigation({ admin }: { admin: boolean }) {
-  return <nav className="card administration-rail" aria-label="Administration destinations">
-    <h2>Administration</h2>
-    <ul>
-      {admin ? <><li><a href="/admin/members">Workforce access</a></li><li><a href="/admin/identity">Identity provider</a></li></> : null}
-      <li><a href="/admin/plugins">Plugin operations</a></li>
-      {admin ? <><li><a href="/admin/deployment">Deployment posture</a></li><li><a href="/admin/data-policy">Data policy</a></li></> : null}
-    </ul>
-  </nav>;
+  return <SecondaryNavigation label="Administration destinations" items={[
+    ...(admin ? [{ href: "/admin/members", label: "Workforce access" }, { href: "/admin/identity", label: "Identity provider" }] : []),
+    { href: "/admin/plugins", label: "Plugin operations" },
+    ...(admin ? [{ href: "/admin/deployment", label: "Deployment posture" }, { href: "/admin/data-policy", label: "Data policy" }] : [])
+  ]} />;
 }
 
 function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void }) {
@@ -149,8 +155,8 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
       </form>
       {model.invitations.length === 0 ? <p className="portal-empty">No workforce invitations are pending.</p> : <ul className="administration-list compact">{model.invitations.map((invitation) => <li key={invitation.id}>
         <div><strong>{invitation.displayName}</strong><span>{invitation.email} · {invitation.roles.map((role) => roleLabels[role as OrganizationRole]).join(", ")}</span>
-          <span>Delivery: {invitation.deliveryStatus}{invitation.deliveryFailure === null ? "" : ` — ${invitation.deliveryFailure}`}</span></div><div className="record-actions">
-          <span className={`badge ${invitation.status === "linked" ? "badge-success" : invitation.status === "pending" ? "badge-info" : "badge-muted"}`}>{invitation.status}</span>
+          <span>Delivery: {displayStatus(invitation.deliveryStatus)}{invitation.deliveryFailure === null ? "" : ` — ${invitation.deliveryFailure}`}</span></div><div className="record-actions">
+          <span className={statusClass(invitation.status)}>{displayStatus(invitation.status)}</span>
           {(invitation.deliveryStatus === "bounced" || invitation.deliveryStatus === "failed" || invitation.status === "expired") ?
             <button className="btn-primary" type="button" disabled={pending !== null} onClick={() => void reissue(invitation.id)}>Reissue</button> : null}
           {invitation.status === "pending" ? <button className="btn-secondary" type="button" disabled={pending !== null}
@@ -160,8 +166,8 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
       <div className="workforce-signals" aria-label="Reconciliation signals"><span>Stale SCIM {model.reconciliation.staleScimMembers}</span><span>Entitlement conflicts {model.reconciliation.entitlementConflicts}</span><span>Group removals to confirm {model.reconciliation.groupRemovalCandidates}</span><span>Failed operations {model.reconciliation.failedOperations}</span>
         <button className="btn-secondary" type="button" disabled={pending !== null} onClick={() => void reconcile()}>{pending === "reconcile" ? "Reconciling…" : "Run reconciliation"}</button></div></div>
       {model.members.length === 0 ? <p className="portal-empty">No workforce members yet. Send an invitation or connect SCIM to begin.</p> : <ul className="administration-list workforce-roster">{model.members.map((member) => <li key={member.personId} className="administration-record workforce-record">
-        <div className="workforce-member-summary"><div><h3>{member.displayName}</h3><p>{member.email ?? "Email will appear after identity linking"}</p></div><span className={`badge ${member.status === "active" ? "badge-success" : member.status === "suspended" ? "badge-warning" : "badge-muted"}`}>{member.status}</span></div>
-        <form key={member.roleRevision} onSubmit={(event) => void saveRoles(event, member.personId, member.roleRevision)}><fieldset disabled={member.status !== "active"}><legend>Organization Roles</legend><div className="role-checkboxes">{model.roles.map((role) => <label className="choice" key={role}>
+        <div className="workforce-member-summary"><div><h3>{member.displayName}</h3><p>{member.email ?? "Email will appear after identity linking"}</p></div><span className={statusClass(member.status)}>{displayStatus(member.status)}</span></div>
+        <details className="workforce-member-controls"><summary>Manage access for {member.displayName}</summary><form key={member.roleRevision} onSubmit={(event) => void saveRoles(event, member.personId, member.roleRevision)}><fieldset disabled={member.status !== "active"}><legend>Organization Roles</legend><div className="role-checkboxes">{model.roles.map((role) => <label className="choice" key={role}>
           <input type="checkbox" name="roles" value={role} defaultChecked={member.roles.includes(role)} />{roleLabels[role as OrganizationRole]}</label>)}</div></fieldset><button className="btn-secondary" type="submit" disabled={pending !== null || member.status !== "active"}>{pending === `roles:${member.personId}` ? "Saving…" : "Save roles"}</button></form>
         <form className="workforce-lifecycle" onSubmit={(event) => event.preventDefault()}><div className="field"><label htmlFor={`reason-${member.personId}`}>Lifecycle reason</label><input id={`reason-${member.personId}`} name="reason" minLength={3} maxLength={1000} required={member.status === "active"}
           aria-invalid={lifecycleErrors[member.personId] !== undefined} aria-describedby={`reason-hint-${member.personId}${lifecycleErrors[member.personId] === undefined ? "" : ` reason-error-${member.personId}`}`}
@@ -169,22 +175,22 @@ function WorkforceWorkspace({ setNotice }: { setNotice(message: string): void })
           <p id={`reason-hint-${member.personId}`} className="field-hint">Required for suspension or deprovisioning.</p>
           {lifecycleErrors[member.personId] === undefined ? null : <p id={`reason-error-${member.personId}`} className="field-error" role="alert">{lifecycleErrors[member.personId]}</p>}</div><div className="record-actions">
           {member.status === "suspended" ? <button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "activate", member.lifecycleVersion)}>Reactivate</button> : member.status === "active" ? <><button className="btn-secondary" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "suspend", member.lifecycleVersion)}>Suspend</button>
-            <button className="btn-danger" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "deprovision", member.lifecycleVersion)}>Deprovision</button></> : null}</div></form>
+            <button className="btn-danger" type="button" disabled={pending !== null} onClick={(event) => runLifecycleFromForm(event.currentTarget.form, member.personId, "deprovision", member.lifecycleVersion)}>Deprovision</button></> : null}</div></form></details>
       </li>)}</ul>}
     </section>
     <details className="workforce-section workforce-disclosure"><summary>SCIM provisioning and IdP group mapping</summary><div className="workforce-disclosure-body"><p>Endpoint: <code>/scim/v2</code>. Group additions grant mapped Organization Roles; omissions become reconciliation candidates and never silently remove access.</p>
       <form className="operation-form" onSubmit={(event) => void createCredential(event)}><div className="field"><label htmlFor="scim-label">Credential label</label><input id="scim-label" name="label" required minLength={2} maxLength={120} placeholder="Production identity sync" /></div><button className="btn-primary" type="submit" disabled={pending !== null}>{pending === "credential" ? "Creating…" : "Create SCIM credential"}</button></form>
       {scimCredential !== null ? <div className="credential-reveal" role="status"><label htmlFor="scim-secret">Copy this credential now</label><input id="scim-secret" readOnly value={scimCredential} onFocus={(event) => event.currentTarget.select()} /><p>Plenum will not show it again.</p></div> : null}
-      <ul className="administration-list compact">{model.scimCredentials.map((credential) => <li key={credential.id}><div><strong>{credential.label}</strong><span>{credential.tokenPrefix}… · {credential.lastUsedAt === null ? "not used" : `last used ${new Date(credential.lastUsedAt).toLocaleString()}`}</span></div>{credential.revokedAt === null ? <button className="btn-secondary" type="button" disabled={pending !== null} onClick={() => void run(`credential:${credential.id}`, () => request<OrganizationWorkforceV1>(`/v1/operations/workforce/scim-credentials/${credential.id}/revoke`, { method: "POST", body: "{}" }), "SCIM credential revoked.")}>Revoke</button> : <span className="badge badge-muted">revoked</span>}</li>)}</ul>
+      <ul className="administration-list compact">{model.scimCredentials.map((credential) => <li key={credential.id}><div><strong>{credential.label}</strong><span>{credential.tokenPrefix}… · {credential.lastUsedAt === null ? "not used" : `last used ${formatDate(credential.lastUsedAt)}`}</span></div>{credential.revokedAt === null ? <button className="btn-secondary" type="button" disabled={pending !== null} onClick={() => void run(`credential:${credential.id}`, () => request<OrganizationWorkforceV1>(`/v1/operations/workforce/scim-credentials/${credential.id}/revoke`, { method: "POST", body: "{}" }), "SCIM credential revoked.")}>Revoke</button> : <span className="badge badge-muted">revoked</span>}</li>)}</ul>
       <form className="operation-form workforce-mapping-form" onSubmit={(event) => void createMapping(event)}><div className="field"><label htmlFor="group-external-id">IdP group ID</label><input id="group-external-id" name="groupExternalId" required /></div><div className="field"><label htmlFor="group-display-name">Group name</label><input id="group-display-name" name="groupDisplayName" required /></div><div className="field"><label htmlFor="group-role">Organization Role</label><select id="group-role" name="organizationRole">{model.roles.map((role) => <option value={role} key={role}>{roleLabels[role as OrganizationRole]}</option>)}</select></div><button className="btn-secondary" type="submit" disabled={pending !== null}>Add mapping</button></form>
       {model.groupMappings.length === 0 ? <p className="portal-empty">No IdP group mapping exists. SCIM groups cannot grant roles until an Admin creates one.</p> : <ul className="administration-list compact">{model.groupMappings.map((mapping) => <li key={mapping.id}><strong>{mapping.groupDisplayName}</strong><span>{roleLabels[mapping.organizationRole as OrganizationRole]} · {mapping.activeMemberCount} members</span></li>)}</ul>}
       <section aria-labelledby="provisioning-operation-title"><h3 id="provisioning-operation-title">Provisioning operations</h3>
         <p className="field-hint">Provider requests and reconciliation attempts are durable. Preparing a retry does not replay a payload; Entra ID or Okta must resend the failed request.</p>
         {model.provisioningOperations.length === 0 ? <p className="portal-empty">No provider operation has been recorded.</p> :
           <ul className="administration-list compact">{model.provisioningOperations.slice(0, 10).map((operation) => <li key={operation.id}>
-            <div><strong>{operation.operationType.replaceAll("_", " ")}</strong><span>{operation.source} · {new Date(operation.startedAt).toLocaleString()} · attempt {operation.attemptCount}</span>
+            <div><strong>{operation.operationType.replaceAll("_", " ")}</strong><span>{operation.source} · {formatDate(operation.startedAt)} · attempt {operation.attemptCount}</span>
               {operation.errorReason === null ? null : <span>{operation.errorReason}</span>}</div><div className="record-actions">
-              <span className={`badge ${operation.status === "succeeded" ? "badge-success" : operation.status === "failed" ? "badge-warning" : "badge-info"}`}>{operation.status.replaceAll("_", " ")}</span>
+              <span className={statusClass(operation.status)}>{displayStatus(operation.status)}</span>
               {operation.status === "failed" && operation.attemptCount < 10 ? <button className="btn-secondary" type="button" disabled={pending !== null}
                 onClick={() => void run(`retry:${operation.id}`, () => request<OrganizationWorkforceV1>(`/v1/operations/workforce/provisioning-operations/${operation.id}/retry`, { method: "POST", body: "{}" }), "Retry prepared. Ask the identity provider to resend the failed request.")}>Prepare retry</button> : null}</div>
           </li>)}</ul>}
@@ -234,7 +240,7 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
     try {
       await request(`/v1/organizations/${organizationId}/plugin-installations`, { method: "POST", body: JSON.stringify({
         installationId: crypto.randomUUID(), artifactId,
-        permittedPermissions: String(data.get("permissions") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
+        permittedPermissions: data.getAll("permissions").map(String),
         compatibility: { hostApiVersion: String(data.get("hostApiVersion")), releaseSchemaVersion: String(data.get("releaseSchemaVersion")),
           deploymentProfile: String(data.get("deploymentProfile")) }
       }) }); await load(); setNotice("Plugin installed with its verified digest and granted permissions.");
@@ -247,18 +253,20 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
     catch (cause) { setNotice(cause instanceof Error ? cause.message : "The Plugin governance action failed."); }
     finally { setPending(false); }
   };
-  const registerPublisher = (event: FormEvent<HTMLFormElement>) => {
+  const registerPublisher = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    void govern("/v1/plugin-publishers", { publisherPrincipalId: String(data.get("publisherPrincipalId")),
+    try { await govern("/v1/plugin-publishers", { publisherPrincipalId: String(data.get("publisherPrincipalId")),
       displayName: String(data.get("displayName")), signatureKeyId: String(data.get("signatureKeyId")),
-      publicKeyPem: String(data.get("publicKeyPem")) }, "Plugin Publisher registered with a pinned signing key.");
+      publicKeyPem: await publicKeyFile(data, "publicKeyPem") }, "Plugin Publisher registered with a pinned signing key."); }
+    catch (cause) { setNotice(cause instanceof Error ? cause.message : "The public key could not be read."); }
   };
-  const provisionTrust = (event: FormEvent<HTMLFormElement>) => {
+  const provisionTrust = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget);
-    void govern("/v1/plugin-trust-roots", { publisherId: String(data.get("publisherId")),
-      publisherKeyId: String(data.get("publisherKeyId")), publisherPublicKeyPem: String(data.get("publisherPublicKeyPem")),
-      revocationKeyId: String(data.get("revocationKeyId")), revocationPublicKeyPem: String(data.get("revocationPublicKeyPem")) },
-    "Institution-provisioned Plugin trust root recorded.");
+    try { await govern("/v1/plugin-trust-roots", { publisherId: String(data.get("publisherId")),
+      publisherKeyId: String(data.get("publisherKeyId")), publisherPublicKeyPem: await publicKeyFile(data, "publisherPublicKeyPem"),
+      revocationKeyId: String(data.get("revocationKeyId")), revocationPublicKeyPem: await publicKeyFile(data, "revocationPublicKeyPem") },
+    "Institution-provisioned Plugin trust root recorded."); }
+    catch (cause) { setNotice(cause instanceof Error ? cause.message : "The public key could not be read."); }
   };
   const importRevocations = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const file = data.get("revocationDocument");
@@ -272,32 +280,34 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
     if (!(file instanceof File)) return;
     const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
     const termsDigest = `sha256:${[...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-    await govern("/v1/plugins/licenses", { pluginId: String(data.get("pluginId")), license: String(data.get("license")), termsDigest },
+    const selected = model?.artifacts.find((artifact) => artifact.artifactId === data.get("artifactId"));
+    if (selected === undefined) { setNotice("Choose an available Plugin."); return; }
+    await govern("/v1/plugins/licenses", { pluginId: selected.pluginId, artifactId: selected.artifactId, license: String(data.get("license")), termsDigest },
       "Plugin license terms accepted with their calculated digest.");
   };
   return <section className="administration-workspace" aria-labelledby="plugins-title">
     <div className="workspace-heading"><h1 id="plugins-title">Plugin operations</h1>
       <p>Submission, approval, installation, binding, and Runtime execution remain separate authorities. Plugin output cannot directly change Session state.</p></div>
-    {model?.permissions.canApprove ? <section className="card operation-form" aria-labelledby="plugin-governance-title">
+    {model?.permissions.canApprove ? <section className="workspace-section operation-form" aria-labelledby="plugin-governance-title">
       <h2 id="plugin-governance-title">Publisher trust and license governance</h2>
       <p>Publisher registration, institution-provisioned trust, signed revocation data, and license acceptance remain separate recorded controls.</p>
-      <div className="governance-summary" aria-label="Plugin governance status"><span>{model.governance.publishers.length} Publishers</span>
-        <span>{model.governance.trustRoots.length} trust roots</span><span>{model.governance.revocationLists.length} revocation lists</span>
-        <span>{model.governance.licenseAcceptances.length} license acceptances</span></div>
+      <div className="governance-summary" aria-label="Plugin governance status"><span>{plural(model.governance.publishers.length, "Publisher")}</span>
+        <span>{plural(model.governance.trustRoots.length, "trust root")}</span><span>{plural(model.governance.revocationLists.length, "revocation list")}</span>
+        <span>{plural(model.governance.licenseAcceptances.length, "license acceptance")}</span></div>
       <details><summary>Register a Plugin Publisher</summary><form onSubmit={registerPublisher}>
         <div className="field"><label htmlFor="publisher-person">Organization Publisher</label><select id="publisher-person" name="publisherPrincipalId" required>
           {model.governance.publisherMembers.map((member) => <option key={member.personId} value={member.personId}>{member.displayName}</option>)}</select></div>
         <div className="field"><label htmlFor="publisher-name">Publisher display name</label><input id="publisher-name" name="displayName" required /></div>
         <div className="field"><label htmlFor="publisher-key-id">Signing key label</label><input id="publisher-key-id" name="signatureKeyId" required /></div>
-        <div className="field"><label htmlFor="publisher-public-key">Signing public key (PEM)</label><textarea id="publisher-public-key" name="publicKeyPem" required /></div>
+        <div className="field"><label htmlFor="publisher-public-key">Signing public key file</label><input id="publisher-public-key" name="publicKeyPem" type="file" accept=".pem,.pub" required /></div>
         <button className="btn-primary" type="submit" disabled={pending}>Register Publisher</button></form></details>
       <details><summary>Provision a Publisher trust root</summary><form onSubmit={provisionTrust}>
         <div className="field"><label htmlFor="trust-publisher">Registered Publisher</label><select id="trust-publisher" name="publisherId" required>
           {model.governance.publishers.map((publisher) => <option key={publisher.publisherId} value={publisher.publisherId}>{publisher.displayName}</option>)}</select></div>
         <div className="field"><label htmlFor="trust-publisher-key-id">Publisher key label</label><input id="trust-publisher-key-id" name="publisherKeyId" required /></div>
-        <div className="field"><label htmlFor="trust-publisher-key">Publisher public key (PEM)</label><textarea id="trust-publisher-key" name="publisherPublicKeyPem" required /></div>
+        <div className="field"><label htmlFor="trust-publisher-key">Publisher public key file</label><input id="trust-publisher-key" name="publisherPublicKeyPem" type="file" accept=".pem,.pub" required /></div>
         <div className="field"><label htmlFor="trust-revocation-key-id">Revocation key label</label><input id="trust-revocation-key-id" name="revocationKeyId" required /></div>
-        <div className="field"><label htmlFor="trust-revocation-key">Revocation public key (PEM)</label><textarea id="trust-revocation-key" name="revocationPublicKeyPem" required /></div>
+        <div className="field"><label htmlFor="trust-revocation-key">Revocation public key file</label><input id="trust-revocation-key" name="revocationPublicKeyPem" type="file" accept=".pem,.pub" required /></div>
         <button className="btn-primary" type="submit" disabled={pending}>Provision trust root</button></form></details>
       <details><summary>Import signed revocation data</summary><form onSubmit={(event) => void importRevocations(event)}>
         <div className="field"><label htmlFor="revocation-publisher">Registered Publisher</label><select id="revocation-publisher" name="publisherId" required>
@@ -305,7 +315,8 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
         <div className="field"><label htmlFor="revocation-document">Signed revocation list</label><input id="revocation-document" name="revocationDocument" type="file" accept="application/json,.json" required /></div>
         <button className="btn-primary" type="submit" disabled={pending}>Verify and import revocations</button></form></details>
       <details><summary>Accept Plugin license terms</summary><form onSubmit={(event) => void acceptLicense(event)}>
-        <div className="field"><label htmlFor="license-plugin">Plugin ID</label><input id="license-plugin" name="pluginId" required /></div>
+        <div className="field"><label htmlFor="license-plugin">Plugin</label><select id="license-plugin" name="artifactId" required>
+          <option value="">Choose a Plugin</option>{model.artifacts.map((artifact) => <option key={artifact.artifactId} value={artifact.artifactId}>{displayStatus(artifact.pluginId.replaceAll(".", " "))} · {artifact.version}</option>)}</select></div>
         <div className="field"><label htmlFor="license-name">License identifier</label><input id="license-name" name="license" required /></div>
         <div className="field"><label htmlFor="license-terms">License terms file</label><input id="license-terms" name="licenseTerms" type="file" required /></div>
         <button className="btn-primary" type="submit" disabled={pending}>Accept calculated terms digest</button></form></details>
@@ -316,10 +327,10 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
       <button className="btn-primary" type="submit" disabled={pending}>Verify and submit</button></form> : null}
     {model === null ? <PlenumLoader label="Loading Plugin provenance" /> : model.artifacts.length === 0 ? <p className="empty-state">No Plugin Artifacts have been submitted.</p> :
       <ul className="administration-list">{model.artifacts.map((artifact) => <li className="card administration-record" key={artifact.artifactId}>
-        <div className="card-heading"><div><h2>{artifact.pluginId} {artifact.version}</h2><p>{artifact.publisherName}</p></div>
-          <span className="badge badge-state">{artifact.lifecycleStatus.replaceAll("_", " ")}</span></div>
-        <dl className="provenance-grid"><div><dt>Submitted</dt><dd>{new Date(artifact.submittedAt).toLocaleString()}</dd></div>
-          <div><dt>Usage</dt><dd>{artifact.installationCount} installations · {artifact.bindingCount} bindings</dd></div></dl>
+        <div className="card-heading"><div><h2>{displayStatus(artifact.pluginId.replaceAll(".", " "))} {artifact.version}</h2><p>{artifact.publisherName}</p></div>
+          <span className={statusClass(artifact.lifecycleStatus)}>{displayStatus(artifact.lifecycleStatus)}</span></div>
+        <dl className="provenance-grid"><div><dt>Submitted</dt><dd>{formatDate(artifact.submittedAt)}</dd></div>
+          <div><dt>Usage</dt><dd>{plural(artifact.installationCount, "installation")} · {plural(artifact.bindingCount, "binding")}</dd></div></dl>
         <details className="provenance-disclosure"><summary>Technical and supply-chain provenance</summary>
           <dl className="provenance-grid"><div><dt>Artifact digest</dt><dd><code>{artifact.digest}</code></dd></div>
             <div><dt>Bundle digest</dt><dd><code>{artifact.bundleDigest}</code></dd></div></dl>
@@ -332,8 +343,8 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
         </div>
         {model.permissions.canInstall && artifact.lifecycleStatus === "approved" && artifact.installationCount === 0 ? <details>
           <summary>Install approved Artifact</summary><form onSubmit={(event) => void install(event, artifact.artifactId)}>
-            <div className="field"><label htmlFor={`plugin-permissions-${artifact.artifactId}`}>Granted permissions (comma separated)</label>
-              <input id={`plugin-permissions-${artifact.artifactId}`} name="permissions" /></div>
+            <fieldset><legend>Granted permissions</legend>{artifact.requestedPermissions.map((permission) => <label className="choice" key={permission}>
+              <input type="checkbox" name="permissions" value={permission} defaultChecked />{displayStatus(permission.replaceAll(/[.:]/gu, " "))}</label>)}</fieldset>
             <div className="field"><label htmlFor={`plugin-host-${artifact.artifactId}`}>Host API version</label>
               <input id={`plugin-host-${artifact.artifactId}`} name="hostApiVersion" defaultValue="1.0.0" required /></div>
             <div className="field"><label htmlFor={`plugin-schema-${artifact.artifactId}`}>Release schema version</label>
@@ -350,6 +361,8 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
 function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: string; setNotice(message: string): void }) {
   const [expiryAction, setExpiryAction] = useState("archive");
   const [model, setModel] = useState<DataPolicyOperations | null>(null);
+  const [policyScope, setPolicyScope] = useState("organization");
+  const [holdScope, setHoldScope] = useState("organization");
   const [pending, setPending] = useState(false);
   const load = useCallback(async () => setModel(await request<DataPolicyOperations>("/v1/operations/data-policy")), []);
   useEffect(() => { void load().catch((cause: unknown) => setNotice(cause instanceof Error ? cause.message : "Data policy did not load.")); }, [load, setNotice]);
@@ -388,19 +401,19 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
     <div className="workspace-heading"><h1 id="policy-title">Data policy</h1>
       <p>Retention, legal hold, corrections, and portable archives are recorded at the Organization boundary.</p></div>
     <div className="workspace-split">
-      <div><section className="card operation-form"><h2>Retention policy</h2><form onSubmit={createPolicy}>
+      <div><section className="workspace-section operation-form"><h2>Retention policy</h2><form onSubmit={createPolicy}>
         <div className="field"><label htmlFor="policy-key">Policy key</label><input id="policy-key" name="policyKey" required maxLength={100} /></div>
         <div className="field"><label htmlFor="policy-version">Version</label><input id="policy-version" name="version" type="number" min="1" defaultValue="1" required /></div>
-        <div className="field"><label htmlFor="policy-scope">Scope</label><select id="policy-scope" name="scopeType" defaultValue="organization"><option value="organization">Organization</option><option value="session">Session</option><option value="export">Export</option><option value="project">Project</option></select></div>
-        <details className="provenance-disclosure"><summary>Technical scope reference</summary>
-          <div className="field"><label htmlFor="policy-reference">Scope reference</label><input id="policy-reference" name="scopeReference" defaultValue={organizationId} required /></div></details>
+        <div className="field"><label htmlFor="policy-scope">Scope</label><select id="policy-scope" name="scopeType" value={policyScope} onChange={(event) => setPolicyScope(event.target.value)}><option value="organization">Organization</option><option value="session">Session</option><option value="export">Export</option><option value="project">Project</option></select></div>
+        <div className="field"><label htmlFor="policy-reference">Applies to</label><select key={policyScope} id="policy-reference" name="scopeReference" required disabled={model === null}>
+          {(model?.targets ?? []).filter((target) => target.scopeType === policyScope).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></div>
         <div className="field"><label htmlFor="policy-days">Retention period in days</label><input id="policy-days" name="periodDays" type="number" min="1" defaultValue="365" required /></div>
         <div className="field"><label htmlFor="hold-behavior">Legal hold behavior</label><select id="hold-behavior" name="legalHoldBehavior"><option value="retain">Retain</option><option value="block_action">Block action</option></select></div>
         <div className="field"><label htmlFor="expiry-action">Expiry action</label><select id="expiry-action" name="expiryAction" value={expiryAction} onChange={(event) => setExpiryAction(event.target.value)}><option value="archive">Archive</option><option value="anonymize">Anonymize</option><option value="delete">Delete</option></select></div>
-        {expiryAction === "archive" ? <div className="field"><label htmlFor="archive-destination">Archive destination</label><input id="archive-destination" name="archiveDestination" defaultValue="institutional-archive" required /></div> : null}
+        {expiryAction === "archive" ? <div className="field"><label htmlFor="archive-destination">Archive destination</label><input id="archive-destination" name="archiveDestination" defaultValue="Institutional archive" required /></div> : null}
         <label className="choice"><input type="checkbox" name="approvalRequired" /> Approval is required before enforcement.</label>
         <button className="btn-primary" type="submit" disabled={pending}>Record policy version</button></form></section>
-        <section className="card operation-form"><h2>Attachment retention</h2><p>Delete up to ten expired files under their published retention policies. Organization legal holds prevent deletion. Interrupted uploads become eligible after 24 hours.</p>
+        <section className="workspace-section operation-form"><h2>Attachment retention</h2><p>Delete up to ten expired files under their published retention policies. Organization legal holds prevent deletion. Interrupted uploads become eligible after 24 hours.</p>
           <button type="button" className="btn-danger" disabled={pending} onClick={async () => {
             setPending(true);
             try {
@@ -410,21 +423,21 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
             } catch (error) { setNotice(error instanceof Error ? error.message : "Retention enforcement failed."); }
             finally { setPending(false); }
           }}>Apply attachment retention</button></section>
-        <section className="card operation-form"><h2>Legal hold</h2><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
+        <section className="workspace-section operation-form"><h2>Legal hold</h2><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
           void mutate("/v1/retention/legal-holds", { scopeType: String(data.get("scopeType")), scopeReference: String(data.get("scopeReference")), reason: String(data.get("reason")) }, "Legal hold placed; matching purge is blocked."); }}>
-          <div className="field"><label htmlFor="hold-scope">Scope</label><select id="hold-scope" name="scopeType"><option value="organization">Organization</option><option value="export">Export</option></select></div>
-          <div className="field"><label htmlFor="hold-reference">Scope reference</label><input id="hold-reference" name="scopeReference" defaultValue={organizationId} required /></div>
+          <div className="field"><label htmlFor="hold-scope">Scope</label><select id="hold-scope" name="scopeType" value={holdScope} onChange={(event) => setHoldScope(event.target.value)}><option value="organization">Organization</option><option value="export">Export</option></select></div>
+          <div className="field"><label htmlFor="hold-reference">Applies to</label><select key={holdScope} id="hold-reference" name="scopeReference" required disabled={model === null}>{(model?.targets ?? []).filter((target) => target.scopeType === holdScope).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}</select></div>
           <div className="field"><label htmlFor="hold-reason">Reason</label><textarea id="hold-reason" name="reason" required maxLength={4000} /></div>
           <button className="btn-primary" type="submit" disabled={pending}>Place legal hold</button></form></section>
       </div>
-      <div><section className="card operation-form"><h2>Correction record</h2><p>The original observation remains intact and traceable.</p><form onSubmit={createCorrection}>
-        <div className="field"><label htmlFor="correction-target">Target reference</label><input id="correction-target" name="targetReference" required /></div>
+      <div><section className="workspace-section operation-form"><h2>Correction record</h2><p>The original observation remains intact and traceable.</p><form onSubmit={createCorrection}>
+        <div className="field"><label htmlFor="correction-target">Record to correct</label><select id="correction-target" name="targetReference" required disabled={model === null}><option value="">Choose a record</option>{(model?.targets ?? []).map((target) => <option key={`${target.scopeType}:${target.id}`} value={`${target.scopeType}:${target.id}`}>{target.label} · {displayStatus(target.scopeType)}</option>)}</select></div>
         <div className="field"><label htmlFor="correction-original">Original recorded value</label><textarea id="correction-original" name="originalValue" required /></div>
         <div className="field"><label htmlFor="correction-value">Corrected value</label><textarea id="correction-value" name="correctedValue" required /></div>
         <div className="field"><label htmlFor="correction-reason">Correction reason</label><textarea id="correction-reason" name="reason" required maxLength={4000} /></div>
         <label className="choice"><input type="checkbox" name="reportsMustRegenerate" /> Existing reports must be regenerated.</label>
         <button className="btn-primary" type="submit" disabled={pending}>Record correction</button></form></section>
-        <section className="card operation-form"><h2>Portable Organization archive</h2><p>The export includes governed Organization data and excludes secrets, protected identity-provider material, and transient credentials.</p>
+        <section className="workspace-section operation-form"><h2>Portable Organization archive</h2><p>The export includes governed Organization data and excludes secrets, protected identity-provider material, and transient credentials.</p>
           <p className="hint">Includes Runtime history and published versions. Keep the matching object-store backup for uploaded files and Release Packages. Portable archives support up to 512 MB (512,000,000 bytes) of expanded data.</p>
           <a className="btn-secondary link-button" href={`/v1/organizations/${organizationId}/archive?format=gzip`}>Export portable archive</a>
           <details><summary>Import into an empty Organization deployment</summary><form onSubmit={(event) => void importArchive(event)}>
@@ -434,9 +447,9 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
     </div>
     <section aria-labelledby="policy-history"><h2 id="policy-history">Policy and correction history</h2>
       {model === null ? <PlenumLoader label="Loading policy history" /> : <div className="history-columns">
-        <div><h3>Retention policies</h3>{model.retentionPolicies.length === 0 ? <p className="empty-state">No retention policies recorded.</p> : <ul className="administration-list compact">{model.retentionPolicies.map((policy) => <li key={policy.id}><strong>{policy.key} v{policy.version}</strong><span>{policy.scopeType} · {policy.periodDays} days · {policy.expiryAction}</span></li>)}</ul>}</div>
+        <div><h3>Retention policies</h3>{model.retentionPolicies.length === 0 ? <p className="empty-state">No retention policies recorded.</p> : <ul className="administration-list compact">{model.retentionPolicies.map((policy) => <li key={policy.id}><strong>{policy.key} v{policy.version}</strong><span>{displayStatus(policy.scopeType)} · {plural(policy.periodDays, "day")} · {displayStatus(policy.expiryAction)}</span></li>)}</ul>}</div>
         <div><h3>Legal holds</h3>{model.legalHolds.length === 0 ? <p className="empty-state">No legal holds recorded.</p> : <ul className="administration-list compact">{model.legalHolds.map((hold) => <li key={hold.holdId}><strong>{hold.releasedAt === null ? "Active" : "Released"} · {hold.scopeType}</strong><span>{hold.reason}</span>{hold.releasedAt === null ? <button className="btn-secondary" type="button" disabled={pending} onClick={() => void mutate(`/v1/retention/legal-holds/${hold.holdId}/release`, { reason: "Authorized legal hold release" }, "Legal hold released with preserved history.")}>Release hold</button> : null}</li>)}</ul>}</div>
-        <div><h3>Corrections</h3>{model.corrections.length === 0 ? <p className="empty-state">No corrections recorded.</p> : <ul className="administration-list compact">{model.corrections.map((item) => <li key={item.id}><strong>{item.targetReference}</strong><span>{item.reason}</span></li>)}</ul>}</div>
+        <div><h3>Corrections</h3>{model.corrections.length === 0 ? <p className="empty-state">No corrections recorded.</p> : <ul className="administration-list compact">{model.corrections.map((item) => <li key={item.id}><strong>{model.targets.find((target) => `${target.scopeType}:${target.id}` === item.targetReference)?.label ?? "Recorded correction"}</strong><span>{item.reason}</span><details className="technical-details"><summary>Correction reference</summary><code>{item.targetReference}</code></details></li>)}</ul>}</div>
       </div>}
     </section>
   </section>;
@@ -464,12 +477,12 @@ function IdentityProviderWorkspace({ setNotice }: { setNotice(message: string): 
     finally { setPending(false); }
   };
   return <section className="administration-workspace identity-provider-workspace" aria-labelledby="identity-provider-title">
-    <div className="workspace-heading"><h1 id="identity-provider-title">Organization identity provider</h1>
+    <div className="workspace-heading"><h1 id="identity-provider-title">Identity provider</h1>
       <p>Test the exact staged sign-in path, then approve only the revision that returns your verified Organization email.</p></div>
     {model === null ? <PlenumLoader label="Loading identity providers" /> : model.identityProviders.length === 0 ?
       <p className="empty-state">No provider revision is awaiting Organization review. Ask a Platform Administrator to stage one against a verified domain.</p> :
       <ol className="platform-provider-list">{model.identityProviders.map((provider) => <li className="platform-provider-row" key={provider.id}>
-        <div className="platform-provider-summary"><div><strong>{provider.displayName}</strong><span className={`badge platform-status platform-status-${provider.status}`}>{provider.status.replaceAll("_", " ")}</span></div>
+        <div className="platform-provider-summary"><div><strong>{provider.displayName}</strong><span className={statusClass(provider.status)}>{displayStatus(provider.status)}</span></div>
           <span>{provider.protocol === "saml" ? "SAML through the approved OIDC broker" : "OpenID Connect"} · revision {provider.version}</span><span>{provider.domains.join(", ")}</span></div>
         <dl className="platform-provider-facts"><div><dt>Preflight</dt><dd>{provider.preflightedAt === null ? "Not passed" : "Passed"}</dd></div>
           <div><dt>Test sign-in</dt><dd>{provider.testedAt === null ? "Required" : "Passed"}</dd></div><div><dt>Approval</dt><dd>{provider.approvedAt === null ? "Required" : "Recorded"}</dd></div></dl>
@@ -502,7 +515,7 @@ export function AdministrationPortal({ organizationId, roles }: { organizationId
   return <div className="administration-shell">
     <AdministrationNavigation admin={admin} />
     <div className="administration-main"><p className="live-region administration-notice" role="status" aria-live="polite" aria-atomic="true">{notice}</p>
-      {!allowed ? <section className="card portal-state teludens-state" data-state="unauthorized">
+      {!allowed ? <section className="workspace-section portal-state teludens-state" data-state="unauthorized">
         <h1>Administration access unavailable</h1><p>Your current Organization Role does not authorize this workspace. Protected administration data was not loaded.</p></section> :
         destination === "members" ? <WorkforceWorkspace setNotice={setNotice} /> : destination === "plugins" ? <PluginsWorkspace organizationId={organizationId} setNotice={setNotice} /> :
           destination === "data-policy" ? <DataPolicyWorkspace organizationId={organizationId} setNotice={setNotice} /> :

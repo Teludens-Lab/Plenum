@@ -131,7 +131,7 @@ export function StructuredForm({ form, initial, disabled, onSubmit, submitLabel,
   };
   return <form className="structured-form" ref={root} onSubmit={submit} noValidate>
     {pageCount === 0 ? null : <header className="form-page-heading">
-      <p role="status">Page {page + 1} of {pageCount}</p><h3 ref={heading} tabIndex={-1}>{pages[page]}</h3>
+      <p role="status">Page {page + 1} of {pageCount}</p><h3 ref={heading} tabIndex={-1} className={pages[page] === form.name ? "visually-hidden" : undefined}>{pages[page]}</h3>
       <ol className="form-progress" aria-label="Form progress">{pages.map((title, index) => <li key={index} aria-current={index === page ? "step" : undefined}><span className="visually-hidden">{title}</span></li>)}</ol>
     </header>}
     {Object.keys(errors).length === 0 ? null : <p className="field-error" role="alert">Complete the highlighted fields before continuing.</p>}
@@ -159,7 +159,7 @@ export function StructuredForm({ form, initial, disabled, onSubmit, submitLabel,
       </>;
       return <fieldset key={section.id} hidden={pageCount > 0 && (section.page ?? 0) !== page}>
         {section.collapsed ? <details><summary>{section.title}</summary>{contents}</details> : <>
-          {section.title === undefined ? null : <legend>{section.title}</legend>}{contents}
+          {section.title === undefined ? null : <legend className={section.title === pages[page] || form.sections.length === 1 && section.title === form.name ? "visually-hidden" : undefined}>{section.title}</legend>}{contents}
         </>}
       </fieldset>;
     })}

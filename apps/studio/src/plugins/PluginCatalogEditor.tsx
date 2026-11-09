@@ -1,3 +1,4 @@
+import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useEffect, useMemo, useState } from "react";
 import { canonicalizeJson, type JsonValue } from "@plenum/event-contracts";
 import {
@@ -102,7 +103,7 @@ function PortEditor({ binding, bindingIndex, direction, client }: {
       <TextField id={`${direction}-label-${port.id}`} label="Port label" value={port.label} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "label"]} client={client} />
       <SelectField id={`${direction}-type-${port.id}`} label="Type" value={port.dataType} options={dataTypes.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "dataType"]} client={client} />
       <TextField id={`${direction}-unit-${port.id}`} label="Unit" value={port.unit} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "unit"]} client={client} />
-      <SelectField id={`${direction}-classification-${port.id}`} label="Classification ceiling" value={port.classification} options={classifications.map((value) => ({ value, label: value }))} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "classification"]} client={client} />
+      <SelectField id={`${direction}-classification-${port.id}`} label="Classification ceiling" value={port.classification} options={classifications.map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "classification"]} client={client} />
       <CheckField id={`${direction}-required-${port.id}`} label="Required" checked={port.required} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "required"]} client={client} />
       {direction === "outputPorts" ? <CheckField id={`${direction}-effect-${port.id}`} label="Carries Effect Proposals" checked={port.carriesEffectProposals === true} path={["coreDesign", "pluginBindings", bindingIndex, direction, portIndex, "carriesEffectProposals"]} client={client} /> : null}
       <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "pluginBindings", bindingIndex, direction], portIndex)}>Remove port</button>
@@ -149,10 +150,10 @@ export function PluginCatalogEditor({ projectId, core, client }: { projectId: st
       <label>Connectivity<select value={connectivity} onChange={(event) => setConnectivity(event.target.value)}><option value="all">All connectivity</option>{["offline_capable", "lan_required", "external_required"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
     </div>
     <div className="plugin-catalog">{visible.length === 0 ? <p>No approved installed Plugins match these filters.</p> : visible.map((entry) => <article className="catalog-card" key={`${entry.installationId}:${entry.digest}`}>
-      <h3>{entry.pluginId}</h3><p><strong>{entry.version}</strong> · {entry.publisher.name}</p>
-      <dl><div><dt>Digest</dt><dd>{entry.digest}</dd></div><div><dt>Connectivity</dt><dd>{entry.manifest.connectivity ?? "not declared"}</dd></div>
+      <h3>{displayStatus(entry.pluginId.replaceAll(".", " "))}</h3><p><strong>{entry.version}</strong> · {entry.publisher.name}</p>
+      <details className="technical-details"><summary>Technical provenance</summary><p>{entry.pluginId}</p><p>{entry.digest}</p></details><dl><div><dt>Connectivity</dt><dd>{displayStatus(entry.manifest.connectivity ?? "not declared")}</dd></div>
         <div><dt>Classification ceiling</dt><dd>{entry.manifest.dataClassificationMaximum ?? "not declared"}</dd></div>
-        <div><dt>Capabilities</dt><dd>{entry.manifest.capabilities?.join(", ") || "None declared"}</dd></div>
+        <div><dt>Capabilities</dt><dd>{entry.manifest.capabilities?.map(displayStatus).join(", ") || "None declared"}</dd></div>
         <div><dt>Permissions</dt><dd>{entry.manifest.requestedPermissions?.join(", ") || "None"}</dd></div>
         <div><dt>Input schema</dt><dd>{entry.manifest.contracts?.inputSchema ?? "Unavailable"}</dd></div>
         <div><dt>Output schema</dt><dd>{entry.manifest.contracts?.outputSchema ?? "Unavailable"}</dd></div>
@@ -160,19 +161,19 @@ export function PluginCatalogEditor({ projectId, core, client }: { projectId: st
       <button className="btn-secondary" type="button" onClick={() => bind(entry)}>Bind installed Plugin</button>
     </article>)}</div>
     <h3>Binding inspector</h3>
-    <div className="editor-list">{bindings.map((binding, index) => <details className="editor-item" id={`pluginBindings-${binding.id}`} key={binding.id}><summary><span>{binding.pluginId} {binding.pluginVersion}</span><span className="item-id">{binding.id}</span></summary><div className="item-body">
-      <p className="digest-line">Pinned {binding.pluginDigest}</p><ConfigurationEditor binding={binding} index={index} client={client} />
+    <div className="editor-list">{bindings.map((binding, index) => <details className="editor-item" id={`pluginBindings-${binding.id}`} key={binding.id}><summary><span>{displayStatus(binding.pluginId.replaceAll(".", " "))} {binding.pluginVersion}</span></summary><details className="technical-details"><summary>Technical reference</summary><p>{binding.pluginId} {binding.pluginVersion}</p><code>{binding.id}</code></details><div className="item-body">
+      <details className="technical-details"><summary>Pinned provenance</summary><p className="digest-line">{binding.pluginDigest}</p></details><ConfigurationEditor binding={binding} index={index} client={client} />
       <TextField id={`binding-timeout-${binding.id}`} label="Timeout seconds" value={binding.timeoutSeconds} type="number" path={["coreDesign", "pluginBindings", index, "timeoutSeconds"]} client={client} />
       <fieldset className="choice-group"><legend>Enabled deployment profiles</legend>{profiles.map((profile) => <label className="choice" key={profile}><input type="checkbox" checked={binding.enabledInProfiles.includes(profile)} onChange={(event) => client.setAtPath(["coreDesign", "pluginBindings", index, "enabledInProfiles"], event.target.checked ? [...binding.enabledInProfiles, profile] : binding.enabledInProfiles.filter((value) => value !== profile))} />{profile.replaceAll("_", " ")}</label>)}</fieldset>
       {binding.connectivity === "external_required" ? <SelectField id={`binding-replacement-${binding.id}`} label="Air-gap local replacement" value={binding.localReplacementBindingId ?? ""} options={[{ value: "", label: "Select a verified local replacement" }, ...bindings.filter((candidate) => candidate.id !== binding.id && candidate.connectivity === "offline_capable").map((candidate) => ({ value: candidate.id, label: `${candidate.pluginId} ${candidate.pluginVersion}` }))]} path={["coreDesign", "pluginBindings", index, "localReplacementBindingId"]} client={client} emptyDeletes /> : null}
       <div className="table-scroll" tabIndex={0} aria-label={`Deployment compatibility for ${binding.pluginId}`}><table className="permission-matrix"><caption>Deployment compatibility and fail-closed reason</caption><thead><tr><th scope="col">Profile</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead><tbody>{profiles.map((profile) => {
         const result = profileCompatibility(binding, profile, bindings);
-        return <tr key={profile}><th scope="row">{profile.replaceAll("_", " ")}</th><td>{result.status}</td><td>{result.reason}</td></tr>;
+        return <tr key={profile}><th scope="row">{profile.replaceAll("_", " ")}</th><td>{displayStatus(result.status)}</td><td>{result.reason}</td></tr>;
       })}</tbody></table></div>
       <fieldset className="nested-editor"><legend>Policy-filtered input mappings</legend>{binding.inputMappings.map((mapping, mappingIndex) => <div className="field-row" key={`${binding.id}-mapping-${mappingIndex}`}>
         <TextField id={`binding-source-${binding.id}-${mappingIndex}`} label="Authorized source" value={mapping.source} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "source"]} client={client} />
         <TextField id={`binding-target-${binding.id}-${mappingIndex}`} label="Plugin input" value={mapping.target} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "target"]} client={client} />
-        <SelectField id={`binding-mapping-class-${binding.id}-${mappingIndex}`} label="Classification ceiling" value={mapping.maxClassification ?? "internal"} options={classifications.map((value) => ({ value, label: value }))} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "maxClassification"]} client={client} />
+        <SelectField id={`binding-mapping-class-${binding.id}-${mappingIndex}`} label="Classification ceiling" value={mapping.maxClassification ?? "internal"} options={classifications.map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "pluginBindings", index, "inputMappings", mappingIndex, "maxClassification"]} client={client} />
         <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "pluginBindings", index, "inputMappings"], mappingIndex)}>Remove mapping</button>
       </div>)}<AddButton label="Add input mapping" onClick={() => client.appendAtPath(["coreDesign", "pluginBindings", index, "inputMappings"], { source: "state.authorized", target: "input", maxClassification: "internal" })} /></fieldset>
       <PortEditor binding={binding} bindingIndex={index} direction="inputPorts" client={client} /><PortEditor binding={binding} bindingIndex={index} direction="outputPorts" client={client} />

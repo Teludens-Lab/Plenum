@@ -79,12 +79,7 @@
 .artifact-empty { min-height: 16rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--space-6); text-align: center; color: var(--text-secondary); }
 .artifact-empty h3 { margin: var(--space-3) 0 var(--space-2); color: var(--text-primary); font-size: var(--text-base); }
 .artifact-empty p { margin: 0; }
-.artifact-review-layout { display: grid; grid-template-columns: minmax(12rem, 0.65fr) minmax(0, 2fr); gap: var(--space-6); align-items: start; }
-.artifact-record-index { display: grid; gap: var(--space-1); }
-.artifact-record-index button { display: grid; gap: var(--space-1); min-height: var(--control-height); padding: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--text-primary); text-align: start; overflow-wrap: anywhere; cursor: pointer; }
-.artifact-record-index button[aria-current="true"] { background: var(--signal-decision-soft); border-color: var(--boundary-standard); }
-.artifact-record-index button:hover { background: var(--material-surface-recessed); }
-.artifact-record-index span { color: var(--text-secondary); font-size: var(--text-xs); }
+.artifact-review-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); align-items: start; }
 .artifact-review-detail { min-width: 0; }
 .artifact-pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-block-end: var(--space-3); }
 .artifact-pager .btn-secondary { display: grid; place-items: center; padding-inline: var(--space-3); }
@@ -92,11 +87,10 @@
 .artifact-pager { flex-wrap: wrap; }
 .artifact-presentation-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-end: var(--space-5); }
 .artifact-workspace:fullscreen { overflow-y: auto; padding: var(--space-6); background: var(--material-surface); }
-.artifact-workspace:fullscreen .artifact-record-index { display: none; }
 .artifact-workspace:fullscreen .artifact-review-layout { grid-template-columns: minmax(0, 1fr); }
 .artifact-workspace .artifact { border-inline-start: 3px solid var(--signal-decision); }
 .artifact-workspace .artifact-content { grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
-.artifact-workspace .artifact-content > div { padding: var(--space-4); border: 1px solid var(--boundary-subtle); border-radius: var(--radius-md); }
+.artifact-workspace .artifact-content > div { padding-block: var(--space-4); border-block-end: 1px solid var(--boundary-subtle); }
 .artifact-workspace .artifact-content > [data-field-type="long_text"] { grid-column: 1 / -1; }
 .artifact-record-details { color: var(--text-secondary); font-size: var(--text-xs); }
 .artifact-record-details summary { cursor: pointer; padding-block: var(--space-2); }

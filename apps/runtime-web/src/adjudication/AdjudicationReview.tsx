@@ -1,3 +1,4 @@
+import { displayStatus, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useState, type FormEvent } from "react";
 
 import type { AdjudicationOptionV1, AdjudicationRequestV1, JsonObject } from "@plenum/event-contracts";
@@ -84,7 +85,7 @@ function AdjudicationCard({ request, disabled, send }: {
   return <article className="card adjudication" aria-labelledby={`adjudication-${request.id}`}>
     <div className="card-heading"><div><h3 id={`adjudication-${request.id}`}>{request.modelName}</h3>
       <p className="hint">{request.mechanism} model</p></div>
-      <span className="badge badge-state">{request.status.replaceAll("_", " ")}</span></div>
+      <span className={statusClass(request.status)}>{displayStatus(request.status)}</span></div>
     <dl className="metadata"><div><dt>Actions</dt><dd>{request.actionSnapshots.length}</dd></div>
       <div><dt>Version</dt><dd>{request.version}</dd></div></dl>
     <ul className="action-snapshots">{request.actionSnapshots.map((action) => <li key={action.artifactId}>

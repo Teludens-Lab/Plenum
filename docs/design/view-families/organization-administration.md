@@ -38,3 +38,9 @@ Control-plane lifecycle states are `pending`, `active`, `suspended` and terminal
 
 Tier behavior: 1920/1440 show admin navigation, table/form and details; 1280x720/600 collapse detail while preserving selected record/actions; 1024x768 transforms dense tables to bounded labeled rows where needed; 768x1024 and 390x844 use navigation/detail sheets and full-width forms. At 200%/320px, policy summaries precede commit actions and tables never force page-level horizontal scroll.
 
+
+## PS-842 candidate contract
+
+One Workspaces entry lands Admins on Workforce access and Publisher-only principals on Plugin operations. The shared secondary menu contains Workforce access, Identity provider, Plugin operations, Deployment posture and Data policy, filtered by authority. Signed requested permissions and named tenant-scoped targets replace free-text technical entry; PEM material is a labeled file selection.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

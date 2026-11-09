@@ -85,7 +85,7 @@ async function author(page, kind) {
   const workflows = await workspace(page, "Workflows");
   const workflow = await addItem(workflows, "Add simple review Workflow");
   await workflow.getByLabel("Workflow name", { exact: true }).fill("Review submission");
-  const forms = await workspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const forms = await workspace(page, "Forms & Artifacts");
   const form = await addItem(forms, "Add Form and Artifact Type");
   const recordName = crisis ? "Response assessment" : "Negotiation proposal";
   await form.getByLabel("Form name", { exact: true }).fill(recordName);
@@ -104,8 +104,10 @@ async function author(page, kind) {
   }
   if (!crisis) {
     const communications = await workspace(page, "Communications");
+    await communications.locator("summary").filter({ hasText: /^Message Channels$/u }).click();
     const channel = await addItem(communications, "Add Message Channel");
     await channel.getByLabel("Channel name", { exact: true }).fill("Policy table");
+    await communications.locator("summary").filter({ hasText: /^Communication Routes$/u }).click();
     const route = await addItem(communications, "Add Communication Route");
     await route.getByRole("checkbox", exact("Negotiate agreement")).check();
     await route.getByRole("checkbox", exact("Negotiate agreement")).uncheck();
@@ -128,7 +130,7 @@ async function author(page, kind) {
   await adaptiveCapture(page, `${kind}-interfaces`);
   await workspace(page, "Session Roles");
   await roles.locator("details.editor-item").first().getByRole("checkbox", exact("Exercise workspace")).check();
-  const access = await workspace(page, "Access & readiness", "Access");
+  const access = await workspace(page, "Access & readiness");
   await access.getByRole("button", exact("Add access policy")).click();
   if (crisis) {
     const logic = await workspace(page, "Advanced logic & world state");
@@ -161,7 +163,7 @@ async function author(page, kind) {
   await methodology.getByRole("checkbox", exact("Form")).uncheck();
   await synced(page);
   await expect(methodology.getByRole("status")).toContainText("attention");
-  const blockedPublication = await workspace(page, "Review & publish", "Review and publish");
+  const blockedPublication = await workspace(page, "Review & publish");
   await expect(blockedPublication.getByRole("button", exact("Freeze for review"))).toBeDisabled();
   await workspace(page, "Methodology");
   await methodology.getByRole("checkbox", exact("Form")).focus();
@@ -169,7 +171,7 @@ async function author(page, kind) {
   await expect(methodology.getByRole("status")).toHaveText("No concept dependencies are blocking publication.");
   await capture(page, `${kind}-methodology`);
   await page.reload();
-  await workspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  await workspace(page, "Forms & Artifacts");
   const reloadedForm = forms.locator("details.editor-item").first();
   await reloadedForm.locator("summary").first().click();
   for (const [index, [, label]] of fields.entries()) await expect(reloadedForm.getByLabel("Field label", { exact: true }).nth(index)).toHaveValue(label);
@@ -178,7 +180,7 @@ async function author(page, kind) {
   return { title, studioPath, recordName, roleName, kind };
 }
 async function publish(page, reviewer, design) {
-  const publication = await workspace(page, "Review & publish", "Review and publish");
+  const publication = await workspace(page, "Review & publish");
   await publication.getByLabel("Release label", { exact: true }).fill(design.title);
   await publication.getByLabel("Semantic version", { exact: true }).fill("1.0.0");
   await publication.getByLabel("Release notes", { exact: true }).fill("Synthetic PS-840 UI-only proof; human UAT recorded separately.");
@@ -192,7 +194,7 @@ async function publish(page, reviewer, design) {
   await publication.getByRole("button", exact("Freeze for review")).click();
   await expect(page.getByText(/is frozen and ready for Reviewer approval/u)).toBeVisible();
   await reviewer.goto(page.url());
-  const review = await workspace(reviewer, "Review & publish", "Review and publish");
+  const review = await workspace(reviewer, "Review & publish");
   await review.getByLabel("Methodology review notes").fill("Independent synthetic persona review; not human UAT or domain validation.");
   await review.getByRole("button", exact("Approve freeze")).click();
   await expect(reviewer.getByText(/Reviewer approval was recorded/u)).toBeVisible();
@@ -303,8 +305,8 @@ async function runSession(browser, baseURL, design) {
       await alert.getByLabel("Response record", { exact: true }).selectOption(originalCommand.aggregateId);
       await command(actor.page, () => alert.getByRole("button", exact("Submit response")).click(), "inject.respond");
       await expect(alert.getByText("Your required steps are complete.", { exact: true })).toBeVisible();
-      if (actor !== second) await expect(alert.getByText("closed", { exact: true })).toHaveCount(0);
-      else await expect(alert.getByText("closed", { exact: true })).toBeVisible();
+      if (actor !== second) await expect(alert.getByText("Closed", { exact: true })).toHaveCount(0);
+      else await expect(alert.getByText("Closed", { exact: true })).toBeVisible();
     }
   }
   expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);

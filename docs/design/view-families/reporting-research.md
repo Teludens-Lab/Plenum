@@ -34,3 +34,9 @@ All Reports states apply: no eligible data, purpose/consent exclusion, generatio
 
 Tier behavior: 1920/1440 show filters, results and provenance; 1280x720/600 keep results primary and collapse provenance; 1024x768 makes filters/provenance sheets; 768x1024 and 390x844 serialize summary, results and disclosures while retaining table alternatives. At 200%/320px, report pages reflow or provide an accessible zoomed document mode without two-dimensional page scrolling.
 
+
+## PS-842 candidate contract
+
+Research-Analyst-only principals land on or can visibly reach Research reports. The page has one H1 and shared date/status formatting. Consent, grants and server-filtered evidence remain authoritative; no role is granted by navigation.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

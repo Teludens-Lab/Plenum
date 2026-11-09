@@ -6,9 +6,9 @@
     <meta name="color-scheme" content="dark light" />
     <script>
       try {
-        document.documentElement.dataset.theme = localStorage.getItem("plenum.theme") === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = ["dark", "light"].includes(localStorage.getItem("plenum.theme")) ? localStorage.getItem("plenum.theme") : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       } catch {
-        document.documentElement.dataset.theme = "light";
+        document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       }
     </script>
     <title>Plenum Runtime</title>

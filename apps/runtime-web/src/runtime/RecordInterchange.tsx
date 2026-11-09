@@ -18,7 +18,7 @@ export function RecordImport({ form, releaseId, disabled, apply }: {
   const fields = canonical.sections.filter((section) => !section.repeatable).flatMap((section) => section.fields).filter((field) => !field.readOnly && !field.computation);
   return <details className="artifact-edit"><summary>Import record values</summary>
     <p>Choose JSON from this Form version and Release, or map CSV columns to fields. Review one row and load it into the editor before saving. Attachment manifests are references; file bytes are uploaded separately.</p>
-    <label htmlFor={id}>Record JSON or CSV file</label><input id={id} type="file" accept=".json,.csv,application/json,text/csv" disabled={disabled} onChange={async (event) => {
+    <label htmlFor={id}>Import records file</label><input id={id} type="file" accept=".json,.csv,application/json,text/csv" disabled={disabled} onChange={async (event) => {
       const file = event.target.files?.[0]; const generation = ++fileGeneration.current; setMessage(""); setCsv(null); setRows([]); setMapping({});
       if (!file) return;
       try {

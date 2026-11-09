@@ -10,6 +10,9 @@ const ICON_PATHS = {
   edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   list: "M4 6h16v14H4zM8 3v4M16 3v4M4 10h16",
   inbox: "M4 13l2.5-7h11L20 13v6H4zM4 13h5l1 2h4l1-2h5",
+  question: "M4 4h16v12H9l-5 4zM9 8a3 3 0 0 1 6 0c0 2-3 2-3 4M12 14h.01",
+  timeline: "M6 4v16M6 6h12M6 12h8M6 18h12M4 6h4M4 12h4M4 18h4",
+  action: "M13 3 5 14h6l-1 7 9-12h-6z",
   bell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4",
   proposal: "M8 4h8v3H8zM6 5.5H5v15h14v-15h-1M9 12h6M9 16h4",
   resources: "M6 3h8l4 4v14H6zM14 3v4h4",
@@ -36,6 +39,10 @@ const ICON_PATHS = {
 } as const;
 
 export type RuntimeIconName = keyof typeof ICON_PATHS;
+
+export function runtimeIconName(value: unknown, fallback: RuntimeIconName): RuntimeIconName {
+  return typeof value === "string" && Object.hasOwn(ICON_PATHS, value) ? value as RuntimeIconName : fallback;
+}
 
 export function RuntimeIcon({ name, className = "runtime-icon" }: { name: RuntimeIconName; className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={ICON_PATHS[name]} /></svg>;
@@ -126,9 +133,13 @@ export function RuntimeHeader(props: RuntimeHeaderProps) {
   const { stage } = props;
   const idle = stage.label === null && stage.clock === null;
   return <header className="app-header runtime-header">
+    <a className="brand-wordmark runtime-wordmark" href="/" aria-label="Plenum home">
+      <img className="brand-wordmark-dark" src="/branding/plenum-wordmark-primary.png" alt="Plenum" width="2170" height="725" />
+      <img className="brand-wordmark-light" src="/branding/plenum-wordmark-primary.png" alt="" width="2170" height="725" aria-hidden="true" />
+    </a>
     <HeaderMenu className="runtime-session-menu" label={`Session: ${props.sessionTitle}. Open Session menu`}
       toggle={<><span className="runtime-session-title">{props.sessionTitle}</span><RuntimeIcon name="chevronDown" /></>}>
-      {props.sessionMenu}
+      {(close) => <><p className="runtime-full-session-title">{props.sessionTitle}</p>{props.sessionMenu(close)}</>}
     </HeaderMenu>
     <div className="runtime-header-tools">
       <span className="runtime-header-break" aria-hidden="true" />
@@ -146,11 +157,11 @@ export function RuntimeHeader(props: RuntimeHeaderProps) {
         aria-label={`Plenum status: ${props.connection.label}`} title={props.connection.label}>
         <span className="visually-hidden">{props.connection.label}</span></span>
       <button className="runtime-header-icon" type="button" onClick={props.onRefresh} disabled={props.refreshing}
-        aria-label="Refresh authoritative state" title="Refresh authoritative state"><RuntimeIcon name="refresh" /></button>
+        aria-label="Refresh authoritative state" title="Refresh authoritative state"><RuntimeIcon name="refresh" /><span>Refresh</span></button>
       {props.notifications === null ? null : <button className="runtime-header-icon runtime-notifications" type="button"
-        onClick={props.notifications.onOpen} aria-label={props.notifications.label} title={props.notifications.label}>
-        <RuntimeIcon name="bell" />
-        {props.notifications.count > 0 ? <span className="runtime-notification-count" aria-hidden="true">{props.notifications.count > 99 ? "99+" : props.notifications.count}</span> : null}
+        onClick={props.notifications.onOpen} aria-description={props.notifications.label} title={props.notifications.label}>
+        <RuntimeIcon name="bell" /><span>Injects</span>
+        {props.notifications.count > 0 ? <span className="runtime-notification-count">{props.notifications.count > 99 ? "99+" : props.notifications.count}</span> : null}
       </button>}
       {props.themeToggle}
       {props.communicationTools}

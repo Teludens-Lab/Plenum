@@ -92,7 +92,7 @@ async function expectDraftSynchronized(page, options = {}) {
 test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation without Organization-role substitution @a11y", async ({ browser }) => {
   const { context, page } = await actor(browser, fixture.tokens.operator, { width: 1440, height: 900 });
   await page.goto("/platform/organizations");
-  await expect(page.getByRole("heading", { name: "Organization provisioning" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Organizations" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Platform control plane/u })).toHaveAttribute("aria-current", "page");
   await page.locator("summary", { hasText: "Provision Organization" }).click();
   await page.getByLabel("Organization name").fill("Synthetic Control Plane Organization");
@@ -183,14 +183,23 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/");
-  const entryActions = page.locator(".entry-header-actions").locator("a, button");
+  const entryActions = page.locator(".entry-v12 .site-nav").locator("a, button");
   await expect(entryActions).toHaveCount(2);
   await expect(entryActions.nth(0)).toHaveText("Sign in");
-  await expect(page.locator(".entry-chamber")).toBeVisible();
-  expect(await page.evaluate(() => getComputedStyle(document.querySelector(".app-frame-entry")).backgroundImage)).toBe("none");
+  await expect(page.locator(".hero__wordmark")).toBeVisible();
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector(".entry-v12")).backgroundImage)).toBe("none");
   await expect(entryActions.nth(1)).toHaveAttribute("aria-label", /^Theme:/u);
   await page.getByRole("link", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Choose a test role" })).toBeVisible();
+  const submitShape = await page.locator(".entry-auth-submit").evaluate((button) => {
+    const icon = button.querySelector("svg");
+    return { height: button.getBoundingClientRect().height, iconWidth: icon.getBoundingClientRect().width,
+      iconHeight: icon.getBoundingClientRect().height, stroke: getComputedStyle(icon).stroke };
+  });
+  expect(submitShape.height).toBeLessThanOrEqual(64);
+  expect(submitShape.iconWidth).toBeLessThanOrEqual(24);
+  expect(submitShape.iconHeight).toBeLessThanOrEqual(24);
+  expect(submitShape.stroke).not.toBe("none");
   await expect(page.locator(".entry-auth-diagram")).toHaveCount(0);
   await expect(page.locator(".entry-branch-diagram")).toHaveCount(0);
   const authCanvas = await page.evaluate(() => {
@@ -217,11 +226,11 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   await expect(page.locator(".product-header-organization")).toHaveText("PS-150 synthetic organization");
   await page.getByRole("button", { name: /Open account menu/ }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Design, deliver and audit governed simulations." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plenum", exact: true })).toBeVisible();
   await expect(page.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await expect(page.getByText("Connection error", { exact: true })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Design, deliver and audit governed simulations." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plenum", exact: true })).toBeVisible();
   await expect(page.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await page.getByRole("link", { name: "Sign in" }).click();
   await page.getByRole("combobox", { name: "Test role", exact: true }).selectOption("publisher");
@@ -409,7 +418,7 @@ test("PS-700-T01 authenticated root is useful, branded, responsive, and accessib
   await page.screenshot({ path: `${evidenceRoot}/root-dark-desktop.png`, fullPage: true });
   await page.getByRole("button", { name: "Open account menu for Synthetic operator" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Design, deliver and audit governed simulations." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plenum", exact: true })).toBeVisible();
   await expect(page.getByText("PS-150 synthetic organization")).toHaveCount(0);
   await context.close();
 });
@@ -418,8 +427,8 @@ test("PS-700-T02 clean, unauthorized, offline, narrow, and 200-percent-text stat
   const clean = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const cleanPage = await clean.newPage();
   await cleanPage.goto("/");
-  await expect(cleanPage.getByRole("heading", { name: "Design, deliver and audit governed simulations." })).toBeVisible();
-  await expect(cleanPage.getByText("Design, deliver and audit governed simulations.")).toBeVisible();
+  await expect(cleanPage.getByRole("heading", { name: "Plenum", exact: true })).toBeVisible();
+  await expect(cleanPage.getByText("Design and deliver simulations,", { exact: false })).toBeVisible();
   await expect(cleanPage.getByLabel("Plenum status: Sign-in required")).toHaveCount(1);
   await expect(cleanPage.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/auth/login?returnTo=%2F");
   await expect(cleanPage.locator(".entry-branch-diagram")).toHaveCount(0);
@@ -500,7 +509,7 @@ test("PS-800-T01/T02 platform lifecycle uses one bounded, restorable workspace a
     return {
       actual: {
         workspace: size(".product-header-title"),
-        section: size(".section-heading h3"), object: size(".catalog-row h4"),
+        section: size(".section-heading h2"), object: size(".project-row h3"),
         detail: size(".catalog-row dd"), label: size(".catalog-row dt")
       },
       expected: {
@@ -723,7 +732,7 @@ test("PS-800-T04 Studio and the five remaining view families preserve bounded wo
   await participant.page.goto(runtimeUrl(fixture.tokens.designerA));
   await expect(participant.page.locator(".participant-runtime-workspace")).toBeVisible();
   await expect(participant.page.getByRole("button", { name: /^Session: /u })).toBeVisible();
-  await expect(participant.page.getByRole("navigation", { name: "Runtime modules" })).toBeVisible();
+  await expect(participant.page.locator("#runtime-navigation")).toBeVisible();
   await expect(participant.page.getByText("Start here", { exact: true })).toBeVisible();
   await expect.poll(() => participant.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
@@ -753,7 +762,7 @@ test("PS-800-T04 Studio and the five remaining view families preserve bounded wo
   const research = await actor(browser, fixture.tokens.designerB, { width: 1440, height: 900 });
   await research.page.goto("/research/reports");
   await expectCompactWorkWordmark(research.page);
-  await expect(research.page.getByRole("heading", { level: 1, name: "Consent-filtered reporting" })).toBeVisible();
+  await expect(research.page.getByRole("heading", { level: 1, name: "Research reports" })).toBeVisible();
   await expect(research.page.getByRole("heading", { name: "Provenance inspection" })).toBeVisible();
   await expect(research.page.getByRole("heading", { name: "Your generated exports" })).toBeVisible();
   expect((await new AxeBuilder({ page: research.page }).analyze()).violations).toEqual([]);
@@ -772,6 +781,7 @@ test("PS-800-T04 Studio and the five remaining view families preserve bounded wo
 
   const constrained = await actor(browser, fixture.tokens.designerA, { width: 320, height: 720 });
   await constrained.page.goto(runtimeUrl(fixture.tokens.designerA));
+  await expect(constrained.page.locator(".participant-runtime-workspace")).toBeVisible();
   await constrained.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   await expect.poll(() => constrained.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(await constrained.page.evaluate(() => Array.from(document.querySelectorAll("button,a,input,select,textarea,summary"))
@@ -1063,12 +1073,12 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
   await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
   const studioUrl = page.url();
   await expect(page.getByRole("combobox", { name: "Design workspace", exact: true })).toBeVisible();
-  const forms = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const forms = await openStudioWorkspace(page, "Forms & Artifacts");
   const form = forms.locator("details.editor-item").first();
   await form.locator("summary").first().click();
   await form.getByRole("button", { name: "Use approved form rules" }).click();
   await form.getByLabel("Allow attachments", { exact: true }).check();
-  await form.getByLabel("Attachment retention", { exact: true }).selectOption({ label: `ps830-files-${suffix} · version 1 · delete after 1 days` });
+  await form.getByLabel("Attachment retention", { exact: true }).selectOption({ label: `ps830-files-${suffix} · version 1 · delete after 1 day` });
   await form.getByLabel("Exportable", { exact: true }).check();
   await expectDraftSynchronized(page, { timeout: 90_000 });
   expect((await new AxeBuilder({ page }).include("#forms").analyze()).violations).toEqual([]);
@@ -1092,7 +1102,7 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
     await seat.getByLabel("Required Seat", { exact: true }).uncheck();
   }
   await expectDraftSynchronized(page, { timeout: 90_000 });
-  const publication = await openStudioWorkspace(page, "Review & publish", "Review and publish");
+  const publication = await openStudioWorkspace(page, "Review & publish");
   await publication.getByLabel("Release label").fill(title);
   await publication.getByLabel("Semantic version").fill("1.0.0");
   await publication.getByLabel("Release notes").fill("Focused attachment and interchange browser proof.");
@@ -1105,7 +1115,7 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
   await expect(page.getByText(/is frozen and ready for Reviewer approval/u)).toBeVisible();
   reviewer = await actor(browser, fixture.tokens.finalReviewer);
   await reviewer.page.goto(studioUrl);
-  const review = await openStudioWorkspace(reviewer.page, "Review & publish", "Review and publish");
+  const review = await openStudioWorkspace(reviewer.page, "Review & publish");
   await review.getByLabel("Methodology review notes").fill("Synthetic independent review of the focused file workflow.");
   await review.getByRole("button", { name: "Approve freeze" }).click();
   await expect(reviewer.page.getByText(/Reviewer approval was recorded/u)).toBeVisible();
@@ -1179,7 +1189,7 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
   const editLabel = await editSummary.innerText();
   await editSummary.click();
   await record.getByText("Import record values", { exact: true }).click();
-  await record.getByLabel("Record JSON or CSV file").setInputFiles({ name: "narrative.csv", mimeType: "text/csv", buffer: Buffer.from('narrative\r\n"Imported, reviewed narrative"\r\n') });
+  await record.getByLabel("Import records file").setInputFiles({ name: "narrative.csv", mimeType: "text/csv", buffer: Buffer.from('narrative\r\n"Imported, reviewed narrative"\r\n') });
   await record.getByLabel("narrative", { exact: true }).selectOption({ label: "What will Red do first?" });
   await record.getByRole("button", { name: "Preview mapped rows" }).click();
   await record.getByText("Row 2 · Ready to review", { exact: true }).click();
@@ -1243,13 +1253,13 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
     await expect(inject).toBeVisible();
     if (name === "PS-830 informational") {
       await expect(inject.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
-      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+      await expect(inject.getByText("Closed", { exact: true })).toBeVisible();
     } else if (name === "PS-830 acknowledge") {
       if (await inject.getByRole("button", { name: "Acknowledge", exact: true }).count()) {
         await inject.getByRole("button", { name: "Acknowledge", exact: true }).focus();
         await participant.page.keyboard.press("Enter");
       }
-      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+      await expect(inject.getByText("Closed", { exact: true })).toBeVisible();
     } else {
       await expect(inject.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
       if (await inject.getByLabel("Response record", { exact: true }).count()) {
@@ -1257,7 +1267,7 @@ test("PS-830-T06/T07 published files and configured Injects use product controls
         await inject.getByLabel("Response record", { exact: true }).selectOption({ label: responseChoice });
         await inject.getByRole("button", { name: "Submit response", exact: true }).click();
       }
-      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+      await expect(inject.getByText("Closed", { exact: true })).toBeVisible();
     }
     await expect(inject.getByText("Your required steps are complete.", { exact: true })).toBeVisible();
   }
@@ -1337,7 +1347,7 @@ test("PS-830-T04/T05 bounded fields, calculations and safe text are authored vis
   await page.goto(`/studio/projects/${projectId}`);
   try { await expect(page.getByRole("combobox", { name: "Design workspace", exact: true })).toBeVisible(); }
   catch (error) { await test.info().attach("draft-load-diagnostics", { body: JSON.stringify(loadDiagnostics), contentType: "application/json" }); throw error; }
-  const workspace = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const workspace = await openStudioWorkspace(page, "Forms & Artifacts");
   const form = workspace.locator("details.editor-item").first();
   await form.locator("summary").first().click();
   await form.getByRole("button", { name: "Use approved form rules" }).click();
@@ -1486,7 +1496,7 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   await expect(secondActivities.getByText("New Activity", { exact: true })).toBeVisible({ timeout: 240_000 });
   const firstStages = await openStudioWorkspace(first.page, "Stages");
   const firstStage = firstStages.locator(".timeline details").first();
-  await firstStage.locator("summary").click();
+  await firstStage.locator(":scope > summary").click();
   await firstStage.getByRole("checkbox", { name: "New Activity" }).check();
   await expectDraftSynchronized(first.page, { timeout: 240_000 });
   await expect.poll(async () => {
@@ -1496,7 +1506,7 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
     return activity !== undefined && draft.materialization.coreDesign.stages[0].allowedActivityIds.includes(activity.id);
   }, { timeout: 240_000 }).toBe(true);
 
-  const secondPreview = await openStudioWorkspace(second.page, "Role walkthrough", "Role & Stage preview");
+  const secondPreview = await openStudioWorkspace(second.page, "Role walkthrough");
   const previewResponse = second.page.waitForResponse((response) => response.url().endsWith(`/v1/projects/${fixture.projectId}/role-preview`) && response.request().method() === "POST");
   await secondPreview.getByRole("button", { name: "Preview interface" }).click();
   const preview = await (await previewResponse).json();
@@ -1507,8 +1517,8 @@ test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime
   const groups = first.page.locator("#stages .editor-list.compact-list details");
   const firstGroup = groups.nth(0);
   const secondGroup = groups.nth(1);
-  await firstGroup.locator("summary").click();
-  await secondGroup.locator("summary").click();
+  await firstGroup.locator(":scope > summary").click();
+  await secondGroup.locator(":scope > summary").click();
   const firstGroupName = await firstGroup.getByLabel("Group name").inputValue();
   const secondGroupName = await secondGroup.getByLabel("Group name").inputValue();
   await firstGroup.getByLabel("Parent Stage Group").selectOption({ label: secondGroupName });
@@ -1569,7 +1579,7 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
   await page.goto(`/studio/projects/${fixture.projectId}`);
   await expect(page.locator(".studio-app-header .product-header-title")).toBeVisible();
 
-  const formsWorkspace = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const formsWorkspace = await openStudioWorkspace(page, "Forms & Artifacts");
   const firstForm = formsWorkspace.locator("details.editor-item").first();
   await firstForm.locator("summary").first().click();
   await expect(firstForm.getByText("Form preview", { exact: true })).toBeVisible();
@@ -1578,10 +1588,10 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
   await expect(firstForm.locator(".form-preview-canvas")).toHaveAttribute("aria-label", /mobile completed preview/u);
 
   const workflowsWorkspace = await openStudioWorkspace(page, "Workflows");
-  await workflowsWorkspace.getByRole("button", { name: "Add DEC-42 reference Workflow" }).click();
-  const dec42 = workflowsWorkspace.locator("details.editor-item").filter({ hasText: "DEC-42 reference review" });
+  await workflowsWorkspace.getByRole("button", { name: "Add review Workflow" }).click();
+  const dec42 = workflowsWorkspace.locator("details.editor-item").filter({ hasText: "Reference review" });
   await expect(dec42).toBeVisible();
-  await dec42.locator("summary").click();
+  await dec42.locator(":scope > summary").click();
   await expect(dec42.getByText("Return for revision", { exact: true }).first()).toBeVisible();
   await expect(dec42.getByText("Resubmit for intermediate review", { exact: true }).first()).toBeVisible();
 
@@ -1597,7 +1607,7 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
   });
   await contentWorkspace.getByRole("button", { name: "Upload and scan" }).click();
   const safeCard = page.locator("#content-library .catalog-card").filter({ hasText: "PS-740 safe content" });
-  await expect(safeCard.getByText("clean", { exact: true })).toBeVisible();
+  await expect(safeCard.getByText("Clean", { exact: true })).toBeVisible();
   await safeCard.getByRole("button", { name: "Use current version in Scenario" }).click();
 
   await contentWorkspace.getByLabel("Content title").fill("PS-740 quarantined content");
@@ -1606,7 +1616,7 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
   });
   await contentWorkspace.getByRole("button", { name: "Upload and scan" }).click();
   const infectedCard = page.locator("#content-library .catalog-card").filter({ hasText: "PS-740 quarantined content" });
-  await expect(infectedCard.getByText("infected", { exact: true })).toBeVisible();
+  await expect(infectedCard.getByText("Infected", { exact: true })).toBeVisible();
   await expect(infectedCard.getByRole("button", { name: "Use current version in Scenario" })).toBeDisabled();
 
   await expectDraftSynchronized(page);
@@ -1621,15 +1631,15 @@ test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and previe
   await page.goto(`/studio/projects/${fixture.projectId}`);
   const advancedWorkspace = await openStudioWorkspace(page, "Advanced logic & world state");
   await expect(advancedWorkspace.getByRole("heading", { name: "Advanced logic & world state" })).toBeVisible();
-  await expect(page.locator("#adjudication")).toBeAttached();
-  await expect(page.locator("#plugins")).toBeAttached();
-  await expect(page.locator("#compositions")).toBeAttached();
-  await expect(page.locator("#polls")).toBeAttached();
-  await expect(page.locator("#voice")).toBeAttached();
+  await expect(page.getByRole("navigation", { name: "Design workspaces" }).locator('a[href="#adjudication"]')).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Design workspaces" }).locator('a[href="#plugins"]')).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Design workspaces" }).locator('a[href="#compositions"]')).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Design workspaces" }).locator('a[href="#polls"]')).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Design workspaces" }).locator('a[href="#voice"]')).toBeVisible();
 
   await advancedWorkspace.getByRole("button", { name: "Add State Value" }).click();
   const stateValue = advancedWorkspace.locator("details.editor-item").first();
-  await stateValue.locator("summary").click();
+  await stateValue.locator(":scope > summary").click();
   await expect(stateValue.getByLabel("Scenario initial value")).toBeVisible();
   await expect(stateValue.getByLabel("Unit")).toBeVisible();
   await expect(stateValue.getByLabel("History")).toBeVisible();
@@ -1658,7 +1668,7 @@ test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and previe
   const catalogCard = pluginsWorkspace.locator("article.catalog-card").first();
   await catalogCard.getByRole("button", { name: "Bind installed Plugin" }).click();
   const binding = pluginsWorkspace.locator("details.editor-item").last();
-  await binding.locator("summary").click();
+  await binding.locator(":scope > summary").click();
   await expect(binding.getByRole("table", { name: /Deployment compatibility/u })).toBeVisible();
   await expect(binding.getByText("Policy-filtered input mappings", { exact: true })).toBeVisible();
 
@@ -1671,17 +1681,17 @@ test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and previe
   const pollsWorkspace = await openStudioWorkspace(page, "Polls");
   await pollsWorkspace.getByRole("button", { name: "Add Poll" }).click();
   const poll = pollsWorkspace.locator("details.editor-item").last();
-  await poll.locator("summary").click();
+  await poll.locator(":scope > summary").click();
   await expect(poll.locator('[role="status"]').filter({ hasText: "Publication readiness:" })).toContainText("Complete");
   await expect(poll.getByText(/Count accepted ballots/u)).toBeVisible();
   await poll.getByLabel("Ballot visibility").selectOption("secret_ballot");
-  await expect(poll.getByText(/resolved OPEN-028/u).first()).toBeVisible();
+  await expect(poll.getByText(/version 1 privacy policy/u).first()).toBeVisible();
   await poll.getByLabel("Ballot visibility").selectOption("open");
 
   const voiceWorkspace = await openStudioWorkspace(page, "Voice Channels");
   await voiceWorkspace.getByLabel("Target deployment profile").selectOption("air_gapped");
   const voice = voiceWorkspace.locator("details.editor-item").first();
-  await voice.locator("summary").click();
+  await voice.locator(":scope > summary").click();
   await expect(voice.getByText(/air gapped compatibility:/u)).toBeVisible();
   await expect(voice.getByText(/Non-audio path:/u)).toBeVisible();
 
@@ -1709,26 +1719,21 @@ test("PS-760-T02 remaining Studio workspaces rehearse deterministically without 
   })).toEqual({ left: 0, right: 0 });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: `${studioAuthoringEvidenceRoot}/studio-workstation-1440x1000.png`, fullPage: false });
-  for (const link of ["Interfaces", "Research", "Measurements & reports", "Access & readiness", "Role walkthrough", "Test & validate", "Review & publish", "Live Changes"]) {
-    await expect(page.getByRole("link", { name: link, exact: true })).toBeVisible();
+  for (const label of ["Interfaces","Research","Measurements & reports","Access & readiness","Role walkthrough","Test & validate","Review & publish","Live Changes"]) {
+    const section = await openStudioWorkspace(page, label);
+    await expect(section).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   }
-  await expect(page.locator("#interfaces")).toBeAttached();
-  await expect(page.locator("#research")).toBeAttached();
-  await expect(page.locator("#measurements-reports")).toBeAttached();
-  await expect(page.locator("#access")).toBeAttached();
-  await expect(page.locator("#preview")).toBeAttached();
-  await expect(page.locator("#review-publish")).toBeAttached();
-  await expect(page.locator("#live-changes")).toBeAttached();
 
-  const reviewWorkspace = await openStudioWorkspace(page, "Review & publish", "Review and publish");
+  const reviewWorkspace = await openStudioWorkspace(page, "Review & publish");
   await expect(reviewWorkspace.getByText("Governance references")).toBeVisible();
   await expect(reviewWorkspace.getByText("Artifact digest")).toBeHidden();
-  const liveChangesWorkspace = await openStudioWorkspace(page, "Live Changes", "Activate a Release");
+  const liveChangesWorkspace = await openStudioWorkspace(page, "Live Changes");
   await expect(liveChangesWorkspace).toBeVisible();
 
   const testWorkspace = await openStudioWorkspace(page, "Test & validate");
   await page.goBack();
-  await expect(page.getByRole("region", { name: "Activate a Release" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Live Changes" })).toBeVisible();
   await page.goForward();
   await expect(testWorkspace).toBeVisible();
   await testWorkspace.getByRole("button", { name: "Run deterministic rehearsal" }).click();
@@ -1760,7 +1765,7 @@ test("PS-760-T02 remaining Studio workspaces rehearse deterministically without 
 test("PS-770-T00 authenticated participant joins a branded simulation with a Session code @a11y", async ({ browser }) => {
   const { context, page } = await actor(browser, fixture.tokens.codeParticipant);
   await page.goto("/?workspace=participant");
-  await expect(page.getByRole("heading", { level: 2, name: "Join a session" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Your Sessions" })).toBeVisible();
   await expect(page.getByText("Synthetic code participant")).toBeVisible();
   await page.getByLabel("Session code").fill("WRONG00");
   await page.getByRole("button", { name: "Find session" }).click();
@@ -1842,7 +1847,7 @@ test("PS-770-T03 Release-authored profiles govern roles, teams, regions, navigat
   const facilitatorBrowser = await actor(browser, fixture.tokens.reviewer);
   await facilitatorBrowser.page.goto(`/sessions/${fixture.sessionId}/runtime?role=facilitator`);
   await expect(facilitatorBrowser.page.getByRole("button", { name: /^Session: PS-150 S1 proof Session/u })).toBeVisible();
-  await expect(facilitatorBrowser.page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link").locator(".runtime-sidebar-label")).toHaveText(
+  await expect(facilitatorBrowser.page.locator("#runtime-navigation").getByRole("link").locator(".runtime-sidebar-label")).toHaveText(
     facilitator.projection.navigation.items.map(({ label }) => label));
   await expect(facilitatorBrowser.page.getByRole("link", { name: "Team Action Review" })).toHaveAttribute("aria-current", "page");
   await expect(facilitatorBrowser.page.getByTitle("Session slide deck")).toBeHidden();
@@ -1868,7 +1873,7 @@ test("PS-770-T04 Designer uploads and assigns a governed resource to a role inte
   await expect(interfaces.getByText("Participant field notes is ready to assign to a role interface.")).toBeVisible();
 
   const authorProfile = interfaces.locator("details.editor-item").filter({ has: page.getByText("Scribe workspace", { exact: true }) });
-  await authorProfile.locator("summary").click();
+  await authorProfile.locator(":scope > summary").click();
   const firstRegion = authorProfile.locator("fieldset.nested-editor").first();
   await firstRegion.getByRole("button", { name: "Add module" }).click();
   const resourceModule = firstRegion.locator(".field-row").last();
@@ -1921,7 +1926,7 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   await expect(page.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
   const choices = page.getByRole("group", { name: "Available team and role" }).getByRole("button");
   await choices.first().click();
-  await expect(page.getByRole("heading", { name: "Enter as" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enter your workspace" })).toBeVisible();
   const remainingChoices = page.getByRole("group", { name: "Available team and role" }).getByRole("button");
   if (await remainingChoices.count() > 0) await remainingChoices.first().click();
   const entryLinks = page.locator(".role-entry-list a");
@@ -1929,7 +1934,7 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   await entryLinks.first().click();
   await expect(page).toHaveURL(/\/sessions\/[0-9a-f-]{36}\/runtime\?role=[a-z_]+$/u);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Runtime modules" })).toBeVisible();
+  await expect(page.locator("#runtime-navigation")).toBeVisible();
   await page.getByRole("button", { name: /^Role: /u }).click();
   await expect(page.getByRole("link", { name: "Exit Session" })).toBeVisible();
   const roleSwitch = page.getByRole("group", { name: "Switch role" });
@@ -1945,11 +1950,11 @@ test("PS-770-T01/T02 AC-08 AC-11 participant enters by policy, chooses labeled S
   await page.setViewportSize({ width: 390, height: 844 });
   const runtimeNavigationToggle = page.getByRole("button", { name: "Open workspace navigation" });
   await expect(runtimeNavigationToggle).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: /^Actions\b/u })).toBeHidden();
+  await expect(page.locator("#runtime-navigation").getByRole("link", { name: /^Actions\b/u })).toBeHidden();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime-mobile.png`, fullPage: true });
   await runtimeNavigationToggle.click();
-  await expect(page.getByRole("navigation", { name: "Runtime modules" }).getByRole("link", { name: /^Actions\b/u })).toBeVisible();
+  await expect(page.locator("#runtime-navigation").getByRole("link", { name: /^Actions\b/u })).toBeVisible();
   await page.screenshot({ path: `${participantEvidenceRoot}/participant-runtime-mobile-navigation-open.png`, fullPage: true });
 
   await page.goto("/__test__/offline");
@@ -1972,7 +1977,7 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   await expect(page.getByRole("button", { name: /^Session: PS-780 Operator Control Exercise/u })).toBeVisible();
   await expect(page.locator("#lifecycle-control-title")).toHaveText("Session control");
   await expect(page.getByRole("heading", { name: "Injects" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Adjudications" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Adjudication status" })).toBeVisible();
 
   const applySession = async (operation, reason) => {
     const target = { "session.start": "active", "session.pause": "paused", "session.resume": "active",
@@ -1991,14 +1996,14 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   await page.getByLabel("Confirm the previewed Stage intervention.").check();
   await page.getByRole("button", { name: "Apply Stage control" }).click();
   await expect(page.getByText("Authoritative Session state updated.")).toBeVisible();
-  await expect(page.getByText(/Status:\s*active/u)).toBeVisible();
+  await expect(page.getByText(/Status:\s*Active/u)).toBeVisible();
 
   await applySession("session.pause", "Pause for operator verification");
   await applySession("session.resume", "Resume after operator verification");
   await applySession("session.complete", "Complete operator exercise");
   await applySession("session.lock", "Lock immutable exercise evidence");
   await expect(page.locator(".runtime-page-header")).toContainText(/Session locked/iu);
-  await expect(page.getByText("session.locked")).toBeVisible();
+  await expect(page.getByText("Session locked", { exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${operatorEvidenceRoot}/operator-control-floor.png`, fullPage: true });
   await context.close();
@@ -2023,6 +2028,7 @@ test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and a
   page.on("request", (request) => {
     if (request.method() === "POST" && /\/v1\/operations\/workforce\/members\/[^/]+\/suspend$/u.test(request.url())) lifecycleRequests.push(request.url());
   });
+  await reviewer.getByText("Manage access for Synthetic final reviewer", { exact: true }).click();
   const lifecycleReason = reviewer.getByLabel("Lifecycle reason");
   await reviewer.getByRole("button", { name: "Suspend" }).click();
   await expect(lifecycleReason).toBeFocused();
@@ -2040,19 +2046,19 @@ test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and a
   await expect(page.locator(".administration-notice")).toContainText("Organization Roles updated");
 
   await page.goto("/admin/plugins");
-  await expect(page.getByText("1 Publishers")).toBeVisible();
-  await expect(page.getByText("1 trust roots")).toBeVisible();
-  await expect(page.getByText("1 revocation lists")).toBeVisible();
-  await expect(page.getByText("1 license acceptances")).toBeVisible();
-  const plugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
+  await expect(page.getByText("1 Publisher")).toBeVisible();
+  await expect(page.getByText("1 trust root")).toBeVisible();
+  await expect(page.getByText("1 revocation list")).toBeVisible();
+  await expect(page.getByText("1 license acceptance")).toBeVisible();
+  const plugin = page.locator("li.administration-record").filter({ hasText: "Org ssg fixtures pending" });
   await plugin.getByRole("button", { name: "Approve Artifact" }).click();
   await expect(page.locator(".administration-notice")).toContainText("Plugin Artifact approved");
-  const approvedPlugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
+  const approvedPlugin = page.locator("li.administration-record").filter({ hasText: "Org ssg fixtures pending" });
   await approvedPlugin.getByText("Install approved Artifact").click();
   await approvedPlugin.getByRole("button", { name: "Verify and install" }).click();
   await expect(page.locator(".administration-notice")).toContainText("Plugin installed");
-  const installedPlugin = page.locator("li.administration-record").filter({ hasText: "org.ssg.fixtures.pending" });
-  await expect(installedPlugin).toContainText("1 installations");
+  const installedPlugin = page.locator("li.administration-record").filter({ hasText: "Org ssg fixtures pending" });
+  await expect(installedPlugin.getByText(/^1 installation · /u)).toBeVisible();
   await installedPlugin.getByRole("button", { name: "Revoke Artifact" }).click();
   await expect(page.locator(".administration-notice")).toContainText("historical provenance is preserved");
 
@@ -2086,7 +2092,7 @@ test("PS-790-T02 reports, replay, retention consequences, research privacy, and 
   await expect(operator.page.getByRole("heading", { name: "Report source trace" })).toBeVisible();
   await expect(operator.page.getByText("Captured History", { exact: true })).toBeVisible();
   await expect(operator.page.getByText("Reconstructed Narrative", { exact: true })).toBeVisible();
-  await expect(operator.page.getByRole("heading", { name: "Generated artifacts" }).locator("..")).toContainText("after_action");
+  await expect(operator.page.getByRole("heading", { name: "Generated artifacts" }).locator("..")).toContainText("After action");
 
   await operator.page.goto(`/admin/sessions/${fixture.sessionId}/replay`);
   await operator.page.getByRole("button", { name: "Run replay" }).click();
@@ -2108,7 +2114,7 @@ test("PS-790-T02 reports, replay, retention consequences, research privacy, and 
   const researchTrace = analyst.page.locator(".report-trace");
   await expect(researchTrace.getByText("Consented observations")).toBeVisible();
   await expect(researchTrace).not.toContainText("Synthetic Blue author");
-  await expect(analyst.page.getByRole("heading", { name: "Your generated exports" }).locator("..")).toContainText("research_dataset");
+  await expect(analyst.page.getByRole("heading", { name: "Your generated exports" }).locator("..")).toContainText("Research dataset");
   expect((await new AxeBuilder({ page: analyst.page }).analyze()).violations).toEqual([]);
   await analyst.page.screenshot({ path: `${operationsEvidenceRoot}/research-provenance.png`, fullPage: true });
   await analyst.context.close();

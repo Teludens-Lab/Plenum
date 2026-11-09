@@ -253,7 +253,7 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
     const moduleArtifactTypes = artifactTypes.filter((type) =>
       (!Array.isArray(module.configuration.artifactTypeKeys) || module.configuration.artifactTypeKeys.includes(type.key)) &&
       (typeof module.configuration.artifactTypeId !== "string" || module.configuration.artifactTypeId === type.id));
-    if (module.moduleType === "session_status") return <section className="card curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}>
+    if (module.moduleType === "session_status") return <section className="workspace-section curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}>
       <h2 id={`qa-module-${module.id}`}>{title}</h2><dl className="runtime-status-list">
         <div><dt>Demo</dt><dd>Isolated Draft</dd></div><div><dt>Stage</dt><dd>{stage?.name ?? "Not configured"}</dd></div>
         <div><dt>Role</dt><dd>{role?.name ?? "Not configured"}</dd></div><div><dt>Team</dt><dd>{team?.name ?? "No Team"}</dd></div>
@@ -279,7 +279,7 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
           onApply={(transitionId, payload) => applyTransition(artifact.id, transitionId, payload)} FieldEditorComponent={FieldEditorComponent} />;
       })}</div>}
     </section>;
-    if (module.moduleType === "artifact_presentation") return <section className="card curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}>
+    if (module.moduleType === "artifact_presentation") return <section className="workspace-section curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}>
       <h2 id={`qa-module-${module.id}`}>{title}</h2>{artifacts.length === 0 ? <p className="empty-state">{emptyText}</p> :
         <ul className="presentation-artifact-list">{artifacts.map((artifact) => <li key={artifact.id}><strong>{artifact.title}</strong>
           <span>{stateLabel(data.workflows.find(({ id }) => id === artifact.workflowId), artifact.state)}</span></li>)}</ul>}
@@ -287,14 +287,14 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
     if (module.moduleType === "slide_deck") {
       const resourceId = typeof module.configuration.releaseResourceId === "string" ? module.configuration.releaseResourceId : "";
       const resource = data.resources.find(({ id }) => id === resourceId);
-      return <section className="card curated-runtime-module runtime-deck-module" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
+      return <section className="workspace-section curated-runtime-module runtime-deck-module" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
         {resource?.dataUri === undefined ? <p className="empty-state">{emptyText}</p> : <iframe className="runtime-deck-frame" src={resource.dataUri} title={title} loading="lazy" sandbox="allow-scripts" allowFullScreen />}
       </section>;
     }
     if (module.moduleType === "resource_library") {
       const resourceIds = Array.isArray(module.configuration.resourceIds) ? module.configuration.resourceIds.filter((id): id is string => typeof id === "string") : [];
       const resources = data.resources.filter(({ id }) => resourceIds.includes(id));
-      return <section className="card curated-runtime-module runtime-resource-library" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
+      return <section className="workspace-section curated-runtime-module runtime-resource-library" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
         {resources.length === 0 ? <p className="empty-state">{emptyText}</p> : <ul className="runtime-resource-list">{resources.map((resource) => <li key={resource.id}>
           <div><strong>{resource.name}</strong><span>{resource.type.replaceAll("_", " ")} · {resource.mediaType}</span>{resource.altText === undefined ? null : <p>{resource.altText}</p>}</div>
           {resource.dataUri === undefined ? <span className="hint">Embedded content unavailable</span> : <a className="btn-secondary link-button" href={resource.dataUri} target="_blank" rel="noreferrer">Open resource</a>}
@@ -302,7 +302,7 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
       </section>;
     }
     const scenarioItems = module.moduleType === "inject_inbox" ? scenario.content ?? [] : [];
-    return <section className="card curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
+    return <section className="workspace-section curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}><h2 id={`qa-module-${module.id}`}>{title}</h2>
       {scenarioItems.length === 0 ? <><p className="empty-state">{emptyText}</p><p className="hint">External delivery is not emitted from an isolated QA demo.</p></> :
         <ul className="qa-demo-scenario-list">{scenarioItems.map((item) => <li key={item.id}><strong>{item.title}</strong>{item.body === undefined ? null : <p>{item.body}</p>}</li>)}</ul>}
     </section>;

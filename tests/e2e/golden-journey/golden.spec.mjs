@@ -27,7 +27,7 @@ async function synchronized(page) {
 }
 async function approveAndPublish(page, reviewerPage, title) {
   await synchronized(page);
-  const publication = await workspace(page, "Review & publish", "Review and publish");
+  const publication = await workspace(page, "Review & publish");
   await publication.getByLabel("Release label", { exact: true }).fill(title);
   await publication.getByLabel("Semantic version", { exact: true }).fill("1.0.0");
   await publication.getByLabel("Release notes", { exact: true }).fill("PS-830 UI-only golden journey; synthetic automated review, human acceptance remains separately recorded.");
@@ -39,7 +39,7 @@ async function approveAndPublish(page, reviewerPage, title) {
   await publication.getByRole("button", { name: "Freeze for review", exact: true }).click();
   await expect(page.getByText(/is frozen and ready for Reviewer approval/u)).toBeVisible();
   await reviewerPage.goto(page.url());
-  const review = await workspace(reviewerPage, "Review & publish", "Review and publish");
+  const review = await workspace(reviewerPage, "Review & publish");
   await review.getByLabel("Methodology review notes").fill("Independent synthetic Reviewer has inspected the frozen design. Named human acceptance is not asserted.");
   await review.getByRole("button", { name: "Approve freeze", exact: true }).click();
   await expect(reviewerPage.getByText(/Reviewer approval was recorded/u)).toBeVisible();
@@ -133,7 +133,7 @@ test("PS-830-T08 blank-install official import and Studio customization @a11y", 
     await expect(second.getByLabel("Team", { exact: true })).toHaveValue("blue");
     await second.screenshot({ path: `${evidenceRoot}/energy-second-facilitator.png` });
 
-    const forms = await workspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+    const forms = await workspace(page, "Forms & Artifacts");
     const form = forms.locator("#forms-form-blue-action");
     await form.locator("summary").first().click();
     if (await form.getByRole("button", { name: "Use approved form rules", exact: true }).count()) await form.getByRole("button", { name: "Use approved form rules", exact: true }).click();

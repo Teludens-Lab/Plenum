@@ -51,7 +51,7 @@ export async function stageAction(page, operation, expected = "accepted") {
   return receipt;
 }
 export async function fillIndustryPlan(dialog, form) {
-  const editor = dialog.locator("section.card:visible").first();
+  const editor = dialog.locator("section.workspace-section:visible").first();
   for (let pageIndex = 0; pageIndex < 5; pageIndex++) {
     for (const field of form.sections.filter((section) => section.page === pageIndex && !section.collapsed).flatMap((section) => section.fields)) {
       if (!field.required || field.readOnly) continue;

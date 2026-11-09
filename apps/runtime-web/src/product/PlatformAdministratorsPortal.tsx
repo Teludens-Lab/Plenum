@@ -1,3 +1,4 @@
+import { formatDate, displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import type {
@@ -10,11 +11,7 @@ import { PlenumLoader } from "../PlenumLoader.js";
 import { PlatformControlNavigation } from "./PlatformControlNavigation.js";
 import { StatusBadge, humanize, platformRequest } from "./PlatformOrganizationsPortal.js";
 
-const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-function formatDate(value: string | null): string {
-  return value === null ? "Not yet" : dateTime.format(new Date(value));
-}
 
 function StepUpGate({ workforce }: { workforce: PlatformAdministratorWorkforceV1 }) {
   if (workforce.stepUp.satisfied) {

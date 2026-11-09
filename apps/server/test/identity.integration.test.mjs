@@ -8,6 +8,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
 import * as Y from "yjs";
 import { canonicalizeJson } from "@plenum/event-contracts";
+import { compileRelease } from "@plenum/release-compiler";
 
 import {
   createOfflinePluginBundle,
@@ -565,6 +566,20 @@ test("PS-790-T01 administration is tenant-scoped, least-privilege, auditable, an
 
   const policies = await getDataPolicyOperations(app, principalD, randomUUID());
   assert.equal(policies.contractId, "operations-admin-v1");
+  assert.ok(policies.targets.some((target) => target.scopeType === "session" && target.id === ids.sessionA));
+  assert.equal(policies.targets.some((target) => target.id === ids.sessionB || target.id === ids.orgB), false);
+  await assert.rejects(recordCorrection(app, principalD, {
+    targetReference: `session:${ids.sessionB}`, originalValue: "Before", correctedValue: "After",
+    reason: "PS-842 cross-Organization selection denial", reportsMustRegenerate: false
+  }, randomUUID()), (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(createRetentionPolicy(app, principalD, {
+    policyKey: "ps842-denied", version: 1, scopeType: "session", scopeReference: ids.sessionB,
+    periodDays: 30, legalHoldBehavior: "retain", expiryAction: "archive", archiveDestination: "Institutional archive", approvalRequired: true
+  }, randomUUID()), (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(acceptPluginLicense(app, principalD, {
+    acceptanceId: randomUUID(), artifactId: randomUUID(), pluginId: "unavailable-plugin",
+    license: "MIT", termsDigest: `sha256:${"a".repeat(64)}`, correlationId: randomUUID()
+  }), (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
   const retention = await getSessionRetentionStatus(app, principalD, ids.sessionA, randomUUID());
   assert.equal(retention.sessionId, ids.sessionA);
   assert.match(retention.consequences.join(" "), /immutable Governing Release/u);
@@ -3235,6 +3250,59 @@ test("PS-830-T04/T05 bounded Forms and authoritative expressions publish, valida
   await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, upload, ids.deploymentA), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
 });
 
+test("PS-842-T02 new interface Releases publish and activate while other Sessions retain their pins", async () => {
+  const operatorPrincipal = { ...principal, authenticationSessionId: randomUUID() };
+  await owner.query(`INSERT INTO identity.authentication_sessions
+    (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+    VALUES ($1,$2,$3,'https://issuer.example','operator-a','mfa','2099-01-01T00:00:00.000Z')`,
+    [operatorPrincipal.authenticationSessionId, ids.orgA, ids.personA]);
+  for (const [previousPath, candidatePath] of [
+    ["fractured-order/fractured-order-release", "fractured-order/fractured-order-interface-release"],
+    ["validation/crisis-response/release", "validation/crisis-response/interface-release"],
+    ["validation/policy-negotiation/release", "validation/policy-negotiation/interface-release"]
+  ]) {
+    const bytes = previousPath.startsWith("validation/")
+      ? compileRelease(JSON.parse(await readFile(new URL(`../../../definitions/${previousPath}-source.json`, import.meta.url), "utf8"))).bytes
+      : await readFile(new URL(`../../../definitions/${previousPath}.json`, import.meta.url));
+    const candidate = JSON.parse(await readFile(new URL(`../../../definitions/${candidatePath}.json`, import.meta.url), "utf8"));
+    const project = await createProject(app, principalD, { requestId: randomUUID(), title: `PS-842 ${candidatePath}`,
+      sourcePackage: { bytes, sha256: createHash("sha256").update(bytes).digest("hex") } }, randomUUID());
+    const publish = async (version) => {
+      const freeze = await freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+      await approvePublicationFreeze(app, principalF, project.projectId, freeze.freezeId, "Synthetic interface compatibility review; human acceptance is separate.", randomUUID());
+      return publishCollaborativeDraft(app, objectStore, principalD, project.projectId, { freezeId: freeze.freezeId,
+        releaseLabel: `PS-842 interface ${version}`, semanticVersion: version, methodologyVersion: "1.3.1",
+        releaseNotes: "Synthetic publication and activation proof", warningsAcknowledged: true, classificationReviewId: "synthetic",
+        accessibilityReviewStatus: "reviewed", retentionPolicyId: "synthetic", approvalNotes: "Automated compatibility fixture" }, randomUUID());
+    };
+    const previous = await publish("1.0.0");
+    const previousBytes = await exportReleasePackage(app, objectStore, principalD, previous.releaseId, randomUUID());
+    const pinned = await createSession(app, operatorPrincipal, project.projectId, previous.releaseId, randomUUID(), ids.deploymentA);
+    const changing = await createSession(app, operatorPrincipal, project.projectId, previous.releaseId, randomUUID(), ids.deploymentA);
+    const draft = await getCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+    const document = collaborativeDocument(draft.update);
+    const update = captureUpdate(document, () => document.transact(() => document.getMap("draft").get("coreDesign").set("interfaces", candidate.coreDesign.interfaces)));
+    const changed = await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update }, randomUUID());
+    assert.equal(changed.validation.valid, true, JSON.stringify(changed.validation.issues));
+    const next = await publish("1.0.1");
+    const exported = JSON.parse(new TextDecoder().decode(await exportReleasePackage(app, objectStore, principalD, next.releaseId, randomUUID())));
+    assert.deepEqual(exported.coreDesign.interfaces, candidate.coreDesign.interfaces);
+    const impact = await getReleaseImpact(app, operatorPrincipal, changing.sessionId, next.releaseId, randomUUID());
+    assert.deepEqual(impact.report.blockedReasons, []);
+    const review = await reviewReleaseImpact(app, principalF, changing.sessionId, { candidateReleaseId: next.releaseId,
+      reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" }, randomUUID());
+    const context = await resolvePrincipalCommandContext(app, operatorPrincipal, changing.sessionId, ids.deviceA, randomUUID());
+    const receipt = await activateRelease(app, operatorPrincipal, context, { commandId: randomUUID(), deviceId: ids.deviceA,
+      operationType: "release.activate", aggregateId: changing.sessionId, expectedAggregateVersion: impact.activationSequence,
+      governingReleaseId: previous.releaseId, payload: { candidateReleaseId: next.releaseId, impactReviewId: review.impactReviewId,
+        reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" } }, randomUUID(), ids.deploymentA);
+    assert.equal(receipt.status, "accepted", JSON.stringify(receipt));
+    assert.equal((await getReleaseHistory(app, operatorPrincipal, changing.sessionId, randomUUID())).activeReleaseId, next.releaseId);
+    assert.equal((await getReleaseHistory(app, operatorPrincipal, pinned.sessionId, randomUUID())).activeReleaseId, previous.releaseId);
+    assert.deepEqual(await exportReleasePackage(app, objectStore, principalD, previous.releaseId, randomUUID()), previousBytes);
+  }
+});
+
 test("PS-830-T07 REQ-030 published records, independent Inject recipients and authoritative schedules", async () => {
   // Independent identity bootstrap: the earlier revocation test invalidates its own login.
   const operatorPrincipal = { ...principal, authenticationSessionId: randomUUID() };
@@ -3754,6 +3822,10 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   assert.equal(firstBody.derivedMetrics[0].measurementDefinitionVersion, 1);
   assert.equal(secondBody.derivedMetrics[0].measurementDefinitionVersion, 2);
   assert.notEqual(firstStandard.artifactId, secondStandard.artifactId);
+  const exportTargets = (await getDataPolicyOperations(app, principalD, randomUUID())).targets.filter((target) => target.scopeType === "export");
+  assert.ok(exportTargets.some((target) => target.id === firstStandard.artifactId));
+  assert.equal(new Set(exportTargets.map((target) => target.label)).size, exportTargets.length);
+  for (const target of exportTargets) assert.doesNotMatch(target.label, /[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|after_action|research_dataset/u);
   for (const format of ["jsonl", "csv", "html", "pdf", "zip"]) {
     const artifact = await generateSessionReport(app, principalD, ids.sessionA, {
       idempotencyKey: randomUUID(), reportKind: "session_archive", format

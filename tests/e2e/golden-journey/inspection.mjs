@@ -18,7 +18,7 @@ export async function inspectReference(page, official) {
     await picker.selectOption(choice.value);
     const slot = page.locator(".editor-workspace-slot:visible");
     await expect(slot).toBeVisible();
-    const disclosures = slot.locator("details");
+    const disclosures = slot.locator("details:not(.technical-details):not(.provenance-disclosure)");
     for (let index = 0; index < await disclosures.count(); index++) {
       const item = disclosures.nth(index);
       if (await item.isVisible() && await item.getAttribute("open") === null) await item.locator(":scope > summary").click();

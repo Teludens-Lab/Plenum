@@ -300,7 +300,7 @@ async function originalDecisionRecords(browser, baseURL, checkpoint) {
 }
 
 async function fillTurnSheet(dialog, form, sector) {
-  const editor = dialog.locator("section.card:visible").first();
+  const editor = dialog.locator("section.workspace-section:visible").first();
   for (let pageIndex = 0; pageIndex <= 2; pageIndex++) {
     const fields = form.sections.filter((section) => section.page === pageIndex && !section.collapsed).flatMap((section) => section.fields);
     for (const field of fields) {

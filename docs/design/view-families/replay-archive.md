@@ -34,3 +34,9 @@ All Replay/archive states apply except local pending for read-only replay. Requi
 
 Tier behavior: 1920/1440 show timeline, replay surface and evidence; 1280x720/600 collapse evidence while retaining time/source/integrity; 1024x768 stacks timeline and surface; 768x1024 and 390x844 use previous/next event navigation plus evidence sheets. At 200%/320px, replay meaning remains available as structured text without relying on spatial animation.
 
+
+## PS-842 candidate contract
+
+Preserve the existing report/replay/archive authorization and governing Release. Use the shared date/status presentation and named policy targets; technical provenance remains available through a labeled disclosure. No migration or production mutation is authorized by this interface task.
+
+Supported acceptance: 1440x900, 1024x768 and equivalent 200% desktop zoom, explicit light/dark, keyboard, reduced motion, forced colors and named desktop AT. Mobile/touch remains N/A. Current evidence and human gates are in ../../acceptance/PS-842-interface-consistency.md; historical closeout does not establish this candidate's acceptance.

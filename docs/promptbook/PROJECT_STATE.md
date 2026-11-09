@@ -1,5 +1,13 @@
 # Project state
 
+## Landing v12 owner-directed update - 2026-11-09
+
+The public landing now follows `references/plenum-landing-v12.html`: centered wordmark, bundled illustration and serif, scroll-driven chamber story, closing entry and footer. Existing sign-in and `plenum.theme` behavior are retained. A short-height adjustment prevents the reference's scroll cue from overlapping Enter Plenum at desktop zoom. Paired reference captures and focused verification are in `output/playwright/landing-v12/`; the [landing brief](../design/view-families/landing.md) records scope. This supersedes the public landing portion of the PS-842 candidate below; its earlier full-suite results remain historical, and human Chrome/screen reader acceptance remains pending. No commit or deployment.
+
+## PS-842 authorized implementation — 2026-11-09
+
+The Product Owner explicitly answered “Proceed; keep those evidence gates pending” for PS-842 entry with PS-840 human reviews and PS-830 signed-checkpoint evidence outstanding, and “I'm delegating to you” for Checkpoint A decisions (a)–(g). Those decisions and the IC-01–IC-40 ledger are in [PS-842 interface consistency](../acceptance/PS-842-interface-consistency.md). This authorizes implementation, not task acceptance or release approval. Starting clean candidate: `c407ce5a1fc8e62f4b85cea82b3a5d70200ade10`, Node v24.22.1. Implementation and automated verification are complete: interface consistency 92/92 browser tests plus 5 static checks and 7 participant scenarios; accessibility 11/11; product 37/37; golden journeys 2/2; generalization 1 domain plus 2 browser journeys; database boundaries 39/39; unit/contract 155/155; visual 4/4 with 25 captures; final types, lint, build and both audits PASS. The ledger records exact candidate hashes, commands, artifacts and the bounded impact assessment for earlier runs. The user will perform the prepared Chrome and screen reader walkthrough; human PS-842-T05, PS-840 reviews and PS-830 signed checkpoints remain pending, so change-level acceptance and PS-850 approval are blocked. The synthetic review server remains at http://127.0.0.1:4191/__test__/personas. No commit or deployment.
+
 ## PS-840 authorized continuation — 2026-11-09
 
 The Product Owner explicitly authorized proceeding with PS-840 and deferring the two live golden Session signed-checkpoint checks as a PS-830 prerequisite exception. Those checks remain pending, are not PASS, and block final PS-850 release approval. Earlier PS-840 stop notices below are historical; all other implementation and validation work is authorized. The owner's product and desktop AT acceptance remains recorded. Candidate reconciliation and new cross-simulation evidence will be recorded without transferring historical PASS labels.

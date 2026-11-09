@@ -1,3 +1,4 @@
+import { formatDate, displayStatus, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   type CommandEnvelopeV1,
@@ -26,13 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
 
-function displayStatus(value: string): string {
-  return value.replaceAll("_", " ").replace(/^./u, (first) => first.toUpperCase());
-}
 
 type SessionDestinationKey = keyof SessionSummaryV1["urls"];
 
@@ -95,25 +90,7 @@ function routeSelection(): { releaseId?: string; sessionId?: string } {
   return { ...(release === undefined ? {} : { releaseId: release }), ...(session === undefined ? {} : { sessionId: session }) };
 }
 
-function AdministrationNavigation() {
-  const destination = window.location.pathname.split("/").filter(Boolean).at(1) ?? "members";
-  const descriptions: Record<string, { title: string; body: string }> = {
-    members: { title: "Members and Organization Roles", body: "Use the Organization members section on this page to verify current least-privilege assignments." },
-    plugins: { title: "Approved Plugins", body: "Open a Project in Studio to inspect approved Plugin installations and bind them to a governed Release." },
-    deployment: { title: "Deployment posture", body: "Deployment profiles, authority health, backup, and recovery remain governed operational controls." },
-    "data-policy": { title: "Data policy", body: "Classification, retention, export, and research-access policy are applied at trusted server boundaries." }
-  };
-  const selected = descriptions[destination] ?? descriptions.members!;
-  return <section className="card administration-navigation" aria-labelledby="administration-title">
-    <p className="eyebrow">Administration</p><h2 id="administration-title">{selected.title}</h2><p>{selected.body}</p>
-    <nav aria-label="Administration destinations"><ul className="lifecycle-links">
-      <li><a href="/admin/members">Members</a></li><li><a href="/admin/plugins">Plugins</a></li>
-      <li><a href="/admin/deployment">Deployment</a></li><li><a href="/admin/data-policy">Data policy</a></li>
-    </ul></nav>
-  </section>;
-}
-
-export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
+export function LifecyclePortal() {
   const [releases, setReleases] = useState<ReleaseCatalogV1 | null>(null);
   const [sessions, setSessions] = useState<SessionCatalogV1 | null>(null);
   const [selectedRelease, setSelectedRelease] = useState<ReleaseSummaryV1 | null>(null);
@@ -180,7 +157,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
         setState("ready");
         setPartialFailure(null);
         setMessage(nextSessions === null
-          ? `${nextReleases?.releases.length ?? 0} Release${nextReleases?.releases.length === 1 ? "" : "s"} shown. Sessions are not available to your current Organization Role.`
+          ? `${nextReleases?.releases.length ?? 0} Release${nextReleases?.releases.length === 1 ? "" : "s"} shown.`
           : nextReleases === null ? `${nextSessions.sessions.length} Session${nextSessions.sessions.length === 1 ? "" : "s"} shown. Releases are not available to your current Organization Role.`
             : `${nextReleases.releases.length} Release${nextReleases.releases.length === 1 ? "" : "s"} and ${nextSessions.sessions.length} Session${nextSessions.sessions.length === 1 ? "" : "s"} shown.`);
       }
@@ -294,7 +271,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
 
     {selectedRelease === null ? null : <article className="card lifecycle-detail" aria-labelledby="release-detail-title">
       <nav aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/#release-catalog">Releases</a></nav>
-      <div className="card-heading"><h2 id="release-detail-title">{selectedRelease.label}</h2><span className="badge badge-state">Immutable</span></div>
+      <div className="card-heading"><h1 id="release-detail-title">{selectedRelease.label}</h1><span className={statusClass("immutable")}>Immutable</span></div>
       <p>{selectedRelease.project.title} · Release {selectedRelease.releaseNumber}</p>
       <dl className="project-metadata"><div><dt>Published</dt><dd>{formatDate(selectedRelease.publishedAt)}</dd></div>
         <div><dt>Publisher</dt><dd>{selectedRelease.publishedBy.displayName}</dd></div>
@@ -307,7 +284,7 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
     </article>}
     {selectedSession === null ? null : <article className="card lifecycle-detail" aria-labelledby="session-detail-title">
       <nav aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/#session-catalog">Sessions</a></nav>
-      <div className="card-heading"><h2 id="session-detail-title">{selectedSession.title}</h2><span className="badge badge-state">{displayStatus(selectedSession.status)}</span></div>
+      <div className="card-heading"><h1 id="session-detail-title">{selectedSession.title}</h1><span className={statusClass(selectedSession.status)}>{displayStatus(selectedSession.status)}</span></div>
       <p>{selectedSession.project.title} · {selectedSession.governingRelease.label}</p>
       <p>{selectedSession.readiness.complete} of {selectedSession.readiness.total} readiness checks complete. {selectedSession.readiness.blockingIncomplete} blocking check{selectedSession.readiness.blockingIncomplete === 1 ? " remains" : "s remain"}.</p>
       <p>Next step: <strong>{primarySessionAction(selectedSession).label}</strong>.</p>
@@ -366,12 +343,11 @@ export function LifecyclePortal({ isAdmin }: { isAdmin: boolean }) {
           : "No Session matches the current search and status. Your filters are preserved."}</p>
         {sessionQuery.trim() === "" && sessionStatus === "all" ? null : <button className="btn-secondary" type="button" onClick={clearSessionFilters}>Show all Sessions</button>}</div> :
         <ul className="session-list catalog-list">{sessions.sessions.map((session) => <li className="lifecycle-row catalog-row" key={session.id}><div>
-          <div className="card-heading"><h3><a href={session.urls.detail}>{session.title}</a></h3><span className="badge badge-state">{displayStatus(session.status)}</span></div>
+          <div className="card-heading"><h3><a href={session.urls.detail}>{session.title}</a></h3><span className={statusClass(session.status)}>{displayStatus(session.status)}</span></div>
           <dl className="catalog-facts"><div><dt>Project</dt><dd>{session.project.title}</dd></div><div><dt>Release</dt><dd>{session.governingRelease.label}</dd></div>
             <div><dt>Readiness</dt><dd>{session.readiness.complete} of {session.readiness.total}</dd></div><div><dt>Participants</dt><dd>{session.participantCount}</dd></div></dl></div>
           <div className="project-actions catalog-row-actions"><a className="btn-primary link-button catalog-primary-action" href={session.urls[primarySessionAction(session).destination]}>{primarySessionAction(session).label}</a></div>
         </li>)}</ul>}
     </section>}
-    {isAdmin ? <AdministrationNavigation /> : null}
   </section>;
 }

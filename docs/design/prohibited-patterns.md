@@ -18,3 +18,5 @@ Treat every item as a defect. Use this list with the installed Impeccable detect
 - Truncation without a way to obtain the full value.
 - Competing scroll containers, scroll traps or horizontal page scrolling.
 
+PS-842 clarifications: one visible H1 names the current page/object; a workspace menu label must match its destination title. A shared participant concept retains its authored name, icon and relative order across roles. Technical identifiers, enums, digests and MIME types belong only in explicitly labeled technical disclosures, never a primary label or required free-text ID field. Visible navigation must reach every authorized workspace. At 200% desktop zoom, evaluate the 1024x768 minimum as 512x384 CSS pixels; phone screenshots alone do not establish a desktop failure. Automated results never stand in for named human/AT walkthrough evidence.
+

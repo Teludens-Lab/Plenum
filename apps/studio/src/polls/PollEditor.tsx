@@ -38,6 +38,7 @@ export function PollEditor({ core, client }: { core: CoreDesignV1; client: Studi
   const policyOptions = policies.map(({ id, name }) => ({ value: id, label: name }));
 
   return <Workspace id="polls" title="Polls" intro="Define who votes, exactly how ballots count, and who may see the result. Incomplete counting rules block publication.">
+    <details className="technical-details"><summary>Policy provenance</summary><p>OPEN-028: version 1 Poll privacy restriction.</p></details>
     <div className="editor-list" data-contract-id={POLL_DEFINITION_CONTRACT_ID}>{polls.map((poll, index) => {
       const base = ["coreDesign", "polls", index] as const;
       const scopeOptions = poll.scope === "team" ? coreArray(core, "teams") : poll.scope === "stage" ? stages : [];
@@ -49,12 +50,12 @@ export function PollEditor({ core, client }: { core: CoreDesignV1; client: Studi
         ...(poll.tallyMethodVersion.trim() === "" ? ["Tally method version is required."] : []),
         ...(poll.tallyMethod === "voting_method_adapter" && !poll.votingMethodAdapterBindingId ? ["Voting Method Adapter is required."] : []),
         ...((poll.certificationPolicy.certifierSessionRoleIds?.length ?? 0) === 0 && (poll.certificationPolicy.certifierOrganizationRoles?.length ?? 0) === 0 ? ["At least one certifier is required."] : []),
-        ...(poll.secrecy !== "open" ? ["Version 1 production Polls must be explicitly non-secret under resolved OPEN-028."] : []),
+        ...(poll.secrecy !== "open" ? ["Version 1 production Polls must be explicitly non-secret under the version 1 privacy policy."] : []),
         ...(poll.openTrigger.mode === "scheduled" && poll.openTrigger.offsetSeconds === undefined ? ["Scheduled open offset is required."] : []),
         ...(poll.closeTrigger.mode === "scheduled" && poll.closeTrigger.offsetSeconds === undefined ? ["Scheduled close offset is required."] : [])
       ];
       return <details className="editor-item" id={`polls-${poll.id}`} key={poll.id}>
-        <summary><span>{poll.question || "Untitled Poll"}</span><span className="item-id">{poll.id}</span></summary>
+        <summary><span>{poll.question || "Untitled Poll"}</span></summary><details className="technical-details"><summary>Technical reference</summary><code>{poll.id}</code></details>
         <div className="item-body grid-fields">
           <TextField id={`poll-question-${poll.id}`} label="Question" value={poll.question} path={[...base, "question"]} client={client} multiline />
           <SelectField id={`poll-type-${poll.id}`} label="Poll type" value={poll.pollType} options={["single_choice", "multiple_choice", "yes_no_abstain", "opinion"].map((value) => ({ value, label: words(value) }))} path={[...base, "pollType"]} client={client} />
@@ -73,7 +74,7 @@ export function PollEditor({ core, client }: { core: CoreDesignV1; client: Studi
           <div className="rule-sentence"><strong>Result audience preview:</strong> {audience(policies.find(({ id }) => id === poll.resultVisibilityPolicyId), core)}</div>
 
           <SelectField id={`poll-secrecy-${poll.id}`} label="Ballot visibility" value={poll.secrecy} options={["open", "secret_ballot", "anonymous_survey"].map((value) => ({ value, label: words(value) }))} path={[...base, "secrecy"]} client={client} />
-          <p className="rule-sentence"><strong>{poll.secrecy === "secret_ballot" ? "Secret ballot" : poll.secrecy === "anonymous_survey" ? "Anonymous survey" : "Open ballot"}:</strong> {poll.secrecy === "secret_ballot" ? "This configuration is visible for design review, but version 1 production publication is blocked under resolved OPEN-028." : poll.secrecy === "anonymous_survey" ? "Responses are not attributable and therefore cannot enforce one ballot per Seat Assignment. This mode is unavailable." : "Ballots and choices remain attributable to authorized viewers."}</p>
+          <p className="rule-sentence"><strong>{poll.secrecy === "secret_ballot" ? "Secret ballot" : poll.secrecy === "anonymous_survey" ? "Anonymous survey" : "Open ballot"}:</strong> {poll.secrecy === "secret_ballot" ? "This configuration is visible for design review, but version 1 production publication is blocked under the version 1 privacy policy." : poll.secrecy === "anonymous_survey" ? "Responses are not attributable and therefore cannot enforce one ballot per Seat Assignment. This mode is unavailable." : "Ballots and choices remain attributable to authorized viewers."}</p>
           <label className="choice" htmlFor={`poll-revote-${poll.id}`}><input id={`poll-revote-${poll.id}`} type="checkbox" checked={poll.allowRevote} onChange={(event) => client.transact(() => {
             client.setAtPath([...base, "allowRevote"], event.target.checked);
             if (event.target.checked) client.setAtPath([...base, "finalBallotRule"], "latest_accepted"); else client.deleteAtPath([...base, "finalBallotRule"]);

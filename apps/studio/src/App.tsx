@@ -1,3 +1,4 @@
+import { formatDate, displayStatus, authorityLabel } from "../../../packages/design-system/src/presentation.mjs";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { ProductShellContextV1, PublicationReviewV1, SimulationTemplateSummaryV1, StudioPublishV1, TemplateLibraryV1 } from "@plenum/event-contracts";
 
@@ -75,18 +76,23 @@ function ThemeToggle() {
     document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("plenum.theme", theme); } catch { /* The document theme still applies when storage is unavailable. */ }
     const synchronizeTheme = (event: StorageEvent) => {
-      if (event.key === "plenum.theme") setTheme(event.newValue === "dark" ? "dark" : "light");
+      if (event.key === "plenum.theme") setTheme(event.newValue === "dark" || event.newValue === "light" ? event.newValue : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    };
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const followSystem = () => {
+      try { if (["light", "dark"].includes(localStorage.getItem("plenum.theme") ?? "")) return; } catch { /* Follow the system when storage is unavailable. */ }
+      setTheme(preference.matches ? "dark" : "light");
     };
     window.addEventListener("storage", synchronizeTheme);
-    return () => window.removeEventListener("storage", synchronizeTheme);
+    preference.addEventListener("change", followSystem);
+    return () => { window.removeEventListener("storage", synchronizeTheme); preference.removeEventListener("change", followSystem); };
   }, [theme]);
   const nextTheme = theme === "light" ? "dark" : "light";
   return <button className="btn-secondary theme-toggle" type="button"
     aria-label={`Theme: ${theme}. Use ${nextTheme} theme`} title={`Use ${nextTheme} theme`}
-    onClick={() => setTheme(nextTheme)}>
-    {theme === "light" ? <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    onClick={() => { setTheme(nextTheme); try { localStorage.setItem("plenum.theme", nextTheme); } catch { /* The document theme still applies. */ } }}>
+    <span className="theme-label">Theme</span>{theme === "light" ? <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
     </svg> : <svg className="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z" />
@@ -280,7 +286,7 @@ export function App() {
         headers: { "content-type": "application/json" }, body: JSON.stringify({ rationale: templateLifecycleRationale }) });
       const body = await response.json() as { lifecycleStatus?: string; error?: { message?: string } };
       if (!response.ok || body.lifecycleStatus === undefined) throw new Error(body.error?.message ?? "Template lifecycle change failed.");
-      setPublishMessage(`Template history now records ${body.lifecycleStatus}.`);
+      setPublishMessage(`Template history now records ${displayStatus(body.lifecycleStatus)}.`);
       setTemplateLifecycleRationale(""); await loadReviewWorkspace();
     } catch (error) { setPublishMessage(error instanceof Error ? error.message : "Template lifecycle change failed."); }
     finally { setTemplatePublishing(false); }
@@ -289,10 +295,10 @@ export function App() {
   if (projectId === null || client === null) return <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="app-header studio-app-header"><BrandWordmark />
-      <div className="product-header-context" aria-label="Current workspace context"><h1 className="product-header-title">Studio</h1></div>
+      <div className="product-header-context" aria-label="Current workspace context"><span className="product-header-title">Studio</span></div>
       <div className="header-actions product-header-actions"><ThemeToggle /></div>
     </header>
-    <main id="main-content" className="state-page" tabIndex={-1}><section className="card state-card teludens-state">
+    <main id="main-content" className="state-page" tabIndex={-1}><section className="workspace-section state-card teludens-state">
       <h1>No Project selected</h1>
       <p>Open a saved Project link to continue editing, or return home to choose another Plenum workspace.</p>
       <a className="btn-primary link-button" href="/">Return to Plenum home</a>
@@ -300,9 +306,9 @@ export function App() {
   </>;
   const valid = state.validation?.valid === true;
   const materialization = client.materialization();
-  const coreDesignTitle = materialization.coreDesign?.identity?.title?.trim() || materialization.scenario?.name?.trim() || "Untitled Core Design";
+  const coreDesignTitle = materialization.coreDesign === undefined ? "Loading Core Design" : materialization.coreDesign.identity?.title?.trim() || materialization.scenario?.name?.trim() || "Untitled Core Design";
   const organizationName = productContext?.organization.name ?? "Projects";
-  const accountRole = friendlyReference(productContext?.organization.roles[0] ?? "", "Designer");
+  const accountRole = authorityLabel(productContext?.organization.roles ?? [], productContext?.platformRoles ?? []);
   const validationLabel = state.validation === null ? "Checking" : valid ? "Ready for review" :
     `${state.validation.issues.length} issue${state.validation.issues.length === 1 ? "" : "s"}`;
   const validationPanel = <section id="validation" className="card validation-inspector" aria-labelledby="validation-title">
@@ -320,12 +326,12 @@ export function App() {
     <p className="hint">Draft generation {state.generation}</p>
   </section>;
   const reviewPublishWorkspace = <section id="review-publish" className="card publish-card" aria-labelledby="publish-title">
-    <h2 id="publish-title" tabIndex={-1}>Review and publish</h2>
+    <h2 id="publish-title" tabIndex={-1}>{editorSectionLabel("review-publish")}</h2>
     <p className="hint">A Publisher freezes the exact synchronized state, a Reviewer approves that freeze, and a Publisher publishes it. Later edits remain in the next Draft.</p>
     <button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canFreeze || !state.connected || !valid || state.unsynchronizedChanges > 0 || reviewing} onClick={() => void freezeForReview()}>{reviewing ? "Working…" : "Freeze for review"}</button>
     {reviewWorkspace?.freeze === null || reviewWorkspace === null ? <p>No frozen revision is awaiting review.</p> : <div className="freeze-summary">
       <p><strong>Frozen revision ready for review</strong></p>
-      <p>Frozen {new Date(reviewWorkspace.freeze.frozenAt).toLocaleString()} by {reviewWorkspace.freeze.frozenBy.displayName}.</p>
+      <p>Frozen {formatDate(reviewWorkspace.freeze.frozenAt)} by {reviewWorkspace.freeze.frozenBy.displayName}.</p>
       <p>{reviewWorkspace.approvals.length} current approval{reviewWorkspace.approvals.length === 1 ? "" : "s"}.</p>
       {reviewWorkspace.approvals.map((approval) => <p key={approval.reviewerPersonId}>Approved by {approval.reviewerDisplayName}: {approval.rationale}</p>)}
       <details className="technical-details"><summary>Technical provenance</summary><dl>
@@ -359,14 +365,14 @@ export function App() {
       <p className="hint">Publish the same approved frozen revision as an immutable Organization Template. Supersession preserves the earlier version and its history.</p>
       <div className="field"><label htmlFor="template-name">Template title</label><input id="template-name" name="templateTitle" required maxLength={200} /></div>
       <div className="field"><label htmlFor="template-summary">Summary</label><textarea id="template-summary" name="templateSummary" maxLength={1000} rows={3} /></div>
-      <div className="field"><label htmlFor="template-supersedes">Supersedes (optional)</label><select id="template-supersedes" name="supersedesTemplateId"><option value="">New Template line</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {template.lifecycleStatus}</option>)}</select></div>
+      <div className="field"><label htmlFor="template-supersedes">Supersedes (optional)</label><select id="template-supersedes" name="supersedesTemplateId"><option value="">New Template line</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {displayStatus(template.lifecycleStatus)}</option>)}</select></div>
       <label className="choice"><input type="checkbox" name="includeScenario" />Include the optional Scenario</label>
       <div className="field"><label htmlFor="template-rationale">Publication rationale</label><textarea id="template-rationale" name="templateRationale" required rows={3} /></div>
       <button className="btn-primary" type="submit" disabled={!reviewWorkspace?.permissions.canPublish || (reviewWorkspace?.approvals.length ?? 0) === 0 || templatePublishing}>{templatePublishing ? "Publishing…" : "Publish immutable Template version"}</button>
     </form>
     <section aria-labelledby="template-history-title"><h3 id="template-history-title">Template lifecycle history</h3>
-      {templates.length === 0 ? <p>No published Templates are available.</p> : <><div className="field"><label htmlFor="template-lifecycle-choice">Template version</label><select id="template-lifecycle-choice" value={templateLifecycleId} onChange={(event) => setTemplateLifecycleId(event.target.value)}>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {template.lifecycleStatus}</option>)}</select></div>
-        {templates.filter(({ id }) => id === templateLifecycleId).map((template) => <details key={template.id}><summary>Attributable history</summary><ol>{template.lifecycleHistory.length === 0 ? <li>Published before lifecycle attribution was introduced.</li> : template.lifecycleHistory.map((item) => <li key={`${item.eventType}-${item.occurredAt}`}>{item.eventType} by {item.actorDisplayName} on {new Date(item.occurredAt).toLocaleString()}: {item.rationale}</li>)}</ol></details>)}
+      {templates.length === 0 ? <p>No published Templates are available.</p> : <><div className="field"><label htmlFor="template-lifecycle-choice">Template version</label><select id="template-lifecycle-choice" value={templateLifecycleId} onChange={(event) => setTemplateLifecycleId(event.target.value)}>{templates.map((template) => <option key={template.id} value={template.id}>{template.title} v{template.version} · {displayStatus(template.lifecycleStatus)}</option>)}</select></div>
+        {templates.filter(({ id }) => id === templateLifecycleId).map((template) => <details key={template.id}><summary>Attributable history</summary><ol>{template.lifecycleHistory.length === 0 ? <li>Published before lifecycle attribution was introduced.</li> : template.lifecycleHistory.map((item) => <li key={`${item.eventType}-${item.occurredAt}`}>{item.eventType} by {item.actorDisplayName} on {formatDate(item.occurredAt)}: {item.rationale}</li>)}</ol></details>)}
         <div className="field"><label htmlFor="template-lifecycle-rationale">Lifecycle rationale</label><textarea id="template-lifecycle-rationale" rows={3} value={templateLifecycleRationale} onChange={(event) => setTemplateLifecycleRationale(event.target.value)} /></div>
         <div className="item-actions"><button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canPublish || templatePublishing || templateLifecycleRationale.trim() === ""} onClick={() => void changeTemplateLifecycle("deprecate")}>Record deprecation</button><button className="btn-secondary" type="button" disabled={!reviewWorkspace?.permissions.canPublish || templatePublishing || templateLifecycleRationale.trim() === ""} onClick={() => void changeTemplateLifecycle("archive")}>Record archival</button></div></>}
     </section>

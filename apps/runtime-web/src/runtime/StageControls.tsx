@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { JsonObject, RuntimeModuleV1 } from "@plenum/event-contracts";
+import { extensionSeconds } from "./timer-extension.js";
 
 export function StageControls({ module, disabled, send }: {
   module: RuntimeModuleV1; disabled: boolean;
@@ -7,6 +8,7 @@ export function StageControls({ module, disabled, send }: {
 }) {
   const control = module.configuration.stageControl;
   const [choice, setChoice] = useState("");
+  const [error, setError] = useState("");
   if (control === null || typeof control !== "object" || Array.isArray(control) || !Array.isArray(control.actions)) return null;
   const actions = control.actions.filter((action): action is JsonObject => action !== null && typeof action === "object" && !Array.isArray(action));
   const selected = actions.find((action) => action.id === choice);
@@ -14,12 +16,16 @@ export function StageControls({ module, disabled, send }: {
     event.preventDefault();
     if (selected === undefined || typeof selected.operation !== "string" || typeof control.version !== "number") return;
     const data = new FormData(event.currentTarget);
+    setError("");
+    let seconds: number | undefined;
+    try { if (selected.operation === "stage.extend") seconds = extensionSeconds(String(data.get("minutes"))); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Check the additional minutes."); return; }
     send(selected.operation, control.version, { reason: String(data.get("reason")),
       ...(typeof selected.targetStageId === "string" ? { targetStageId: selected.targetStageId } : {}),
-      ...(selected.operation === "stage.extend" ? { seconds: Number(data.get("minutes")) * 60 } : {}) });
+      ...(seconds === undefined ? {} : { seconds }) });
   };
   return <form className="runtime-stage-controls" onSubmit={submit}>
-    <h3>Move and timer control</h3>
+    <h3>Stage and timer control</h3>
     <p className="hint">Changes are checked against the current stage and its completion requirements.</p>
     <div className="field"><label htmlFor="participant-stage-action">Action</label>
       <select id="participant-stage-action" value={selected === undefined ? "" : choice} required disabled={disabled} onChange={(event) => setChoice(event.target.value)}>
@@ -29,6 +35,7 @@ export function StageControls({ module, disabled, send }: {
       <input id="participant-stage-minutes" name="minutes" type="number" min="1" step="1" defaultValue="5" required disabled={disabled} /></div> : null}
     <div className="field"><label htmlFor="participant-stage-reason">Reason for this change</label>
       <textarea id="participant-stage-reason" name="reason" required minLength={3} maxLength={500} disabled={disabled} /></div>
-    <button className="btn-primary" type="submit" disabled={disabled || selected === undefined}>Apply control</button>
+    {error ? <p role="alert">{error}</p> : null}
+    <button className="btn-primary" type="submit" disabled={disabled || selected === undefined}>Apply Stage control</button>
   </form>;
 }

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { stageControlPresentation } from '../../apps/server/dist/runtime/stage-control-presentation.js';
 import { validateRuntimeFormPayload } from '../../packages/simulation-schema/dist/index.js';
-const core=JSON.parse(fs.readFileSync(new URL('../../definitions/fractured-order/fractured-order-release-source.json',import.meta.url),'utf8')).materialization.coreDesign;
+const core=JSON.parse(fs.readFileSync(new URL('../../definitions/fractured-order/fractured-order-interface-release-source.json',import.meta.url),'utf8')).materialization.coreDesign;
 const controls={allowStart:true,allowEnd:true,allowReopen:true,allowExtend:true,allowSkip:false,allowReturnToPrevious:true};
 const stages=[{id:'previous',label:'Previous move',transitions:[{targetStageId:'current'}]},{id:'current',label:'Current move'},{id:'next',label:'Next move'}];
 const stage={id:'current',operatorControls:controls,transitions:[{targetStageId:'next',mode:'manual'}]};

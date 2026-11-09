@@ -54,7 +54,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
         })
         : client.setAtPath(["scenario", "initialState", initialIndex, "value"], value);
       return <details className="editor-item" key={variable.id}>
-      <summary><span>{variable.name}</span><span className="item-id">{variable.id}</span></summary>
+      <summary><span>{variable.name}</span></summary><details className="technical-details"><summary>Technical reference</summary><code>{variable.id}</code></details>
       <div className="item-body grid-fields">
         <Field label="Name"><input value={variable.name} onChange={(event) => client.setAtPath(["coreDesign", "stateVariables", index, "name"], event.target.value)} /></Field>
         <Field label="Description"><textarea rows={3} value={variable.description ?? ""} onChange={(event) => client.setAtPath(["coreDesign", "stateVariables", index, "description"], event.target.value)} /></Field>
@@ -193,7 +193,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
       });
     }}>Add Resource</button>
 
-    <h3>Stage completion Gates</h3>
+    <details className="editor-category"><summary>Stage completion Gates</summary>
     {core.stages?.map((stage, stageIndex) => {
       const condition = stage.completionGate?.conditions[0];
       const simple = condition !== undefined && !("conditions" in condition) ? condition : undefined;
@@ -212,7 +212,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
       </fieldset>;
     })}
 
-    <h3>Conditional Stage transitions</h3>
+    </details><details className="editor-category"><summary>Conditional Stage transitions</summary>
     {core.stages?.flatMap((stage, stageIndex) => stage.transitions.map((transition, transitionIndex) => {
       const condition = transition.gate?.conditions[0];
       const simple = condition !== undefined && !("conditions" in condition) ? condition : undefined;
@@ -231,7 +231,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
       </fieldset>;
     }))}
 
-    <h3>Conditional Workflow transitions</h3>
+    </details><details className="editor-category"><summary>Conditional Workflow transitions</summary>
     {(core.workflows ?? []).flatMap((workflow, workflowIndex) => workflow.transitions.map((transition, transitionIndex) => {
       const condition = transition.gate?.conditions[0];
       const simple = condition !== undefined && !("conditions" in condition) ? condition : undefined;
@@ -251,7 +251,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
       </fieldset>;
     }))}
 
-    <h3>Conditional Injects and effects</h3>
+    </details><h3>Conditional Injects and effects</h3>
     {(scenario.injects ?? []).map((inject, injectIndex) => <details className="editor-item" key={inject.id}><summary>{inject.title}</summary>
       <div className="item-body">
         <label className="choice"><input type="checkbox" checked={inject.releaseMode === "gate"} disabled={numericVariables.length === 0}

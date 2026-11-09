@@ -1174,13 +1174,15 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "POST" && url.pathname === "/v1/plugins/licenses") {
         const body = await readBody(request, correlationId);
-        if (Object.keys(body).some((field) => !["pluginId", "license", "termsDigest"].includes(field)) ||
+        if (Object.keys(body).some((field) => !["pluginId", "artifactId", "license", "termsDigest"].includes(field)) ||
+            (body.artifactId !== undefined && typeof body.artifactId !== "string") ||
             ![body.pluginId, body.license, body.termsDigest].every((value) => typeof value === "string")) {
           throw authorizationError("VALIDATION_FAILED", "The Plugin license acceptance is invalid.", correlationId);
         }
         const acceptanceId = randomUUID();
         await acceptPluginLicense(options.pool, principal, {
           acceptanceId, pluginId: body.pluginId as string,
+          ...(body.artifactId === undefined ? {} : { artifactId: body.artifactId as string }),
           license: body.license as string, termsDigest: body.termsDigest as string, correlationId
         });
         send(response, 201, { accepted: true, acceptanceId });

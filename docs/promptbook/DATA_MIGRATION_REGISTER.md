@@ -1,5 +1,7 @@
 # Data migration register
 
+PS-842 requires no database migration or backfill. Named selection projections and transactional target validation use existing tables. Corrected interface configuration is published as new immutable 1.0.1 Releases; no historical Release, Package or Session pin is rewritten. Local test databases are disposable synthetic resources, recorded in the [PS-842 evidence ledger](../acceptance/PS-842-interface-consistency.md). Recovery is a bounded code revert and continued use of earlier Releases, not a data rollback.
+
 IDs are planned and unique in `tasks.json`. Exact SQL filenames are assigned by the owning implementation task after inspecting the live migration sequence.
 
 PS-830 checkpoint B requires no SQL migration. The optional `methodologyContractId` lives in the existing versioned Draft/Core Design JSON. Publication retains the authored freeze and stores the compiler's execution snapshot in the new Definition Revision. Historical rows and Releases are not rewritten. Compiler `0.2.0` is required for the new contract; stop new publication and forward-fix after use rather than reinterpret those Releases with an older compiler.

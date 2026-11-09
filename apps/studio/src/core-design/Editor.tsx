@@ -1,3 +1,4 @@
+import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { Children, isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import { SectionIcon } from "./SectionIcon.js";
 import { FormExpressionEditor } from "./FormExpressionEditor.js";
@@ -142,7 +143,7 @@ function workspaceCards(children: React.ReactNode): React.ReactNode[] {
 export function Workspace({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
   return <section id={id} className="editor-workspace" aria-labelledby={`${id}-title`}><div className="workspace-heading">
     <span className="workspace-icon"><SectionIcon id={id} /></span>
-    <div><h2 id={`${id}-title`} tabIndex={-1}>{title}</h2><p>{intro}</p></div></div>{workspaceCards(children)}</section>;
+    <div><h2 id={`${id}-title`} tabIndex={-1}>{isEditorSectionId(id) ? editorSectionLabel(id) : title}</h2><p>{intro}</p></div></div>{workspaceCards(children)}</section>;
 }
 
 export function AddButton({ label, onClick, disabled = false }: { label: string; onClick(): void; disabled?: boolean }) {
@@ -236,7 +237,7 @@ function TeamEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
             options={teams.filter(({ id }) => id !== team.id).map(({ id, name }) => ({ value: id, label: name }))}
             path={["coreDesign", "teams", index, "relationships", relationshipIndex, "targetTeamId"]} client={client} />
           <SelectField id={`team-relationship-kind-${relationship.id}`} label="Relationship" value={relationship.kind}
-            options={["allied", "neutral", "opposed", "custom"].map((value) => ({ value, label: value }))}
+            options={["allied", "neutral", "opposed", "custom"].map((value) => ({ value, label: displayStatus(value) }))}
             path={["coreDesign", "teams", index, "relationships", relationshipIndex, "kind"]} client={client} />
           <TextField id={`team-relationship-description-${relationship.id}`} label="Description" value={relationship.description ?? ""}
             path={["coreDesign", "teams", index, "relationships", relationshipIndex, "description"]} client={client} />
@@ -261,7 +262,7 @@ function RoleEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
   const stages = coreArray(core, "stages");
   return <Workspace id="roles" title="Session Roles" intro="Assign responsibilities, capabilities, clearance, eligible Teams, Stages, and Interface Profiles. Organization Roles are configured elsewhere.">
     <div className="editor-list">{roles.map((role, index) => <details className="editor-item" id={`sessionRoles-${role.id}`} key={role.id}>
-      <summary><span>{role.name || "Untitled Session Role"}</span><span className="item-id">{role.id}</span></summary><div className="item-body">
+      <summary><span>{role.name || "Untitled Session Role"}</span></summary><div className="item-body"><details className="technical-details"><summary>Technical reference</summary><code>{role.id}</code></details>
         <TextField id={`role-name-${role.id}`} label="Session Role name" value={role.name} path={["coreDesign", "sessionRoles", index, "name"]} client={client} />
         <TextField id={`role-description-${role.id}`} label="Description" value={role.description ?? ""} path={["coreDesign", "sessionRoles", index, "description"]} client={client} multiline />
         <TextField id={`role-responsibilities-${role.id}`} label="Responsibilities (comma separated)" value={(role.responsibilities ?? []).join(", ")} path={["coreDesign", "sessionRoles", index, "responsibilities"]} client={client} transform={(value) => value.split(",").map((item) => item.trim()).filter(Boolean)} />
@@ -283,7 +284,7 @@ function SeatEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
   const teams = coreArray(core, "teams");
   return <Workspace id="seats" title="Seats" intro="Bind Participants to Session Roles and optional Teams with explicit occupancy bounds.">
     <div className="editor-list">{seats.map((seat, index) => <details className="editor-item" id={`seats-${seat.id}`} key={seat.id}>
-      <summary><span>{seat.name || "Untitled Seat"}</span><span className="item-id">{seat.id}</span></summary><div className="item-body grid-fields">
+      <summary><span>{seat.name || "Untitled Seat"}</span></summary><details className="technical-details"><summary>Technical reference</summary><code>{seat.id}</code></details><div className="item-body grid-fields">
         <TextField id={`seat-name-${seat.id}`} label="Seat name" value={seat.name} path={["coreDesign", "seats", index, "name"]} client={client} />
         <SelectField id={`seat-team-${seat.id}`} label="Team" value={seat.teamId ?? ""} options={[{ value: "", label: "No Team" }, ...teams.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "seats", index, "teamId"]} client={client} emptyDeletes />
         <TextField id={`seat-min-${seat.id}`} label="Minimum occupancy" value={seat.minOccupancy} path={["coreDesign", "seats", index, "minOccupancy"]} client={client} type="number" />
@@ -355,7 +356,7 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
     </div></details>)}</div>
     <AddButton label="Add Stage Group" onClick={() => client.appendAtPath(["coreDesign", "stageGroups"], { id: identifier(), name: "New Stage Group", stageType: "group", order: groups.length })} />
     <h3>Sequential timeline</h3><ol className="timeline">{stages.map((stage, index) => <li key={stage.id}><details className="editor-item" id={`stages-${stage.id}`}>
-      <summary><span>{stage.name}</span><span className="badge badge-muted">{stage.stageType}</span></summary><div className="item-body grid-fields">
+      <summary><span>{stage.name}</span><span className="badge badge-muted">{displayStatus(stage.stageType)}</span></summary><div className="item-body grid-fields">
         <TextField id={`stage-name-${stage.id}`} label="Stage name" value={stage.name} path={["coreDesign", "stages", index, "name"]} client={client} />
         <TextField id={`stage-type-${stage.id}`} label="Stage Type" value={stage.stageType} path={["coreDesign", "stages", index, "stageType"]} client={client} />
         <TextField id={`stage-instructions-${stage.id}`} label="Stage instructions" value={stage.instructions ?? ""} path={["coreDesign", "stages", index, "instructions"]} client={client} multiline />
@@ -439,11 +440,11 @@ function FormsEditor({ projectId, core, client }: { projectId: string; core: Cor
       });
     });
   };
-  return <Workspace id="forms" title="Forms & Artifact Types" intro="One Artifact Type definition owns its Form, workflow, Information Policy, and export behavior. Field support is bounded by OPEN-010.">
+  return <Workspace id="forms" title="Forms & Artifact Types" intro="One Artifact Type definition owns its Form, workflow, Information Policy, and export behavior. Supported fields include text, choices, numbers, dates and references.">
     <div className="editor-list">{forms.map((form, formIndex) => {
       const artifact = artifacts.find((item) => item.formId === form.id);
       const artifactIndex = artifacts.findIndex((item) => item.id === artifact?.id);
-      return <details className="editor-item" id={`forms-${form.id}`} key={form.id}><summary><span>{artifact?.name ?? form.name}</span><span className="item-id">{form.id}</span></summary><div className="item-body">
+      return <details className="editor-item" id={`forms-${form.id}`} key={form.id}><summary><span>{artifact?.name ?? form.name}</span></summary><div className="item-body"><details className="technical-details"><summary>Technical reference</summary><code>{form.id}</code></details>
         <TextField id={`form-name-${form.id}`} label="Form name" value={form.name} path={["coreDesign", "forms", formIndex, "name"]} client={client} />
         <TextField id={`form-version-${form.id}`} label="Form version" value={form.formVersion} path={["coreDesign", "forms", formIndex, "formVersion"]} client={client} />
         <FormInterchange form={form} apply={(candidate) => client.setAtPath(["coreDesign", "forms", formIndex], candidate)} />
@@ -456,7 +457,7 @@ function FormsEditor({ projectId, core, client }: { projectId: string; core: Cor
         {artifact === undefined ? <p className="status-error">This Form is not linked to an Artifact Type.</p> : <div className="grid-fields">
           <TextField id={`artifact-name-${artifact.id}`} label="Artifact Type name" value={artifact.name} path={["coreDesign", "artifactTypes", artifactIndex, "name"]} client={client} />
           <TextField id={`artifact-key-${artifact.id}`} label="Stable key" value={artifact.key} path={["coreDesign", "artifactTypes", artifactIndex, "key"]} client={client} />
-          <SelectField id={`artifact-owner-${artifact.id}`} label="Ownership" value={artifact.ownership} options={["individual", "team", "session"].map((value) => ({ value, label: value }))} path={["coreDesign", "artifactTypes", artifactIndex, "ownership"]} client={client} />
+          <SelectField id={`artifact-owner-${artifact.id}`} label="Ownership" value={artifact.ownership} options={["individual", "team", "session"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "artifactTypes", artifactIndex, "ownership"]} client={client} />
           <SelectField id={`artifact-workflow-${artifact.id}`} label="Workflow" value={artifact.workflowId} options={workflows.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "workflowId"]} client={client} />
           <SelectField id={`artifact-policy-${artifact.id}`} label="Information Policy" value={artifact.informationPolicyId} options={policies.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "informationPolicyId"]} client={client} />
           <MultiCheck legend="Creator Session Roles" values={artifact.allowedCreatorSessionRoleIds} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "allowedCreatorSessionRoleIds"]} client={client} />
@@ -497,7 +498,7 @@ function FormsEditor({ projectId, core, client }: { projectId: string; core: Cor
               groups={section.repeatable ? [] : form.sections.filter((item) => item.repeatable)} /> : null}
             <TextField id={`field-help-${form.id}-${field.id}`} label="Help text" value={field.helpText ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "helpText"]} client={client} emptyDeletes />
             <TextField id={`field-reporting-${form.id}-${field.id}`} label="Reporting label" value={field.reportingLabel ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "reportingLabel"]} client={client} emptyDeletes />
-            <SelectField id={`field-classification-${form.id}-${field.id}`} label="Data classification" value={field.dataClassification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "dataClassification"]} client={client} />
+            <SelectField id={`field-classification-${form.id}-${field.id}`} label="Data classification" value={field.dataClassification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "dataClassification"]} client={client} />
             <TextField id={`field-default-${form.id}-${field.id}`} label="Default value" value={typeof field.defaultValue === "string" || typeof field.defaultValue === "number" ? field.defaultValue : ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "defaultValue"]} client={client} emptyDeletes />
             {(field.type === "single_select" || field.type === "multi_select") && <TextField id={`field-options-${form.id}-${field.id}`} label="Choices (value: label, comma separated)" value={(field.options ?? []).map(({ value, label }) => `${value}: ${label}`).join(", ")} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "options"]} client={client} transform={(value) => value.split(",").map((choice) => choice.trim()).filter(Boolean).map((choice) => { const [optionValue, ...label] = choice.split(":"); return { value: optionValue?.trim() ?? "", label: label.join(":").trim() || optionValue?.trim() || "" }; })} />}
             <TextField id={`field-min-${form.id}-${field.id}`} label={numericField(field.type) ? "Minimum value" : "Minimum length"} value={numericField(field.type) ? field.validation?.min ?? "" : field.validation?.minLength ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "validation", numericField(field.type) ? "min" : "minLength"]} client={client} type="number" emptyDeletes />
@@ -538,7 +539,7 @@ function WorkflowEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
       <ol className="workflow-list">{workflow.states.map((state, stateIndex) => <li key={state.key}><div className="field-row">
         <TextField id={`workflow-state-key-${workflow.id}-${stateIndex}`} label="State key" value={state.key} path={["coreDesign", "workflows", index, "states", stateIndex, "key"]} client={client} />
         <TextField id={`workflow-state-${workflow.id}-${stateIndex}`} label="State label" value={state.label} path={["coreDesign", "workflows", index, "states", stateIndex, "label"]} client={client} />
-        <SelectField id={`workflow-kind-${workflow.id}-${stateIndex}`} label="State kind" value={state.kind} options={["draft", "task", "review", "approval", "wait", "terminal", "cancelled"].map((value) => ({ value, label: value }))} path={["coreDesign", "workflows", index, "states", stateIndex, "kind"]} client={client} />
+        <SelectField id={`workflow-kind-${workflow.id}-${stateIndex}`} label="State kind" value={state.kind} options={["draft", "task", "review", "approval", "wait", "terminal", "cancelled"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "workflows", index, "states", stateIndex, "kind"]} client={client} />
         {state.kind === "task" || state.kind === "review" || state.kind === "approval" ? <MultiCheck legend="Holder Session Roles" values={state.holderSessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "workflows", index, "states", stateIndex, "holderSessionRoleIds"]} client={client} /> : null}
         {state.kind === "approval" && <div className="field"><label htmlFor={`workflow-quorum-${workflow.id}-${stateIndex}`}>Approval rule</label>
           <select id={`workflow-quorum-${workflow.id}-${stateIndex}`} value={state.quorum?.rule ?? ""} onChange={(event) => event.target.value === ""
@@ -580,8 +581,8 @@ function WorkflowEditor({ core, client }: { core: CoreDesignV1; client: StudioCo
       <section className="workflow-preview" aria-label={`${workflow.name} workflow preview`}><h3>Guarded workflow preview</h3><ol>{workflow.transitions.map((transition) => <li key={transition.id}><strong>{transition.from === null ? "Start" : workflow.states.find(({ key }) => key === transition.from)?.label ?? transition.from}</strong> → {transition.label ?? transition.command} → <strong>{workflow.states.find(({ key }) => key === transition.to)?.label ?? transition.to}</strong></li>)}</ol></section>
     </div></details>)}</div>
     <div className="item-actions"><AddButton label="Add simple review Workflow" disabled={roles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "workflows"], basicWorkflow("New review Workflow", roles[0]?.id))} />
-      <AddButton label="Add DEC-42 reference Workflow" disabled={roles.length < 3} onClick={() => client.appendAtPath(["coreDesign", "workflows"], dec42Workflow(roles.slice(0, 3).map(({ id }) => id)))} /></div>
-    {roles.length < 3 && <p className="hint">Add at least three Session Roles before using the DEC-42 reference template.</p>}
+      <AddButton label="Add review Workflow" disabled={roles.length < 3} onClick={() => client.appendAtPath(["coreDesign", "workflows"], dec42Workflow(roles.slice(0, 3).map(({ id }) => id)))} /></div>
+    {roles.length < 3 && <p className="hint">Add at least three Session Roles before using the review Workflow template.</p>}
   </Workspace>;
 }
 
@@ -592,7 +593,7 @@ function PolicyEditor({ core, client }: { core: CoreDesignV1; client: StudioColl
   return <Workspace id="policies" title="Information Policy" intro="New policies start denied. Add only the audiences that should receive the record; leakage blocks Publication.">
     <div className="editor-list">{policies.map((policy, index) => <details className="editor-item" id={`informationPolicies-${policy.id}`} key={policy.id}><summary><span>{policy.name}</span><span className={`badge ${policy.grants.length === 0 ? "badge-error" : "badge-online"}`}>{policy.grants.length === 0 ? "Deny all" : `${policy.grants.length} grant${policy.grants.length === 1 ? "" : "s"}`}</span></summary><div className="item-body">
       <TextField id={`policy-name-${policy.id}`} label="Policy name" value={policy.name} path={["coreDesign", "informationPolicies", index, "name"]} client={client} />
-      <SelectField id={`policy-class-${policy.id}`} label="Classification" value={policy.classification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "informationPolicies", index, "classification"]} client={client} />
+      <SelectField id={`policy-class-${policy.id}`} label="Classification" value={policy.classification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "informationPolicies", index, "classification"]} client={client} />
       {policy.grants.map((grant, grantIndex) => <fieldset className="nested-editor" key={`${policy.id}-${grantIndex}`}><legend>Allowed audience {grantIndex + 1}</legend>
         <MultiCheck legend="Session Roles" values={grant.audience.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "informationPolicies", index, "grants", grantIndex, "audience", "sessionRoleIds"]} client={client} />
         <MultiCheck legend="Teams" values={grant.audience.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "informationPolicies", index, "grants", grantIndex, "audience", "teamIds"]} client={client} />
@@ -623,7 +624,7 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
     return `${sender} may send through ${channels.find(({ id }) => id === route.channelId)?.name ?? "missing Channel"} to ${recipient}`;
   };
   return <Workspace id="communications" title="Communications" intro="Define governed Message Channels and plain-language Routes. Every Route is checked against its Information Policy before Publication and at Runtime.">
-    <h3>Message Channels</h3><div className="editor-list">{channels.map((channel, index) => <details className="editor-item" id={`messageChannels-${channel.id}`} key={channel.id}><summary><span>{channel.name}</span><span className="badge badge-muted">{channel.type.replaceAll("_", " ")}</span></summary><div className="item-body grid-fields">
+    <details className="editor-category"><summary>Message Channels</summary><div className="editor-list">{channels.map((channel, index) => <details className="editor-item" id={`messageChannels-${channel.id}`} key={channel.id}><summary><span>{channel.name}</span><span className="badge badge-muted">{channel.type.replaceAll("_", " ")}</span></summary><div className="item-body grid-fields">
       <TextField id={`channel-name-${channel.id}`} label="Channel name" value={channel.name} path={["coreDesign", "communications", "messageChannels", index, "name"]} client={client} />
       <SelectField id={`channel-type-${channel.id}`} label="Channel type" value={channel.type} options={["direct", "team_message", "broadcast", "request_for_information", "proposal_thread"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "communications", "messageChannels", index, "type"]} client={client} />
       <SelectField id={`channel-policy-${channel.id}`} label="Information Policy" value={channel.informationPolicyId ?? ""} options={policies.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "messageChannels", index, "informationPolicyId"]} client={client} />
@@ -637,7 +638,7 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
       <ItemActions path={["coreDesign", "communications", "messageChannels"]} index={index} count={channels.length} client={client} label={channel.name} />
     </div></details>)}</div>
     <AddButton label="Add Message Channel" disabled={policies.length === 0} onClick={() => client.appendAtPath(["coreDesign", "communications", "messageChannels"], { id: identifier(), name: "New Message Channel", type: "direct", supportsAttachments: false, supportsThreading: true, informationPolicyId: policies[0]?.id, approvalRequired: false, exportable: true, activeStageIds: [] })} />
-    <h3>Communication Routes</h3><div className="editor-list">{routes.map((route, index) => {
+    </details><details className="editor-category"><summary>Communication Routes</summary><div className="editor-list">{routes.map((route, index) => {
       const policy = policies.find(({ id }) => id === route.informationPolicyId);
       const leakage = route.recipient.public === true && policy?.classification !== "public";
       return <details className="editor-item" id={`communications-${route.id}`} key={route.id}><summary><span>{routeLabel(route)}</span><span className={`badge ${leakage ? "badge-error" : "badge-online"}`}>{leakage ? "leakage blocked" : "governed"}</span></summary><div className="item-body grid-fields">
@@ -659,7 +660,7 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
       </div></details>;
     })}</div>
     <AddButton label="Add Communication Route" disabled={channels.length === 0 || policies.length === 0 || roles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "communications", "routes"], { id: identifier(), channelId: channels[0]?.id ?? "", informationPolicyId: policies[0]?.id, sender: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, recipient: { sessionRoleIds: roles[0] === undefined ? [] : [(roles[1] ?? roles[0]).id] } })} />
-    <div className="table-scroll"><table className="permission-matrix"><caption>Route matrix by Session Role</caption><thead><tr><th scope="col">Sender</th>{roles.map((role) => <th scope="col" key={role.id}>{role.name}</th>)}</tr></thead><tbody>{roles.map((sender) => <tr key={sender.id}><th scope="row">{sender.name}</th>{roles.map((recipient) => { const matching = routes.filter((route) => route.sender.sessionRoleIds?.includes(sender.id) && route.recipient.sessionRoleIds?.includes(recipient.id)); return <td key={recipient.id}>{matching.length === 0 ? "Denied" : matching.map((route) => channels.find(({ id }) => id === route.channelId)?.name ?? "Missing Channel").join(", ")}</td>; })}</tr>)}</tbody></table></div>
+    </details><div className="table-scroll"><table className="permission-matrix"><caption>Route matrix by Session Role</caption><thead><tr><th scope="col">Sender</th>{roles.map((role) => <th scope="col" key={role.id}>{role.name}</th>)}</tr></thead><tbody>{roles.map((sender) => <tr key={sender.id}><th scope="row">{sender.name}</th>{roles.map((recipient) => { const matching = routes.filter((route) => route.sender.sessionRoleIds?.includes(sender.id) && route.recipient.sessionRoleIds?.includes(recipient.id)); return <td key={recipient.id}>{matching.length === 0 ? "Denied" : matching.map((route) => channels.find(({ id }) => id === route.channelId)?.name ?? "Missing Channel").join(", ")}</td>; })}</tr>)}</tbody></table></div>
   </Workspace>;
 }
 
@@ -703,8 +704,8 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
   const artifacts = coreArray(core, "artifactTypes");
   const variables = coreArray(core, "stateVariables");
   return <Workspace id="injects" title="Injects" intro="Author release logic, recipients, required responses, dependencies, and operator notes; the timeline previews pacing without changing Runtime state.">
-    <div className="inject-timeline" aria-label="Inject timeline"><h3>Timeline preview</h3>{stages.map((stage) => <section key={stage.id}><h4>{stageChoiceLabel(core, stage.id)}</h4><ul>{injects.filter((inject) => inject.stageId === stage.id).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section>)}<section><h4>Manual or unassigned</h4><ul>{injects.filter((inject) => inject.stageId === undefined).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section></div>
-    <div className="editor-list">{injects.map((inject, index) => <details className="editor-item" id={`injects-${inject.id}`} key={inject.id}><summary><span>{inject.title}</span><span className="badge badge-muted">{inject.releaseMode.replaceAll("_", " ")}</span></summary><div className="item-body grid-fields">
+    <div className="inject-timeline" aria-label="Inject timeline"><h3>Timeline preview</h3>{stages.map((stage) => <section key={stage.id}><h4>{stageChoiceLabel(core, stage.id)}</h4><ul>{injects.filter((inject) => inject.stageId === stage.id).map((inject) => <li key={inject.id}>{inject.title} — {displayStatus(inject.releaseMode)}</li>)}</ul></section>)}<section><h4>Manual or unassigned</h4><ul>{injects.filter((inject) => inject.stageId === undefined).map((inject) => <li key={inject.id}>{inject.title} — {displayStatus(inject.releaseMode)}</li>)}</ul></section></div>
+    <div className="editor-list">{injects.map((inject, index) => <details className="editor-item" id={`injects-${inject.id}`} key={inject.id}><summary><span>{inject.title}</span><span className="badge badge-muted">{displayStatus(inject.releaseMode)}</span></summary><div className="item-body grid-fields">
       <TextField id={`inject-title-${inject.id}`} label="Inject title" value={inject.title} path={["scenario", "injects", index, "title"]} client={client} />
       <TextField id={`inject-sender-${inject.id}`} label="Sender identity" value={inject.senderIdentity ?? ""} path={["scenario", "injects", index, "senderIdentity"]} client={client} emptyDeletes />
       <SelectField id={`inject-content-${inject.id}`} label="Content" value={inject.contentId} options={content.map(({ id, title }) => ({ value: id, label: title }))} path={["scenario", "injects", index, "contentId"]} client={client} />
@@ -742,7 +743,7 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
       {inject.requiredResponseArtifactTypeId !== undefined && <TextField id={`inject-deadline-${inject.id}`} label="Response deadline in seconds" value={inject.responseDeadlineSeconds ?? 0} type="number" path={["scenario", "injects", index, "responseDeadlineSeconds"]} client={client} />}
       <MultiCheck legend="Follow-on Injects" values={inject.followOnInjectIds ?? []} options={injects.filter(({ id }) => id !== inject.id).map(({ id, title }) => ({ value: id, label: title }))} path={["scenario", "injects", index, "followOnInjectIds"]} client={client} />
       <SelectField id={`inject-control-notes-${inject.id}`} label="Control notes content" value={inject.controlNotesContentId ?? ""} options={[{ value: "", label: "No control notes" }, ...content.map(({ id, title }) => ({ value: id, label: title }))]} path={["scenario", "injects", index, "controlNotesContentId"]} client={client} emptyDeletes />
-      <p className="rule-sentence">Release “{inject.title}” {inject.releaseMode.replaceAll("_", " ")}{inject.stageId === undefined ? "" : ` at ${stageChoiceLabel(core, inject.stageId)}`} to {inject.recipients.public === true ? "the public audience" : `${(inject.recipients.sessionRoleIds?.length ?? 0) + (inject.recipients.teamIds?.length ?? 0)} selected recipient groups`}.</p>
+      <p className="rule-sentence">Release “{inject.title}” {displayStatus(inject.releaseMode)}{inject.stageId === undefined ? "" : ` at ${stageChoiceLabel(core, inject.stageId)}`} to {inject.recipients.public === true ? "the public audience" : `${(inject.recipients.sessionRoleIds?.length ?? 0) + (inject.recipients.teamIds?.length ?? 0)} selected recipient groups`}.</p>
       <ItemActions path={["scenario", "injects"]} index={index} count={injects.length} client={client} label={inject.title} />
     </div></details>)}</div>
     <AddButton label="Add Inject" disabled={content.length === 0 || roles.length === 0} onClick={() => client.appendAtPath(["scenario", "injects"], { id: identifier(), title: "New Inject", completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired: true }, contentId: content[0]?.id ?? "", senderIdentity: "Control", recipients: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, releaseMode: "manual", effects: [], followOnInjectIds: [] })} />
@@ -806,7 +807,7 @@ function ContentLibraryEditor({ projectId, core, client }: { projectId: string; 
       <div className="field"><label htmlFor="content-media-type">Declared content type</label><select id="content-media-type" value={mediaType} onChange={(event) => setMediaType(event.target.value)}><option value="text/plain">Plain text</option><option value="text/markdown">Markdown</option><option value="application/pdf">PDF</option><option value="image/png">PNG image</option><option value="image/jpeg">JPEG image</option></select></div>
     </div><button className="btn-primary" type="submit" disabled={busy || file === null || title.trim() === ""}>{busy ? "Scanning…" : "Upload and scan"}</button></form>
     <div className="catalog-filters"><label htmlFor="content-search">Search governed content<input id="content-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="btn-secondary" type="button" onClick={() => void load()}>Refresh library</button></div>
-    <div className="plugin-catalog">{visible.map((item) => { const current = item.versions.find((version) => version.version === item.currentVersion); return <article className="catalog-card" key={item.id}><h3>{item.title}</h3><p><span className={`badge ${current?.scanStatus === "clean" ? "badge-online" : "badge-error"}`}>{current?.scanStatus ?? "unavailable"}</span> Version {item.currentVersion}</p><p>{current?.fileName} · {current?.mediaType} · {current?.sizeBytes ?? 0} bytes</p><p className="digest-line">Digest {current?.sha256}</p><details><summary>Version history</summary><ol>{item.versions.map((version) => <li key={version.id}>v{version.version}: {version.scanStatus} — {version.fileName}</li>)}</ol></details><button className="btn-secondary" type="button" disabled={current?.scanStatus !== "clean" || policies.length === 0} onClick={() => reuse(item)}>Use current version in Scenario</button></article>; })}</div>
+    <div className="plugin-catalog">{visible.map((item) => { const current = item.versions.find((version) => version.version === item.currentVersion); return <article className="catalog-card" key={item.id}><h3>{item.title}</h3><p><span className={`badge ${current?.scanStatus === "clean" ? "badge-online" : "badge-error"}`}>{displayStatus(current?.scanStatus ?? "unavailable")}</span> Version {item.currentVersion}</p><p>{current?.fileName} · {current?.sizeBytes ?? 0} bytes</p><details className="technical-details"><summary>File provenance</summary><p>{current?.mediaType}</p><p className="digest-line">Digest {current?.sha256}</p></details><details><summary>Version history</summary><ol>{item.versions.map((version) => <li key={version.id}>v{version.version}: {displayStatus(version.scanStatus)} — {version.fileName}</li>)}</ol></details><button className="btn-secondary" type="button" disabled={current?.scanStatus !== "clean" || policies.length === 0} onClick={() => reuse(item)}>Use current version in Scenario</button></article>; })}</div>
   </Workspace>;
 }
 
@@ -916,7 +917,8 @@ function RoleResourceEditor({ projectId, core, client }: {
       : <div className="plugin-catalog">{resources.map((resource) => {
         const assignments = [...new Set(referencedBy(resource.id))];
         return <article className="catalog-card" key={resource.id}><h4>{resource.name}</h4>
-          <p>{ROLE_RESOURCE_KINDS.find(({ value }) => value === resource.type)?.label ?? resource.type.replaceAll("_", " ")} · {resource.mediaType}</p>
+          <p>{ROLE_RESOURCE_KINDS.find(({ value }) => value === resource.type)?.label ?? displayStatus(resource.type)}</p>
+          <details className="technical-details"><summary>Resource provenance</summary><p>Content type: {resource.mediaType}</p></details>
           <p>{resource.altText ?? "No participant description."}</p>
           <p className="hint">{assignments.length === 0 ? "Not assigned to an interface." : `Assigned to ${assignments.join(", ")}.`}</p>
           <button className="btn-danger compact" type="button" disabled={assignments.length > 0} onClick={() => remove(resource)}>Remove resource</button>
@@ -1043,8 +1045,8 @@ function MeasurementReportEditor({ core, client }: { core: CoreDesignV1; client:
       <TextField id={`measurement-key-${measurement.id}`} label="Stable key" value={measurement.key} path={["coreDesign", "measurementDefinitions", index, "key"]} client={client} />
       <TextField id={`measurement-version-${measurement.id}`} label="Definition version" value={measurement.version} type="number" path={["coreDesign", "measurementDefinitions", index, "version"]} client={client} />
       <TextField id={`measurement-description-${measurement.id}`} label="Definition" value={measurement.description} path={["coreDesign", "measurementDefinitions", index, "description"]} client={client} multiline />
-      <SelectField id={`measurement-source-${measurement.id}`} label="Governed source" value={measurement.source} options={sources.map((value) => ({ value, label: value }))} path={["coreDesign", "measurementDefinitions", index, "source"]} client={client} />
-      <SelectField id={`measurement-aggregation-${measurement.id}`} label="Aggregation" value={measurement.aggregation} options={["count", "sum", "average", "minimum", "maximum", "latest"].map((value) => ({ value, label: value }))} path={["coreDesign", "measurementDefinitions", index, "aggregation"]} client={client} />
+      <SelectField id={`measurement-source-${measurement.id}`} label="Governed source" value={measurement.source} options={sources.map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "measurementDefinitions", index, "source"]} client={client} />
+      <SelectField id={`measurement-aggregation-${measurement.id}`} label="Aggregation" value={measurement.aggregation} options={["count", "sum", "average", "minimum", "maximum", "latest"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "measurementDefinitions", index, "aggregation"]} client={client} />
       <TextField id={`measurement-unit-${measurement.id}`} label="Unit" value={measurement.unit} path={["coreDesign", "measurementDefinitions", index, "unit"]} client={client} />
       <MultiCheck legend="Research Questions" values={measurement.researchQuestionIds} options={questions.map(({ id, question }) => ({ value: id, label: question }))} path={["coreDesign", "measurementDefinitions", index, "researchQuestionIds"]} client={client} />
       <ItemActions path={["coreDesign", "measurementDefinitions"]} index={index} count={measurements.length} client={client} label={measurement.label} />
@@ -1060,7 +1062,7 @@ function MeasurementReportEditor({ core, client }: { core: CoreDesignV1; client:
         <MultiCheck legend="Available to Session Roles" values={report.availableToSessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "reports", index, "availableToSessionRoleIds"]} client={client} />
         <fieldset className="nested-editor"><legend>Report sections</legend>{sections.map((section, sectionIndex) => <div className="grid-fields" key={section.id ?? sectionIndex}>
           <TextField id={`report-section-title-${report.id}-${sectionIndex}`} label="Section title" value={section.title ?? ""} path={["coreDesign", "reports", index, "sections", sectionIndex, "title"]} client={client} />
-          <SelectField id={`report-section-source-${report.id}-${sectionIndex}`} label="Data source" value={section.source ?? "evidence"} options={sources.map((value) => ({ value, label: value }))} path={["coreDesign", "reports", index, "sections", sectionIndex, "source"]} client={client} />
+          <SelectField id={`report-section-source-${report.id}-${sectionIndex}`} label="Data source" value={section.source ?? "evidence"} options={sources.map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "reports", index, "sections", sectionIndex, "source"]} client={client} />
           <MultiCheck legend="Measurements" values={section.measurementDefinitionIds ?? []} options={measurements.map(({ id, label }) => ({ value: id, label }))} path={["coreDesign", "reports", index, "sections", sectionIndex, "measurementDefinitionIds"]} client={client} />
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "reports", index, "sections"], sectionIndex)}>Remove section</button>
         </div>)}<AddButton label="Add report section" onClick={() => client.appendAtPath(["coreDesign", "reports", index, "sections"], { id: identifier(), title: "Summary", source: "evidence", measurementDefinitionIds: [] })} /></fieldset>
@@ -1257,16 +1259,16 @@ function AccessEditor({ core, client }: { core: CoreDesignV1; client: StudioColl
     <CheckField id="exposure-warning" label="Require exposure acknowledgement when reassigning" checked={policy.reassignment.exposureAcknowledgementRequired} path={["coreDesign", "accessPolicy", "reassignment", "exposureAcknowledgementRequired"]} client={client} />
     <h3>Shared displays</h3>{policy.displays.map((display, index) => <div className="field-row" key={`${display.interfaceProfileId}-${index}`}>
       <SelectField id={`display-profile-${index}`} label="Interface Profile" value={display.interfaceProfileId} options={profiles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "accessPolicy", "displays", index, "interfaceProfileId"]} client={client} />
-      <SelectField id={`display-classification-${index}`} label="Classification ceiling" value={display.classificationCeiling} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "accessPolicy", "displays", index, "classificationCeiling"]} client={client} />
+      <SelectField id={`display-classification-${index}`} label="Classification ceiling" value={display.classificationCeiling} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: displayStatus(value) }))} path={["coreDesign", "accessPolicy", "displays", index, "classificationCeiling"]} client={client} />
       <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "accessPolicy", "displays"], index)}>Remove display</button>
     </div>)}<AddButton label="Add shared display" disabled={profiles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "accessPolicy", "displays"], { interfaceProfileId: profiles[0]?.id ?? "", classificationCeiling: "public" })} />
-    <h3>Readiness design</h3>{policy.readiness.map((check, index) => <div className="nested-editor grid-fields" key={`${check.key}-${index}`}>
+    <h3>Readiness design</h3>{policy.readiness.map((check, index) => <details className="editor-item" key={`${check.key}-${index}`}><summary>{check.label}</summary><div className="item-body grid-fields">
       <TextField id={`readiness-key-${index}`} label="Stable key" value={check.key} path={["coreDesign", "accessPolicy", "readiness", index, "key"]} client={client} />
       <TextField id={`readiness-label-${index}`} label="Readiness check" value={check.label} path={["coreDesign", "accessPolicy", "readiness", index, "label"]} client={client} />
       <MultiCheck legend="Applicable Session Roles" values={check.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "accessPolicy", "readiness", index, "sessionRoleIds"]} client={client} />
       <CheckField id={`readiness-blocking-${index}`} label="Blocks Session readiness" checked={check.blocking} path={["coreDesign", "accessPolicy", "readiness", index, "blocking"]} client={client} />
       <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "accessPolicy", "readiness"], index)}>Remove check</button>
-    </div>)}<AddButton label="Add readiness check" onClick={() => client.appendAtPath(["coreDesign", "accessPolicy", "readiness"], { key: `check_${policy.readiness.length + 1}`, label: "New readiness check", sessionRoleIds: [], blocking: true })} />
+    </div></details>)}<AddButton label="Add readiness check" onClick={() => client.appendAtPath(["coreDesign", "accessPolicy", "readiness"], { key: `check_${policy.readiness.length + 1}`, label: "New readiness check", sessionRoleIds: [], blocking: true })} />
     <h3>Roster import review</h3><p className="hint">Preview synthetic comma-separated rows before any Runtime import. Nothing is submitted from this design review.</p>
     <div className="field"><label htmlFor="roster-review">Name, email, Seat</label><textarea id="roster-review" rows={4} value={rosterText} onChange={(event) => setRosterText(event.target.value)} /></div>
     {rosterRows.length === 0 ? <p>No roster rows to review.</p> : <table><caption>Roster review preview</caption><thead><tr><th>Name</th><th>Email</th><th>Seat</th><th>Review</th></tr></thead><tbody>{rosterRows.map((row, index) => <tr key={`${row.join(":")}-${index}`}><td>{row[0] || "Missing"}</td><td>{row[1] || "Missing"}</td><td>{row[2] || "Unassigned"}</td><td>{row.length === 3 && row.every(Boolean) ? "Ready" : "Needs review"}</td></tr>)}</tbody></table>}
@@ -1333,9 +1335,9 @@ function Rehearsal({ projectId }: { projectId: string }) {
       <div className="field"><label htmlFor="rehearsal-start">Fixed ISO start time</label><input id="rehearsal-start" value={startedAt} onChange={(event) => setStartedAt(event.target.value)} /></div>
     </div><button className="btn-primary" type="button" disabled={busy || !Number.isSafeInteger(seed) || seed < 0 || Number.isNaN(Date.parse(startedAt))} onClick={() => void run()}>{busy ? "Rehearsing…" : "Run deterministic rehearsal"}</button>
     <p role="status" aria-live="polite">{message}</p>
-    {result === null ? null : <div className="rehearsal-result"><p className="digest-line">Exact Draft digest {result.artifactDigest}</p><p>Final Stages: {result.finalStageIds.join(", ") || "none"}</p>
+    {result === null ? null : <details className="rehearsal-result technical-details"><summary>Rehearsal trace and provenance</summary><p className="digest-line">Exact Draft digest {result.artifactDigest}</p><p>Final Stages: {result.finalStageIds.join(", ") || "none"}</p>
       {result.trace.length === 0 ? <p>No triggers were evaluated. Add at least one Stage to rehearse.</p> : <ol>{result.trace.map((trace) => <li key={trace.triggerId}><strong>{trace.triggerId}</strong> — {trace.fired ? "fired" : "did not fire"}<ul>{trace.explanations.length === 0 ? <li>No condition was required.</li> : trace.explanations.map((explanation) => <li key={`${trace.triggerId}-${explanation.path}`}>{explanation.fact ?? explanation.path}: {explanation.passed ? "passed" : "failed"} ({explanation.reason.replaceAll("_", " ")})</li>)}</ul>{trace.stateChanges.map((change) => <p key={`${trace.triggerId}-${change.stateVariableId}`}>{change.stateVariableId}: {String(change.previousValue)} → {String(change.newValue)}</p>)}</li>)}</ol>}
-    </div>}
+    </details>}
   </Workspace>;
 }
 
@@ -1344,11 +1346,16 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
   reviewWorkspace: React.ReactNode; liveChangesWorkspace: React.ReactNode;
 }) {
   const [activeSection, setActiveSection] = useState<EditorSectionId>(() => editorSectionIdForTarget(location.hash.slice(1)));
+  const [visitedSections, setVisitedSections] = useState(() => new Set([activeSection]));
   const focusActiveHeading = useRef(false);
   const canvas = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleHashChange = () => setActiveSection(editorSectionIdForTarget(location.hash.slice(1)));
+    const handleHashChange = () => {
+      const id = editorSectionIdForTarget(location.hash.slice(1));
+      setVisitedSections((visited) => visited.has(id) ? visited : new Set([...visited, id]));
+      setActiveSection(id);
+    };
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
@@ -1363,6 +1370,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
   function activateSection(id: EditorSectionId): void {
     if (id === activeSection) return;
     focusActiveHeading.current = true;
+    setVisitedSections((visited) => visited.has(id) ? visited : new Set([...visited, id]));
     setActiveSection(id);
     // pushState keeps Back/Forward history without the browser's anchor jump; hashchange still restores them.
     history.pushState(null, "", `#${id}`);
@@ -1419,7 +1427,7 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
     </nav>
     <div ref={canvas} className="editor-canvas" aria-label={`${editorSectionLabel(activeSection)} workspace`}>
       <p className="visually-hidden" aria-live="polite">Core Design: {editorSectionLabel(activeSection)}</p>
-      {workspaces.map(([id, workspace]) => <div className="editor-workspace-slot" hidden={id !== activeSection} key={id}>{workspace}</div>)}
+      {workspaces.map(([id, workspace]) => <div className="editor-workspace-slot" hidden={id !== activeSection} key={id}>{visitedSections.has(id) ? workspace : null}</div>)}
     </div>
     <aside className="editor-inspector" aria-label="Draft guidance">{inspector}</aside>
   </div>;

@@ -64,7 +64,8 @@
     "build": "tsc --build --pretty false && npm run build:web --workspace @plenum/runtime-web && npm run build:web --workspace @plenum/studio",
     "build:fractured-order": "npm run build --silent && node scripts/compile-fractured-order.mjs",
     "test:participant-interfaces": "npm run build --silent && node --test tests/platform/participant-interfaces.test.mjs && node tests/e2e/participant-interfaces.mjs",
-    "test:e2e:participant": "npm run build --silent && playwright test --config tests/e2e/playwright.participant.config.mjs"
+    "test:e2e:participant": "npm run build --silent && playwright test --config tests/e2e/playwright.participant.config.mjs",
+    "test:interface-consistency": "npm run build --silent && node scripts/compile-interface-releases.mjs && node --test tests/platform/interface-presentation.test.mjs tests/platform/interface-consistency.test.mjs && node tests/e2e/participant-interfaces.mjs && playwright test --config tests/e2e/interface-consistency/playwright.config.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

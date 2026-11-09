@@ -30,6 +30,7 @@ import type { ObjectStore } from "../../registry/object-store.js";
 import { publishReleaseFromFreeze, type PublicationControls } from "../../registry/publication.js";
 import { resolveRuntimeInterfaceProfile } from "../../runtime/artifact-workflow.js";
 import { rehearseStages } from "@plenum/workflow-engine";
+import { assertFormAttachmentRetention } from "../../reporting/form-retention.js";
 
 const MAX_UPDATE_BYTES = 256 * 1024;
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
@@ -280,6 +281,21 @@ export async function assertStudioReadAccess(
   });
 }
 
+export async function listFormRetentionPolicies(pool: Pool, principal: AuthenticatedPrincipal, projectId: string, correlationId: string) {
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await requireStudioAccess(client, principal, ["admin", "designer", "publisher"], correlationId);
+    const project = await client.query("SELECT 1 FROM studio.simulation_projects WHERE organization_id=$1 AND id=$2", [principal.organizationId, projectId]);
+    if (!project.rowCount) throw authorizationError("NOT_FOUND", "The Simulation Project was not found.", correlationId);
+    const result = await client.query<{ id: string; policy_key: string; version: number; period_days: number; scope_type: string; scope_reference: string }>(
+      `SELECT id,policy_key,version,period_days,scope_type,scope_reference FROM reporting.retention_policies
+        WHERE organization_id=$1 AND expiry_action='delete' AND approval_required=false
+          AND ((scope_type='organization' AND scope_reference IN ('*',$1::text)) OR (scope_type='project' AND scope_reference=$2) OR scope_type='artifact_type')
+        ORDER BY policy_key,version DESC LIMIT 200`, [principal.organizationId, projectId]);
+    return result.rows.map((row) => ({ id: row.id, label: `${row.policy_key} · version ${row.version} · delete after ${row.period_days} days`,
+      ...(row.scope_type === "artifact_type" ? { artifactTypeId: row.scope_reference } : {}) }));
+  });
+}
+
 export async function getCollaborativeDraft(
   pool: Pool,
   principal: AuthenticatedPrincipal,
@@ -460,6 +476,7 @@ export async function freezeCollaborativeDraft(
     if (!validation.valid) {
       throw authorizationError("VALIDATION_FAILED", "The merged Draft has validation errors.", correlationId, validation as unknown as JsonValue);
     }
+    await assertFormAttachmentRetention(client, principal.organizationId, projectId, materialization.coreDesign as unknown as import("@plenum/simulation-schema").CoreDesignV1, correlationId);
     const snapshot = Y.encodeStateAsUpdate(document);
     const stateVector = Y.encodeStateVector(document);
     const materializationSha256 = sha256(canonicalizeJson(materialization));

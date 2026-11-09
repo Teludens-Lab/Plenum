@@ -7,7 +7,7 @@
 - Goal: Make joining and participating in a Session fully operable without direct links, internal IDs or operator assistance outside configured policy.
 - User outcome: Participants can accept invitations, pass onboarding, select eligible Seats and active roles, use every configured module, recover offline work, and understand authoritative outcomes.
 - Risk: **HIGH**
-- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: true`.
+- Metadata: `source_evidence` is populated; `prerequisites_verified: true`; `ready_to_execute: false`.
 
 ## Requirements and invariants
 

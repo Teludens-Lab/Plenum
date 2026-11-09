@@ -6,6 +6,8 @@ import {
   assertRuntimeCoreDesign,
   assertRuntimeScenario,
   hasPinnedPluginDigest,
+  projectEnabledConcepts,
+  validateMethodologyConcepts,
   type CoreDesignV1,
   type ReleaseManifestV1,
   type ScenarioV1,
@@ -13,7 +15,7 @@ import {
 } from "@plenum/simulation-schema";
 import { compileModelComposition, previewCompositionFixture, type CompositionPreviewV1 } from "./compositions/index.js";
 
-export const RELEASE_COMPILER_VERSION = "0.1.0";
+export const RELEASE_COMPILER_VERSION = "0.2.0";
 export { RELEASE_MANIFEST_CONTRACT_ID };
 export const PACKAGE_IMPORT_CONTRACT_ID = "package-import-v1";
 export const PACKAGE_SCHEMA_VERSION = "1.0.0";
@@ -154,7 +156,7 @@ function assertPinnedDependencies(coreDesign: CoreDesignV1): void {
 }
 
 function assertExecutableRuntimeDesign(coreDesign: CoreDesignV1, scenario: ScenarioV1): void {
-  if (coreDesign.teams !== undefined) {
+  if (coreDesign.teams !== undefined || coreDesign.methodologyContractId !== undefined || coreDesign.forms?.some((form) => form.contractId !== undefined)) {
     assertRuntimeCoreDesign(coreDesign);
     assertRuntimeScenario(coreDesign, scenario);
   }
@@ -201,13 +203,17 @@ function validateInput(input: CompileReleaseInput): void {
     throw new Error("The frozen materialization is incomplete");
   }
   assertPortable(asJson(input.materialization));
-  assertPinnedDependencies(input.materialization.coreDesign);
-  assertExecutableRuntimeDesign(input.materialization.coreDesign, input.materialization.scenario);
+  const conceptIssues = validateMethodologyConcepts(input.materialization);
+  if (conceptIssues.length > 0) throw new Error(conceptIssues.map(({ message }) => message).join("\n"));
+  const active = projectEnabledConcepts(input.materialization);
+  assertPinnedDependencies(active.coreDesign);
+  assertExecutableRuntimeDesign(active.coreDesign, active.scenario);
 }
 
 export function compileRelease(input: CompileReleaseInput): CompiledRelease {
   validateInput(input);
-  const materialization = { coreDesign: compiledCoreDesign(input.materialization.coreDesign), scenario: input.materialization.scenario };
+  const active = projectEnabledConcepts(input.materialization);
+  const materialization = { coreDesign: compiledCoreDesign(active.coreDesign), scenario: active.scenario };
   const frozen = JSON.parse(canonicalizeJson(asJson(materialization))) as {
     coreDesign: CoreDesignV1 & JsonObject;
     scenario: ScenarioV1 & JsonObject;
@@ -221,7 +227,7 @@ export function compileRelease(input: CompileReleaseInput): CompiledRelease {
     releaseLabel: input.releaseLabel,
     semanticVersion: input.semanticVersion,
     methodologyVersion: input.methodologyVersion,
-    compilerVersion: RELEASE_COMPILER_VERSION,
+    compilerVersion: input.materialization.coreDesign.methodologyContractId === undefined && !input.materialization.coreDesign.forms?.some((form) => form.contractId !== undefined) ? "0.1.0" : RELEASE_COMPILER_VERSION,
     contentDigest,
     publishedBy: input.publishedBy,
     approvedBy: [...input.approvedBy].sort(),
@@ -262,12 +268,22 @@ export function verifyReleasePackage(bytes: Uint8Array, expectedPackageDigest: s
     throw new Error("Package contract is incompatible");
   }
   if (canonicalizeJson(pkg) !== new TextDecoder().decode(bytes)) throw new Error("Package bytes are not canonical");
-  if (pkg.manifest.schemaVersion !== SIMULATION_SCHEMA_VERSION || pkg.manifest.compilerVersion !== RELEASE_COMPILER_VERSION) {
+  if (pkg.manifest.schemaVersion !== SIMULATION_SCHEMA_VERSION || !["0.1.0", RELEASE_COMPILER_VERSION].includes(pkg.manifest.compilerVersion)) {
     throw new Error("Release schema or compiler is incompatible");
   }
   if (sha256(canonicalizeJson(pkg.manifest)) !== pkg.manifestDigest) throw new Error("Manifest digest mismatch");
   const contentDigest = sha256(canonicalizeJson({ coreDesign: pkg.coreDesign, scenario: pkg.scenario }));
   if (contentDigest !== pkg.manifest.contentDigest) throw new Error("Release content digest mismatch");
+  if (pkg.coreDesign.forms?.some((form) => form.contractId !== undefined) && pkg.manifest.compilerVersion !== RELEASE_COMPILER_VERSION) throw new Error("Structured Forms require compiler 0.2.0");
+  if (pkg.coreDesign.methodologyContractId !== undefined) {
+    const authored = { coreDesign: pkg.coreDesign, scenario: pkg.scenario };
+    const issues = validateMethodologyConcepts(authored);
+    if (issues.length > 0) throw new Error(issues.map(({ message }) => message).join("\n"));
+    if (pkg.manifest.compilerVersion !== RELEASE_COMPILER_VERSION ||
+        canonicalizeJson(asJson(projectEnabledConcepts(authored))) !== canonicalizeJson(asJson(authored))) {
+      throw new Error("Package contains inactive definitions or an incompatible methodology compiler version");
+    }
+  }
   assertPortable(asJson({ coreDesign: pkg.coreDesign, scenario: pkg.scenario }));
   assertPinnedDependencies(pkg.coreDesign);
   assertExecutableRuntimeDesign(pkg.coreDesign, pkg.scenario);

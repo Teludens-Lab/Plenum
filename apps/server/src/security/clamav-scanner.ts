@@ -1,8 +1,9 @@
 import { Socket } from "node:net";
 
-import type { ContentScanResult, ContentScanner } from "../studio/content-library.js";
+import type { ContentScanResult, ContentScanner } from "./content-scanning.js";
+import { FORM_LIMITS } from "@plenum/simulation-schema";
 
-const MAX_SCAN_BYTES = 512 * 1024;
+const MAX_SCAN_BYTES = FORM_LIMITS.attachmentBytes;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 function decodeResponse(chunks: Buffer[]): string {
@@ -44,7 +45,12 @@ export class ClamAvContentScanner implements ContentScanner {
       };
       socket.setTimeout(this.#timeoutMs, () => fail("Malware scanner timed out"));
       socket.on("error", () => fail("Malware scanner connection failed"));
-      socket.on("data", (chunk: Buffer) => response.push(chunk));
+      let responseBytes = 0;
+      socket.on("data", (chunk: Buffer) => {
+        responseBytes += chunk.byteLength;
+        if (responseBytes > 4096) fail("Malware scanner response exceeded its bound");
+        else response.push(chunk);
+      });
       socket.on("end", () => {
         if (settled) return;
         const result = decodeResponse(response);
@@ -77,7 +83,11 @@ export class ClamAvContentScanner implements ContentScanner {
       };
       socket.setTimeout(this.#timeoutMs, () => finish("unavailable"));
       socket.on("error", () => finish("unavailable"));
-      socket.on("data", (chunk: Buffer) => response.push(chunk));
+      let responseBytes = 0;
+      socket.on("data", (chunk: Buffer) => {
+        responseBytes += chunk.byteLength;
+        if (responseBytes > 4096) finish("unavailable"); else response.push(chunk);
+      });
       socket.on("end", () => finish(decodeResponse(response) === "PONG" ? "available" : "unavailable"));
       socket.connect(this.#port, this.#host, () => socket.end("zPING\0"));
     });

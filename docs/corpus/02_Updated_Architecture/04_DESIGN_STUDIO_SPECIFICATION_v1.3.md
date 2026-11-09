@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | SAS |
 | Number | 04 |
-| Version | 1.3.4 |
-| Date | 2026-11-01 |
+| Version | 1.3.5 |
+| Date | 2026-11-08 |
 | Status | Draft for review. v1.2 amendment merged (DEC-26). |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -157,7 +157,7 @@ The Studio may build acyclic sequential and nested Stages, priority-ordered cond
 
 1. Name the Artifact Type.
 2. Choose ownership: individual, team or session.
-3. Mark whether it is decision-bearing (DEC-35).
+3. Mark whether it is decision-bearing (DEC-63).
 4. Select or create a Form.
 5. Select a workflow template or a custom workflow.
 6. Set creator Session Roles and recipients.
@@ -171,7 +171,7 @@ Sections and fields with drag-and-drop ordering. Field settings: label, key, typ
 Show "Legislative Sponsor" when "Instrument Type" equals "Legislation".
 ```
 
-Supported field types and limits follow OPEN-010.
+Supported target field types and limits follow resolved OPEN-010 (Decision Register §7.2). Studio must expose only verified supported options and explain unavailable capabilities in plain language. The current six-type selector does not establish delivery of the broader approved target; implementation acceptance is tracked in Decision Register §7.5.
 
 ### 10.3 Form preview
 
@@ -366,3 +366,4 @@ Owned by 10 Extension Framework (DEC-52 to DEC-60). Designers never write plugin
 | 1.3.3 | 2026-10-21 | Repointed Organization Role governance from superseded DEC-44 to DEC-61. |
 | 1.3.4 | 2026-11-01 | Applied resolved OPEN-013: production two-person integrity, immutable Template governance, distinct-author methodology approval, approval invalidation, governed activation and complete decision provenance. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |
+| 1.3.5 | 2026-11-08 | Aligned Forms canvas with resolved OPEN-010 and DEC-63; distinguished target capabilities from current verified controls. |

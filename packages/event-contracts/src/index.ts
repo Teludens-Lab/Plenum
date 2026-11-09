@@ -834,7 +834,7 @@ export const SESSION_OPERATOR_POLICY_V1 = {
     "session.pause", "session.resume", "session.complete", "session.lock", "session.archive", "session.delete",
     "participant.assign", "participant.reassign", "participant.remove_bulk", "participant.readiness_override", "principal.revoke",
     "stage.start", "stage.end", "stage.reopen", "stage.extend", "stage.skip", "stage.return",
-    "timer.pause", "timer.resume", "timer.extend", "inject.release", "inject.cancel",
+    "timer.pause", "timer.resume", "timer.extend", "inject.release", "inject.cancel", "inject.reschedule",
     "adjudication.route", "plugin_binding.enable", "plugin_binding.disable", "export.request",
     "delivery.retry", "session.recover", "authority.transfer", "release.activate"
   ],
@@ -965,9 +965,14 @@ export interface RuntimeSseV1 {
 }
 
 export interface RuntimeFormFieldV1 {
+  computation?: import("@plenum/simulation-schema").FormComputationV1;
+  formattedTextContractId?: "formatted-text-v1";
+  defaultValue?: boolean | number | string | Array<boolean | number | string>;
   key: string;
   label: string;
-  type: "text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
+  type: "text" | "long_text" | "number" | "yes_no" | "date" | "time" | "date_time" | "currency" | "percentage" | "single_select" | "multi_select" | "artifact_reference" | "entity_reference" | "formatted_text";
+  numeric?: { unit: string; precision: number };
+  entityReference?: { kind: "artifact" | "team" | "session_role" | "resource" | "capability" | "state_variable" | "stage"; multiple: boolean };
   required: boolean;
   requiredWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
   visibleWhen?: { field: string; operator: "equals" | "not_equals" | "includes" | "present"; value?: string | number | boolean };
@@ -979,6 +984,8 @@ export interface RuntimeFormFieldV1 {
 }
 
 export interface RuntimeFormV1 {
+  attachments?: import("@plenum/simulation-schema").FormAttachmentPolicyV1;
+  contractId?: "structured-form-v2";
   id: string;
   name: string;
   formVersion: string;
@@ -1017,6 +1024,7 @@ export interface RuntimeArtifactHistoryV1 {
 }
 
 export interface RuntimeArtifactV1 {
+  exportable?: boolean;
   id: string;
   artifactTypeKey: string;
   title: string;
@@ -1029,6 +1037,26 @@ export interface RuntimeArtifactV1 {
   createdByMe: boolean;
   actions: RuntimeActionV1[];
 }
+
+export interface FormAttachmentV1 {
+  id: string; fileName: string; mediaType: string; sizeBytes: number; sha256: string;
+  scanStatus: "quarantined" | "clean" | "infected" | "failed"; available: boolean; canRetryScan: boolean; expiresAt: string;
+}
+
+export const FORM_ATTACHMENT_UPLOAD_CONTRACT_ID = "form-attachment-upload-v1";
+export const formAttachmentUploadV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema", $id: FORM_ATTACHMENT_UPLOAD_CONTRACT_ID,
+  type: "object", additionalProperties: false, required: ["command", "attachmentId", "fileName", "mediaType", "contentBase64"],
+  properties: {
+    command: { type: "object", required: ["commandId", "deviceId", "aggregateId", "expectedAggregateVersion", "governingReleaseId", "operationType", "payload"],
+      properties: { commandId: { type: "string", format: "uuid" }, deviceId: { type: "string", format: "uuid" }, aggregateId: { type: "string", format: "uuid" },
+        governingReleaseId: { type: "string", format: "uuid" }, expectedAggregateVersion: { type: "integer", minimum: 0 }, activeSessionRoleId: { type: "string" },
+        operationType: { enum: ["artifact.attach_file", "artifact.rescan_file"] }, payload: { type: "object", maxProperties: 0 } } },
+    attachmentId: { type: "string", format: "uuid" }, fileName: { type: "string", minLength: 1, maxLength: 255, pattern: "^[^\\x00-\\x1f\\x7f/\\\\]+$" },
+    mediaType: { enum: ["text/plain", "text/markdown", "application/pdf", "image/png", "image/jpeg"] },
+    contentBase64: { type: "string", minLength: 4, maxLength: 26666668, contentEncoding: "base64" }
+  }
+} as const;
 
 export interface RuntimeCreateTaskV1 {
   artifactTypeKey: string;
@@ -1084,6 +1112,10 @@ export interface RuntimeInjectV1 {
   acknowledgedAt: string | null;
   respondedAt: string | null;
   requiredResponseArtifactTypeId: string | null;
+  governingReleaseId?: string;
+  acknowledgementRequired?: boolean;
+  recipientComplete?: boolean;
+  responseArtifactTypeKey?: string | null;
   version: number;
 }
 
@@ -1290,7 +1322,9 @@ export interface ReadinessProjectionV1 {
   ready: boolean;
   checks: Array<{ key: string; label: string; blocking: boolean; complete: boolean }>;
   staffing: {
-    seats: Array<{ seatId: string; sessionRoleIds: string[]; teamId: string | null; minimum: number; maximum: number | null; occupied: number }>;
+    people?: Array<{ personId: string; displayName: string }>;
+    peopleTruncated?: boolean;
+    seats: Array<{ seatId: string; label?: string; sessionRoleIds: string[]; teamId: string | null; minimum: number; maximum: number | null; occupied: number }>;
     joinRequests: Array<{ personId: string; requestedSeatId: string | null; status: string; submittedAt: string }>;
     rosterReview: Array<{ rowId: string; rowNumber: number; personId: string | null; seatId: string | null; reasons: string[] }>;
     assignments: Array<{ seatAssignmentId: string; participantId: string; personId: string; seatId: string; sessionRoleId: string; teamId: string | null; accessRevision: number }>;
@@ -1385,6 +1419,13 @@ export interface AdjudicationTraceEntryV1 extends JsonObject {
   details: JsonValue;
 }
 
+/** Request choices scoped to the active reviewer and visible decision artifacts. */
+export interface AdjudicationOptionV1 {
+  modelId: string;
+  modelName: string;
+  actions: Array<{ id: string; label: string }>;
+}
+
 export interface AdjudicationReviewV1 {
   id: string;
   perspectiveId: string;
@@ -1436,6 +1477,9 @@ export interface AdjudicationRequestV1 {
   record: AdjudicationRecordV1 | null;
   canReview: boolean;
   canSynthesize: boolean;
+  /** Authored scoring guidance is projected only to an authorized lead reviewer. */
+  rubric?: Array<{ id: string; label: string; weight: number; minimum: number; maximum: number;
+    anchors?: Array<{ score: number; label: string }> }>;
 }
 
 const uuidProperty = { type: "string", format: "uuid" } as const;
@@ -1680,7 +1724,9 @@ export const artifactCommandV1Schema = {
   title: "Artifact Command v1",
   properties: {
     ...commandEnvelopeV1Schema.properties,
-    operationType: { type: "string", pattern: "^artifact\\.[a-z][a-z0-9_]*$" }
+    operationType: { type: "string", pattern: "^artifact\\.[a-z][a-z0-9_]*$" },
+    payload: { type: "object", properties: { content: { type: "object",
+      description: "The single record payload. For a decision-bearing type this is exactly one Action; repeating fields are supporting data." } } }
   }
 } as const satisfies ContractSchema<ArtifactCommandV1>;
 
@@ -2386,7 +2432,14 @@ export const runtimeProjectionV1Schema = {
     createTasks: { type: "array", items: { type: "object" } },
     artifacts: { type: "array", items: { type: "object" } },
     messages: { type: "array", items: { type: "object" } },
-    injects: { type: "array", items: { type: "object" } },
+    injects: { type: "array", items: { type: "object", additionalProperties: false,
+      required: ["id", "definitionId", "title", "content", "state", "releasedAt", "acknowledgedAt", "respondedAt", "requiredResponseArtifactTypeId", "version"],
+      properties: { id: uuidProperty, definitionId: { type: "string", minLength: 1 }, title: { type: "string" }, content: jsonObjectProperty,
+        state: { enum: ["released", "acknowledged", "responded", "closed"] }, releasedAt: utcInstantProperty,
+        acknowledgedAt: { type: ["string", "null"], format: "date-time" }, respondedAt: { type: ["string", "null"], format: "date-time" },
+        requiredResponseArtifactTypeId: { type: ["string", "null"] }, version: { type: "integer", minimum: 1 },
+        governingReleaseId: uuidProperty, acknowledgementRequired: { type: "boolean" }, recipientComplete: { type: "boolean" },
+        responseArtifactTypeKey: { type: ["string", "null"] } } } },
     polls: { type: "array", items: { type: "object" } },
     voiceChannels: { type: "array", items: { type: "object" } },
     timeline: { type: "object" }

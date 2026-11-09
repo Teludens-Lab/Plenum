@@ -1,0 +1,72 @@
+{
+  "archiveVersion": 1,
+  "restoreContract": "plenum-organization-logical-v1",
+  "generatedAt": "2026-11-09T00:00:00.000Z",
+  "sourceOrganizationRef": "576f18824476444ff24bae34",
+  "data": {
+    "organization": {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "Org A",
+      "created_at": "2026-11-09T08:26:09.131417+00:00",
+      "activated_at": null,
+      "suspended_at": null,
+      "offboarded_at": null,
+      "lifecycle_status": "active",
+      "lifecycle_version": 1
+    },
+    "persons": [
+      {
+        "id": "20000000-0000-4000-8000-000000000004",
+        "created_at": "2026-11-09T08:26:09.131417+00:00",
+        "display_name": "Approver D"
+      }
+    ],
+    "memberships": [
+      {
+        "person_id": "20000000-0000-4000-8000-000000000004",
+        "created_at": "2026-11-09T08:26:09.131417+00:00",
+        "organization_id": "10000000-0000-4000-8000-000000000001",
+        "organization_role": "admin"
+      }
+    ],
+    "projects": [],
+    "simulationTemplates": [],
+    "templateLifecycleEvents": [],
+    "projectCollaborators": [],
+    "projectMutationReceipts": [],
+    "collaborativeDocuments": [],
+    "publicationFreezes": [],
+    "revisions": [],
+    "releases": [],
+    "sessions": [],
+    "sessionAuthorities": [],
+    "activationReviews": [],
+    "activations": [],
+    "participants": [],
+    "seatAssignments": [],
+    "artifacts": [],
+    "sessionSequences": [],
+    "events": [],
+    "checkpointBatches": [],
+    "checkpointSignatures": [],
+    "anchorReceipts": [],
+    "reportDefinitions": [],
+    "measurementDefinitions": [],
+    "researchConsents": [],
+    "analyticalRecords": [],
+    "retentionPolicies": [],
+    "formAttachments": [],
+    "legalHoldEvents": [],
+    "corrections": [],
+    "exportJobs": [],
+    "exportArtifacts": []
+  },
+  "dataSha256": "6396f9c9247efa7aa2a5c55d5bebe2308b1b3791915b2354adf353b131fb9bdb",
+  "excludedDataClasses": [
+    "authentication_credentials",
+    "secret_ballot_choices",
+    "protected_voice_assets",
+    "audit_record_details",
+    "object_store_blobs"
+  ]
+}

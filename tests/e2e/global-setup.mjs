@@ -49,7 +49,9 @@ const migrations = [
   "apps/server/migrations/037_organization_workforce.sql",
   "apps/server/migrations/038_identity_workforce_operations.sql",
   "apps/server/migrations/039_operational_security_events.sql",
-  "apps/server/migrations/040_operational_security_reader.sql"
+  "apps/server/migrations/040_operational_security_reader.sql",
+  "apps/server/migrations/041_form_attachments.sql",
+  "apps/server/migrations/042_inject_schedule_provenance.sql"
 ];
 
 export default async function globalSetup() {

@@ -1,0 +1,189 @@
+{
+  "form": {
+    "contractId": "structured-form-v2",
+    "id": "83000000-0000-4000-8000-000000000010",
+    "name": "Bounded form",
+    "formVersion": "2",
+    "sections": [
+      {
+        "id": "83000000-0000-4000-8000-000000000011",
+        "title": "Details",
+        "fields": [
+          {
+            "id": "83000000-0000-4000-8000-000000000100",
+            "key": "short_text",
+            "label": "short text",
+            "type": "short_text",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000101",
+            "key": "long_text",
+            "label": "long text",
+            "type": "long_text",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000102",
+            "key": "number",
+            "label": "number",
+            "type": "number",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000103",
+            "key": "yes_no",
+            "label": "yes no",
+            "type": "yes_no",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000104",
+            "key": "date",
+            "label": "date",
+            "type": "date",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000105",
+            "key": "time",
+            "label": "time",
+            "type": "time",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000106",
+            "key": "date_time",
+            "label": "date time",
+            "type": "date_time",
+            "required": true
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000107",
+            "key": "currency",
+            "label": "currency",
+            "type": "currency",
+            "required": true,
+            "numeric": {
+              "unit": "EUR",
+              "precision": 2
+            },
+            "validation": {
+              "min": 0,
+              "max": 100
+            }
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000108",
+            "key": "percentage",
+            "label": "percentage",
+            "type": "percentage",
+            "required": true,
+            "numeric": {
+              "unit": "%",
+              "precision": 2
+            },
+            "validation": {
+              "min": 0,
+              "max": 100
+            }
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000109",
+            "key": "single_select",
+            "label": "single select",
+            "type": "single_select",
+            "required": true,
+            "options": [
+              {
+                "value": "one",
+                "label": "One"
+              },
+              {
+                "value": "two",
+                "label": "Two"
+              }
+            ]
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000110",
+            "key": "multi_select",
+            "label": "multi select",
+            "type": "multi_select",
+            "required": true,
+            "options": [
+              {
+                "value": "one",
+                "label": "One"
+              },
+              {
+                "value": "two",
+                "label": "Two"
+              }
+            ]
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000111",
+            "key": "entity_reference",
+            "label": "entity reference",
+            "type": "entity_reference",
+            "required": true,
+            "entityReference": {
+              "kind": "team",
+              "multiple": false
+            }
+          },
+          {
+            "id": "83000000-0000-4000-8000-000000000150",
+            "key": "locked",
+            "label": "Locked value",
+            "type": "short_text",
+            "defaultValue": "fixed",
+            "editableBySessionRoleIds": [
+              "83000000-0000-4000-8000-000000000003"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "83000000-0000-4000-8000-000000000012",
+        "title": "Items",
+        "repeatable": true,
+        "itemLabel": "Item",
+        "minItems": 0,
+        "maxItems": 50,
+        "fields": [
+          {
+            "id": "83000000-0000-4000-8000-000000000151",
+            "key": "amount",
+            "label": "Amount",
+            "type": "number",
+            "required": true
+          }
+        ]
+      }
+    ]
+  },
+  "payload": {
+    "short_text": "Short",
+    "long_text": "Detailed response",
+    "number": 1.25,
+    "yes_no": false,
+    "date": "2024-02-29",
+    "time": "23:59:59",
+    "date_time": "2026-11-08T12:30:00.000Z",
+    "currency": 12.25,
+    "percentage": 50.25,
+    "single_select": "one",
+    "multi_select": [
+      "one"
+    ],
+    "entity_reference": "83000000-0000-4000-8000-000000000001",
+    "locked": "fixed",
+    "83000000-0000-4000-8000-000000000012": [
+      {
+        "amount": 2
+      }
+    ]
+  }
+}

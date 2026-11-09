@@ -348,6 +348,7 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
 }
 
 function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: string; setNotice(message: string): void }) {
+  const [expiryAction, setExpiryAction] = useState("archive");
   const [model, setModel] = useState<DataPolicyOperations | null>(null);
   const [pending, setPending] = useState(false);
   const load = useCallback(async () => setModel(await request<DataPolicyOperations>("/v1/operations/data-policy")), []);
@@ -363,7 +364,7 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
     void mutate("/v1/retention/policies", { policyKey: String(data.get("policyKey")), version: Number(data.get("version")),
       scopeType: String(data.get("scopeType")), scopeReference: String(data.get("scopeReference")),
       periodDays: Number(data.get("periodDays")), legalHoldBehavior: String(data.get("legalHoldBehavior")),
-      expiryAction: String(data.get("expiryAction")), archiveDestination: String(data.get("archiveDestination")),
+      expiryAction: String(data.get("expiryAction")), archiveDestination: String(data.get("archiveDestination") ?? ""),
       approvalRequired: data.get("approvalRequired") === "on" }, "Retention policy recorded as an immutable version.");
   };
   const createCorrection = (event: FormEvent<HTMLFormElement>) => {
@@ -376,7 +377,7 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
   const importArchive = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const input = event.currentTarget.elements.namedItem("organizationArchive") as HTMLInputElement;
     const file = input.files?.[0]; if (file === undefined) return; setPending(true);
-    try { const response = await fetch(`/v1/organizations/${organizationId}/archive/import`, { method: "POST", headers: { "content-type": "application/json" }, body: file });
+    try { const response = await fetch(`/v1/organizations/${organizationId}/archive/import`, { method: "POST", headers: { "content-type": file.name.endsWith(".gz") ? "application/gzip" : "application/json" }, body: file });
       const body = await response.json() as ErrorEnvelopeV1 | { restoredRows: number };
       if (!response.ok) throw new Error("error" in body ? body.error.message : "Archive import failed.");
       setNotice(`Portable Organization archive verified and imported; ${"restoredRows" in body ? body.restoredRows : 0} rows restored.`); await load(); }
@@ -395,10 +396,20 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
           <div className="field"><label htmlFor="policy-reference">Scope reference</label><input id="policy-reference" name="scopeReference" defaultValue={organizationId} required /></div></details>
         <div className="field"><label htmlFor="policy-days">Retention period in days</label><input id="policy-days" name="periodDays" type="number" min="1" defaultValue="365" required /></div>
         <div className="field"><label htmlFor="hold-behavior">Legal hold behavior</label><select id="hold-behavior" name="legalHoldBehavior"><option value="retain">Retain</option><option value="block_action">Block action</option></select></div>
-        <div className="field"><label htmlFor="expiry-action">Expiry action</label><select id="expiry-action" name="expiryAction"><option value="archive">Archive</option><option value="anonymize">Anonymize</option><option value="delete">Delete</option></select></div>
-        <div className="field"><label htmlFor="archive-destination">Archive destination</label><input id="archive-destination" name="archiveDestination" defaultValue="institutional-archive" required /></div>
+        <div className="field"><label htmlFor="expiry-action">Expiry action</label><select id="expiry-action" name="expiryAction" value={expiryAction} onChange={(event) => setExpiryAction(event.target.value)}><option value="archive">Archive</option><option value="anonymize">Anonymize</option><option value="delete">Delete</option></select></div>
+        {expiryAction === "archive" ? <div className="field"><label htmlFor="archive-destination">Archive destination</label><input id="archive-destination" name="archiveDestination" defaultValue="institutional-archive" required /></div> : null}
         <label className="choice"><input type="checkbox" name="approvalRequired" /> Approval is required before enforcement.</label>
         <button className="btn-primary" type="submit" disabled={pending}>Record policy version</button></form></section>
+        <section className="card operation-form"><h2>Attachment retention</h2><p>Delete up to ten expired files under their published retention policies. Organization legal holds prevent deletion. Interrupted uploads become eligible after 24 hours.</p>
+          <button type="button" className="btn-danger" disabled={pending} onClick={async () => {
+            setPending(true);
+            try {
+              const result = await request<{ purged: number; held: number; failed: number; batchFull: boolean }>("/v1/retention/form-attachments/enforce", { method: "POST", body: "{}" });
+              setNotice(`${result.purged} files deleted; ${result.held} held; ${result.failed} failed.${result.batchFull ? " Another batch may remain." : ""}${result.failed ? " Failed deletions remain recorded for retry." : ""}`);
+              await load();
+            } catch (error) { setNotice(error instanceof Error ? error.message : "Retention enforcement failed."); }
+            finally { setPending(false); }
+          }}>Apply attachment retention</button></section>
         <section className="card operation-form"><h2>Legal hold</h2><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
           void mutate("/v1/retention/legal-holds", { scopeType: String(data.get("scopeType")), scopeReference: String(data.get("scopeReference")), reason: String(data.get("reason")) }, "Legal hold placed; matching purge is blocked."); }}>
           <div className="field"><label htmlFor="hold-scope">Scope</label><select id="hold-scope" name="scopeType"><option value="organization">Organization</option><option value="export">Export</option></select></div>
@@ -414,9 +425,10 @@ function DataPolicyWorkspace({ organizationId, setNotice }: { organizationId: st
         <label className="choice"><input type="checkbox" name="reportsMustRegenerate" /> Existing reports must be regenerated.</label>
         <button className="btn-primary" type="submit" disabled={pending}>Record correction</button></form></section>
         <section className="card operation-form"><h2>Portable Organization archive</h2><p>The export includes governed Organization data and excludes secrets, protected identity-provider material, and transient credentials.</p>
-          <a className="btn-secondary link-button" href={`/v1/organizations/${organizationId}/archive`}>Export portable archive</a>
+          <p className="hint">Includes Runtime history and published versions. Keep the matching object-store backup for uploaded files and Release Packages. Portable archives support up to 512 MB (512,000,000 bytes) of expanded data.</p>
+          <a className="btn-secondary link-button" href={`/v1/organizations/${organizationId}/archive?format=gzip`}>Export portable archive</a>
           <details><summary>Import into an empty Organization deployment</summary><form onSubmit={(event) => void importArchive(event)}>
-            <div className="field"><label htmlFor="organization-archive">Verified Organization archive</label><input id="organization-archive" name="organizationArchive" type="file" accept="application/json,.json" required /></div>
+            <div className="field"><label htmlFor="organization-archive">Verified Organization archive</label><input id="organization-archive" name="organizationArchive" type="file" accept="application/json,application/gzip,.json,.gz" required /></div>
             <button className="btn-danger" type="submit" disabled={pending}>Verify and import archive</button></form></details></section>
       </div>
     </div>

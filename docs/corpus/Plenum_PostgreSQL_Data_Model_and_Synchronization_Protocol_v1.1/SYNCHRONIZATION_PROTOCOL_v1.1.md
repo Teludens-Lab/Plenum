@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | SYNC |
-| Version | 1.1.2 |
-| Date | 2026-10-23 |
+| Version | 1.1.3 |
+| Date | 2026-11-08 |
 | Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001, ADR-002 and ADR-010; named specialist sign-offs remain required. OPEN-002, OPEN-014, OPEN-015 and OPEN-017 are resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner (role placeholders — OPEN-001) |
@@ -170,12 +170,12 @@ Codes, HTTP statuses and retry rules are defined in 09 §8.1. Client behavior:
 
 ## 8. Authority transfer and fencing
 
-`runtime.session_authorities` is the single authority record in the authoritative environment. Transfer is an operator-run procedure, never a browser decision or DNS failover (ADR-001, OPEN-016):
+`runtime.session_authorities` is the single authority record in the authoritative environment. Transfer follows ADR-001 and resolved OPEN-016 (Decision Register §7.3). The following implementation sequence requires a verified runbook and the acceptance evidence in Register §7.5; it is never a browser decision or DNS failover:
 
 1. Suspend new intake; drain in-flight Commands; unknown outcomes are resolved by receipt lookup.
-2. Prove the old authority is fenced (for example by revoking its write credentials) before enabling the successor. Without proof, do not declare the transfer successful.
-3. In one controlled transaction, advance the epoch and name the successor Deployment. Every write path checks Deployment and epoch inside its own transaction.
-4. Restore database, objects, receipts, evidence sequence and outbox to a consistent point; verify the checkpoint chain; resume from the last committed state.
+2. Prove the old authority, including background writers and any old database primary, is fenced before enabling the successor. A shared-database authority row does not isolate an independently writable database copy. Without proof, remain paused.
+3. Verify database, objects, receipts, Evidence sequence and outbox at a consistent point; verify checkpoint continuity. Restore only when required by the failure scenario.
+4. In one controlled transaction, advance the epoch and name the successor Deployment. Every write path checks Deployment and epoch inside its own transaction. Reconnect clients and reconcile pending submissions without duplicating committed work.
 5. Record operator, reason, fencing proof, old and new epochs and recovery status as an Evidence Event and an `authority_transfers` row.
 
 Air-gapped Sessions are authoritative locally from creation. A cloud and an institutional Deployment never both process Commands for one Session; cross-site moves are maintenance-window procedures until a validated transfer protocol exists.
@@ -229,7 +229,7 @@ Air-gapped Sessions are authoritative locally from creation. A cloud and an inst
 
 ## 13. Institution-owned values
 
-OPEN-014, OPEN-015 and OPEN-017 now define the managed-device posture, key custody, offline lifetime and Command allowlist, and recovery/anchor targets. Deployments must implement and evidence those approved values. Institution-owned values still awaiting resolution include the transfer runbook (OPEN-016), recording and transcription consent handling (OPEN-027), retention of objects and cursors, Command size, outbox and delta limits, and plugins permitted in air-gapped mode. Their absence blocks production release, not implementation and testing of these contracts.
+OPEN-014, OPEN-015 and OPEN-017 now define the managed-device posture, key custody, offline lifetime and Command allowlist, and recovery/anchor targets. Deployments must implement and evidence those approved values. OPEN-016 now defines approved transfer policy and conditional targets; the operational runbook, staffing and rehearsals still require evidence. OPEN-027 resolves production recording/transcription by disabling them; OPEN-009 governs retention and OPEN-011 the first approved Plugin baseline. Applicable deployment-specific cursor retention, Command size, outbox/delta limits and permitted air-gapped Plugins must be documented and verified. Missing required implementation/operational evidence blocks production release, not implementation and testing of these contracts.
 
 ## Change log
 
@@ -239,3 +239,4 @@ OPEN-014, OPEN-015 and OPEN-017 now define the managed-device posture, key custo
 | 1.1.1 | 2026-10-17 | Added §4.3 offline feature rules for Ballots, voice, floor control and Effect Proposal approvals (DEC-48, INV-026); floor endpoints and voice media in the transport table; SYNC-16 and SYNC-17; split §4 into subsections. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms and DEC-37 outcomes (renamed NEEDS_REVIEW to NEEDS_RECONCILIATION); recorded rejections with evidence (DEC-43); canonical digest; `activeSessionRoleId`; listed requests refused without receipts; SSE stream and WebSocket collaboration per ADR-010; proposed offline-queueable Command rule pending OPEN-015; moved the error catalog to 09 §8.1; added implementation status to every acceptance test. |
 | 1.0.0 | 2026-10-17 | Initial proposal (archived). |
+| 1.1.3 | 2026-11-08 | Aligned transfer ordering and fencing with resolved OPEN-016; retained operational evidence and deployment-contract obligations. |

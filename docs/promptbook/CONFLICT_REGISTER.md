@@ -4,7 +4,7 @@ Working log only. It is not decision authority. Consequential contradictions are
 
 ## Current normative conflicts
 
-None discovered during generation. The current corpus consistently distinguishes Confirmed product direction, Assumed governance/vocabulary, Product Owner-approved technical design with any named specialist sign-offs still pending, and observed spike behavior.
+None discovered during generation. As of 2026-11-08, the former assumptions are confirmed or superseded by approved amendments; the Decision Register separates policy resolution from implementation and specialist/release evidence. Older observations below remain dated history, not current blockers.
 
 ## Observed gaps that are not normative conflicts
 
@@ -19,3 +19,7 @@ None discovered during generation. The current corpus consistently distinguishes
 | PS-800 requires a roughly one-second remote-update emphasis, but the Teludens catalog and production token layer do not define a semantic remote-update duration/token. | Keep the behavior as an identified motion-token gap; do not add a local literal. Propose a conservative semantic token during implementation and request owner ratification. | Product Owner; Technical Lead | PS-800 | Does not block Checkpoint A; blocks MOT-010 implementation | "Approve the semantic remote-update emphasis token and duration used to identify changed content without moving focused, hovered or selected content." |
 
 If a future task finds a contradiction, add: source citations, proposed resolution, owner, affected task IDs, blocking status, and candidate OPEN wording. Do not assign a new OPEN number locally.
+
+## 2026-11-08 sequence reconciliation
+
+The former PS-840 requirement that every ledger row already pass would require future PS-845 operational evidence and unresolved PS-815/820 external/human gates. The task now accepts product-owned rows only; PS-850 retains the mandatory whole-ledger gate with direct dependencies on all remaining tasks. No requirement or final gate is waived. PS-845 is added for the distinct OPEN-016 implementation outcome; “PS-40” in the request is interpreted as PS-840.

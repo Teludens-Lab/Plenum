@@ -6,9 +6,9 @@
 |---|---|
 | Document ID | PRD |
 | Number | 01 |
-| Version | 0.7.5 |
-| Date | 2026-11-01 |
-| Status | Draft — reconstructed (DEC-21, Assumed). Not ratified. |
+| Version | 0.7.6 |
+| Date | 2026-11-08 |
+| Status | Approved reconstructed product baseline; DEC-21 confirmed 2026-11-08, subject to the Decision Register and later approved decisions. Implementation and release acceptance remain separate. |
 | Owner | Product Owner |
 | Approvers | Product Owner; Methodology Lead; Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
 | Authority | Top product authority for the Plenum corpus. Owns the REQ and INV catalogs. |
@@ -92,7 +92,7 @@ This PRD implements the decisions below. Their text lives only in the Decision R
 | Collaboration and offline | DEC-15, DEC-17, DEC-18; ADR-001, ADR-002 |
 | Deployment and technology | DEC-06, DEC-19, DEC-49; ADR-005 to ADR-018 |
 | Evidence | DEC-20, DEC-43; ADR-003 |
-| Lifecycles and naming | DEC-37 to DEC-40 |
+| Lifecycles and naming | DEC-37 to DEC-39; DEC-64 |
 | First proof | DEC-14, DEC-42, DEC-45 |
 | Workload | DEC-16 |
 
@@ -159,7 +159,7 @@ REQ-001 to REQ-008 replace PLENUM-NEW-01 to PLENUM-NEW-08 in order.
 | REQ-027 | Workflow transitions MUST be evaluated at the trusted boundary against permissions, Gates, Stage, record version and Governing Release. | Direct API attempts to skip states or bypass roles fail. | INV-003 | 05, 09 |
 | REQ-028 | Artifact drafting MUST provide autosave, conflict detection, recovery after reconnection and explicit submission; each submitted Artifact MUST reference the exact Form version used. | A stale write returns a conflict; a submitted Artifact can be re-rendered with its original Form. | INV-004 | 05 |
 | REQ-029 | Every Message send MUST be checked against Communication Routes. | A send on a forbidden route is rejected and recorded. | DEC-10 | 05 |
-| REQ-030 | Injects MUST follow the Inject lifecycle and support manual, scheduled, Stage-entry, Stage-exit and conditional release, cancellation, rescheduling and per-recipient acknowledgement and response tracking. | Each trigger type fires exactly once in a test Session. | DEC-40 | 05 |
+| REQ-030 | Injects MUST follow the Inject lifecycle and support manual, scheduled, Stage-entry, Stage-exit and conditional release, cancellation, rescheduling and per-recipient acknowledgement and response tracking. | Each trigger type fires exactly once in a test Session. | DEC-64 | 05 |
 | REQ-031 | Every State Value change MUST record previous value, new value, operation, source, actor and rationale, transactionally with its cause. | No State Value change exists without a matching source record. | Runtime §10 | 05 |
 | REQ-032 | The operator console MUST show Session status, current Stage, timer, connected Participants, Seat occupancy, required submissions, active workflow tasks, pending Injects, adjudication queue, delivery failures, warnings and the event stream. | Console fields match authoritative state during a rehearsal. | Runtime §14 | 05 |
 | REQ-033 | Recovery operations (reassign, reopen, correct recipients, release missed Injects, reprocess failed automation, extend deadlines, restore state, annotate) MUST NOT erase original history. | Every recovery action leaves the original record and a compensating record. | INV-004, INV-015 | 05 |
@@ -364,7 +364,7 @@ Delivery sequence, gates and evidence are owned by 07 Implementation Roadmap. De
 
 ## 10. Open items affecting this PRD
 
-Unresolved items are those not marked resolved in Decision Register §7; OPEN-003, OPEN-007, OPEN-021 and OPEN-025 are resolved. The items that block PRD ratification are OPEN-001 (approvers) and confirmation of the Assumed decisions listed in Decision Register §3.
+All OPEN entries in Decision Register §7 have recorded resolutions as of 2026-11-08, including baseline-limited resolutions. DEC-21–27 and DEC-30–40 have been confirmed or superseded by the approved amendments DEC-62–64; DEC-51 is confirmed. Decision Register §3 retains specialist and release gates, and §7.5 identifies implementation/evidence work. Resolved decisions are not proof of delivery.
 
 ---
 
@@ -412,3 +412,4 @@ Section numbers cited here refer to the superseded source documents (Foundation 
 | 0.7.3 | 2026-10-17 | Updated the open-item status note after the Product Owner resolved OPEN-003 by confirming the official Fractured Order golden reference. No requirement or acceptance criterion changed. |
 | 0.7.4 | 2026-10-21 | Applied the OPEN-007 identity-profile resolution and DEC-61 Reviewer and Research Analyst Organization Roles; no requirement IDs changed. |
 | 0.7.5 | 2026-11-01 | Applied resolved OPEN-013 to REQ-022: production two-person integrity, distinct-author approval and explicit sandbox-only self-approval; no requirement IDs changed. |
+| 0.7.6 | 2026-11-08 | Aligned owner confirmation, DEC-64 and resolved decision status; retained implementation and release gates. |

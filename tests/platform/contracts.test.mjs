@@ -41,8 +41,33 @@ import {
 } from "@plenum/event-contracts";
 import {
   SIMULATION_SCHEMA_VERSION,
+  injectCompletion, assertInjectCompletion,
   hasPinnedPluginDigest
 } from "@plenum/simulation-schema";
+
+test("PS-830-T07 Inject completion is per recipient, configured and backward compatible", () => {
+  const configured = (acknowledgementRequired, response) => ({ completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired },
+    ...(response ? { requiredResponseArtifactTypeId: "response" } : {}) });
+  const counts = (acknowledged, responded) => ({ total: 2, acknowledged, responded });
+  assert.equal(injectCompletion(configured(false, false), counts(0, 0)).state, "closed");
+  assert.equal(injectCompletion(configured(true, false), counts(1, 0)).complete, false);
+  assert.equal(injectCompletion(configured(true, false), counts(2, 0)).state, "closed");
+  assert.equal(injectCompletion(configured(false, true), counts(0, 1)).complete, false);
+  assert.equal(injectCompletion(configured(false, true), counts(0, 2)).state, "closed");
+  assert.equal(injectCompletion(configured(true, true), counts(2, 1)).complete, false);
+  assert.equal(injectCompletion(configured(true, true), counts(2, 2)).state, "closed");
+  assert.equal(injectCompletion({}, counts(0, 0)).acknowledgementRequired, true);
+  assert.equal(injectCompletion({}, counts(2, 0)).state, "acknowledged");
+  assert.equal(injectCompletion({ requiredResponseArtifactTypeId: "response" }, counts(2, 2)).state, "responded");
+  assert.equal(injectCompletion(configured(false, false), { total: 0, acknowledged: 0, responded: 0 }).complete, false);
+  for (const completionRequirements of [null, {}, [], { contractId: "inject-completion-v2", acknowledgementRequired: true },
+    { contractId: "inject-completion-v1", acknowledgementRequired: "false" },
+    { contractId: "inject-completion-v1", acknowledgementRequired: false, completion: "any_recipient" }]) {
+    assert.throws(() => assertInjectCompletion({ id: "invalid", completionRequirements }), /invalid inject-completion-v1/u);
+  }
+  assert.doesNotThrow(() => assertInjectCompletion({ id: "legacy" }));
+  assert.doesNotThrow(() => assertInjectCompletion({ id: "configured", ...configured(false, true) }));
+});
 import {
   AuthorizationError,
   authorizeCommandRole,

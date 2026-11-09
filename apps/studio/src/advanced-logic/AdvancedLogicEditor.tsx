@@ -1,7 +1,7 @@
 import type { CoreDesignV1, GateV1, ScenarioV1, StateVariableDefinitionV1 } from "@plenum/simulation-schema";
 
 import type { StudioCollaborationClient } from "../collaboration/client.js";
-import { identifier } from "../core-design/model.js";
+import { identifier, stageChoiceLabel } from "../core-design/model.js";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="field"><span>{label}</span>{children}</label>;
@@ -197,7 +197,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
     {core.stages?.map((stage, stageIndex) => {
       const condition = stage.completionGate?.conditions[0];
       const simple = condition !== undefined && !("conditions" in condition) ? condition : undefined;
-      return <fieldset className="nested-editor" key={stage.id}><legend>{stage.name}</legend>
+      return <fieldset className="nested-editor" key={stage.id}><legend>{stageChoiceLabel(core, stage.id)}</legend>
         <label className="choice"><input type="checkbox" checked={stage.completionGate !== undefined}
           disabled={numericVariables.length === 0} onChange={(event) => event.target.checked
             ? client.setAtPath(["coreDesign", "stages", stageIndex, "completionGate"], simpleGate(numericVariables[0]!.id))
@@ -216,7 +216,7 @@ export function AdvancedLogicEditor({ core, scenario, client }: {
     {core.stages?.flatMap((stage, stageIndex) => stage.transitions.map((transition, transitionIndex) => {
       const condition = transition.gate?.conditions[0];
       const simple = condition !== undefined && !("conditions" in condition) ? condition : undefined;
-      return <fieldset className="nested-editor" key={transition.id}><legend>{stage.name} to {core.stages?.find(({ id }) => id === transition.targetStageId)?.name ?? transition.targetStageId}</legend>
+      return <fieldset className="nested-editor" key={transition.id}><legend>{stageChoiceLabel(core, stage.id)} to {stageChoiceLabel(core, transition.targetStageId)}</legend>
         <label className="choice"><input type="checkbox" checked={transition.gate !== undefined} disabled={numericVariables.length === 0}
           onChange={(event) => event.target.checked
             ? client.setAtPath(["coreDesign", "stages", stageIndex, "transitions", transitionIndex, "gate"], simpleGate(numericVariables[0]!.id))

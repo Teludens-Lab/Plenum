@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | CDM |
 | Number | 03 |
-| Version | 1.3.3 |
-| Date | 2026-10-21 |
+| Version | 1.3.4 |
+| Date | 2026-11-08 |
 | Status | Draft for review. v1.2 addendum merged (DEC-26). Header previously read 1.1.0 in a file named v1.2; corrected. |
 | Owner | Technical Lead, with Methodology Lead for meaning |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -313,7 +313,7 @@ interface ArtifactTypeDefinition {
   formId: string;
   workflowId: string;
   ownership: "individual" | "team" | "session";
-  decisionBearing: boolean;          // DEC-35
+  decisionBearing: boolean;          // DEC-63
   actionFormId?: string;             // schema for the single Action inside a Decision Record (OPEN-018 resolved)
   versioning: "none" | "draft_versions" | "full_history";
   informationPolicyId: string;
@@ -402,7 +402,7 @@ interface FormUiOptions {
 type DataClassification = "public" | "internal" | "confidential" | "restricted"; // extensions OPEN-024
 ```
 
-Field-type limits, nesting depth and attachment rules are OPEN-010.
+Resolved OPEN-010 (Decision Register §7.2) governs the supported target field set, nesting, calculations, attachments and import/export limits. The illustrative interfaces above predate that resolution: entries such as ranking and matrix are deferred, and the approved yes/no and Artifact-reference support must be reconciled into versioned contracts. Do not interpret the illustration as implemented support or as permission to enable deferred types. Contract changes require their own compatibility and verification evidence; §7.5 records the remaining work.
 
 ## 10. Workflows
 
@@ -1091,7 +1091,7 @@ Offline Participant bundles are runtime-generated, policy-filtered projections �
 
 ## 21. Open questions
 
-OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-024 (classification), and OPEN-028 (secret ballots). OPEN-005, the PS-400 baseline of OPEN-006, OPEN-012, and OPEN-018 are resolved; OPEN-021 is resolved by DEC-59 and DEC-60.
+The cited OPEN items have recorded resolutions; status authority is Decision Register §7. OPEN-004 and OPEN-010 were resolved on 2026-11-08, with implementation/evidence work in §7.5. OPEN-024 and OPEN-028 are resolved for version 1; their constraints remain in force. Existing schema examples are not proof that every approved target has been implemented.
 
 ## Change log
 
@@ -1102,3 +1102,4 @@ OPEN-004 (concept activation), OPEN-010 (form constraints), OPEN-024 (classifica
 | 1.3.1 | 2026-10-17 | Added `PollDefinition` (§13.2), `VoiceChannelDefinition` (§13.3), `ModelCompositionDefinition` and a digest-pinned `PluginBinding` (§14.2); renamed `CommunicationChannel` to `MessageChannel` and `channels` to `messageChannels` (DEC-51); removed `requireHumanApproval` (DEC-54); added validator rules and runtime mappings. |
 | 1.3.0 | 2026-10-17 | Split Core Design, Scenario and manifest (DEC-31); replaced phases with Stages and Stage Groups (DEC-33); replaced `RoleDefinition` with `SessionRoleDefinition` and removed platform scope (DEC-44); added capability catalog; defined previously undefined types (ActorSelector, AssignmentRule, QuorumDefinition, FactReference, ExpressionDefinition, FieldValidation, ValidationRule, EditabilityRule, FormUiOptions, NavigationDefinition, ReportSection, ReportFilter, InputMapping, RubricDefinition, DecisionRule, EffectMapping, OperatorControlDefinition, ResourceAllocation, PluginBinding, ValidationProfile, AccessPolicyDefinition and others); replaced VisibilityRule with default-deny Information Policy; added decision-bearing artifacts, capabilities, resources, research and measurement types; added DEC-42 reference workflow; merged v1.2 addendum. |
 | 1.2.0 | 2026-10-17 | Reconciliation addendum (archived). Header incorrectly read 1.1.0. |
+| 1.3.4 | 2026-11-08 | Cited approved form target and limits, marked pre-resolution interface examples as requiring contract reconciliation, and aligned DEC-63/status references. |

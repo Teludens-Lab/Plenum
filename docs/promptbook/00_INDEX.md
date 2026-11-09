@@ -1,14 +1,16 @@
-# Plenum Studio development promptbook v1.4
+# Plenum Studio development promptbook v1.5
 
 ## Executive summary
 
-This promptbook now schedules 49 dependency-ordered tasks across P00-P11. P00-P06 built and verified the platform's principal technical slices; P07-P11 close the remaining product, workflow, user-interface, operational and acceptance gaps needed for a genuinely usable platform. It generates implementation instructions only; it does not claim that planned completion work is already implemented, deployed, ratified or released.
+This promptbook now schedules 50 dependency-ordered tasks across P00-P11. P00-P06 built and verified the platform's principal technical slices; P07-P11 close the remaining product, workflow, user-interface, operational and acceptance gaps needed for a genuinely usable platform. It generates implementation instructions only; it does not claim that planned completion work is already implemented, deployed, ratified or released.
 
 The retained executable spike remains `references/plenum-runtime-slice/` v0.2.0 and is not a golden source. The Product Owner confirmed Fractured Order commit `ae5d5065bc04a53631815b1b1715a54e21e3ef5b` as the immutable behavioral reference under `references/fractured-order/`. P00-P05 now have extensive Node 24/PostgreSQL 18/browser/accessibility/deployment evidence recorded in `PROJECT_STATE.md`, culminating in PS-550 engineering completion and a production NO-GO. That evidence proves technical slices, not the complete user-facing product; P07-P11 close that distinction explicitly.
 
 ## Finished-system definition
 
 The implementation target is a blank-install, UI-only lifecycle: a non-programming Designer can create or import and visually verify Fractured Order, publish a Release, staff and run a Session, complete all role workflows, adjudicate and recover, and produce traceable evidence, reports, replay and archive. The same platform must then author and run two materially different simulations without Runtime code changes. Every product surface uses the Teludens catalog under `references/teludens-design-system-catalog/`, including the complete Fractured Order experience, and uses the approved primary Plenum wordmark with theme-safe presentation as platform branding. Release approval remains separate from implementation completion.
+
+Start the remaining sequence with [APPROVAL_IMPLEMENTATION_PROMPTBOOK.md](APPROVAL_IMPLEMENTATION_PROMPTBOOK.md): PS-815/820 outstanding acceptance, PS-830 approved authoring and golden journey, PS-840 product UAT, PS-842 role-by-role interface consistency, PS-845 controlled authority transfer and PS-850 final convergence.
 
 ## Deliverable map
 
@@ -45,17 +47,17 @@ The implementation target is a blank-install, UI-only lifecycle: a non-programmi
 
 - Approved: ADR-006 no-Supabase principle; ADR-007 React/TypeScript frontend.
 - Confirmed product scope: DEC-01..20 and DEC-41..60, including collaboration, offline/LAN, single authority, voting, voice, and the whole Extension Framework.
-- Assumed: DEC-21..27 and DEC-30..40; tasks may design against them but phase exits remain labeled.
+- Confirmed 2026-11-08: the former assumptions DEC-21..27 and DEC-30..40, with amended entries superseded by DEC-62..64; both DEC-51 names confirmed. OPEN-004/010/016/023 resolved; implementation and specialist/release evidence remain separate.
 - Approved 2026-10-20: ADR-002, ADR-004/005, ADR-008..014 and ADR-017. ADR-006/007 were already Approved; ADR-001/003/015/016/018 remain Confirmed. Named specialist sign-offs remain explicit.
 - Candidates: Yjs, LiveKit, React Router, TanStack Query, Zustand, React Hook Form, Zod, dnd-kit, React Flow, Vitest, Playwright, Vite, Radix, Tailwind, Tiptap, Kysely, IndexedDB/Dexie, structured logging, OpenTelemetry. A task must pin only what it actually uses.
 
 ## Coverage and exclusions
 
-- Vertical tasks: 49 (32 P00-P06 tasks plus 17 product-completion tasks in P07-P11).
+- Vertical tasks: 50 (32 P00-P06 tasks plus 18 product-completion tasks in P07-P11).
 - Normative coverage: 94/94 REQs and 28/28 INVs.
 - Product exclusions preserved: AI-assisted authoring, ranked-choice voting, video, feedback loops, public Plugin marketplace, arbitrary custom code, mandatory Kubernetes, and unsupported production claims.
 - Dependency cycles: none, verified by the promptbook validator.
 
-## Exact next runnable prompt
+## Remaining-task entry
 
-PS-760 passed automated and product-owner evidence on 2026-11-02. [PS-770 - Complete participant entry and Runtime experience](prompts/P09/PS-770-complete-participant-entry-and-runtime-experience.md) is the next eligible prompt. Keep `OPEN-010` explicitly unratified.
+Use the linked implementation promptbook and current PROJECT_STATE.md. No remaining task is marked unconditionally ready: verify prerequisite evidence and the recorded PS-815→PS-820 exception; preserve external/human gates. Independent safe preparation may proceed without claiming task acceptance. PS-770 is historical completed work, not the current next-task pointer.

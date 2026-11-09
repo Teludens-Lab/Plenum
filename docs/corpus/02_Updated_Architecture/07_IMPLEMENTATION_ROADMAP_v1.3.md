@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | IRM |
 | Number | 07 |
-| Version | 1.3.2 |
-| Date | 2026-10-17 |
+| Version | 1.3.3 |
+| Date | 2026-11-08 |
 | Status | Draft for review. v1.2 amendment merged; duplicate section numbers fixed (DEC-26). |
 | Owner | Product Owner, with Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -242,9 +242,13 @@ Anyone changing code — human or coding agent — first reads the requirement r
 
 | Item | Status |
 |---|---|
-| Specification set (01–12, Data Model, Synchronization Protocol) | Rebuilt 2026-10-17; 10–12 added the same day; Draft; awaiting confirmations in Decision Register §3 |
+| Specification decisions | Owner confirmation recorded 2026-11-08 in Decision Register v1.0.16; implementation and specialist/release acceptance remain separate |
 | Reference code slice v0.2 | Spike for Phase 1; data-driven roles and transitions; see its README for verification status |
-| Phases 0–6 | Not started |
+| Phases 0–6 | Historical phase table is not a current completion audit; consult delivery evidence before claiming readiness |
+
+### 17.1 Follow-up from owner approval on 2026-11-08
+
+Decision Register §7.5 owns the outstanding acceptance obligations for OPEN-004, OPEN-010, OPEN-016, DEC-63 and DEC-64. Before closing implementation work, demonstrate dependency validation and preservation, bounded Forms across renderer/server/export, safe measured authority transfer and the amended decision/Inject semantics. OPEN-023 requires reconciliation only if source material is recovered. This approval changes governing documentation, not delivery status or deployment.
 
 ## Change log
 
@@ -254,3 +258,4 @@ Anyone changing code — human or coding agent — first reads the requirement r
 | 1.3.1 | 2026-10-17 | Corrected the migrations citation to Data Model §11. |
 | 1.3.2 | 2026-10-17 | Moved the Extension Framework, polls and voice into first-release Phases 2 and 3 (DEC-46, DEC-47, DEC-58); Phase 6 becomes catalog expansion; added epics L to N, delivery stage F, MVP criteria and load-test coverage. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |
+| 1.3.3 | 2026-11-08 | Recorded approved-decision follow-up and removed obsolete assumptions-as-blockers; avoided treating the historical phase table as a current implementation audit. |

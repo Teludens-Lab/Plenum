@@ -16,6 +16,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import type { ObjectStore } from "./object-store.js";
+import { assertFormAttachmentRetention } from "../reporting/form-retention.js";
 
 export interface PublicationControls extends JsonObject {
   validationReportId: string;
@@ -203,6 +204,7 @@ async function publishMaterialization(
         if (freeze.rowCount !== 1) throw authorizationError("NOT_FOUND", "The Publication Freeze was not found.", input.correlationId);
       }
       await assertApprovedPluginBindings(client, principal.organizationId, frozen.materialization.coreDesign, input.correlationId);
+      await assertFormAttachmentRetention(client, principal.organizationId, input.projectId, frozen.materialization.coreDesign, input.correlationId);
       const duplicate = await client.query<{ release_id: string }>(
         `SELECT release.id AS release_id
            FROM studio.definition_revisions revision
@@ -238,7 +240,7 @@ async function publishMaterialization(
            (id,organization_id,project_id,parent_revision_id,snapshot,snapshot_sha256,methodology_version,author_id,source_freeze_id)
          VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)`,
         [definitionRevisionId, principal.organizationId, input.projectId, parent.rows[0]?.id ?? null,
-          JSON.stringify(frozen.materialization), compiled.contentDigest, input.methodologyVersion, principal.principalId,
+          JSON.stringify({ coreDesign: compiled.release.coreDesign, scenario: compiled.release.scenario }), compiled.contentDigest, input.methodologyVersion, principal.principalId,
           frozen.sourceFreezeId ?? null]
       );
       await client.query(
@@ -248,7 +250,7 @@ async function publishMaterialization(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [releaseId, principal.organizationId, input.projectId, definitionRevisionId,
           number.rows[0]?.release_number, input.releaseLabel, PACKAGE_SCHEMA_VERSION,
-          RELEASE_COMPILER_VERSION, compiled.packageDigest, objectKey, principal.principalId, now]
+          compiled.release.manifest.compilerVersion, compiled.packageDigest, objectKey, principal.principalId, now]
       );
       for (const approver of input.controls.approvedBy) {
         await client.query(
@@ -417,6 +419,7 @@ export async function importReleasePackage(
         return;
       }
       const people = [manifest.publishedBy, ...manifest.approvedBy];
+      await assertFormAttachmentRetention(client, principal.organizationId, manifest.projectId, compiled.release.coreDesign, correlationId);
       const memberships = await client.query<{ count: string }>(
         `SELECT count(DISTINCT person_id) AS count FROM identity.memberships
           WHERE organization_id=$1 AND person_id=ANY($2::uuid[])`,

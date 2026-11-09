@@ -39,7 +39,7 @@ export function ProjectPortal() {
   const [message, setMessage] = useState("Loading recent Project work.");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"active" | "archived" | "all">("active");
-  const [mode, setMode] = useState<"blank" | "template">("blank");
+  const [mode, setMode] = useState<"blank" | "template" | "package">("blank");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [includeScenario, setIncludeScenario] = useState(false);
   const [pending, setPending] = useState(false);
@@ -100,7 +100,16 @@ export function ProjectPortal() {
     setNoticeKind("status");
     setMessage("Creating the Project and its Draft.");
     try {
-      const result = await request<ProjectMutationV1>("/v1/projects", {
+      let result: ProjectMutationV1;
+      if (mode === "package") {
+        const file = form.get("releasePackage");
+        if (!(file instanceof File) || file.size === 0 || file.size > 32_000_000) throw new Error("Choose a Release Package of at most 32 MB.");
+        const bytes = await file.arrayBuffer();
+        const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+        result = await request<ProjectMutationV1>(`/v1/projects/import-package?${new URLSearchParams({ requestId, title, sha256 })}`, {
+          method: "POST", headers: { "content-type": "application/vnd.plenum.release+json" }, body: bytes
+        });
+      } else result = await request<ProjectMutationV1>("/v1/projects", {
         method: "POST",
         body: JSON.stringify({ requestId, title,
           ...(mode === "template" ? { templateId: selectedTemplateId, includeScenario } : {}) })
@@ -110,7 +119,7 @@ export function ProjectPortal() {
       navigateWithLoader(result.editorUrl);
     } catch (cause) {
       setNoticeKind("error");
-      setMessage(`Project was not created. ${cause instanceof Error ? cause.message : "Review the form and try again."} Your entries are preserved.`);
+      setMessage(`${cause instanceof PortalError ? "Project creation was rejected." : "Project creation could not be confirmed."} ${cause instanceof Error ? cause.message : "Try again."} Your entries are preserved; retry unchanged entries to recover the original result.`);
       setPending(false);
       requestAnimationFrame(() => noticeRef.current?.focus());
     }
@@ -168,6 +177,7 @@ export function ProjectPortal() {
   }
 
   function chooseTemplate(templateId: string): void {
+    createRequestIdRef.current = null;
     setMode("template");
     setSelectedTemplateId(templateId);
     setIncludeScenario(false);
@@ -204,19 +214,24 @@ export function ProjectPortal() {
         {query.trim() === "" && status === "active" ? null : <button className="btn-secondary" type="button" onClick={clearProjectFilters}>Clear Project filters</button>}</div>
     </form>
 
-    {portal.permissions.canCreateProject ? <form className="card project-create teludens-path" onSubmit={(event) => void create(event)}>
+    {portal.permissions.canCreateProject ? <form className="card project-create teludens-path" onChange={() => { if (!pending) createRequestIdRef.current = null; }} onSubmit={(event) => void create(event)}>
       <h3>Create a Project</h3>
-      <fieldset><legend>Starting point</legend>
+      <fieldset disabled={pending}><legend>Starting point</legend>
         <label className="choice"><input type="radio" name="startingPoint" value="blank" checked={mode === "blank"} onChange={() => { setMode("blank"); setSelectedTemplateId(""); setIncludeScenario(false); }} />Blank Core Design</label>
         <label className="choice"><input type="radio" name="startingPoint" value="template" checked={mode === "template"} onChange={() => setMode("template")} disabled={(templates?.templates.length ?? 0) === 0} />Simulation Template</label>
+        <label className="choice"><input type="radio" name="startingPoint" value="package" checked={mode === "package"} onChange={() => setMode("package")} />Release Package file</label>
       </fieldset>
-      <div className="field"><label htmlFor="new-project-title">Project name</label><input ref={titleRef} id="new-project-title" name="title" required maxLength={200} aria-describedby="new-project-title-help" />
+      <div className="field"><label htmlFor="new-project-title">Project name</label><input ref={titleRef} id="new-project-title" name="title" required disabled={pending} maxLength={200} aria-describedby="new-project-title-help" />
         <p className="hint" id="new-project-title-help">Use a name that distinguishes this design from other work in the Organization.</p></div>
-      {mode === "template" ? <><div className="field"><label htmlFor="new-project-template">Simulation Template</label><select id="new-project-template" required value={selectedTemplateId} onChange={(event) => { setSelectedTemplateId(event.target.value); setIncludeScenario(false); }}>
+      {mode === "template" ? <><div className="field"><label htmlFor="new-project-template">Simulation Template</label><select id="new-project-template" required disabled={pending} value={selectedTemplateId} onChange={(event) => { setSelectedTemplateId(event.target.value); setIncludeScenario(false); }}>
         <option value="" disabled>Choose a Simulation Template</option>{templates?.templates.map((template) => <option key={template.id} value={template.id}>{templateLabel(template)}</option>)}
       </select></div>
-      <label className="choice"><input type="checkbox" checked={includeScenario} disabled={selectedTemplate?.includesOptionalScenario !== true} onChange={(event) => setIncludeScenario(event.target.checked)} />Copy optional Scenario content</label>
+      <label className="choice"><input type="checkbox" checked={includeScenario} disabled={pending || selectedTemplate?.includesOptionalScenario !== true} onChange={(event) => setIncludeScenario(event.target.checked)} />Copy optional Scenario content</label>
       <p className="hint">Core Design is copied. Scenario content is excluded by default.</p></> : null}
+      {mode === "package" ? <div className="field"><label htmlFor="project-release-package">Release Package</label>
+        <input id="project-release-package" name="releasePackage" type="file" required disabled={pending} accept=".json,application/vnd.plenum.release+json" aria-describedby="project-package-help" />
+        <p className="hint" id="project-package-help">Choose an exported Release Package, up to 32 MB. Its Core Design and Scenario become a new local Draft. Review every element before requesting local approval and publication.</p>
+      </div> : null}
       <button className="btn-primary" type="submit" disabled={pending || (mode === "template" && selectedTemplateId === "")}>{pending ? "Creating Project..." : "Create Project and open Draft"}</button>
     </form> : <section className="card portal-readonly"><p className="eyebrow">Read-only</p><h3>Review access</h3><p>Your Organization Role can inspect Project status and open review work, but cannot create, archive, or reopen Projects.</p></section>}
 
@@ -228,7 +243,7 @@ export function ProjectPortal() {
         <ul className="project-list catalog-list">{portal.projects.map((project) => <li className="project-row catalog-row" key={project.id}>
           <div className="project-row-main"><div className="card-heading"><h4><a href={project.editorUrl}>{project.title}</a></h4><span className={`badge ${project.lifecycleStatus === "active" ? "badge-online" : "badge-state"}`}>{project.lifecycleStatus === "active" ? "Active" : "Archived"}</span></div>
             <dl className="project-metadata"><div><dt>Owner</dt><dd>{project.owner.displayName}</dd></div><div><dt>Last activity</dt><dd><time dateTime={project.updatedAt}>{formatDate(project.updatedAt)}</time></dd></div><div><dt>Release status</dt><dd>{project.releaseCount === 0 ? "Draft only" : `${project.releaseCount} published Release${project.releaseCount === 1 ? "" : "s"}`}</dd></div>
-              <div><dt>Starting point</dt><dd>{project.sourceTemplate?.title ?? "Blank Core Design"}</dd></div></dl>
+              <div><dt>Starting point</dt><dd>{project.sourceTemplate?.title ?? "Local Draft"}</dd></div></dl>
             {project.collaborators.length > 0 ? <p className="hint">Collaborators: {project.collaborators.map(({ displayName, roles }) => `${displayName} (${roles.join(", ")})`).join("; ")}</p> : null}
           </div>
           <div className="project-actions catalog-row-actions">
@@ -249,7 +264,7 @@ export function ProjectPortal() {
 
     <section aria-labelledby="templates-title"><div className="section-heading"><h3 id="templates-title">Simulation Templates</h3></div>
       {(templates?.templates.length ?? 0) === 0 ? <div className="empty-state"><h4>No Simulation Templates available</h4><p>No Templates are published to this Organization library. You can still start with a blank Core Design.</p></div> : <ul className="template-list">{templates?.templates.map((template) => <li className="card template-row" key={template.id}><div><h4>{template.title}</h4><p>{template.summary || "Reusable Core Design"}</p><p className="hint">Published {formatDate(template.publishedAt)}. {template.includesOptionalScenario ? "Optional Scenario content is available." : "Core Design only."}</p></div>
-        {portal.permissions.canCreateProject ? <button className="btn-secondary" type="button" onClick={() => chooseTemplate(template.id)}>Start from Template</button> : null}</li>)}</ul>}
+        {portal.permissions.canCreateProject ? <button className="btn-secondary" type="button" disabled={pending} onClick={() => chooseTemplate(template.id)}>Start from Template</button> : null}</li>)}</ul>}
     </section>
 
     {portal.permissions.canViewMembers && portal.members !== undefined ? <section className="card organization-members" aria-labelledby="members-title"><h3 id="members-title">Organization members and roles</h3><ul>{portal.members.map((member) => <li key={member.id}><span>{member.displayName}</span><span>{member.roles.join(", ")}</span></li>)}</ul></section> : null}

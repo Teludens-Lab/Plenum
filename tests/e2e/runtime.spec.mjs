@@ -269,10 +269,10 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await restored.goto(runtimeUrl());
     await expect(restored.getByRole("list", { name: "Session messages", exact: true })).toContainText("Reconnect complete: 1 accepted.", { timeout: 20_000 });
     const restoredArtifact = restored.getByRole("article", { name: "Blue Strategic Orientation" });
-    await restoredArtifact.locator(".artifact-edit > summary").click();
+    await restoredArtifact.locator(".artifact-edit > summary").first().click();
     await expect(restoredArtifact.getByLabel("What will Red do first?")).toHaveValue(uniqueDraft, { timeout: 15_000 });
     await restored.reload();
-    await restoredArtifact.locator(".artifact-edit > summary").click();
+    await restoredArtifact.locator(".artifact-edit > summary").first().click();
     await expect(restoredArtifact.getByLabel("What will Red do first?")).toHaveValue(uniqueDraft, { timeout: 15_000 });
     expect((await new AxeBuilder({ page: restored }).analyze()).violations).toEqual([]);
 
@@ -1450,7 +1450,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await stages.locator("details[id^='stages-']").first().locator("summary").click();
     await stages.getByLabel("Duration in seconds (0 for untimed)").first().fill("1799");
     const forms = await openStudioWorkspace(first.page, "Forms & Artifacts", "Forms & Artifact Types");
-    await forms.locator("details[id^='forms-']").first().locator("summary").click();
+    await forms.locator("details[id^='forms-']").first().locator("summary").first().click();
     await forms.getByLabel("Form name").first().fill("PS-350 browser-configured form");
     const workflows = await openStudioWorkspace(first.page, "Workflows");
     await workflows.locator("details[id^='workflows-']").first().locator("summary").click();

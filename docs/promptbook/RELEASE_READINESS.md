@@ -47,3 +47,7 @@ This is a maturity view, not a release declaration. Current status is derived fr
 ## Honest claim boundary
 
 PS-550 engineering verification is complete. The production recommendation remains **NO-GO**: P07-P11 product-completion evidence, full-route Teludens/branding conformance, manual accessibility, formal security review, institution-owned trust/backup/retention operations evidence, golden-journey/UAT evidence and final authorized owner approval remain.
+
+## 2026-11-08 approval implementation alignment
+
+The four remaining OPEN decisions and prior assumptions are resolved in Register v1.0.16. Production remains NO-GO pending implementation/evidence. PS-830 owns approved authoring, PS-840 independent product UAT, PS-845 controlled authority transfer, and PS-850 final evidence convergence. Earlier evidence rows remain observations of their original builds, not certification of the new approved capability set.

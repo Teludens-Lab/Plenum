@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { JsonObject, ProjectDemoV1, RuntimeFormV1 } from "@plenum/event-contracts";
 import {
-  runtimeFormValue,
   type CoreDesignV1,
   type RuntimeArtifactTypeDefinitionV1,
   type RuntimeFormDefinitionV1,
@@ -10,6 +9,7 @@ import {
   type ScenarioV1
 } from "@plenum/simulation-schema";
 import { PlenumLoader } from "../PlenumLoader.js";
+import { FormValue } from "../runtime/FormTableSummary.js";
 
 export type ProjectDemoFieldEditorProps = {
   form: RuntimeFormV1;
@@ -53,6 +53,11 @@ function asRuntimeForm(form: RuntimeFormDefinitionV1): RuntimeFormV1 {
     label: item.label,
     type: item.type === "short_text" ? "text" : item.type,
     required: item.required === true,
+    ...(form.contractId === undefined || item.defaultValue === undefined ? {} : { defaultValue: item.defaultValue }),
+    ...(item.numeric === undefined ? {} : { numeric: item.numeric }),
+    ...(item.computation === undefined ? {} : { computation: item.computation, readOnly: true }),
+    ...(item.formattedTextContractId === undefined ? {} : { formattedTextContractId: item.formattedTextContractId }),
+    ...(item.entityReference === undefined ? {} : { entityReference: item.entityReference }),
     ...(item.requiredWhen === undefined ? {} : { requiredWhen: item.requiredWhen }),
     ...(item.visibleWhen === undefined ? {} : { visibleWhen: item.visibleWhen }),
     ...(item.helpText === undefined ? {} : { helpText: item.helpText }),
@@ -73,6 +78,7 @@ function asRuntimeForm(form: RuntimeFormDefinitionV1): RuntimeFormV1 {
   }));
   return {
     id: form.id, name: form.name, formVersion: form.formVersion,
+    ...(form.contractId === undefined ? {} : { contractId: form.contractId }),
     fields: sections.flatMap((section) => section.fields), sections,
     ...(form.rules === undefined ? {} : { rules: form.rules })
   };
@@ -100,9 +106,7 @@ function stateLabel(workflow: RuntimeWorkflowDefinitionV1 | undefined, state: st
 
 function ArtifactFields({ form, payload }: { form: RuntimeFormV1; payload: JsonObject }) {
   return <dl className="qa-demo-artifact-fields">{form.fields.map((field) => {
-    const value = runtimeFormValue(payload, field.key);
-    const display = Array.isArray(value) ? value.join(", ") : String(value ?? "Not provided");
-    return <div key={field.key}><dt>{field.label}</dt><dd>{display || "Not provided"}</dd></div>;
+    return <div key={field.key}><dt>{field.label}</dt><dd><FormValue field={field} payload={payload} /></dd></div>;
   })}</dl>;
 }
 
@@ -246,6 +250,9 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
   const renderModule = (module: RuntimeInterfaceProfileV1["layout"]["regions"][number]["modules"][number]): ReactNode => {
     const title = module.title ?? module.moduleType.replaceAll("_", " ");
     const emptyText = typeof module.configuration.emptyStateText === "string" ? module.configuration.emptyStateText : "Nothing is available in this context.";
+    const moduleArtifactTypes = artifactTypes.filter((type) =>
+      (!Array.isArray(module.configuration.artifactTypeKeys) || module.configuration.artifactTypeKeys.includes(type.key)) &&
+      (typeof module.configuration.artifactTypeId !== "string" || module.configuration.artifactTypeId === type.id));
     if (module.moduleType === "session_status") return <section className="card curated-runtime-module" aria-labelledby={`qa-module-${module.id}`}>
       <h2 id={`qa-module-${module.id}`}>{title}</h2><dl className="runtime-status-list">
         <div><dt>Demo</dt><dd>Isolated Draft</dd></div><div><dt>Stage</dt><dd>{stage?.name ?? "Not configured"}</dd></div>
@@ -254,10 +261,10 @@ export function ProjectDemo({ projectId, FieldEditorComponent }: {
     </section>;
     if (module.moduleType === "artifact_form") return <section className="qa-demo-module" aria-labelledby={`qa-module-${module.id}`}>
       <div className="section-heading"><h2 id={`qa-module-${module.id}`}>{title}</h2></div>
-      {artifactTypes.length === 0 ? <p className="empty-state">{emptyText}</p> : <div className="qa-demo-create-grid">{artifactTypes.map((artifactType) => {
+      {moduleArtifactTypes.length === 0 ? <p className="empty-state">{emptyText}</p> : <div className="qa-demo-create-grid">{moduleArtifactTypes.map((artifactType) => {
         const form = data.forms.find(({ id }) => id === artifactType.formId);
         return form === undefined ? <p className="empty-state" key={artifactType.id}>{artifactType.name} refers to a missing Form.</p> :
-          <section className="qa-demo-create" key={artifactType.id} aria-labelledby={`qa-create-${artifactType.id}`}><h3 id={`qa-create-${artifactType.id}`}>{artifactType.name}</h3>
+          <section className="qa-demo-create" key={artifactType.id} aria-labelledby={`qa-create-${module.id}-${artifactType.id}`}><h3 id={`qa-create-${module.id}-${artifactType.id}`}>{artifactType.name}</h3>
             <FieldEditorComponent form={asRuntimeForm(form)} disabled={false} submitLabel="Create demo artifact" onSubmit={(payload) => createArtifact(artifactType, payload)} />
           </section>;
       })}</div>}

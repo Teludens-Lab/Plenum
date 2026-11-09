@@ -1,6 +1,5 @@
 import type {
   CoreDesignV1,
-  MethodologyConceptV1,
   RuntimeFormDefinitionV1,
   RuntimeInformationGrantV1,
   RuntimeInterfaceProfileV1,
@@ -11,25 +10,35 @@ import type {
   RuntimeWorkflowTransitionV1
 } from "@plenum/simulation-schema";
 
-export const METHODOLOGY_CONCEPTS: readonly MethodologyConceptV1[] = [
-  { key: "stage", label: "Stage", enabled: true, dependsOn: [] },
-  { key: "session_role", label: "Session Role", enabled: true, dependsOn: [] },
-  { key: "seat", label: "Seat", enabled: true, dependsOn: ["session_role"] },
-  { key: "artifact_type", label: "Artifact Type", enabled: true, dependsOn: ["form", "workflow_definition"] },
-  { key: "workflow_definition", label: "Workflow Definition", enabled: true, dependsOn: ["session_role"] },
-  { key: "information_policy", label: "Information Policy", enabled: true, dependsOn: ["session_role"] },
-  { key: "team", label: "Team", enabled: true, dependsOn: ["seat"] },
-  { key: "decision_record", label: "Decision Record", enabled: true, dependsOn: ["artifact_type"] },
-  { key: "inject", label: "Inject", enabled: false, dependsOn: ["information_policy"] },
-  { key: "communication", label: "Communication", enabled: false, dependsOn: ["information_policy"] },
-  { key: "research_question", label: "Research Question", enabled: false, dependsOn: [] }
-];
-
 export const FIELD_TYPES = ["short_text", "long_text", "number", "single_select", "multi_select", "artifact_reference"] as const;
 export const MODULE_TYPES = ["session_status", "artifact_form", "task_list", "artifact_presentation", "slide_deck", "resource_library", "message_inbox", "proposal_thread", "inject_inbox"] as const;
 
 export function identifier(): string {
   return crypto.randomUUID();
+}
+
+/** Distinguish repeated Stage names without exposing their internal identifiers. */
+export function stageChoiceLabel(core: CoreDesignV1, stageId: string): string {
+  const stages = core.stages ?? [];
+  const stage = stages.find(({ id }) => id === stageId);
+  if (!stage) return "Missing Stage";
+  if (stages.filter(({ name }) => name === stage.name).length < 2) return stage.name;
+  const groupPath = (groupId: string | undefined): string => {
+    const names: string[] = [];
+    const visited = new Set<string>();
+    while (groupId && !visited.has(groupId)) {
+      visited.add(groupId);
+      const group = core.stageGroups?.find(({ id }) => id === groupId);
+      if (!group) break;
+      names.unshift(group.name);
+      groupId = group.parentGroupId;
+    }
+    return names.join(" / ");
+  };
+  const group = groupPath(stage.stageGroupId);
+  const label = group ? `${group} / ${stage.name}` : stage.name;
+  const ambiguous = stages.filter((other) => other.name === stage.name && groupPath(other.stageGroupId) === group).length > 1;
+  return ambiguous ? `${label} (Stage ${stages.indexOf(stage) + 1})` : label;
 }
 
 export function basicStage(name: string, order: number): RuntimeStageDefinitionV1 {

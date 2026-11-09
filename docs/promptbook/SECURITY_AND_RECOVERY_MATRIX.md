@@ -17,3 +17,7 @@
 | Authority loss | Explicit fencing; no auto-failover | Health and receipt lookup | Operator transfer procedure | Future approval under OPEN-016 | OPEN-016 |
 
 RPO, RTO, retention, key custody, anchor ownership, credential lifetime, and incident owners are not invented here. Their absence blocks production readiness but not bounded local implementation tests.
+
+## 2026-11-08 approval implementation alignment
+
+PS-830 tests mandatory concept controls, field/attachment access, scanner refusal, safe expressions and export isolation. PS-845 inventories and fences every consequential writer, verifies old-database isolation where applicable, and rehearses timed application transfer separately from OPEN-017 disaster recovery. Missing isolation means no promotion. PS-815 external-provider/mail/human and PS-820 institutional/AT gates remain mandatory at PS-850.

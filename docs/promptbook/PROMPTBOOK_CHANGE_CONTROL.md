@@ -38,3 +38,11 @@ Any requirement, contract, schema, package, Plugin, client, deployment-profile, 
 ## Review gate
 
 A regenerated promptbook is acceptable only when validation reports zero orphan requirements, missing links, duplicate IDs/slugs/migrations, dependency cycles, invalid states, unknown command references, or sample-task rubric failures. This validates the promptbook structure; it does not validate application behavior.
+
+## 2026-11-08 approval implementation alignment
+
+The 2026-11-08 regeneration preserves existing remaining task identities and adds PS-845 for the previously unscheduled approved transfer outcome. PS-830 owns bounded implementation checkpoints rather than postponing implementation until final release. PS-840 closes product-owned rows; PS-850 closes the whole ledger. APPROVAL_IMPLEMENTATION_PROMPTBOOK.md is an execution guide, not a second task authority. Application implementation and release acceptance have not been executed by generating these prompts.
+
+## 2026-11-09 role-by-role interface consistency addition
+
+Adds PS-842 as a distinct vertical outcome sequenced after PS-840: closing the interface inconsistencies and gaps found by the 2026-11-09 role-by-role audit. Existing task identities are preserved. PS-850 gains a direct PS-842 prerequisite and approval-gate reference. The ledger gains the `release-control:role-interface-consistency` obligation owned by PS-842. The validator retains PS-842 in the remaining sequence and requires it to own `CMD-INTERFACE-CONSISTENCY`. The command registry adds that proposed command and registers the existing `npm run test:participant-interfaces` script as Proposed pending re-verification. Because PS-842 changes code and Release configuration after PS-840, its execution requires affected PS-830/PS-840 reruns. Application implementation and acceptance have not been executed by generating this prompt.

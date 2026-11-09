@@ -16,10 +16,13 @@ import {
 import { randomUUID } from "node:crypto";
 import { stageControlPresentation } from "./stage-control-presentation.js";
 import { readParticipantTimeline } from "./participant-timeline.js";
+import { artifactFieldAccess, visibleArtifactForm, visibleArtifactPayload, preserveProtectedArtifactValues } from "./artifact-visibility.js";
+import { FORM_INTERCHANGE_CONTRACT_ID, formRecordTables, type FormRecordExportV1 } from "@plenum/simulation-schema";
+import { createStoredZip, createTextPdf } from "../reporting/formats.js";
 import type { Pool, PoolClient } from "pg";
 import { audienceAllows, type FieldAudience } from "@plenum/policy-engine";
-import { runtimeFormValue, setRuntimeFormValue, validateRuntimeFormPayload, type AutomationActionV1, type GateV1,
-  type RuntimeFieldConditionV1, type RuntimeFieldValidationV1, type RuntimeStageDefinitionV1,
+import { runtimeFormValue, setRuntimeFormValue, validateRuntimeFormPayload, resolveTeamCellFieldOptions, type AutomationActionV1, type GateV1,
+  STRUCTURED_FORM_CONTRACT_ID, fieldEditable, recomputeFormValues, structuredPayloadIssues, type RuntimeFormDefinitionV1, type RuntimeFormFieldDefinitionV1, type RuntimeStageDefinitionV1,
   type StateVariableDefinitionV1 } from "@plenum/simulation-schema";
 import { evaluateGate, nextStage, rehearseStages, remainingSeconds, resolveWorkflowTransition, type GateExplanationV1 } from "@plenum/workflow-engine";
 
@@ -45,35 +48,8 @@ import { executeVotingCommand, getPollProjection } from "../voting/polls.js";
 import { createVoiceCommandExecutor, getVoiceProjection } from "../comms/voice.js";
 import type { MediaProviderAdapter } from "@plenum/media-adapter";
 
-interface RuntimeFieldDefinition {
-  id: string;
-  key: string;
-  label: string;
-  type: "short_text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
-  required: boolean;
-  requiredWhen?: RuntimeFieldConditionV1;
-  visibleWhen?: RuntimeFieldConditionV1;
-  helpText?: string;
-  options?: NonNullable<RuntimeFormV1["fields"][number]["options"]>;
-  control?: NonNullable<RuntimeFormV1["fields"][number]["control"]>;
-  readOnly?: boolean;
-  optionSource?: { kind: "team_cells"; teamId: string; cellKind: string };
-  validation?: RuntimeFieldValidationV1;
-}
-
-interface RuntimeFormDefinition {
-  id: string;
-  name: string;
-  formVersion: string;
-  layout?: NonNullable<RuntimeFormV1["layout"]>;
-  fields: RuntimeFieldDefinition[];
-  sections: Array<{
-    id: string; title?: string; description?: string; fields: RuntimeFieldDefinition[];
-    repeatable?: boolean; itemLabel?: string; itemKeyField?: string; minItems?: number; maxItems?: number;
-    page?: number; columns?: 2 | 3 | 4; collapsed?: boolean; table?: NonNullable<RuntimeFormV1["sections"][number]["table"]>;
-  }>;
-  rules?: Array<{ kind: "distinct"; fields: string[]; message: string }>;
-}
+type RuntimeFieldDefinition = RuntimeFormFieldDefinitionV1;
+type RuntimeFormDefinition = RuntimeFormDefinitionV1 & { fields: RuntimeFieldDefinition[] };
 
 interface ArtifactTypeDefinition {
   id: string;
@@ -85,6 +61,8 @@ interface ArtifactTypeDefinition {
   allowedCreatorSessionRoleIds: string[];
   allowedTeamIds?: string[];
   availableStageIds?: string[];
+  exportable?: boolean;
+  retentionPolicyId?: string;
   evidenceLinks?: Array<{
     field: string;
     sourceArtifactTypeIds: string[];
@@ -138,12 +116,12 @@ interface RuntimeDefinition {
   teams: Array<{ id: string; name: string }>;
   teamCells?: Array<{ id: string; name?: string; teamId: string; kind: string; enabled: boolean }>;
   sessionRoles: Array<{ id: string; name: string; capabilities?: Array<{ capability: string }>; isControlRole?: boolean }>;
-  seats: Array<{ id: string; sessionRoleIds: string[]; teamId?: string }>;
+  seats: Array<{ id: string; name?: string; sessionRoleIds: string[]; teamId?: string }>;
   informationPolicies: Array<{ id: string; grants: Array<{ audience: FieldAudience; fieldsExcluded?: string[] }> }>;
   stateVariables?: StateVariableDefinitionV1[];
-  capabilities?: Array<{ id: string; informationPolicyId: string; initialState: string; mode?: "boolean" | "counted";
+  capabilities?: Array<{ id: string; name?: string; informationPolicyId: string; initialState: string; mode?: "boolean" | "counted";
     initialQuantity?: number; maximumQuantity?: number; renewal?: { everyStageType: string; amount: number } }>;
-  resourceDefinitions?: Array<{ id: string; informationPolicyId: string; replenishment?: { everyStageType?: string; amount: number } }>;
+  resourceDefinitions?: Array<{ id: string; name?: string; informationPolicyId: string; replenishment?: { everyStageType?: string; amount: number } }>;
   stages: Array<{
     id: string; label: string; name?: string; stageType?: string; durationSeconds?: number; timerMode?: "countdown" | "countup" | "none";
     entryGate?: GateV1;
@@ -363,7 +341,8 @@ async function readRelease(
 function formFor(definition: RuntimeDefinition, type: ArtifactTypeDefinition): RuntimeFormDefinition {
   const form = definition.forms.find((candidate) => candidate.id === type.formId);
   if (form === undefined) throw new Error(`Release Artifact Type ${type.key} has no Form`);
-  return form;
+  return { ...form, fields: form.fields.map((field) => resolveTeamCellFieldOptions(field, definition.teamCells ?? [])),
+    sections: form.sections.map((section) => ({ ...section, fields: section.fields.map((field) => resolveTeamCellFieldOptions(field, definition.teamCells ?? [])) })) };
 }
 
 function workflowFor(definition: RuntimeDefinition, type: ArtifactTypeDefinition): WorkflowDefinition {
@@ -448,17 +427,17 @@ async function runtimeGateFacts(
   return facts;
 }
 
-function artifactAllowed(
+function artifactGrants(
   definition: RuntimeDefinition,
   type: ArtifactTypeDefinition,
   context: SessionAccessContextV1,
   ownerTeamId: string | null,
   payload: JsonObject,
   actor: { teamId?: string; isControlRole: boolean }
-): boolean {
+): Array<{ fieldsExcluded?: string[] }> {
   const policy = definition.informationPolicies.find((candidate) => candidate.id === type.informationPolicyId);
-  if (policy === undefined) return false;
-  return policy.grants.some((grant) => audienceAllows({
+  if (policy === undefined) return [];
+  return policy.grants.filter((grant) => audienceAllows({
     organizationId: context.organizationId,
     sessionId: context.sessionId,
     participantId: context.participantId,
@@ -468,6 +447,8 @@ function artifactAllowed(
     organizationRoles: []
   }, grant.audience, ownerTeamId ?? undefined, payload));
 }
+
+function artifactAllowed(...args: Parameters<typeof artifactGrants>): boolean { return artifactGrants(...args).length > 0; }
 
 async function activeStageId(client: PoolClient, definition: RuntimeDefinition, context: SessionAccessContextV1): Promise<string | undefined> {
   const result = await client.query<{ stage_id: string }>(
@@ -581,26 +562,33 @@ function actionLabel(transition: WorkflowTransitionDefinition): string {
   return `${action[0]?.toUpperCase() ?? ""}${action.slice(1).replaceAll("_", " ")}`;
 }
 
-function asForm(form: RuntimeFormDefinition, cells: NonNullable<RuntimeDefinition["teamCells"]> = []): RuntimeFormV1 {
-  const field = (item: RuntimeFieldDefinition): RuntimeFormV1["fields"][number] => ({
+function asForm(form: RuntimeFormDefinition, cells: NonNullable<RuntimeDefinition["teamCells"]> = [], sessionRoleId = "", state = ""): RuntimeFormV1 {
+  const field = (source: RuntimeFieldDefinition): RuntimeFormV1["fields"][number] => {
+    const item = resolveTeamCellFieldOptions(source, cells);
+    return ({
     key: item.key,
     label: item.label,
     type: item.type === "short_text" ? "text" : item.type,
     required: item.required === true,
+    ...(form.contractId === undefined || item.defaultValue === undefined ? {} : { defaultValue: item.defaultValue }),
     ...(item.requiredWhen === undefined ? {} : { requiredWhen: item.requiredWhen }),
     ...(item.visibleWhen === undefined ? {} : { visibleWhen: item.visibleWhen }),
     ...(item.helpText === undefined ? {} : { helpText: item.helpText }),
     ...(item.control === undefined ? {} : { control: item.control }),
-    ...(item.optionSource === undefined ? item.options === undefined ? {} : { options: item.options }
-      : { options: cells.filter((cell) => cell.enabled && cell.teamId === item.optionSource?.teamId && cell.kind === item.optionSource.cellKind)
-        .map((cell) => ({ value: cell.id, label: cell.name ?? cell.id })) }),
-    ...(item.readOnly === undefined ? {} : { readOnly: item.readOnly }),
+    ...(item.options === undefined ? {} : { options: item.options }),
+    ...(form.contractId === undefined ? item.readOnly === undefined ? {} : { readOnly: item.readOnly } : { readOnly: !fieldEditable(item, sessionRoleId, state) }),
+    ...(item.numeric === undefined ? {} : { numeric: item.numeric }),
+    ...(item.computation === undefined ? {} : { computation: item.computation }),
+    ...(item.formattedTextContractId === undefined ? {} : { formattedTextContractId: item.formattedTextContractId }),
+    ...(item.entityReference === undefined ? {} : { entityReference: item.entityReference }),
     ...(item.validation === undefined ? {} : { validation: item.validation })
-  });
+  }); };
   return {
     id: form.id,
     name: form.name,
     formVersion: form.formVersion,
+    ...(form.attachments ? { attachments: form.attachments } : {}),
+    ...(form.contractId === undefined ? {} : { contractId: form.contractId }),
     ...(form.layout === undefined ? {} : { layout: form.layout }),
     fields: form.fields.map(field),
     sections: form.sections.map((section) => ({
@@ -629,6 +617,59 @@ function asAction(transition: WorkflowTransitionDefinition): RuntimeActionV1 {
     requiresForm: transition.command === "artifact.create" || transition.contentOnly === true || transition.editableFieldKeys !== undefined,
     ...(transition.editableFieldKeys === undefined ? {} : { editableFieldKeys: transition.editableFieldKeys })
   };
+}
+
+async function authorizedForm(client: PoolClient, context: SessionAccessContextV1, definition: RuntimeDefinition,
+  type: ArtifactTypeDefinition, actor: { teamId?: string; isControlRole: boolean }): Promise<RuntimeFormDefinition> {
+  const authored = formFor(definition, type);
+  if (authored.contractId !== STRUCTURED_FORM_CONTRACT_ID) return authored;
+  const form = structuredClone(authored);
+  let references: ArtifactRow[] = [];
+  if (form.fields.some((field) => field.entityReference?.kind === "artifact" || field.type === "artifact_reference")) {
+    references = (await client.query<ArtifactRow>(`SELECT id,artifact_type_key,state,payload,version,governing_release_id,form_version,
+      creator_participant_id,visible_role_ids,owner_team_id FROM runtime.artifact_instances
+      WHERE organization_id=$1 AND session_id=$2 AND (creator_participant_id=$3 OR visible_role_ids && $4::text[])
+      ORDER BY created_at,id LIMIT 1000`, [context.organizationId, context.sessionId, context.participantId, [context.activeSessionRoleId]])).rows;
+  }
+  const acceptedSources = form.fields.some((field) => field.type === "artifact_reference") ? new Set((await client.query<{ source_artifact_id: string }>(
+    `SELECT DISTINCT source_artifact_id FROM runtime.message_threads WHERE organization_id=$1 AND session_id=$2
+      AND recipient_team_id=$3 AND accepted_at IS NOT NULL`, [context.organizationId, context.sessionId, actor.teamId ?? null])).rows.map(({ source_artifact_id }) => source_artifact_id)) : new Set<string>();
+  for (const field of form.sections.flatMap((section) => section.fields)) {
+    if (field.type !== "artifact_reference" && (field.type !== "entity_reference" || !field.entityReference)) continue;
+    const kind = field.type === "artifact_reference" ? "artifact" : field.entityReference!.kind;
+    if (kind === "artifact") {
+      field.options = references.flatMap((row) => {
+        const source = typeFor(definition, row.artifact_type_key);
+        return source && (field.type !== "artifact_reference" || (acceptedSources.has(row.id) && field.reference?.sourceArtifactTypeIds.includes(source.id))) && artifactAllowed(definition, source, context, row.owner_team_id, row.payload, actor)
+          ? [{ value: row.id, label: `${source.name} (${row.state})` }] : [];
+      });
+    } else {
+      const candidates = kind === "team" ? definition.teams : kind === "session_role" ? definition.sessionRoles : kind === "stage" ? definition.stages
+        : kind === "resource" ? definition.resourceDefinitions ?? [] : kind === "capability" ? definition.capabilities ?? [] : definition.stateVariables ?? [];
+      field.options = candidates.filter((candidate) => !("informationPolicyId" in candidate) || artifactAllowed(definition,
+        { ...type, informationPolicyId: candidate.informationPolicyId }, context, actor.teamId ?? null, {}, actor))
+        .map((candidate) => ({ value: candidate.id, label: candidate.name ?? ("label" in candidate ? candidate.label : candidate.id) }));
+    }
+  }
+  form.fields = form.sections.flatMap((section) => section.fields);
+  return form;
+}
+
+function formEditIssues(form: RuntimeFormDefinition, before: JsonObject, after: JsonObject, sessionRoleId: string, state: string): string[] {
+  if (form.contractId !== STRUCTURED_FORM_CONTRACT_ID) return [];
+  const issues: string[] = [];
+  for (const section of form.sections) {
+    const oldEntries = section.repeatable ? (Array.isArray(before[section.id]) ? before[section.id] as JsonObject[] : []) : [before];
+    const newEntries = section.repeatable ? (Array.isArray(after[section.id]) ? after[section.id] as JsonObject[] : []) : [after];
+    for (const field of section.fields.filter((field) => !field.computation && !fieldEditable(field, sessionRoleId, state))) {
+      for (let index = 0; index < Math.max(oldEntries.length, newEntries.length); index += 1) {
+        const previous = runtimeFormValue(oldEntries[index] ?? {}, field.key) ?? field.defaultValue ?? "";
+        const next = runtimeFormValue(newEntries[index] ?? {}, field.key) ?? field.defaultValue ?? "";
+        if (JSON.stringify(previous) !== JSON.stringify(next)) issues.push(`${field.label} cannot be changed in this Role and Workflow state`);
+      }
+    }
+  }
+  return issues;
 }
 
 function visibleRoles(
@@ -745,6 +786,9 @@ async function revisionAuthorParticipantIds(client: PoolClient, context: Session
 
 export async function executeArtifactCommand(input: CommandExecutionContext): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
+  if (command.payload.content !== undefined && jsonPayload(command.payload.content) === undefined) {
+    return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Record content must be one object. Create separate Decision Records for separate Actions." };
+  }
   const revisionAuthors = await revisionAuthorParticipantIds(client, context, command);
   if (revisionAuthors === undefined) {
     return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Artifact co-authors must be current Participants in this Session." };
@@ -773,9 +817,29 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
       await runtimeGateFacts(client, definition, initial, context,
         { state: "", typeKey: artifactType.key, payload: {}, ...(actor.teamId === undefined ? {} : { ownerTeamId: actor.teamId }) }));
     if (isDecision(transition)) return transition;
-    const content = jsonPayload(command.payload.content) ?? {};
+    let content = jsonPayload(command.payload.content) ?? {};
+    try { content = preserveProtectedArtifactValues({}, content, artifactFieldAccess(artifactGrants(definition, artifactType, context, actor.teamId ?? null, content, actor))); }
+    catch { return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "A supplied field is unavailable in this role context." }; }
+    const form = await authorizedForm(client, context, definition, artifactType, actor);
+    if (form.contractId !== undefined) {
+      const structureIssues = structuredPayloadIssues(form, content);
+      if (structureIssues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: structureIssues.map(({ message }) => message).join("; ") };
+      for (const section of form.sections) {
+        const entries = section.repeatable ? (Array.isArray(content[section.id]) ? content[section.id] as JsonObject[] : []) : [content];
+        for (const entry of entries) if (isRecord(entry)) for (const field of section.fields) {
+          if (runtimeFormValue(entry, field.key) === undefined && field.defaultValue !== undefined) setRuntimeFormValue(entry, field.key, structuredClone(field.defaultValue));
+        }
+      }
+      const computed = recomputeFormValues(form, content);
+      if (computed.issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: computed.issues.map(({ message }) => message).join("; ") };
+      content = computed.payload as JsonObject;
+      const edits = formEditIssues(form, {}, content, context.activeSessionRoleId, transition.to);
+      if (edits.length > 0) return { status: "rejected", errorCode: "PERMISSION_DENIED", message: edits.join("; ") };
+      const issues = validateRuntimeFormPayload(form, content, { draft: workflow.states.find((state) => state.key === transition.to)?.kind === "draft" });
+      if (issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: issues.map((issue) => issue.message).join("; ") };
+    }
     if (workflow.states.find((state) => state.key === transition.to)?.kind !== "draft") {
-      const issues = validateRuntimeFormPayload(formFor(definition, artifactType), content);
+      const issues = validateRuntimeFormPayload(form, content);
       if (issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: issues.map((issue) => issue.message).join("; ") };
     }
     if (!await acceptedProposalReferencesValid(client, context, definition, artifactType, actor.teamId, content)) {
@@ -846,8 +910,15 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the creator may edit this Artifact." };
   }
   let payload = artifact.payload;
+  const suppliedContent = jsonPayload(command.payload.content);
+  let authorizedContent: JsonObject | undefined;
+  if (suppliedContent !== undefined) {
+    try { authorizedContent = preserveProtectedArtifactValues(artifact.payload, suppliedContent,
+      artifactFieldAccess(artifactGrants(definition, artifactType, context, artifact.owner_team_id, artifact.payload, actor))); }
+    catch (error) { return { status: "rejected", errorCode: "PERMISSION_DENIED", message: error instanceof Error ? error.message : "A supplied field is unavailable." }; }
+  }
   if (transition.editableFieldKeys !== undefined) {
-    const content = jsonPayload(command.payload.content);
+    const content = authorizedContent;
     if (content === undefined) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Artifact content must be an object." };
     payload = structuredClone(artifact.payload);
     for (const key of transition.editableFieldKeys) {
@@ -857,22 +928,34 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
       }
       setRuntimeFormValue(payload, key, value);
     }
-    const issues = validateRuntimeFormPayload(formFor(definition, artifactType), payload)
-      .filter((issue) => transition.editableFieldKeys?.includes(issue.field));
+    const issues = formFor(definition, artifactType).contractId === undefined ? validateRuntimeFormPayload(formFor(definition, artifactType), payload)
+      .filter((issue) => transition.editableFieldKeys?.includes(issue.field)) : [];
     if (issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: issues.map((issue) => issue.message).join("; ") };
   } else if (transition.contentOnly === true) {
-    const content = jsonPayload(command.payload.content);
+    const content = authorizedContent;
     if (content === undefined) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Artifact content must be an object." };
     payload = content;
   } else {
     const state = workflow.states.find((candidate) => candidate.key === artifact.state);
-    if (state?.kind === "draft") {
+    if (state?.kind === "draft" && formFor(definition, artifactType).contractId === undefined) {
       const issues = validateRuntimeFormPayload(formFor(definition, artifactType), payload);
       if (issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: issues.map((issue) => issue.message).join("; ") };
     }
   }
   if (!await acceptedProposalReferencesValid(client, context, definition, artifactType, actor.teamId, payload)) {
     return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "An accepted proposal reference is invalid or unavailable to this Team." };
+  }
+  const form = await authorizedForm(client, context, definition, artifactType, actor);
+  if (form.contractId !== undefined) {
+    const structureIssues = structuredPayloadIssues(form, payload);
+    if (structureIssues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: structureIssues.map(({ message }) => message).join("; ") };
+    const computed = recomputeFormValues(form, payload);
+    if (computed.issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: computed.issues.map(({ message }) => message).join("; ") };
+    payload = computed.payload as JsonObject;
+    const edits = formEditIssues(form, artifact.payload, payload, context.activeSessionRoleId, artifact.state);
+    if (edits.length > 0) return { status: "rejected", errorCode: "PERMISSION_DENIED", message: edits.join("; ") };
+    const issues = validateRuntimeFormPayload(form, payload, { draft: workflow.states.find((state) => state.key === transition.to)?.kind === "draft" });
+    if (issues.length > 0) return { status: "rejected", errorCode: "VALIDATION_FAILED", message: issues.map((issue) => issue.message).join("; ") };
   }
   const version = currentVersion + 1;
   await client.query(
@@ -1238,11 +1321,115 @@ export interface RuntimeProjectionInput {
   timelineBefore?: number;
 }
 
+/** File operations reuse the record's pinned Release, Information Policy and normal edit transition. */
+export async function authorizeArtifactFile(client: PoolClient, context: SessionAccessContextV1, artifactId: string, correlationId: string, write = false) {
+  const rows = await client.query<ArtifactRow>("SELECT * FROM runtime.artifact_instances WHERE organization_id=$1 AND session_id=$2 AND id=$3 FOR UPDATE",
+    [context.organizationId, context.sessionId, artifactId]);
+  const artifact = rows.rows[0];
+  if (!artifact || (artifact.creator_participant_id !== context.participantId && !artifact.visible_role_ids.includes(context.activeSessionRoleId))) throw authorizationError("TARGET_NOT_FOUND", "The Artifact was not found.", correlationId);
+  const { definition, initial } = await readRelease(client, context.organizationId, artifact.governing_release_id, correlationId);
+  const type = typeFor(definition, artifact.artifact_type_key), actor = actorFor(definition, context);
+  if (!type || !actor || !artifactAllowed(definition, type, context, artifact.owner_team_id, artifact.payload, actor)) throw authorizationError("TARGET_NOT_FOUND", "The Artifact was not found.", correlationId);
+  const form = formFor(definition, type);
+  if (!form.attachments || !type.retentionPolicyId) throw authorizationError("CAPABILITY_UNAVAILABLE", "Attachments are not enabled for this Form version.", correlationId);
+  if (write) {
+    if (context.sessionStatus !== "active" || (!actor.isControlRole && actor.teamId !== artifact.owner_team_id)) throw authorizationError("PERMISSION_DENIED", "This record cannot be changed in the current context.", correlationId);
+    const transition = transitionFor(workflowFor(definition, type), artifact.state, "artifact.edit", context.activeSessionRoleId,
+      await runtimeGateFacts(client, definition, initial, context, { state: artifact.state, typeKey: artifact.artifact_type_key, payload: artifact.payload,
+        ...(artifact.owner_team_id ? { ownerTeamId: artifact.owner_team_id } : {}) }));
+    if (isDecision(transition) || !transition.contentOnly || transition.editableFieldKeys !== undefined ||
+        (artifact.creator_participant_id !== context.participantId && !transition.allowNonCreatorEdit)) throw authorizationError("PERMISSION_DENIED", "Attachments require permission to edit this record.", correlationId);
+  }
+  const session = await client.query<{ project_id: string }>("SELECT project_id FROM runtime.sessions WHERE organization_id=$1 AND id=$2", [context.organizationId, context.sessionId]);
+  return { artifact, form, retentionPolicyId: type.retentionPolicyId, artifactTypeId: type.id, projectId: session.rows[0]!.project_id };
+}
+
+export async function executeArtifactFileCommand(input: CommandExecutionContext, scan: { status: "clean" | "infected" | "failed"; detail: string }): Promise<CommandDecision> {
+  const { client, context, command } = input;
+  let access: Awaited<ReturnType<typeof authorizeArtifactFile>>;
+  try { access = await authorizeArtifactFile(client, context, command.aggregateId, command.commandId, true); }
+  catch (error) {
+    if (error instanceof Error && "envelope" in error) {
+      const envelope = (error as import("../errors.js").AuthorizationError).envelope;
+      return { status: "rejected", errorCode: envelope.error.code, message: envelope.error.message };
+    }
+    throw error;
+  }
+  const { artifact } = access;
+  if (artifact.governing_release_id !== command.governingReleaseId) return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "The Artifact is governed by another Release." };
+  if (Number(artifact.version) !== command.expectedAggregateVersion) return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: "Refresh the record before attaching this file." };
+  const rescan = command.operationType === "artifact.rescan_file";
+  const updated = await client.query(
+    `UPDATE runtime.form_attachments SET upload_state='attached',scan_status=$1,scan_detail=$2,attached_at=coalesce(attached_at,transaction_timestamp())
+      WHERE organization_id=$3 AND artifact_id=$4 AND id=$5 AND sha256=$6 AND created_by=$7
+        AND (($8::boolean AND upload_state='attached' AND scan_status='failed') OR (NOT $8 AND upload_state='pending')) RETURNING id`,
+    [scan.status, scan.detail, context.organizationId, artifact.id, command.payload.attachmentId, command.payload.sha256, context.principalId, rescan]);
+  if (updated.rowCount !== 1) return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This upload is already attached, unavailable, or awaiting recovery." };
+  const version = Number(artifact.version) + 1;
+  await client.query("UPDATE runtime.artifact_instances SET version=$1,updated_at=transaction_timestamp() WHERE organization_id=$2 AND id=$3", [version, context.organizationId, artifact.id]);
+  await recordArtifactRevision(client, context, command, { id: artifact.id, version, governingReleaseId: artifact.governing_release_id, state: artifact.state, payload: artifact.payload }, [context.participantId]);
+  return { status: "accepted", aggregateVersion: version, eventType: rescan ? "artifact.attachment_rescanned" : "artifact.attachment_added",
+    eventPayload: { artifactId: artifact.id, attachmentId: command.payload.attachmentId!, sha256: command.payload.sha256!, scanStatus: scan.status, version } };
+}
+
+export async function exportRuntimeArtifact(input: RuntimeProjectionInput & { artifactId: string; format: "json" | "csv" | "pdf" }): Promise<{ bytes: Uint8Array; mediaType: string; fileName: string }> {
+  return withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
+    const context = await resolveSessionAccessContext(client, input.principal, { sessionId: input.sessionId, deviceId: input.deviceId,
+      correlationId: input.correlationId, ...(input.activeSessionRoleId ? { requestedActiveSessionRoleId: input.activeSessionRoleId } : {}) });
+    const row = await client.query<ArtifactRow>("SELECT * FROM runtime.artifact_instances WHERE organization_id=$1 AND session_id=$2 AND id=$3",
+      [context.organizationId, context.sessionId, input.artifactId]);
+    const artifact = row.rows[0];
+    if (!artifact || (artifact.creator_participant_id !== context.participantId && !artifact.visible_role_ids.includes(context.activeSessionRoleId))) {
+      throw authorizationError("TARGET_NOT_FOUND", "The Artifact was not found.", input.correlationId);
+    }
+    const { definition } = await readRelease(client, context.organizationId, artifact.governing_release_id, input.correlationId);
+    const type = typeFor(definition, artifact.artifact_type_key), actor = actorFor(definition, context);
+    if (!type || !actor || type.exportable !== true || !artifactAllowed(definition, type, context, artifact.owner_team_id, artifact.payload, actor)) {
+      throw authorizationError("PERMISSION_DENIED", "Export is unavailable in this role context.", input.correlationId);
+    }
+    const allows = artifactFieldAccess(artifactGrants(definition, type, context, artifact.owner_team_id, artifact.payload, actor));
+    const form = visibleArtifactForm(await authorizedForm(client, context, definition, type, actor), allows);
+    const record: FormRecordExportV1 = { contractId: FORM_INTERCHANGE_CONTRACT_ID, kind: "record", artifactId: artifact.id,
+      governingReleaseId: artifact.governing_release_id, formId: form.id, formVersion: artifact.form_version,
+      payload: visibleArtifactPayload(artifact.payload, allows) };
+    if (form.attachments) {
+      const files = await client.query<{ id: string; file_name: string; media_type: string; size_bytes: number; sha256: string; scan_status: "clean" | "infected" | "failed"; retention_policy_id: string; expires_at: Date }>(
+        "SELECT id,file_name,media_type,size_bytes,sha256,scan_status,retention_policy_id,expires_at FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND upload_state='attached' ORDER BY created_at,id",
+        [context.organizationId, artifact.id]);
+      if (files.rows.length) record.attachmentManifest = { bytesIncluded: false, files: files.rows.map((file) => ({ id: file.id, fileName: file.file_name,
+        mediaType: file.media_type, sizeBytes: file.size_bytes, sha256: file.sha256, scanStatus: file.scan_status, retentionPolicyId: file.retention_policy_id, expiresAt: file.expires_at.toISOString() })) };
+    }
+    const json = new TextEncoder().encode(JSON.stringify(record, null, 2));
+    if (input.format === "json") return { bytes: json, mediaType: "application/json", fileName: "record.json" };
+    if (input.format === "csv") return { bytes: createStoredZip([
+      { path: "record.json", bytes: json },
+      ...formRecordTables(form, [record]).map((table) => ({ path: table.name, bytes: new TextEncoder().encode(table.csv) }))
+    ]), mediaType: "application/zip", fileName: "record-tables.zip" };
+    const lines = [type.name, `Record: ${artifact.id}`, `Form: ${form.name} / ${record.formVersion}`, `Release: ${record.governingReleaseId}`, ""];
+    if (record.attachmentManifest) lines.push("Attachments (download clean files separately)", ...record.attachmentManifest.files.map((file) => `${file.fileName}: ${file.sizeBytes} bytes, ${file.scanStatus}, SHA-256 ${file.sha256}`), "");
+    for (const section of form.sections) {
+      lines.push(section.title ?? "Details");
+      const entries = section.repeatable ? record.payload[section.id] : [record.payload];
+      if (Array.isArray(entries)) entries.forEach((entry, index) => {
+        if (!isRecord(entry)) return;
+        if (section.repeatable) lines.push(`${section.itemLabel ?? "Entry"} ${index + 1}`);
+        for (const field of section.fields) {
+          const value = runtimeFormValue(entry, field.key);
+          lines.push(`${field.label}: ${typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "")}`);
+        }
+      });
+      lines.push("");
+    }
+    if (lines.some((line) => /[^\x20-\x7e\n\r\t]/u.test(line))) throw authorizationError("CAPABILITY_UNAVAILABLE", "PDF cannot render this record’s characters. Use JSON or linked CSV tables to preserve the text.", input.correlationId);
+    return { bytes: createTextPdf(lines.flatMap((line) => line.replaceAll("\t", "    ").split(/\r?\n/u))), mediaType: "application/pdf", fileName: "record.pdf" };
+  });
+}
+
 export async function getRuntimeArtifactHistory(input: RuntimeProjectionInput & { artifactId: string; beforeVersion?: number }): Promise<RuntimeArtifactHistoryV1> {
   return withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
     const context = await resolveSessionAccessContext(client, input.principal, {
       sessionId: input.sessionId, deviceId: input.deviceId, correlationId: input.correlationId,
-      ...(input.activeSessionRoleId === undefined ? {} : { activeSessionRoleId: input.activeSessionRoleId })
+      ...(input.activeSessionRoleId === undefined ? {} : { requestedActiveSessionRoleId: input.activeSessionRoleId })
     });
     const { definition } = await readRelease(client, context.organizationId, context.activeReleaseId, input.correlationId);
     const actor = actorFor(definition, context);
@@ -1280,9 +1467,12 @@ export async function getRuntimeArtifactHistory(input: RuntimeProjectionInput & 
       }
       const revisionType = typeFor(revisionDefinition, artifact.artifact_type_key);
       if (revisionType === undefined) continue;
+      const grants = artifactGrants(revisionDefinition, revisionType, context, artifact.owner_team_id, row.payload, actor);
+      if (!grants.length) continue;
+      const allows = artifactFieldAccess(grants);
       revisions.push({ version: Number(row.artifact_version), state: row.state,
         stateLabel: workflowFor(revisionDefinition, revisionType).states.find((state) => state.key === row.state)?.label ?? row.state,
-        payload: row.payload, form: asForm(formFor(revisionDefinition, revisionType), revisionDefinition.teamCells),
+        payload: visibleArtifactPayload(row.payload, allows), form: asForm(visibleArtifactForm(await authorizedForm(client, context, revisionDefinition, revisionType, actor), allows), revisionDefinition.teamCells, context.activeSessionRoleId, row.state),
         authorDisplayName: row.author_display_name, recordedAt: row.created_at.toISOString() });
     }
     return { artifactId: input.artifactId, revisions,
@@ -1296,7 +1486,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       sessionId: input.sessionId,
       deviceId: input.deviceId,
       correlationId: input.correlationId,
-      ...(input.activeSessionRoleId === undefined ? {} : { activeSessionRoleId: input.activeSessionRoleId })
+      ...(input.activeSessionRoleId === undefined ? {} : { requestedActiveSessionRoleId: input.activeSessionRoleId })
     });
     const { definition, releaseLabel, simulationTitle } = await readRelease(
       client, context.organizationId, context.activeReleaseId, input.correlationId
@@ -1330,37 +1520,50 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
         ORDER BY created_at,id`,
       [context.organizationId, context.sessionId, context.participantId, [context.activeSessionRoleId]]
     );
-    const artifacts: RuntimeArtifactV1[] = rows.rows.flatMap((artifact) => {
-      const artifactType = typeFor(definition, artifact.artifact_type_key);
+    const authorizedForms = new Map<string, Promise<RuntimeFormDefinition>>();
+    const projectedForm = (releaseId: string, source: RuntimeDefinition, type: ArtifactTypeDefinition) => {
+      const key = `${releaseId}:${type.id}`;
+      let form = authorizedForms.get(key);
+      if (!form) { form = authorizedForm(client, context, source, type, actor); authorizedForms.set(key, form); }
+      return form;
+    };
+    const artifacts: RuntimeArtifactV1[] = [];
+    for (const artifact of rows.rows) {
+      const pinned = (await readRelease(client, context.organizationId, artifact.governing_release_id, input.correlationId)).definition;
+      const artifactType = typeFor(pinned, artifact.artifact_type_key);
       if (artifactType === undefined) throw new Error(`Release lacks Artifact Type ${artifact.artifact_type_key}`);
-      if (!artifactAllowed(definition, artifactType, context, artifact.owner_team_id, artifact.payload, actor)) return [];
-      const workflow = workflowFor(definition, artifactType);
+      if (!artifactAllowed(pinned, artifactType, context, artifact.owner_team_id, artifact.payload, actor)) continue;
+      const workflow = workflowFor(pinned, artifactType);
       const state = workflow.states.find((candidate) => candidate.key === artifact.state);
       const createdByMe = artifact.creator_participant_id === context.participantId;
-      return [{
+      const allows = artifactFieldAccess(artifactGrants(pinned, artifactType, context, artifact.owner_team_id, artifact.payload, actor));
+      artifacts.push({
         id: artifact.id,
         artifactTypeKey: artifact.artifact_type_key,
         title: artifactType.name,
         state: artifact.state,
         stateLabel: state?.label ?? artifact.state,
-        payload: artifact.payload,
+        payload: visibleArtifactPayload(artifact.payload, allows),
         version: Number(artifact.version),
         governingReleaseId: artifact.governing_release_id,
-        form: asForm(formFor(definition, artifactType), definition.teamCells),
+        form: asForm(visibleArtifactForm(await projectedForm(artifact.governing_release_id, pinned, artifactType), allows), pinned.teamCells, context.activeSessionRoleId, artifact.state),
+        exportable: artifactType.exportable === true,
         createdByMe,
         actions: actionsFor(workflow, artifact.state, context.activeSessionRoleId, createdByMe,
           actor.isControlRole || actor.teamId === artifact.owner_team_id)
-      }];
-    });
-    const createTasks: RuntimeCreateTaskV1[] = definition.artifactTypes.flatMap((artifactType) => {
+      });
+    }
+    const createTasks: RuntimeCreateTaskV1[] = [];
+    for (const artifactType of definition.artifactTypes) {
       if (!artifactType.allowedCreatorSessionRoleIds.includes(context.activeSessionRoleId) ||
           (artifactType.allowedTeamIds !== undefined && (actor.teamId === undefined || !artifactType.allowedTeamIds.includes(actor.teamId))) ||
-          (artifactType.availableStageIds !== undefined && (stage === null || !artifactType.availableStageIds.includes(stage.id)))) return [];
+          (artifactType.availableStageIds !== undefined && (stage === null || !artifactType.availableStageIds.includes(stage.id)))) continue;
       const workflow = workflowFor(definition, artifactType);
       const transition = workflow.transitions.find((candidate) => candidate.from === null &&
         candidate.allowedSessionRoleIds.includes(context.activeSessionRoleId));
-      if (transition === undefined) return [];
-      const form = asForm(formFor(definition, artifactType), definition.teamCells);
+      if (transition === undefined) continue;
+      const form = asForm(visibleArtifactForm(await projectedForm(context.activeReleaseId, definition, artifactType),
+        artifactFieldAccess(artifactGrants(definition, artifactType, context, actor.teamId ?? null, {}, actor))), definition.teamCells, context.activeSessionRoleId, transition.to);
       const task: RuntimeCreateTaskV1 = {
         artifactTypeKey: artifactType.key,
         title: artifactType.name,
@@ -1370,10 +1573,10 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       const scoped = profile.modules.some((module) => Array.isArray(module.configuration.scopedModalArtifacts) &&
         module.configuration.scopedModalArtifacts.some((entry) => isRecord(entry) && entry.artifactTypeId === artifactType.id && entry.oneModalPerScope === true));
       const scopeField = form.fields.find((field) => field.key === "industryCellId" && field.readOnly);
-      return scoped && scopeField !== undefined ? (scopeField.options ?? []).map((option) => ({
+      createTasks.push(...(scoped && scopeField !== undefined ? (scopeField.options ?? []).map((option) => ({
         ...task, title: `${task.title} · ${option.label}`, initialValues: { industryCellId: option.value }
-      })) : [task];
-    });
+      })) : [task]));
+    }
     const role = definition.sessionRoles.find((candidate) => candidate.id === context.activeSessionRoleId);
     if (role === undefined) throw new Error(`Release lacks Session Role ${context.activeSessionRoleId}`);
     const information = await getInformationProjection(client, context, actor, input.correlationId);
@@ -1391,7 +1594,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
         ?? assignment.session_role_id,
       teamLabel: assignment.team_id === null ? null
         : definition.teams.find((candidate) => candidate.id === assignment.team_id)?.name ?? assignment.team_id,
-      seatLabel: assignment.seat_id,
+      seatLabel: definition.seats.find((seat) => seat.id === assignment.seat_id)?.name ?? assignment.seat_id,
       runtimeUrl: `/sessions/${context.sessionId}/runtime?role=${encodeURIComponent(assignment.session_role_id)}`
     }));
     const sessionIdentity = await client.query<{ title: string }>(

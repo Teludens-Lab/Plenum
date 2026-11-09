@@ -11,6 +11,8 @@ import {
   assertModelComposition,
   assertRuntimeCoreDesign,
   assertRuntimeScenario,
+  projectEnabledConcepts,
+  validateMethodologyConcepts,
   type CoreDesignV1,
   type ScenarioV1
 } from "@plenum/simulation-schema";
@@ -102,20 +104,6 @@ function catalogIssues(materialization: StudioMaterialization): StudioValidation
           `Workflow ${id} state ${String(state.key)} needs an eligible Session Role or the creator as holder.`, `workflows.${id}`, id));
       }
     }
-  }
-  const concepts = records(core.methodologyConcepts);
-  const conceptCollections: Record<string, string> = {
-    Team: "teams", "Decision Record": "decisionTraceability", Inject: "injects", Communication: "communications",
-    "Research Question": "researchQuestions"
-  };
-  for (const concept of concepts.filter((item) => item.enabled === false)) {
-    const collection = conceptCollections[String(concept.label)];
-    const referenced = collection === "injects" ? records(scenario.injects).length > 0 :
-      collection === "communications" ? records((core.communications as Record<string, unknown> | undefined)?.routes).length > 0 :
-        collection !== undefined && records(core[collection]).length > 0;
-    if (referenced) issues.push(issue("methodology.disabled_dependency",
-      `${String(concept.label)} is disabled but enabled design elements still depend on it. Re-enable the concept or remove those dependencies.`,
-      `methodologyConcepts.${String(concept.key)}`, String(concept.key)));
   }
   const policies = records(core.informationPolicies);
   const policyById = new Map(policies.map((policy) => [String(policy.id), policy]));
@@ -268,8 +256,12 @@ export function validateStudioDraft(value: unknown): StudioValidationReportV1 {
   if (!record(value.coreDesign) || !record(value.scenario)) {
     return digestReport(false, [issue("draft.structure", "The Draft needs both a Core Design and a Scenario.", "draft", null)]);
   }
-  const materialization = value as unknown as StudioMaterialization;
-  const issues: StudioValidationIssueV1[] = catalogIssues(materialization);
+  const authored = value as unknown as StudioMaterialization;
+  const materialization = projectEnabledConcepts(authored);
+  const issues: StudioValidationIssueV1[] = [
+    ...validateMethodologyConcepts(authored).map((item) => ({ ...item, severity: "error" as const })),
+    ...catalogIssues(materialization)
+  ];
   try {
     assertRuntimeCoreDesign(materialization.coreDesign);
   } catch (error) {

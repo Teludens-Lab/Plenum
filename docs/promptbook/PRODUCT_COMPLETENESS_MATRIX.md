@@ -85,8 +85,11 @@ Each task must leave the application runnable and include a 5–20 minute user-t
 | Accessibility and desktop adaptive behavior | Keyboard, focus, names, announcements, contrast, desktop browser zoom/reflow, desktop AT, reduced motion | `PS-700`–`PS-820` | Automated plus qualified desktop review | PASS for PS-800; PS-815 confirms a desktop-only production scope with a 1024 × 768 minimum and equivalent 200% browser-zoom viewport. Mobile, iOS, Android and touch-device acceptance are N/A. PS-820 retains its separate supported-desktop accessibility gate |
 | CI, security and observability | Repeatable gates, SAST/DAST, SBOM/provenance, uploads, logs/metrics/traces/alerts | `PS-810` | Clean CI and incident/rotation rehearsal | IMPLEMENTED / ACCEPTANCE PENDING â€” local contracts, unit/security, integration/migration, browser/accessibility, deployment/offline bundle, license/SBOM and plan checks pass; GitHub CI/CodeQL/DAST/attestation, live alerts, rotation rehearsal and operator script remain NOT RUN |
 | Install, upgrade and recovery | Three profiles, no-Internet install, upgrade, forward-fix, backup/restore and custody | `PS-820` | Clean-install and institution drill artifacts | **AUTOMATED PASS / HUMAN DESKTOP ACCEPTANCE NOT RUN** — prior-schema forward-fix and compatibility, all three profile shells, zero-egress controls, encrypted restore and independent Evidence verification pass; qualified Windows/macOS keyboard/screen-reader review and named approval remain pending |
-| Fractured Order complete lifecycle | Blank-install UI-only design-to-archive workflow using shared Teludens Plenum UI | `PS-830` | Golden-journey bundle and human acceptance | PLANNED |
-| Platform generalization | Policy-negotiation and crisis-response designs run without Runtime edits | `PS-840` | Cross-simulation UI evidence | PLANNED |
+| Fractured Order complete lifecycle | Blank-install UI-only design-to-archive workflow using shared Teludens Plenum UI | `PS-830` | Golden-journey bundle and human acceptance | AUTOMATED GATES PASS / ACCEPTANCE PARTIAL on the local blank-install candidate: original/Energy archive and restore pass, but independent signed live-Session checkpoint verification and named human/desktop AT acceptance remain open |
+| Platform generalization | Policy-negotiation and crisis-response designs exercise approved optional concepts and forms without Runtime edits | `PS-840` | Independent cross-simulation UI evidence | PLANNED |
+| Approved authoring behavior | OPEN-004/010 and DEC-63/64 across Studio, server, Runtime and export; original/Energy golden journey | `PS-830` | Checkpoint A–H coverage and version-compatible evidence | AUTOMATED PASS on the local candidate, including converged product/a11y/install/security gates; named human/desktop AT and live-golden signed Evidence checkpoint acceptance remain open |
+| Role-by-role interface consistency | One navigation model, vocabulary and Teludens layout grammar for every persona and participant role; no internal identifiers as labels | `PS-842` | IC-01–IC-40 ledger, `CMD-INTERFACE-CONSISTENCY` and human role-by-role walkthrough | PLANNED |
+| Controlled authority transfer | Resolved OPEN-016 implementation, fencing, continuity and timed operator rehearsal | `PS-845` | Positive/negative transfer cases and named operational review | PLANNED |
 | Production decision | Exact artifacts, all gates, support/operations handoff and authorized GO | `PS-850` | Signed release evidence index | PLANNED |
 
 ## Golden-journey release test
@@ -115,7 +118,10 @@ The journey fails if a tester must open developer tools, paste an internal ident
 - After `PS-800`: full route/state/viewport Teludens conformance review.
 - After `PS-820`: a new tester follows clean-install and accessibility scripts.
 - After `PS-830`: complete Fractured Order golden journey.
-- After `PS-840`: independent UAT and fail-closed no-gap audit.
+- After `PS-840`: independent product UAT and structural audit; external/operational rows remain explicitly pending.
+- After `PS-842`: role-by-role walkthrough for every persona and participant role, plus affected PS-830/PS-840 reruns.
+- After `PS-845`: controlled authority-transfer evidence and affected upstream reruns.
+- At `PS-850`: final-candidate convergence and the unscoped fail-closed release audit.
 
 ## Evidence status vocabulary
 
@@ -130,3 +136,13 @@ The journey fails if a tester must open developer tools, paste an internal ident
 - **N/A** — an approved source decision makes the row inapplicable.
 
 Only **PASS** or approved **N/A** is acceptable to `PS-850`.
+
+## Remaining-sequence ownership — 2026-11-08
+
+PS-830 checkpoints A–D have local focused automated evidence in [PS-830-checkpoints.md](../acceptance/PS-830-checkpoints.md). OPEN-004 concepts and OPEN-010 bounded basic Forms, calculations and safe text have domain, publication/integration and Studio/shared-renderer browser proof. This does not close the full capability row: E–H, named human/AT and final-candidate gates remain outstanding. No historical PASS is transferred to this candidate.
+
+APPROVAL_IMPLEMENTATION_PROMPTBOOK.md assigns approved capabilities to PS-830 and operational transfer to PS-845. PS-840 closes applicable product-owned rows only; it cannot close future transfer or missing provider/human rows. PS-850 accepts the entire ledger only after all mandatory evidence is present. The machine ledger adds explicit release-control obligations for these approvals with PLANNED status, so historical structural PASS does not conceal the new work.
+
+PS-830 focused A?G evidence now exists in [PS-830-checkpoints.md](../acceptance/PS-830-checkpoints.md). G demonstrates supported Package/Template authoring, workforce staffing, Orientation coverage and all four Energy variations through a reviewed rubric result. This does not upgrade the overall capability rows to PASS: H full original/customized journeys, final-candidate gates and named acceptance remain required. The known scheduled/rescheduled Inject gap is retained for H resolution.
+
+2026-11-09 H update: the scheduled/rescheduled Inject gap has a focused migration 042 integration pass. The full registered blank-install golden command passed 2/2 on disposable `plenum_ps830_g_browser4`, and its 109 MB Organization archive was imported through Admin UI into isolated `plenum_ps830_g_browser5`; both restored Sessions replayed with no differences and generated fresh reports. Product E2E passed 37/37, accessibility 11/11, clean-install/upgrade across three profiles, security 8/8 plus zero reported npm vulnerabilities, post-limit unit 154/154 and integration 39/39, and all other required local commands passed. The local lifecycle and authoring rows above record this bounded result. A supported way to create and independently verify signed checkpoints from the live golden Sessions is still missing; named human/desktop AT, external provider and production gates also remain open. PS-830 overall and release approval are not PASS. Exact candidate identity and artifacts are in the checkpoint record.

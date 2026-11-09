@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | PGLDM |
-| Version | 1.1.4 |
-| Date | 2026-11-01 |
+| Version | 1.1.5 |
+| Date | 2026-11-08 |
 | Status | Approved by Product Owner direction on 2026-10-20. Depends on ADR-001 to ADR-005 and ADR-014 to ADR-016; named specialist sign-offs remain required. OPEN-002 is resolved. |
 | Owner | Technical Lead |
 | Approvers | Technical Lead; Security Owner; Operations Owner (role placeholders — OPEN-001) |
@@ -97,7 +97,7 @@ A Core Design and its Scenarios are stored as collaborative documents in one pro
 |---|---|---|
 | sessions | id, organization_id, project_id, initial_release_id, status, version | Implemented; the initial release must belong to the session's project (composite FK) |
 | session_authorities | session_id, deployment_id, authority_epoch, status | Implemented; checked on every consequential write |
-| authority_transfers | id, session_id, from_deployment_id, to_deployment_id, from_epoch, to_epoch, fencing_proof, operator_person_id, reason, status | Specified (OPEN-016) |
+| authority_transfers | id, session_id, from_deployment_id, to_deployment_id, from_epoch, to_epoch, fencing_proof, operator_person_id, reason, status | Specified (resolved OPEN-016; implementation evidence pending) |
 | release_activations | id, session_id, project_id, release_id, previous_activation_id, activation_sequence, compatibility_policy, approved_by | Implemented (initial activation only); release must belong to the session's project |
 | release_activation_reviews | id, organization_id, session_id, from_release_id, to_release_id, report_sha256, change_classification, reviewed_by, reviewer_roles, policy_version, evidence, rationale, reviewed_at | Implemented baseline; fresh distinct-author consequential approval and complete provenance extension specified by resolved OPEN-013 and PS-760 |
 | participants | id, organization_id, session_id, person_id (unique per session) | Implemented |
@@ -106,9 +106,9 @@ A Core Design and its Scenarios are stored as collaborative documents in one pro
 | session_teams | session_id, team_id (Release-defined), status | Specified |
 | artifact_instances | id, session_id, governing_release_id, artifact_type_key, workflow_key, form_version, creator_participant_id, state, payload, visible_role_ids, version | Implemented |
 | artifact_versions | artifact_id, version, payload, state, changed_by, changed_at | Specified (history is currently reconstructable from Evidence Events) |
-| decision_actions | id, artifact_id, action_key, payload, version | Specified (DEC-35; OPEN-018) |
+| decision_actions | id, artifact_id, action_key, payload, version | Specified (DEC-63; resolved OPEN-018) |
 | stage_instances, timers | session_id, stage_id, status, started_at, deadline_at, paused_remaining | Specified |
-| inject_instances, inject_recipient_states | session_id, inject_definition_id, state; per-recipient acknowledged_at, responded_at | Specified (DEC-40) |
+| inject_instances, inject_recipient_states | session_id, inject_definition_id, state; per-recipient acknowledged_at, responded_at | Specified (DEC-64) |
 | messages | session_id, channel_id, sender_participant_id, recipients, thread_id, content, approval_state, delivery_state | Specified |
 | information_deliveries | session_id, record_ref, participant_id, released_at, delivered_at, viewed_at, acknowledged_at | Specified (08 Canon §6.1) |
 | state_values, state_snapshots | session_id, state_variable_id, scope_ref, value; snapshot at evidence_sequence | Specified |
@@ -287,3 +287,4 @@ OPEN-014, OPEN-015 and OPEN-017 resolve the managed-device, signing-key custody,
 | 1.1.1 | 2026-10-17 | Added `voting`, `comms` and `extension` schemas (ADR-016) with entity catalogs §4.7 to §4.9 and DB-11 to DB-13. |
 | 1.1.0 | 2026-10-17 | Adopted Glossary terms; added persons, Organization Role memberships and seat assignments (DEC-44); moved Release-defined identifiers out of `CHECK` constraints (DEC-45); added project-consistency foreign keys, application role, append-only triggers and corrected row-level security; recorded rejected and reconciliation receipts with evidence (DEC-43); split checkpoint storage into batches, signatures and anchors; replaced inline SQL with the tested migrations 001–004; added entity catalog with implementation status and acceptance test status. |
 | 1.0.0 | 2026-10-17 | Initial proposal (archived). |
+| 1.1.5 | 2026-11-08 | Aligned authority-transfer, single-Action and per-recipient Inject decision references; no database schema or migration change. |

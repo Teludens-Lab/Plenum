@@ -5,12 +5,12 @@
 | Field | Value |
 |---|---|
 | Document ID | GLOSS |
-| Version | 1.0.2 |
-| Date | 2026-10-21 |
-| Status | Controlled draft. Terms marked **(A)** rest on Assumed decisions and change if those decisions change. |
+| Version | 1.0.3 |
+| Date | 2026-11-08 |
+| Status | Controlled. Former assumption markers removed following owner confirmation on 2026-11-08; DEC-62–64 preserve amended decision history. |
 | Owner | Product Owner |
-| Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
-| Governed by | `DECISION_REGISTER_v1.0.md`, chiefly DEC-30 to DEC-40 and DEC-46 to DEC-61 |
+| Approvers | Sethu Nguna as Product Owner, Methodology Lead and Technical Lead (resolved OPEN-001) |
+| Governed by | `DECISION_REGISTER_v1.0.md`, chiefly DEC-30 to DEC-39, DEC-46 to DEC-61, DEC-63 and DEC-64 |
 | Read by | Every Plenum document, API, event contract, database object and interface label |
 
 ## 1. Rules
@@ -44,16 +44,16 @@
 
 | Term | Definition | Notes |
 |---|---|---|
-| Simulation Project | The container for one simulation's design work: its Core Design, Scenarios, Draft, Definition Revisions and Simulation Releases. | DEC-31 (A). Legacy: Simulation (design identity) |
-| Core Design | The reusable methodological structure of a simulation: Team Definitions, Session Roles, Seats, Stages, Artifact Types, Forms, Workflow Definitions, Information Policies, Interface Profiles and Adjudication Models. Contains no exercise-specific content. | DEC-31 (A) |
-| Scenario | Exercise-specific content bound to a Core Design: briefs, inject content and schedules, initial State Values, scenario objectives and assets. | DEC-31 (A) |
-| Simulation Template | A Core Design published to the Organization library for reuse. Starting from it copies the Core Design; Scenario content is copied only when the designer chooses. | DEC-32 (A); DEC-04 |
+| Simulation Project | The container for one simulation's design work: its Core Design, Scenarios, Draft, Definition Revisions and Simulation Releases. | DEC-31. Legacy: Simulation (design identity) |
+| Core Design | The reusable methodological structure of a simulation: Team Definitions, Session Roles, Seats, Stages, Artifact Types, Forms, Workflow Definitions, Information Policies, Interface Profiles and Adjudication Models. Contains no exercise-specific content. | DEC-31 |
+| Scenario | Exercise-specific content bound to a Core Design: briefs, inject content and schedules, initial State Values, scenario objectives and assets. | DEC-31 |
+| Simulation Template | A Core Design published to the Organization library for reuse. Starting from it copies the Core Design; Scenario content is copied only when the designer chooses. | DEC-32; DEC-04 |
 | Methodology Concept | A canonical SSG concept (for example Team, Stage, Adjudication) that a Core Design may enable or disable, subject to dependency rules. | DEC-01; OPEN-004 |
 | Draft | The mutable, collaboratively edited working state of a Core Design and its Scenarios. | ADR-002 |
 | Definition Revision | An immutable, hashed snapshot of a validated Draft. | |
 | Simulation Release | The immutable, compiled, executable output of one Definition Revision, carrying compiler version, schema version and content digest. The only thing a Session can execute. | Legacy: Simulation Package, simulation version, published version, scenario version |
 | Package | The portable file form of a Simulation Release, used for export and import (including air-gapped transfer). A Package carries a Release; it is not a separate identity. | OPEN-020 |
-| Publication | The controlled process that turns a Definition Revision into a Simulation Release. Follows the Publication lifecycle (§7.1). | DEC-39 (A) |
+| Publication | The controlled process that turns a Definition Revision into a Simulation Release. Follows the Publication lifecycle (§7.1). | DEC-39 |
 | Terminology Profile | Designer-set display labels for canonical concepts. | Rule 2 |
 
 ## 4. Structure (defined in a Core Design)
@@ -63,16 +63,16 @@
 | Team Definition | A designer-defined group of Participants with identity, objectives and resources. Not a fixed set of sides. | |
 | Session Role | A Release-defined functional responsibility in a Session, with explicit capabilities and scope (for example Scribe, Facilitator, White Cell in Fractured Order). | DEC-61. Legacy: role definition, RoleInstance |
 | Seat | A Release-defined position a Participant occupies, binding a Session Role and optionally a Team. Has minimum and maximum occupancy and a join mode. | |
-| Stage | A unit of simulation structure and time. Has a designer-chosen **Stage Type** label (for example phase, move, round, turn, orientation, custom) and may belong to a parent **Stage Group**, allowing nesting such as a move containing phases. | DEC-33 (A); OPEN-005. Legacy: phase, round, turn, move, orientation, temporal node |
+| Stage | A unit of simulation structure and time. Has a designer-chosen **Stage Type** label (for example phase, move, round, turn, orientation, custom) and may belong to a parent **Stage Group**, allowing nesting such as a move containing phases. | DEC-33; OPEN-005. Legacy: phase, round, turn, move, orientation, temporal node |
 | Stage Transition | A guarded move from one Stage to another: automatic, manual, or either. | Legacy: phase transition |
 | Activity | Something Participants do within a Stage: read, discuss, submit, review, communicate, adjudicate, observe or custom. | |
 | Artifact Type | A versioned definition of a structured record: its Form, Workflow Definition, ownership, Information Policy, retention and export behavior. | DEC-09 |
-| Decision-bearing type | An Artifact Type marked by the methodology as recording a committed choice. Instances are Decision Records. | DEC-35 (A) |
+| Decision-bearing type | An Artifact Type marked by the methodology as recording a committed choice. Instances are Decision Records. | DEC-63 |
 | Form | The versioned field schema, layout, validation and conditional logic for an Artifact Type. | |
 | Workflow Definition | A state machine of states, guarded transitions, permitted Session Roles, emitted events and side effects. | DEC-08; OPEN-006 |
 | Gate | A declarative, type-checked condition that restricts a transition or action, evaluated authoritatively in the Runtime. | Legacy: rule, condition group |
 | Information Policy | The default-deny rules controlling which Participants may see a record or field, and when it is released. | DEC-10. Legacy: visibility rule, visibility matrix |
-| Inject Definition | A designed release of information to a defined audience, with release mode, schedule or trigger, required response and effects. | DEC-34 (A). Legacy: event definition (designer sense) |
+| Inject Definition | A designed release of information to a defined audience, with release mode, schedule or trigger, required response and effects. | DEC-34. Legacy: event definition (designer sense) |
 | Message Channel | A permitted message type (direct, team, proposal, request for information, broadcast, public statement, custom). | DEC-51. Legacy: Communication Channel |
 | Communication Route | The rule allowing a sender selector to use a Message Channel toward a recipient selector, possibly with approval. | |
 | Voice Channel Definition | A designed audio channel: mode (`radio_ptt`, `open_room`, `private_call`, `broadcast`), capacity, active Stages, listen, transmit, moderate and invite policies, radio floor rules, recording and transcription policy. | DEC-47, DEC-51; document 12 |
@@ -98,7 +98,7 @@
 
 | Term | Definition | Notes |
 |---|---|---|
-| Session | One execution of a Simulation Release. Owns its state, Participants and evidence. | DEC-30 (A). Legacy: run, simulation run, exercise session |
+| Session | One execution of a Simulation Release. Owns its state, Participants and evidence. | DEC-30. Legacy: run, simulation run, exercise session |
 | Session Authority | The single Deployment currently permitted to commit consequential changes for a Session. | ADR-001 |
 | Authority Epoch | A monotonically increasing number identifying the current Session Authority; writes carrying an older epoch are rejected. | ADR-001 |
 | Release Activation | A recorded event that makes a Simulation Release govern new work in a Session. The first activation happens at Session creation. | ADR-004 |
@@ -108,10 +108,10 @@
 | Active Role Context | The single Session Role a multi-role Participant is currently acting in. | |
 | Session Team | The runtime instance of a Team Definition in a Session. | Legacy: TeamInstance |
 | Artifact | An instance of an Artifact Type in a Session, with author, version and history. | Legacy: artifact instance, submission, form record |
-| Decision Record | An Artifact of a decision-bearing type. | DEC-35 (A) |
-| Action | One executable component inside a Decision Record. | DEC-35 (A). Legacy: ActionRecord as a top-level entity |
+| Decision Record | An Artifact of a decision-bearing type. | DEC-63 |
+| Action | The single executable component inside a Decision Record. | DEC-63. Legacy: ActionRecord as a top-level entity |
 | Workflow Instance | The execution of a Workflow Definition for one Artifact. | |
-| Inject Instance | The runtime state of one Inject Definition in a Session, including per-recipient acknowledgement and response. | DEC-40 (A) |
+| Inject Instance | The runtime state of one Inject Definition in a Session, including per-recipient acknowledgement and response. | DEC-64 |
 | Message | A communication sent over a Message Channel. | |
 | Poll | The runtime instance of a Poll Definition in a Session (§7.9). | DEC-46 |
 | Electorate | The Seat Assignments eligible to vote in a Poll, with weights and veto rights, frozen when the Poll opens. | |
@@ -137,7 +137,7 @@
 | Control Intervention | An authorized operator action that changes Session state outside normal participant flow, with authority, reason and category recorded. | Legacy: White Cell intervention (White Cell is a Release-defined role name) |
 | Command | A request to change state, carrying a stable Command ID, expected aggregate version and Governing Release. | |
 | Command Receipt | The durable server record of a Command's outcome. | |
-| Command Outcome | The status of a Command Receipt (§7.6). | DEC-37 (A) |
+| Command Outcome | The status of a Command Receipt (§7.6). | DEC-37 |
 | Projection | The authorization-filtered view of Session data sent to one Participant or Device. | |
 | Projection Cursor | An opaque, server-validated position in a Projection's delta stream. | |
 | Offline Outbox | The protected client-side queue of Commands created while disconnected. | |
@@ -147,9 +147,9 @@
 
 | Term | Definition | Notes |
 |---|---|---|
-| Evidence Event | The append-only, sequenced, tamper-evident institutional record of a committed change or a rejected Command in a Session. | DEC-34 (A); DEC-43; ADR-003. Legacy: event log entry, in-session audit event |
+| Evidence Event | The append-only, sequenced, tamper-evident institutional record of a committed change or a rejected Command in a Session. | DEC-34; DEC-43; ADR-003. Legacy: event log entry, in-session audit event |
 | Evidence Sequence | The strictly increasing per-Session number assigned to each Evidence Event. | |
-| Domain Event | A past-tense notification that a change committed, derived from an Evidence Event and delivered through the outbox to Projections and integrations. | DEC-34 (A) |
+| Domain Event | A past-tense notification that a change committed, derived from an Evidence Event and delivered through the outbox to Projections and integrations. | DEC-34 |
 | Checkpoint | A signed digest over a contiguous range of Evidence Events, chained to the previous Checkpoint. | ADR-003 |
 | Anchor | An independently held copy of a Checkpoint digest used to detect tampering. | ADR-003; OPEN-017 |
 | Audit Record | A security or administrative record outside any Session: authentication, membership changes, publication approvals, exports. | |
@@ -165,12 +165,12 @@
 
 Status values are lower snake_case in data and contracts. Display labels may differ.
 
-### 7.1 Publication lifecycle — DEC-39 (A)
+### 7.1 Publication lifecycle — DEC-39
 
 `draft` → `validated` → `in_review` → `approved` → `published` → `superseded` → `archived`
 
 - A failed validation leaves the item in `draft` with a validation report attached.
-- A test session is not required by default. An Organization policy may require a passed test session before `approved`.
+- A test session is not required by default. An Organization policy may require a passed test session before `approved`. Production approval and sandbox exceptions follow resolved OPEN-013 and the confirmed application of DEC-39.
 
 ### 7.2 Session lifecycle
 
@@ -188,11 +188,11 @@ Carried from Runtime §20 as the default template for decision-bearing Artifact 
 
 `draft` → `submitted` → `under_review` → `clarification_requested` → `resubmitted` → `approved` → `adjudication_pending` → `adjudicated` → `effects_applied` → `closed`
 
-### 7.5 Inject lifecycle — DEC-40 (A)
+### 7.5 Inject lifecycle — DEC-64
 
-`draft` → `scheduled` → `eligible` → `released` → `acknowledged` → `responded` → `closed`, with exits `cancelled` and `expired`. Acknowledgement and response are tracked per recipient.
+Lifecycle vocabulary and configurable requirements follow DEC-64. Scheduling, acknowledgement and response steps are not universally mandatory; recipient states and configured completion requirements determine progress. The implementation must not infer all-recipient completion from a single acknowledgement.
 
-### 7.6 Command outcomes — DEC-37 (A)
+### 7.6 Command outcomes — DEC-37
 
 | Status | Where | Meaning |
 |---|---|---|
@@ -229,7 +229,7 @@ A replayed Command returns its original receipt with `replayed: true`.
 
 `requested` → `granted` or `queued` → `released`, `expired` or `preempted`.
 
-## 8. Naming conventions — DEC-38 (A)
+## 8. Naming conventions — DEC-38
 
 | Item | Convention | Examples |
 |---|---|---|
@@ -347,3 +347,4 @@ A replayed Command returns its original receipt with `replayed: true`.
 | 1.0.0 | 2026-10-17 | Created from the 2026-10-17 review and questionnaire. |
 | 1.0.1 | 2026-10-17 | Added voting, voice and extension terms (DEC-46 to DEC-60) and lifecycles §7.9 to §7.12; renamed Communication Channel to Message Channel (DEC-51); replaced Adapter with Plugin Installation; mapped specification event names. |
 | 1.0.2 | 2026-10-21 | Added Reviewer and Research Analyst Organization Roles from DEC-61. |
+| 1.0.3 | 2026-11-08 | Aligned confirmed terms and publication interpretation; removed assumption markers; adopted DEC-63 and DEC-64 while preserving historical entries. |

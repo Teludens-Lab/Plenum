@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   COMMAND_ENVELOPE_CONTRACT_ID,
+  FORM_ATTACHMENT_UPLOAD_CONTRACT_ID, formAttachmentUploadV1Schema,
   ARTIFACT_COMMAND_CONTRACT_ID,
   STAGE_COMMAND_CONTRACT_ID,
   INJECT_COMMAND_CONTRACT_ID,
@@ -93,6 +94,14 @@ import {
 import {
   COMPOSITION_DEFINITION_CONTRACT_ID,
   GATE_EXPRESSION_CONTRACT_ID,
+  METHODOLOGY_CONTRACT_ID,
+  STRUCTURED_FORM_CONTRACT_ID,
+  FORM_EXPRESSION_CONTRACT_ID, FORMATTED_TEXT_CONTRACT_ID, formExpressionV1Schema, formattedTextV1Schema,
+  FORM_INTERCHANGE_CONTRACT_ID, formInterchangeV1Schema,
+  FORM_ATTACHMENT_CONTRACT_ID, formAttachmentPolicyV1Schema,
+  INJECT_COMPLETION_CONTRACT_ID, injectCompletionV1Schema,
+  structuredFormV2Schema,
+  methodologyConceptsV1Schema,
   PLUGIN_BINDING_CONTRACT_ID,
   compositionDefinitionV1Schema,
   gateExpressionV1Schema,
@@ -188,8 +197,16 @@ assert.equal(pluginManifestV1Schema.$id, PLUGIN_MANIFEST_CONTRACT_ID);
 assert.equal(pluginBindingV1Schema.$id, PLUGIN_BINDING_CONTRACT_ID);
 assert.equal(compositionDefinitionV1Schema.$id, COMPOSITION_DEFINITION_CONTRACT_ID);
 assert.equal(gateExpressionV1Schema.$id, GATE_EXPRESSION_CONTRACT_ID);
+assert.equal(methodologyConceptsV1Schema.$id, METHODOLOGY_CONTRACT_ID);
+assert.equal(structuredFormV2Schema.$id, STRUCTURED_FORM_CONTRACT_ID);
+assert.equal(formExpressionV1Schema.$id, FORM_EXPRESSION_CONTRACT_ID);
+assert.equal(formattedTextV1Schema.$id, FORMATTED_TEXT_CONTRACT_ID);
+assert.equal(formInterchangeV1Schema.$id, FORM_INTERCHANGE_CONTRACT_ID);
+assert.equal(formAttachmentPolicyV1Schema.$id, FORM_ATTACHMENT_CONTRACT_ID);
+assert.equal(formAttachmentUploadV1Schema.$id, FORM_ATTACHMENT_UPLOAD_CONTRACT_ID);
+assert.equal(injectCompletionV1Schema.$id, INJECT_COMPLETION_CONTRACT_ID);
 
-const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
+const contractSchemas = [formAttachmentUploadV1Schema, formAttachmentPolicyV1Schema, formInterchangeV1Schema, formExpressionV1Schema, formattedTextV1Schema, structuredFormV2Schema, methodologyConceptsV1Schema, artifactCommandV1Schema, stageCommandV1Schema, injectCommandV1Schema, messageCommandV1Schema,
   commandEnvelopeV1Schema, commandReceiptV1Schema, domainEventV1Schema,
   eventEnvelopeV1Schema, errorEnvelopeV1Schema, runtimeProjectionV1Schema, participantEntryV1Schema,
   runtimeNavigationV1Schema, runtimeSseV1Schema,
@@ -204,6 +221,7 @@ const contractSchemas = [artifactCommandV1Schema, stageCommandV1Schema, injectCo
   projectPortalV1Schema, templateLibraryV1Schema, releaseCatalogV1Schema, sessionCatalogV1Schema,
   createdConfiguredSessionV1Schema,
   pluginManifestV1Schema, pluginBindingV1Schema, compositionDefinitionV1Schema, gateExpressionV1Schema];
+contractSchemas.push(injectCompletionV1Schema);
 for (const schema of contractSchemas) {
   checkCamelCaseProperties(schema);
 }

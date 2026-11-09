@@ -916,6 +916,13 @@ export async function requireActiveGuest(pool: Pool, organizationId: string, gue
 async function readiness(client: PoolClient, context: PrincipalSessionCommandContext, activeReleaseId: string): Promise<ReadinessProjectionV1> {
   const access = await config(client, context);
   if (access === undefined) throw new Error("Session access configuration is missing");
+  const release = await client.query<{ seats: Array<{ id: string; name?: string }> }>(
+    `SELECT revision.snapshot->'coreDesign'->'seats' AS seats
+       FROM registry.releases release JOIN studio.definition_revisions revision
+         ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+      WHERE release.organization_id=$1 AND release.id=$2`, [context.organizationId, activeReleaseId]
+  );
+  const seatLabels = new Map((release.rows[0]?.seats ?? []).map((item) => [item.id, item.name]));
   const checks = await client.query<{ check_key: string; label: string; blocking: boolean; governing_release_id: string; assignment_version: string; completed_at: Date | null }>(
     `SELECT check_key,label,blocking,governing_release_id,assignment_version,completed_at
        FROM runtime.session_readiness_checks WHERE organization_id=$1 AND session_id=$2 ORDER BY check_key`,
@@ -982,7 +989,7 @@ async function readiness(client: PoolClient, context: PrincipalSessionCommandCon
   return { contractId: "readiness-v1", sessionId: context.sessionId, governingReleaseId: activeReleaseId,
     assignmentVersion: Number(access.assignment_version), ready: items.every((item) => !item.blocking || item.complete), checks: items,
     staffing: {
-      seats: staffingSeats.rows.map((item) => ({ seatId: item.seat_id, sessionRoleIds: item.session_role_ids,
+      seats: staffingSeats.rows.map((item) => ({ seatId: item.seat_id, label: seatLabels.get(item.seat_id) ?? item.seat_id, sessionRoleIds: item.session_role_ids,
         teamId: item.team_id, minimum: item.min_occupancy, maximum: item.max_occupancy, occupied: Number(item.occupied) })),
       joinRequests: joinRequests.rows.map((item) => ({ personId: item.person_id, requestedSeatId: item.requested_seat_id,
         status: item.status, submittedAt: item.submitted_at.toISOString() })),
@@ -1016,6 +1023,18 @@ export async function getReadiness(
       throw authorizationError("PERMISSION_DENIED", "An active Session Operator assignment is required.", correlationId);
     }
     const projection = await readiness(client, context, session.rows[0].release_id);
+    // Names are disclosed only after the existing Organization and Session Operator checks.
+    // The same bounded roster query lets large directories narrow the picker without returning contact details.
+    const people = await client.query<{ person_id: string; display_name: string }>(
+      `SELECT workforce.person_id,person.display_name
+         FROM identity.organization_workforce_members workforce JOIN identity.persons person ON person.id=workforce.person_id
+        WHERE workforce.organization_id=$1 AND workforce.status='active'
+          AND ($2::text IS NULL OR strpos(lower(person.display_name),lower($2)) > 0)
+        ORDER BY person.display_name,workforce.person_id LIMIT 101`,
+      [principal.organizationId, rosterQuery?.trim() ?? null]
+    );
+    projection.staffing.people = people.rows.slice(0, 100).map((person) => ({ personId: person.person_id, displayName: person.display_name }));
+    projection.staffing.peopleTruncated = people.rows.length > 100;
     if (rosterQuery === undefined) return projection;
     const query = rosterQuery.trim().toLocaleLowerCase("en-US");
     return { ...projection, staffing: { ...projection.staffing,

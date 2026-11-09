@@ -8,7 +8,8 @@ import {
   authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
-  createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent
+  createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
+  startScheduledInjectWorker
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { buildSecurityHeaders } from "./security-headers.mjs";
@@ -273,10 +274,16 @@ const retentionStart = setTimeout(() => void enforceRetention(), 30_000);
 const retentionInterval = setInterval(() => void enforceRetention(), 24 * 60 * 60_000);
 retentionStart.unref();
 retentionInterval.unref();
+const stopInjectWorker = startScheduledInjectWorker(pool, oidc.organizationId, deploymentId, (error, sessionId) => {
+  const code = typeof error?.code === "string" && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : "unexpected";
+  telemetry.emit({ event: "inject.schedule_failed", severity: "error", outcome: "failed", correlationId: randomUUID(),
+    category: code, ...(sessionId === undefined ? {} : { sessionId }) });
+});
 let closing = false;
 async function close() {
   if (closing) return; closing = true;
   clearTimeout(retentionStart); clearInterval(retentionInterval);
+  await stopInjectWorker();
   await collaboration.close();
   server.closeAllConnections();
   metricsServer.closeAllConnections();

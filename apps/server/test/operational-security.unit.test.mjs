@@ -121,6 +121,22 @@ test("PS-810 ClamAV readiness uses the private daemon protocol", async () => {
   }
 });
 
+test("PS-830-T06 scanner accepts exactly 20 MB and bounds daemon output", async () => {
+  const server = await scannerServer("stream: OK\0");
+  try {
+    const scanner = new ClamAvContentScanner({ host: "127.0.0.1", port: server.address().port, timeoutMs: 5_000 });
+    assert.equal((await scanner.scan(new Uint8Array(20_000_000), "application/pdf")).status, "clean");
+    await assert.rejects(scanner.scan(new Uint8Array(20_000_001), "application/pdf"), /size bound/u);
+    await assert.rejects(scanner.scan(new Uint8Array(), "text/plain"), /size bound/u);
+  } finally { await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+  const oversized = await scannerServer("x".repeat(4097));
+  try {
+    const scanner = new ClamAvContentScanner({ host: "127.0.0.1", port: oversized.address().port, timeoutMs: 1_000 });
+    await assert.rejects(scanner.scan(new Uint8Array([1]), "text/plain"), /response exceeded/u);
+    assert.equal(await scanner.health(), "unavailable");
+  } finally { await new Promise((resolve, reject) => oversized.close((error) => error ? reject(error) : resolve())); }
+});
+
 test("PS-810 operations secret is narrow and rejects unexpected credentials", () => {
   const value = parseOperationsSecretBundle(JSON.stringify({
     ALERT_RECIPIENT: "operations@example.test",

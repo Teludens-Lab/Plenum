@@ -22,6 +22,7 @@ Authoritative sources and sections:
 - `docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md` — 07 Roadmap section 15
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register OPEN-014
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register OPEN-017
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register sections 3, 5.7 and 7.1 through 7.5
 
 Observed source evidence:
 
@@ -46,6 +47,11 @@ Run every Node/npm command with Node 24 or newer. Record `node --version` at pre
 - Backup/restore and signer custody
 - Manual accessibility report gaps
 - Managed-device offline policy
+- Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth
+- Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates
+- Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A
+- Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests
+- Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning
 
 Read callers, tests, fixtures, configuration, exports, migrations, and public contracts that touch the change. Verify real paths before creating any unobserved path.
 
@@ -71,10 +77,12 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 ## Implementation
 
+- Resume the existing PS-820 evidence and owner-authorized PS-815 exception; identify applicable migration and image deltas before rerunning. Record qualified desktop/AT reviews and institutional approval as NOT RUN until actually completed
 - Automate a disposable clean-install and versioned upgrade rehearsal
 - Execute restore and Evidence verification with separated custody
 - Record manual task-based accessibility results and fix blockers
 - Validate offline-device expiry, revocation and data clearing on an approved managed-device profile
+- After PS-830 form/schema changes and PS-845 transfer changes, repeat affected empty-install, prior-version upgrade, historical-record preservation, rollback compatibility and restore checks on the final candidate; reuse the harness rather than creating another installation path
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
 
@@ -100,7 +108,7 @@ Pin Governing Release, schema, contract, Plugin, and Platform Adapter versions w
 
 - Do not run destructive production operations without explicit authorization
 - Do not claim all assistive technologies from one review
-- Do not claim high availability while OPEN-016 remains unresolved
+- Do not claim live authority-transfer readiness from backup/restore tests; PS-845 owns resolved OPEN-016 implementation and timed transfer evidence
 
 Also prohibited: destructive production operations, production secret changes, paid service creation, `git add .`, force push, destructive reset, invented commands, and completion claims after a failed gate.
 
@@ -110,6 +118,7 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then a prior supported version upgrades without losing Releases, Sessions, evidence or objects
 - Given the documented preconditions, when the task behavior is exercised, then restore meets approved objectives and independently verifies evidence
 - Given the documented preconditions, when the task behavior is exercised, then qualified manual accessibility review has no unresolved task-blocking defect
+- Given the documented preconditions, when the task behavior is exercised, then historical Releases, submitted forms and Sessions remain readable after the approved capability changes; incompatible contracts fail explicitly and are not silently upgraded
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -137,13 +146,16 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Offline bundles make no public-network request
 - Schema rollback is never assumed safe
 
-The approval gate is: Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.. A task may be implementation-complete without being release-approved.
+The approval gate is: Preserve historical AUTOMATED PASS and HUMAN NOT RUN separately. Re-verify automated installation prerequisites for a new working candidate before PS-830 execution; human/AT acceptance remains mandatory for task completion and PS-850. The recorded PS-815 exception is not a blanket release waiver. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
 - Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md
 - Record exact user-test evidence and unresolved defects
 - Update authoritative contracts and compatibility/migration registers when changed
+- Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries
+- Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels
+- Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.
 

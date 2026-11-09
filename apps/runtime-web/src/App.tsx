@@ -1,4 +1,8 @@
 import { ArtifactCard, ArtifactContent, CreateTask, CreateWorkspace, FieldEditor, createTaskKey } from "./runtime/ArtifactForms.js";
+import { FormAttachments } from "./runtime/FormAttachments.js";
+import { StaffingPersonPicker } from "./runtime/StaffingPersonPicker.js";
+import { OperatorInjectSchedule } from "./runtime/OperatorInjectSchedule.js";
+import { RecordExport } from "./runtime/RecordInterchange.js";
 import { ArtifactWorkspace, moduleArtifacts } from "./runtime/ArtifactWorkspace.js";
 import { SessionTool } from "./runtime/SessionTool.js";
 import { StageControls } from "./runtime/StageControls.js";
@@ -7,6 +11,7 @@ import {
   type CommandEnvelopeV1,
   type CommandReceiptV1,
   type AdjudicationRequestV1,
+  type AdjudicationOptionV1,
   type ErrorEnvelopeV1,
   type EffectProposalV1,
   type JsonObject,
@@ -781,22 +786,30 @@ function MessageInbox({ module, projection, disabled, send }: {
   </section>;
 }
 
-function InjectCard({ inject, disabled, send }: { inject: RuntimeInjectV1; disabled: boolean; send: SendInformation }) {
+function InjectCard({ inject, artifacts, disabled, send }: { inject: RuntimeInjectV1; artifacts: RuntimeArtifactV1[]; disabled: boolean; send: SendInformation }) {
   const [artifactId, setArtifactId] = useState("");
+  const responses = artifacts.filter((artifact) => artifact.artifactTypeKey === inject.responseArtifactTypeKey &&
+    (inject.governingReleaseId === undefined || artifact.governingReleaseId === inject.governingReleaseId));
+  const selectedResponse = responses.some(({ id }) => id === artifactId);
+  const acknowledgementRequired = inject.acknowledgementRequired ?? true;
   const body = typeof inject.content.body === "string" ? inject.content.body : "No details were provided.";
   return <article className="card" aria-labelledby={`inject-${inject.id}`}>
     <div className="card-heading"><h3 id={`inject-${inject.id}`}>{inject.title}</h3><span className="badge badge-state">{inject.state}</span></div>
     <p>{body}</p>
-    {inject.acknowledgedAt === null ? <button className="btn-primary" type="button" disabled={disabled}
+    {inject.recipientComplete === true && <p className="hint">Your required steps are complete.</p>}
+    {inject.state !== "closed" && acknowledgementRequired && inject.acknowledgedAt === null ? <button className="btn-primary" type="button" disabled={disabled}
       onClick={() => send("inject.acknowledge", inject.id, inject.version, {})}>Acknowledge</button> : null}
-    {inject.requiredResponseArtifactTypeId === null || inject.acknowledgedAt === null || inject.respondedAt !== null ? null : <form onSubmit={(event) => {
+    {inject.state === "closed" || inject.requiredResponseArtifactTypeId === null || (acknowledgementRequired && inject.acknowledgedAt === null) || inject.respondedAt !== null ? null : <form onSubmit={(event) => {
       event.preventDefault();
-      if (artifactId.trim().length > 0) send("inject.respond", inject.id, inject.version, { artifactId: artifactId.trim() });
+      if (selectedResponse) send("inject.respond", inject.id, inject.version, { artifactId });
     }}>
-      <div className="field"><label htmlFor={`inject-${inject.id}-artifact`}>Response Artifact ID</label>
-        <input id={`inject-${inject.id}-artifact`} required value={artifactId} disabled={disabled}
-          onChange={(event) => setArtifactId(event.target.value)} /></div>
-      <button className="btn-primary" type="submit" disabled={disabled || artifactId.trim().length === 0}>Submit response</button>
+      <div className="field"><label htmlFor={`inject-${inject.id}-artifact`}>Response record</label>
+        <select id={`inject-${inject.id}-artifact`} required value={artifactId} disabled={disabled}
+          onChange={(event) => setArtifactId(event.target.value)}><option value="">Choose a response record</option>
+          {responses.map((artifact) => <option key={artifact.id} value={artifact.id}>{artifact.title} · {artifact.stateLabel} · version {artifact.version}</option>)}
+        </select></div>
+      {responses.length === 0 && <p className="hint">Create a record of the required type in your workspace before responding.</p>}
+      <button className="btn-primary" type="submit" disabled={disabled || !selectedResponse}>Submit response</button>
     </form>}
   </article>;
 }
@@ -807,7 +820,7 @@ function InjectInbox({ module, projection, disabled, send }: {
   return <section aria-labelledby={`${module.id}-heading`}>
     <div className="section-heading"><h2 id={`${module.id}-heading`}>{module.title}</h2></div>
     {projection.injects.length === 0 ? <p className="empty-state">{module.emptyStateText}</p> : <div className="card-grid">
-      {projection.injects.map((inject) => <InjectCard key={inject.id} inject={inject} disabled={disabled} send={send} />)}
+      {projection.injects.map((inject) => <InjectCard key={inject.id} inject={inject} artifacts={projection.artifacts} disabled={disabled || module.mode !== "write"} send={send} />)}
     </div>}
   </section>;
 }
@@ -942,6 +955,7 @@ function RuntimeView() {
   const [projection, setProjection] = useState<RuntimeProjectionV1 | null>(null);
   const [effectProposals, setEffectProposals] = useState<EffectProposalV1[]>([]);
   const [adjudications, setAdjudications] = useState<AdjudicationRequestV1[]>([]);
+  const [adjudicationOptions, setAdjudicationOptions] = useState<AdjudicationOptionV1[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { toasts, notify: setNotice, dismiss: dismissToast, hold: holdToast } = useToasts();
   const [sidebarPreference, setSidebarPreference] = useState<"auto" | "open" | "closed">("auto");
@@ -971,7 +985,7 @@ function RuntimeView() {
         api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap${roleQuery}`, { headers }),
         api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection${roleQuery}`, { headers }),
         api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers }),
-        api<{ adjudications: AdjudicationRequestV1[] }>(`/v1/sessions/${id}/adjudications`, { headers })
+        api<{ adjudications: AdjudicationRequestV1[]; options?: AdjudicationOptionV1[] }>(`/v1/sessions/${id}/adjudications${roleQuery}`, { headers })
       ]);
       if (version !== loadVersion.current) return;
       const previous = await offlineStore.load(id, registered.deviceId);
@@ -1011,6 +1025,7 @@ function RuntimeView() {
       setProjection(nextProjection);
       setEffectProposals(proposalResponse.proposals);
       setAdjudications(adjudicationResponse.adjudications);
+      setAdjudicationOptions(adjudicationResponse.options ?? []);
       setConnection("online");
     } catch (cause) {
       if (version !== loadVersion.current) return;
@@ -1051,6 +1066,7 @@ function RuntimeView() {
           setProjection(cached.projection);
           setEffectProposals([]);
           setAdjudications([]);
+          setAdjudicationOptions([]);
           setConnection("offline");
           setNotice("Using the protected offline view. Local pending work is not submitted.", "caution");
           return;
@@ -1177,7 +1193,8 @@ function RuntimeView() {
     }
     return post({
       commandId: crypto.randomUUID(), deviceId, operationType, aggregateId, expectedAggregateVersion,
-      governingReleaseId: projection.releaseId, activeSessionRoleId: projection.activeSessionRoleId,
+      governingReleaseId: operationType.startsWith("inject.") ? projection.injects.find(({ id }) => id === aggregateId)?.governingReleaseId ?? projection.releaseId : projection.releaseId,
+      activeSessionRoleId: projection.activeSessionRoleId,
       deviceObservedAt: new Date().toISOString(), payload
     });
   };
@@ -1321,6 +1338,15 @@ function RuntimeView() {
   });
   const activeSeat = projection.roleContexts.find((role) => role.sessionRoleId === projection.activeSessionRoleId);
   const roleSwitchUnavailable = pending || connection !== "online";
+  const downloadArtifact = async (artifactId: string, format: "json" | "csv" | "pdf") => {
+    if (!navigator.onLine) throw new Error("Export requires a live connection.");
+    const response = await fetch(`/v1/sessions/${id}/runtime-artifacts/${artifactId}/export?format=${format}&activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}`,
+      { credentials: "same-origin", headers: { "x-device-id": deviceId! } });
+    if (!response.ok) { const result = await response.json(); throw new Error(result.error?.message ?? "The record export is unavailable."); }
+    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a");
+    link.href = url; link.download = format === "csv" ? "record-tables.zip" : `record.${format}`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   const renderRuntimeModule = (module: RuntimeModuleV1): ReactNode => {
     if (module.type === "session_timeline") return <SessionTimeline firstPage={projection.timeline} online={connection === "online"}
       loadOlder={async (before) => {
@@ -1342,9 +1368,12 @@ function RuntimeView() {
         `/v1/sessions/${id}/runtime-artifacts/${artifactId}/history?activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}${before === undefined ? "" : `&beforeVersion=${before}`}`,
         { headers: { "x-device-id": deviceId! } })} />;
     if (module.type === "task_list") return <ArtifactWorkspace module={module} artifacts={projection.artifacts}
-      renderArtifact={(artifact) => module.mode === "read" ? <article className="card artifact"><h2>{artifact.title}</h2>
-        <span className="badge badge-state">{artifact.stateLabel}</span><ArtifactContent form={artifact.form} payload={artifact.payload} /></article>
-        : <ArtifactCard key={`${artifact.id}-${artifact.version}`} artifact={artifact} disabled={submitting} send={send} />} />;
+      renderArtifact={(artifact) => <div key={`${artifact.id}:${projection.activeSessionRoleId}`}>{module.mode === "read" ? <article className="card artifact"><h2>{artifact.title}</h2>
+        <span className="badge badge-state">{artifact.stateLabel}</span><ArtifactContent form={artifact.form} payload={artifact.payload} />
+        {artifact.exportable ? <RecordExport disabled={submitting} download={(format) => downloadArtifact(artifact.id, format)} /> : null}</article>
+        : <ArtifactCard key={`${artifact.id}-${artifact.version}`} artifact={artifact} disabled={submitting} send={send} download={(format) => downloadArtifact(artifact.id, format)} />}
+        {artifact.form.attachments && id && deviceId ? <FormAttachments artifact={artifact} sessionId={id} deviceId={deviceId} activeSessionRoleId={projection.activeSessionRoleId}
+          disabled={submitting || connection !== "online"} readOnly={module.mode !== "write"} onChanged={load} /> : null}</div>} />;
     if (module.type === "message_inbox") return <div id={`runtime-module-${module.id}`}><MessageInbox module={module} projection={projection}
       disabled={submitting} send={sendInformation} /></div>;
     if (module.type === "proposal_thread") return <div id={`runtime-module-${module.id}`}><ProposalThreads module={module} projection={projection}
@@ -1498,7 +1527,7 @@ function RuntimeView() {
             <div className="card-grid">{projection.polls.map((poll) => <PollCard key={poll.id} poll={poll} disabled={submitting} send={sendPoll} />)}</div>
           </section>}
           <EffectProposalReview proposals={effectProposals} disabled={submitting} decide={(proposal, decision, reason) => void decideEffect(proposal, decision, reason)} />
-          <AdjudicationReview adjudications={adjudications} disabled={submitting} send={sendInformation} />
+          <AdjudicationReview adjudications={adjudications} options={adjudicationOptions} disabled={submitting} send={sendInformation} />
         </div>
       </main>
     </div>
@@ -1658,23 +1687,22 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
               void send(`/v1/sessions/${id}/invitations`, "invitation.issue", payload, crypto.randomUUID(), 0)
                 .then((result) => setInvitationToken(result !== null && "invitationToken" in result ? result.invitationToken : null)); }}>
               <details className="provenance-disclosure"><summary>Reserve for a directory person</summary>
-                <div className="field"><label htmlFor="invite-person">Directory person reference <span className="hint">(optional)</span></label>
-                  <input id="invite-person" name="personId" type="text" autoComplete="off" /></div></details>
+                <StaffingPersonPicker sessionId={id!} staffing={readiness.staffing} /></details>
               <div className="field"><label htmlFor="invite-seat">Reserved Seat <span className="hint">(optional)</span></label>
                 <select id="invite-seat" name="seatId"><option value="">Any eligible Seat</option>
-                  {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+                  {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{item.label ?? friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <button className="btn-primary" type="submit" disabled={pending}>Issue invitation</button>
             </form>
             {invitationToken === null ? null : <p className="credential" role="status">Copy this one-time token now: <code>{invitationToken}</code></p>}
           </article>
-          <article className="card"><h3>Assign participant</h3><p>Use direct assignment only when an authorized directory reference is available.</p>
+          <article className="card"><h3>Assign participant</h3><p>Choose an active Organization member and their intended Seat and Session Role.</p>
             <details className="provenance-disclosure"><summary>Open direct assignment form</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
               void send(`/v1/sessions/${id}/participants`, "participant.assign", {
                 personId: String(data.get("personId")), seatId: String(data.get("seatId")), sessionRoleId: String(data.get("sessionRoleId"))
               }, crypto.randomUUID()); }}>
-              <div className="field"><label htmlFor="assign-person">Directory person reference</label><input id="assign-person" name="personId" type="text" required autoComplete="off" /></div>
+              <StaffingPersonPicker sessionId={id!} staffing={readiness.staffing} required />
               <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+                {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{item.label ?? friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor="assign-role">Session Role</label><select id="assign-role" name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
                   {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
@@ -1682,7 +1710,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
           </article>
         </div>
         <h3>Seat occupancy</h3>
-        <ul className="readiness-list">{readiness.staffing.seats.map((item, index) => <li key={item.seatId}><span><strong>{friendlyReference(item.seatId, `Seat ${index + 1}`)}</strong></span>
+        <ul className="readiness-list">{readiness.staffing.seats.map((item, index) => <li key={item.seatId}><span><strong>{item.label ?? friendlyReference(item.seatId, `Seat ${index + 1}`)}</strong></span>
           <span>{item.occupied} / {item.maximum ?? "unlimited"} occupied · minimum {item.minimum}</span></li>)}</ul>
         <h3>Waiting room</h3>
         {readiness.staffing.joinRequests.length === 0 ? <p className="empty-state">No pending join requests.</p> : <ul className="readiness-list">
@@ -1697,7 +1725,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
             <span>{item.reasons.join(", ")}</span></li>)}</ul>}
         <h3>Active assignments</h3>
         {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
-          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
+          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{readiness.staffing.seats.find((seat) => seat.seatId === item.seatId)?.label ?? friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
             <details className="provenance-disclosure"><summary>Assignment references</summary><code>{item.personId} · {item.seatAssignmentId}</code></details>
             <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
               void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
@@ -1706,7 +1734,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
                 exposureAcknowledged: data.get("exposureAcknowledged") === "on"
               }, item.participantId, item.accessRevision); }}>
               <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
-                {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
+                {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{seat.label ?? friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role</label><select id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
                 {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
@@ -1839,7 +1867,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
         </form>
       </section>}
       <section aria-labelledby="inject-queue-title"><div className="section-heading"><h2 id="inject-queue-title">Injects</h2></div>
-        {projection.injectQueue.length === 0 ? <p className="empty-state">No Inject Definitions are configured.</p> : <ul className="readiness-list">{projection.injectQueue.map((item) => <li key={item.definitionId}>
+        {projection.injectQueue.length === 0 ? <p className="empty-state">No Inject Definitions are configured.</p> : <ul className="readiness-list">{projection.injectQueue.map((item) => <li className="inject-queue-item" key={item.definitionId}>
           <span><strong>{item.title}</strong> · {item.state} · {item.releaseMode}{item.scheduledAt === null ? "" : ` · ${new Date(item.scheduledAt).toLocaleString()}`}</span>
           {item.releaseMode === "manual" && item.id === null ? <button className="btn-secondary" type="button" disabled={pending}
             onClick={() => void send(`/v1/operator/sessions/${projection.sessionId}/inject`, "inject.release",
@@ -1847,6 +1875,13 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
           {item.id !== null && !["cancelled","closed","expired"].includes(item.state) ? <button className="btn-secondary" type="button" disabled={pending}
             onClick={() => void send(`/v1/operator/sessions/${projection.sessionId}/inject`, "inject.cancel",
               { reason: `Cancel ${item.title}`, confirmed: true }, item.id, item.version)}>Cancel Inject</button> : null}
+          {item.id !== null && item.state === "scheduled" && item.scheduledAt !== null ?
+            <OperatorInjectSchedule key={`${item.id}:${item.version}`} title={item.title} scheduledAt={item.scheduledAt}
+              disabled={pending || !["open", "active", "paused"].includes(projection.sessionStatus)}
+              reschedule={(scheduledAt, reason) => {
+                if (item.id) void send(`/v1/operator/sessions/${projection.sessionId}/inject`, "inject.reschedule",
+                  { scheduledAt, reason, confirmed: true }, item.id, item.version);
+              }} /> : null}
         </li>)}</ul>}
       </section>
       <section aria-labelledby="adjudication-queue-title"><div className="section-heading"><h2 id="adjudication-queue-title">Adjudications</h2></div>

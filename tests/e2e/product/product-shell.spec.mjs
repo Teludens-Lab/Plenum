@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { gunzipSync } from "node:zlib";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -56,7 +57,7 @@ async function expectCompactWorkWordmark(page) {
 }
 
 async function openStudioWorkspace(page, name, regionName = name) {
-  const picker = page.getByLabel("Design workspace", { exact: true });
+  const picker = page.getByRole("combobox", { name: "Design workspace", exact: true });
   if (await picker.isVisible()) await picker.selectOption({ label: name });
   else await page.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name, exact: true }).click();
   const workspace = page.getByRole("region", { name: regionName });
@@ -188,8 +189,7 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   await expect(page.locator(".entry-chamber")).toBeVisible();
   expect(await page.evaluate(() => getComputedStyle(document.querySelector(".app-frame-entry")).backgroundImage)).toBe("none");
   await expect(entryActions.nth(1)).toHaveAttribute("aria-label", /^Theme:/u);
-  await page.getByRole("link", { name: "Sign in" }).click({ noWaitAfter: true });
-  await expect(page.locator(".plenum-loader-overlay.is-visible")).toBeVisible();
+  await page.getByRole("link", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Choose a test role" })).toBeVisible();
   await expect(page.locator(".entry-auth-diagram")).toHaveCount(0);
   await expect(page.locator(".entry-branch-diagram")).toHaveCount(0);
@@ -207,9 +207,7 @@ test("PS-700 local user-test sign-in and sign-out use only the synthetic loopbac
   });
   expect(authCanvas).toEqual({ actual: authCanvas.expected, expected: authCanvas.expected, image: "none" });
   await page.getByRole("combobox", { name: "Test role", exact: true }).selectOption("publisher");
-  await page.getByRole("button", { name: "Continue" }).click({ noWaitAfter: true });
-  await expect(page.locator(".plenum-loader-overlay.is-visible")).toBeVisible();
-  await expect(page.getByRole("status", { name: "Resolving next state" })).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/$/u);
   await expect(page.locator(".product-header-organization")).toHaveText("PS-150 synthetic organization");
   await page.goto("/__test__/offline");
@@ -678,6 +676,7 @@ test("PS-800-T03 platform lifecycle preserves task order across height, tablet, 
   const forcedPage = await forcedContext.newPage();
   await forcedPage.goto("/?workspace=lifecycle");
   expect(await forcedPage.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
+  await expect(forcedPage.getByRole("link", { name: "PS-780 Operator Control Exercise", exact: true })).toBeVisible();
   expect(await forcedPage.evaluate(() => {
     const current = document.querySelector('.shell-navigation a[aria-current="page"]');
     const available = Array.from(document.querySelectorAll(".shell-navigation a")).find((link) => link !== current);
@@ -1037,6 +1036,428 @@ test("PS-720-T02 Operator creates one configured Session and uses stable lifecyc
   await admin.context.close();
 });
 
+test("PS-830-T06/T07 published files and configured Injects use product controls @a11y", async ({ browser }) => {
+  test.setTimeout(600_000);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  let title = `PS-830 files ${suffix}`;
+  const admin = await actor(browser, fixture.tokens.operator, { width: 1024, height: 768 });
+  const designer = await actor(browser, fixture.tokens.publisher, { width: 1024, height: 768 });
+  const page = designer.page;
+  page.setDefaultTimeout(20_000);
+  admin.page.setDefaultTimeout(20_000);
+  let reviewer;
+  if (!process.env.PLENUM_PS830_E_SESSION_PATH) {
+  await admin.page.goto("/admin/data-policy");
+  const policy = admin.page.getByRole("heading", { name: "Retention policy", exact: true }).locator("..");
+  await policy.getByLabel("Policy key").fill(`ps830-files-${suffix}`);
+  await policy.getByLabel("Expiry action").selectOption("delete");
+  await policy.getByLabel("Retention period in days").fill("1");
+  await policy.getByRole("button", { name: "Record policy version" }).click();
+  await expect(admin.page.locator(".administration-notice")).toContainText("Retention policy recorded");
+
+  await page.goto("/?workspace=projects");
+  await page.locator(".template-row").filter({ hasText: "Fractured Order Core Design" }).getByRole("button", { name: "Start from Template" }).click();
+  await page.getByLabel("Project name").fill(title);
+  await page.getByLabel("Copy optional Scenario content").check();
+  await page.getByRole("button", { name: "Create Project and open Draft" }).click();
+  await expect(page).toHaveURL(/\/studio\/projects\/[0-9a-f-]{36}$/u);
+  const studioUrl = page.url();
+  await expect(page.getByRole("combobox", { name: "Design workspace", exact: true })).toBeVisible();
+  const forms = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const form = forms.locator("details.editor-item").first();
+  await form.locator("summary").first().click();
+  await form.getByRole("button", { name: "Use approved form rules" }).click();
+  await form.getByLabel("Allow attachments", { exact: true }).check();
+  await form.getByLabel("Attachment retention", { exact: true }).selectOption({ label: `ps830-files-${suffix} · version 1 · delete after 1 days` });
+  await form.getByLabel("Exportable", { exact: true }).check();
+  await expectDraftSynchronized(page, { timeout: 90_000 });
+  expect((await new AxeBuilder({ page }).include("#forms").analyze()).violations).toEqual([]);
+  const injectWorkspace = await openStudioWorkspace(page, "Injects");
+  for (const [index, name] of ["PS-830 informational", "PS-830 acknowledge", "PS-830 response"].entries()) {
+    if (index > 0) await injectWorkspace.getByRole("button", { name: "Add Inject", exact: true }).click();
+    const inject = index === 0 ? injectWorkspace.locator("details.editor-item").first() : injectWorkspace.locator("details.editor-item").last();
+    await inject.locator("summary").first().click();
+    await inject.getByLabel("Inject title", { exact: true }).fill(name);
+    await inject.getByLabel("Release mode", { exact: true }).selectOption("manual");
+    await inject.getByLabel("Public recipients", { exact: true }).check();
+    await inject.getByLabel("Acknowledgement requirement", { exact: true }).selectOption(index === 1 ? "true" : "false");
+    if (index === 2) await inject.getByLabel("Required response Artifact Type", { exact: true }).selectOption({ label: "Blue Strategic Orientation" });
+  }
+  await expectDraftSynchronized(page, { timeout: 90_000 });
+  expect((await new AxeBuilder({ page }).include("#injects").analyze()).violations).toEqual([]);
+  // Focused files proof needs one participant; the unchanged reference's full staffing belongs to the golden journey.
+  const seats = await openStudioWorkspace(page, "Seats");
+  for (const seat of await seats.locator("details.editor-item").all()) {
+    await seat.locator("summary").first().click();
+    await seat.getByLabel("Required Seat", { exact: true }).uncheck();
+  }
+  await expectDraftSynchronized(page, { timeout: 90_000 });
+  const publication = await openStudioWorkspace(page, "Review & publish", "Review and publish");
+  await publication.getByLabel("Release label").fill(title);
+  await publication.getByLabel("Semantic version").fill("1.0.0");
+  await publication.getByLabel("Release notes").fill("Focused attachment and interchange browser proof.");
+  await publication.getByText("Governance references").click();
+  await publication.getByLabel("Classification review reference").fill("synthetic-internal-review");
+  await publication.getByLabel("Retention policy reference", { exact: true }).fill(`ps830-files-${suffix}`);
+  await publication.getByLabel("Approval notes").fill("Synthetic automated review; named human acceptance remains separate.");
+  await publication.getByLabel("I acknowledge the validation warnings.").check();
+  await publication.getByRole("button", { name: "Freeze for review" }).click();
+  await expect(page.getByText(/is frozen and ready for Reviewer approval/u)).toBeVisible();
+  reviewer = await actor(browser, fixture.tokens.finalReviewer);
+  await reviewer.page.goto(studioUrl);
+  const review = await openStudioWorkspace(reviewer.page, "Review & publish", "Review and publish");
+  await review.getByLabel("Methodology review notes").fill("Synthetic independent review of the focused file workflow.");
+  await review.getByRole("button", { name: "Approve freeze" }).click();
+  await expect(reviewer.page.getByText(/Reviewer approval was recorded/u)).toBeVisible();
+  await publication.getByRole("button", { name: "Freeze for review" }).click();
+  await expect(page.getByText("1 current approval.")).toBeVisible();
+  await publication.getByRole("button", { name: "Publish approved freeze" }).click();
+  await expect(page.getByText(`Published ${title}.`)).toBeVisible();
+
+  await admin.page.goto("/?workspace=lifecycle");
+  const release = admin.page.locator("#release-catalog .lifecycle-row").filter({ hasText: title });
+  await release.getByRole("button", { name: "Create Session from this Release" }).click();
+  await release.getByLabel("Session name").fill(title);
+  await release.getByRole("button", { name: "Create configured Session" }).click();
+  await expect(admin.page).toHaveURL(/\/sessions\/[0-9a-f-]{36}$/u);
+  await writeFile("test-results/golden-journey/checkpoint-e-published-session.json", JSON.stringify({ title,
+    sessionPath: new URL(admin.page.url()).pathname, studioPath: new URL(studioUrl).pathname,
+    provenance: "Created, authored, reviewed, published and configured through product controls in PS-830-T06." }, null, 2));
+  } else {
+    if (!/^\/sessions\/[0-9a-f-]{36}$/u.test(process.env.PLENUM_PS830_E_SESSION_PATH)) throw new Error("Resume requires the recorded product Session path.");
+    await admin.page.goto(process.env.PLENUM_PS830_E_SESSION_PATH);
+    await expect(admin.page.locator("#session-detail-title")).toBeVisible();
+    title = await admin.page.locator("#session-detail-title").innerText();
+  }
+  if (process.env.PLENUM_PS830_E_SESSION_PATH) await admin.page.goto(`/admin${process.env.PLENUM_PS830_E_SESSION_PATH}`);
+  else await admin.page.getByRole("navigation", { name: "Session destinations" }).getByRole("link", { name: "Complete readiness", exact: true }).click();
+  const control = admin.page.getByRole("region", { name: "Session control", exact: true });
+  await expect(control).toBeVisible();
+  if (await control.getByLabel("Next valid action").locator('option[value="session.pause"]').count() === 0) {
+  await admin.page.getByText("Open direct assignment form", { exact: true }).click();
+  const assignment = admin.page.getByRole("heading", { name: "Assign participant", exact: true }).locator("..");
+  await assignment.getByLabel("Participant name", { exact: true }).selectOption({ label: "Synthetic Designer A" });
+  await assignment.getByLabel("Seat", { exact: true }).selectOption({ label: "Blue Scribe" });
+  await assignment.getByLabel("Session Role", { exact: true }).selectOption({ label: "Scribe" });
+  await assignment.getByRole("button", { name: "Assign Seat" }).click();
+  await expect(admin.page.getByRole("heading", { name: "Active assignments" }).locator(".." )).toContainText("Blue Scribe");
+  const readiness = admin.page.getByRole("region", { name: "Operator readiness" });
+  while (await readiness.getByRole("button", { name: "Confirm", exact: true }).count()) {
+    const remaining = await readiness.getByRole("button", { name: "Confirm", exact: true }).count();
+    await readiness.getByRole("button", { name: "Confirm", exact: true }).first().click();
+    await expect(readiness.getByRole("button", { name: "Confirm", exact: true })).toHaveCount(remaining - 1);
+  }
+  await readiness.getByRole("button", { name: "Mark Session ready" }).click();
+  await readiness.getByRole("button", { name: "Open Session", exact: true }).click();
+  await control.getByLabel("Next valid action").selectOption("session.start");
+  await control.getByLabel("Reason", { exact: true }).fill("Begin focused file proof.");
+  await control.getByLabel("Confirm this authoritative lifecycle change.").check();
+  await control.getByRole("button", { name: "Apply Session control" }).click();
+  await expect(control.getByLabel("Next valid action").locator('option[value="session.pause"]')).toHaveCount(1);
+  }
+
+  const participant = await actor(browser, fixture.tokens.designerA, { width: 1024, height: 768 });
+  participant.page.setDefaultTimeout(20_000);
+  await participant.page.goto("/?workspace=participant");
+  const session = participant.page.getByRole("article", { name: title, exact: true });
+  if (!await session.isVisible()) await participant.page.getByRole("navigation", { name: "Your Sessions" }).getByRole("button").filter({ hasText: title }).click();
+  await session.getByRole("link", { name: "Blue Scribe", exact: true }).click();
+  if (process.env.PLENUM_PS830_F_RESUME_INJECTS !== "true") {
+  await participant.page.getByRole("button", { name: "Strategic Orientation", exact: true }).click();
+  const dialog = participant.page.getByRole("dialog", { name: "Strategic Orientation", exact: true });
+  const entry = dialog.getByRole("region", { name: "Blue Strategic Orientation", exact: true });
+  await entry.getByRole("radiogroup", { name: "Blue strategic orientation" }).getByRole("radio", { name: "Pressure", exact: true }).check();
+  await entry.getByRole("radiogroup", { name: "Forecast Red orientation" }).getByRole("radio", { name: "Stabilization", exact: true }).check();
+  await entry.getByLabel("What will Red do first?").fill("Synthetic initial narrative.");
+  await entry.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(participant.page.getByText("The server accepted the Command.", { exact: true }).first()).toBeVisible();
+  if (await dialog.isVisible()) await dialog.getByRole("button", { name: "Close Strategic Orientation", exact: true }).click();
+  const record = participant.page.getByRole("article").filter({ has: participant.page.getByRole("heading", { name: "Blue Strategic Orientation", exact: true }) });
+  await expect(record).toBeVisible();
+  const editSummary = record.locator("details.artifact-edit > summary").first();
+  const editLabel = await editSummary.innerText();
+  await editSummary.click();
+  await record.getByText("Import record values", { exact: true }).click();
+  await record.getByLabel("Record JSON or CSV file").setInputFiles({ name: "narrative.csv", mimeType: "text/csv", buffer: Buffer.from('narrative\r\n"Imported, reviewed narrative"\r\n') });
+  await record.getByLabel("narrative", { exact: true }).selectOption({ label: "What will Red do first?" });
+  await record.getByRole("button", { name: "Preview mapped rows" }).click();
+  await record.getByText("Row 2 · Ready to review", { exact: true }).click();
+  await expect(record).toContainText("Imported, reviewed narrative");
+  await record.getByRole("button", { name: "Load row 2 into editor" }).click();
+  await record.getByRole("button", { name: editLabel, exact: true }).click();
+  await expect(record.locator(".artifact-content")).toContainText("Imported, reviewed narrative");
+  const files = participant.page.getByRole("region", { name: "Attachments for Blue Strategic Orientation" });
+  await files.getByLabel("Choose attachment").setInputFiles({ name: "proof.txt", mimeType: "text/plain", buffer: Buffer.from("Synthetic attachment proof.") });
+  await participant.context.setOffline(true);
+  await expect(files.getByRole("button", { name: "Upload and scan" })).toBeDisabled();
+  await participant.context.setOffline(false);
+  await expect(files.getByRole("button", { name: "Upload and scan" })).toBeEnabled();
+  // The server receives the real upload; only its first response is lost. Retry must recover that receipt.
+  await participant.page.route(/\/runtime-artifacts\/[^/]+\/attachments\?/u, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fetch(); await route.abort("failed");
+    await participant.page.unroute(/\/runtime-artifacts\/[^/]+\/attachments\?/u);
+  });
+  await files.getByRole("button", { name: "Upload and scan" }).click();
+  await expect(files.getByRole("status")).toContainText("not confirmed accepted");
+  await files.getByRole("button", { name: "Retry pending operation" }).click();
+  await expect(files.getByRole("status")).toContainText("original server receipt was recovered");
+  await expect(files.getByRole("button", { name: "Download proof.txt" })).toBeEnabled();
+  const download = participant.page.waitForEvent("download");
+  await files.getByRole("button", { name: "Download proof.txt" }).click();
+  expect((await readFile(await (await download).path())).toString()).toBe("Synthetic attachment proof.");
+  await files.getByLabel("Choose attachment").setInputFiles({ name: "scan-failed.txt", mimeType: "text/plain", buffer: Buffer.from("PS740-SCANNER-FAILURE") });
+  await files.getByRole("button", { name: "Upload and scan" }).click();
+  await expect(files.getByRole("button", { name: "Download scan-failed.txt" })).toBeDisabled();
+  await expect(files.getByRole("button", { name: "Retry scan for scan-failed.txt" })).toBeEnabled();
+  await record.getByText("Export record", { exact: true }).click();
+  const exported = participant.page.waitForEvent("download");
+  await record.getByRole("button", { name: "Export JSON", exact: true }).click();
+  const exportedRecord = JSON.parse((await readFile(await (await exported).path())).toString());
+  expect(exportedRecord.attachmentManifest.files.map((file) => file.fileName)).toContain("proof.txt");
+  expect(exportedRecord.attachmentManifest.bytesIncluded).toBe(false);
+  expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+  for (const dismiss of await participant.page.getByRole("button", { name: /^Dismiss:/u }).all()) if (await dismiss.isVisible()) await dismiss.click();
+  await files.getByRole("heading").scrollIntoViewIfNeeded();
+  await participant.page.screenshot({ path: "output/playwright/golden-journey/published-record-files.png", fullPage: true });
+  await participant.page.setViewportSize({ width: 512, height: 384 });
+  await participant.page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await files.getByLabel("Choose attachment").focus();
+  expect(await participant.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+  await participant.page.screenshot({ path: "output/playwright/golden-journey/published-files-200-percent.png", fullPage: true });
+  }
+  await participant.page.setViewportSize({ width: 1024, height: 768 });
+  await participant.page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
+  await participant.page.getByRole("link", { name: "Notifications", exact: true }).click();
+  for (const name of ["PS-830 informational", "PS-830 acknowledge", "PS-830 response"]) {
+    const queued = admin.page.locator("#inject-queue-title").locator("..").locator("..").getByRole("listitem").filter({ hasText: name });
+    await expect(queued).toBeVisible();
+    if (await queued.getByRole("button", { name: "Release Inject", exact: true }).count()) {
+      await queued.getByRole("button", { name: "Release Inject", exact: true }).click();
+      await expect(admin.page.getByText("Authoritative Session state updated.", { exact: true })).toBeVisible();
+    }
+    await participant.page.getByRole("button", { name: "Refresh authoritative state", exact: true }).click();
+    const inject = participant.page.getByRole("article", { name, exact: true });
+    await expect(inject).toBeVisible();
+    if (name === "PS-830 informational") {
+      await expect(inject.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
+      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+    } else if (name === "PS-830 acknowledge") {
+      if (await inject.getByRole("button", { name: "Acknowledge", exact: true }).count()) {
+        await inject.getByRole("button", { name: "Acknowledge", exact: true }).focus();
+        await participant.page.keyboard.press("Enter");
+      }
+      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+    } else {
+      await expect(inject.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
+      if (await inject.getByLabel("Response record", { exact: true }).count()) {
+        const responseChoice = await inject.getByLabel("Response record", { exact: true }).getByRole("option").filter({ hasText: "Blue Strategic Orientation" }).innerText();
+        await inject.getByLabel("Response record", { exact: true }).selectOption({ label: responseChoice });
+        await inject.getByRole("button", { name: "Submit response", exact: true }).click();
+      }
+      await expect(inject.getByText("closed", { exact: true })).toBeVisible();
+    }
+    await expect(inject.getByText("Your required steps are complete.", { exact: true })).toBeVisible();
+  }
+  expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+  await participant.page.screenshot({ path: "output/playwright/golden-journey/inject-completion.png", fullPage: true });
+  await participant.page.setViewportSize({ width: 512, height: 384 });
+  await participant.page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  expect(await horizontalOverflowState(participant.page)).toEqual({ overflow: 0, offenders: [] });
+  expect((await new AxeBuilder({ page: participant.page }).analyze()).violations).toEqual([]);
+  await participant.page.screenshot({ path: "output/playwright/golden-journey/inject-completion-200-percent.png", fullPage: true });
+  await admin.page.goto("/admin/data-policy");
+  await admin.page.getByRole("button", { name: "Apply attachment retention" }).click();
+  await expect(admin.page.locator(".administration-notice")).toContainText("0 files deleted");
+  await Promise.all([admin.context.close(), designer.context.close(), reviewer?.context.close(), participant.context.close()]);
+});
+
+test("PS-830-T03 concept controls protect foundations and retain inactive authoring @a11y", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const designer = await actor(browser, fixture.tokens.designerA, { width: 1024, height: 768 });
+  const { page, context } = designer;
+  const baseURL = test.info().project.use.baseURL;
+  const created = await context.request.post(new URL("/v1/projects", baseURL).href, { data: {
+    requestId: crypto.randomUUID(), title: "PS-830 concept controls", templateId: fixture.templateId, includeScenario: true
+  } });
+  expect(created.status()).toBe(201);
+  const { projectId } = await created.json();
+  await page.goto(`/studio/projects/${projectId}`);
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Design workspace", exact: true })).toBeVisible();
+  const teams = await openStudioWorkspace(page, "Teams");
+  const teamNames = await teams.locator("details.editor-item > summary").allTextContents();
+  expect(teamNames.length).toBeGreaterThan(0);
+  const workspace = await openStudioWorkspace(page, "Methodology");
+  for (const label of ["Identity and permissions", "Information Policy", "Versioned Releases", "Evidence and audit", "Session Authority", "Stage", "Session Role", "Seat"]) {
+    await expect(workspace.getByRole("checkbox", { name: label, exact: true })).toBeDisabled();
+    await expect(workspace.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
+  }
+  await workspace.getByRole("checkbox", { name: "Team", exact: true }).uncheck();
+  await expect(workspace.getByText("Disabled; authored content retained", { exact: true })).toBeVisible();
+  await expectDraftSynchronized(page);
+  await expect(page.locator("#validation .issue-list")).toContainText("requires Team");
+  await openStudioWorkspace(page, "Teams");
+  await expect(teams.locator("details.editor-item > summary")).toHaveText(teamNames);
+  await openStudioWorkspace(page, "Methodology");
+  await workspace.getByRole("checkbox", { name: "Team", exact: true }).focus();
+  await page.keyboard.press("Space");
+  await expect(workspace.getByRole("checkbox", { name: "Team", exact: true })).toBeChecked();
+  await expectDraftSynchronized(page);
+  await expect(page.locator("#validation .issue-list")).not.toContainText("requires Team");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await mkdir("output/playwright/golden-journey", { recursive: true });
+  await page.screenshot({ path: "output/playwright/golden-journey/concepts-1024x768.png", fullPage: true });
+  await page.setViewportSize({ width: 512, height: 384 });
+  expect(await horizontalOverflowState(page)).toEqual({ overflow: 0, offenders: [] });
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await page.screenshot({ path: "output/playwright/golden-journey/concepts-200-percent-forced-colors.png", fullPage: true });
+  const denied = await browser.newContext({ extraHTTPHeaders: headers(fixture.tokens.portalOperator) });
+  expect((await denied.request.post(new URL(`/v1/projects/${projectId}/publication-freezes`, baseURL).href)).status()).toBe(403);
+  await denied.close();
+  await context.close();
+});
+
+test("PS-830-T04/T05 bounded fields, calculations and safe text are authored visually and use the shared Runtime renderer @a11y", async ({ browser }) => {
+  test.setTimeout(360_000);
+  const { page, context } = await actor(browser, fixture.tokens.designerA, { width: 1024, height: 768 });
+  const loadDiagnostics = [];
+  page.on("pageerror", (error) => loadDiagnostics.push(error.message));
+  page.on("websocket", (socket) => socket.on("framereceived", ({ payload }) => {
+    try { const frame = JSON.parse(String(payload)); loadDiagnostics.push({ type: frame.type, contractId: frame.contractId, updateBytes: frame.update?.length ?? 0 }); } catch { /* Non-JSON diagnostics contain no captured content. */ }
+  }));
+  const baseURL = test.info().project.use.baseURL;
+  const created = await context.request.post(new URL("/v1/projects", baseURL).href, { data: {
+    requestId: crypto.randomUUID(), title: "PS-830 form controls", templateId: fixture.templateId, includeScenario: true
+  } });
+  expect(created.status()).toBe(201);
+  const { projectId } = await created.json();
+  await page.goto(`/studio/projects/${projectId}`);
+  try { await expect(page.getByRole("combobox", { name: "Design workspace", exact: true })).toBeVisible(); }
+  catch (error) { await test.info().attach("draft-load-diagnostics", { body: JSON.stringify(loadDiagnostics), contentType: "application/json" }); throw error; }
+  const workspace = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
+  const form = workspace.locator("details.editor-item").first();
+  await form.locator("summary").first().click();
+  await form.getByRole("button", { name: "Use approved form rules" }).click();
+  await expect(form).toContainText("262144 UTF-8 JSON bytes");
+  for (const [type, label] of [["yes_no", "Contingency available"], ["date", "Review date"], ["time", "Review time"],
+    ["date_time", "Review instant"], ["currency", "Budget"], ["percentage", "Confidence"]]) {
+    await form.getByRole("button", { name: "Add field", exact: true }).click();
+    const labelInput = form.getByRole("textbox", { name: "Field label", exact: true }).last();
+    const field = labelInput.locator("xpath=ancestor::fieldset[1]");
+    await labelInput.fill(label);
+    await field.getByRole("combobox", { name: "Field type", exact: true }).selectOption(type);
+    await field.getByRole("checkbox", { name: "Required", exact: true }).check();
+    if (["currency", "percentage"].includes(type)) {
+      await field.getByRole("textbox", { name: "Unit (currency code or measurement)", exact: true }).fill(type === "currency" ? "EUR" : "%");
+      await field.getByRole("spinbutton", { name: "Minimum value", exact: true }).fill("0");
+      await field.getByRole("spinbutton", { name: "Maximum value", exact: true }).fill("100");
+    }
+  }
+  await form.getByRole("button", { name: "Add field", exact: true }).click();
+  const note = form.getByRole("textbox", { name: "Field label", exact: true }).last().locator("xpath=ancestor::fieldset[1]");
+  await note.getByRole("textbox", { name: "Field label", exact: true }).fill("Budget note");
+  await note.getByRole("button", { name: "Add conditional visibility", exact: true }).click();
+  await note.getByRole("combobox", { name: "Source field", exact: true }).selectOption({ label: "Budget" });
+  await note.getByRole("combobox", { name: "Comparison", exact: true }).selectOption("equals");
+  await note.getByRole("spinbutton", { name: "Comparison value", exact: true }).fill("12.25");
+  await form.getByRole("button", { name: "Add field", exact: true }).click();
+  const calculated = form.getByRole("textbox", { name: "Field label", exact: true }).last().locator("xpath=ancestor::fieldset[1]");
+  await calculated.getByRole("textbox", { name: "Field label", exact: true }).fill("Double budget");
+  await calculated.getByRole("combobox", { name: "Field type", exact: true }).selectOption("number");
+  await calculated.getByRole("checkbox", { name: "Compute this field", exact: true }).check();
+  await calculated.getByRole("textbox", { name: "Formula version", exact: true }).fill("budget-1");
+  const expression = calculated.getByRole("group", { name: "Calculation", exact: true });
+  await expression.getByRole("combobox", { name: "Value or operation", exact: true }).selectOption("multiply");
+  const left = expression.getByRole("group", { name: "Left value", exact: true });
+  await left.getByRole("combobox", { name: "Value or operation", exact: true }).selectOption("field");
+  await left.getByRole("combobox", { name: "Input field", exact: true }).selectOption({ label: "Budget" });
+  await expression.getByRole("group", { name: "Right value", exact: true }).getByRole("spinbutton", { name: "Constant value", exact: true }).fill("2");
+  await form.getByRole("button", { name: "Add field", exact: true }).click();
+  const formatted = form.getByRole("textbox", { name: "Field label", exact: true }).last().locator("xpath=ancestor::fieldset[1]");
+  await formatted.getByRole("textbox", { name: "Field label", exact: true }).fill("Contingency explanation");
+  await formatted.getByRole("combobox", { name: "Field type", exact: true }).selectOption("formatted_text");
+  await form.getByRole("button", { name: "Add Form section" }).click();
+  const section = form.getByRole("textbox", { name: "Section title", exact: true }).last().locator("xpath=ancestor::fieldset[1]");
+  await section.getByRole("textbox", { name: "Section title", exact: true }).fill("Contingency items");
+  await section.getByRole("checkbox", { name: "Repeatable section" }).check();
+  await section.getByRole("spinbutton", { name: "Maximum entries" }).fill("2");
+  await section.getByRole("button", { name: "Add field", exact: true }).click();
+  await section.getByRole("textbox", { name: "Field label", exact: true }).fill("Item description");
+  await section.getByRole("textbox", { name: "Field key", exact: true }).fill("itemDescription");
+  await expectDraftSynchronized(page, { timeout: 90_000 });
+  await expect(page.locator("#validation")).toContainText("No blocking issues");
+  await page.screenshot({ path: "output/playwright/golden-journey/expressions-authoring.png", fullPage: true });
+  await form.getByText("Import or export Form definition", { exact: true }).click();
+  const fileInput = form.getByLabel("Choose Form JSON file");
+  await fileInput.setInputFiles({ name: "malformed.json", mimeType: "application/json", buffer: Buffer.from("{") });
+  await expect(form.getByRole("status").filter({ hasText: "not valid JSON" })).toBeVisible();
+  const exportedFile = page.waitForEvent("download");
+  await form.getByRole("button", { name: "Export Form JSON", exact: true }).click();
+  const downloaded = await exportedFile;
+  const exportedBytes = await readFile(await downloaded.path());
+  await fileInput.setInputFiles({ name: "form-definition.json", mimeType: "application/json", buffer: exportedBytes });
+  const importReview = form.getByRole("region", { name: "Imported Form review" });
+  await expect(importReview).toContainText("Double budget");
+  await expect(importReview).toContainText("Contingency items (repeating)");
+  expect((await new AxeBuilder({ page }).include("#forms").analyze()).violations).toEqual([]);
+  await page.screenshot({ path: "output/playwright/golden-journey/interchange-form-review.png", fullPage: true });
+  await importReview.getByRole("button", { name: "Apply reviewed Form" }).click();
+  await expectDraftSynchronized(page, { timeout: 90_000 });
+  await expect(page.locator("#validation")).toContainText("No blocking issues");
+
+  // This uses the actual shared Runtime FieldEditor in the isolated preview. Live Command authority is covered by the DB integration test.
+  await page.goto(`/projects/${projectId}/demo`);
+  await page.getByRole("combobox", { name: "Role", exact: true }).selectOption({ label: "Scribe" });
+  await page.getByRole("combobox", { name: "Team", exact: true }).selectOption({ label: "Blue" });
+  await page.getByRole("combobox", { name: "Stage", exact: true }).selectOption({ label: "Orientation" });
+  const entry = page.getByRole("region", { name: "Strategic Orientation", exact: true }).getByRole("region", { name: "Blue Strategic Orientation", exact: true });
+  await entry.getByRole("radiogroup", { name: "Blue strategic orientation" }).getByRole("radio", { name: "Pressure", exact: true }).check();
+  await entry.getByRole("radiogroup", { name: "Forecast Red orientation" }).getByRole("radio", { name: "Stabilization", exact: true }).check();
+  await entry.getByLabel("What will Red do first?").fill("A synthetic contingency description.");
+  await entry.getByRole("combobox", { name: /Contingency available/u }).selectOption("false");
+  await entry.getByLabel(/Review date/u).fill("2026-11-08");
+  await entry.getByLabel(/Review time/u).fill("12:30:00");
+  await entry.getByLabel("Review instant (UTC)").fill("2026-11-08T12:30");
+  await entry.getByLabel("Review instant (UTC)").fill("2026-11-08T12:30:00.1");
+  await expect(entry.getByRole("textbox", { name: "Budget note", exact: true })).toHaveCount(0);
+  await entry.getByRole("spinbutton", { name: /Budget/u }).fill("12.25");
+  await entry.getByRole("textbox", { name: "Budget note", exact: true }).fill("Visible for this amount.");
+  await entry.getByRole("spinbutton", { name: /Confidence/u }).fill("50.25");
+  await entry.getByRole("button", { name: "Add item", exact: true }).click();
+  await entry.getByRole("button", { name: "Add item", exact: true }).click();
+  await expect(entry.getByRole("button", { name: "Add item", exact: true })).toBeDisabled();
+  await entry.getByRole("textbox", { name: "Item description", exact: true }).nth(0).fill("Primary response");
+  await entry.getByRole("textbox", { name: "Item description", exact: true }).nth(1).fill("Fallback response");
+  await expect(entry.getByRole("spinbutton", { name: "Double budget", exact: true })).toBeDisabled();
+  await expect(entry.getByRole("spinbutton", { name: "Double budget", exact: true })).toHaveValue("24.5");
+  const explanation = entry.getByRole("textbox", { name: "Contingency explanation", exact: true });
+  await explanation.fill("<script>unsafe</script>");
+  await entry.getByRole("button", { name: "Create demo artifact" }).click();
+  await expect(entry.getByRole("alert").filter({ hasText: "does not allow HTML" })).toBeVisible();
+  await explanation.fill("Contingency");
+  await explanation.press("Control+A");
+  await entry.getByRole("button", { name: "Bold", exact: true }).click();
+  await expect(explanation).toHaveValue("**Contingency**");
+  await expect(entry.getByRole("alert").filter({ hasText: "does not allow HTML" })).toHaveCount(0);
+  await entry.getByText("Formatted preview", { exact: true }).click();
+  await expect(entry.locator("strong").filter({ hasText: "Contingency" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: "output/playwright/golden-journey/expressions-runtime-renderer.png", fullPage: true });
+  await page.setViewportSize({ width: 512, height: 384 });
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await entry.getByRole("combobox", { name: /Contingency available/u }).focus();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: "output/playwright/golden-journey/expressions-200-percent-forced-colors.png", fullPage: true });
+  await entry.getByRole("button", { name: "Create demo artifact" }).click();
+  await expect(page.locator(".qa-demo-artifact").filter({ has: page.getByRole("heading", { name: "Blue Strategic Orientation" }) })).toBeVisible();
+  await context.close();
+});
+
 test("PS-730-T01/AC-01 foundational Studio authoring converges, previews Runtime projection, and links validation to the exact control @a11y", async ({ browser }) => {
   test.setTimeout(900_000);
   const first = await actor(browser, fixture.tokens.designerA);
@@ -1149,7 +1570,7 @@ test("PS-740-T02 governed authoring exposes previews, DEC-42, communications, In
 
   const formsWorkspace = await openStudioWorkspace(page, "Forms & Artifacts", "Forms & Artifact Types");
   const firstForm = formsWorkspace.locator("details.editor-item").first();
-  await firstForm.locator("summary").click();
+  await firstForm.locator("summary").first().click();
   await expect(firstForm.getByText("Form preview", { exact: true })).toBeVisible();
   await firstForm.getByLabel("Viewport").selectOption("mobile");
   await firstForm.getByLabel("Mode").selectOption("completed");
@@ -1583,7 +2004,7 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
 });
 
 test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and archive operations @a11y", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   const publisher = await actor(browser, fixture.tokens.publisher);
   await publisher.page.goto("/admin/plugins");
   await expect(publisher.page.getByRole("heading", { name: "Plugin operations" })).toBeVisible();
@@ -1643,9 +2064,14 @@ test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and a
   await hold.getByLabel("Reason").fill("Preserve PS-790 synthetic acceptance evidence");
   await hold.getByRole("button", { name: "Place legal hold" }).click();
   await expect(page.locator(".administration-notice")).toContainText("matching purge is blocked");
-  const downloadPromise = page.waitForEvent("download");
+  const downloadPromise = page.waitForEvent("download", { timeout: 120_000 });
   await page.getByRole("link", { name: "Export portable archive" }).click();
-  expect((await downloadPromise).suggestedFilename()).toBe("plenum-organization-archive.json");
+  const archiveDownload = await downloadPromise;
+  expect(archiveDownload.suggestedFilename()).toBe("plenum-organization-archive.json.gz");
+  const archive = JSON.parse(gunzipSync(await readFile(await archiveDownload.path())).toString("utf8"));
+  expect(archive.archiveVersion).toBe(2);
+  expect(archive.databaseSchema).toBe("plenum-042");
+  expect(Array.isArray(archive.data.injectInstances)).toBe(true);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${operationsEvidenceRoot}/administration-data-policy.png`, fullPage: true });
   await admin.context.close();

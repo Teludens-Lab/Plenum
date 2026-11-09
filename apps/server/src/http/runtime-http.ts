@@ -1,5 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { promisify } from "node:util";
+import { gzip, gunzip } from "node:zlib";
 
 import {
   createErrorEnvelope,
@@ -63,9 +65,11 @@ import {
   type IdentityMetadataFetcher,
   type StageOrganizationIdentityProviderInput
 } from "../identity/organization-providers.js";
-import { getRuntimeArtifactHistory, getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
+import { exportRuntimeArtifact, getRuntimeArtifactHistory, getRuntimeProjection, submitRuntimeCommand } from "../runtime/artifact-workflow.js";
+import { listFormAttachments, downloadFormAttachment, uploadFormAttachment, rescanFormAttachment, enforceFormAttachmentRetention } from "../runtime/form-attachments.js";
+import { listFormRetentionPolicies } from "../studio/collaboration/service.js";
 import { activateRelease, getReleaseHistory, getReleaseImpact, reviewReleaseImpact } from "../runtime/release-activation.js";
-import { getAdjudications } from "../adjudication/service.js";
+import { getAdjudicationOptions, getAdjudications } from "../adjudication/service.js";
 import { getRuntimeBootstrap, getRuntimeDeltas, getRuntimeSnapshot, getRuntimeSse } from "../sync/runtime-sync.js";
 import { validateCommandEnvelope } from "../runtime/commands/processor.js";
 import { getOperatorProjection } from "../runtime/operator-projection.js";
@@ -155,6 +159,9 @@ import {
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_PACKAGE_BYTES = 32_000_000;
+const MAX_ARCHIVE_BYTES = 512_000_000;
+const compressArchive = promisify(gzip);
+const decompressArchive = promisify(gunzip);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export interface RuntimeHttpOptions {
@@ -382,13 +389,13 @@ function sendParticipantRuntimeResource(
   response.end(Buffer.from(asset.bytes));
 }
 
-async function readBody(request: IncomingMessage, correlationId: string): Promise<JsonObject> {
+async function readBody(request: IncomingMessage, correlationId: string, maximumBytes = MAX_BODY_BYTES): Promise<JsonObject> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += bytes.length;
-    if (size > MAX_BODY_BYTES) throw authorizationError("TOO_LARGE", "The request exceeds 1 MB.", correlationId);
+    if (size > maximumBytes) throw authorizationError("TOO_LARGE", `The request exceeds ${maximumBytes} bytes.`, correlationId);
     chunks.push(bytes);
   }
   if (chunks.length === 0) return {};
@@ -415,6 +422,28 @@ async function readPackageBytes(request: IncomingMessage, correlationId: string)
   }
   if (size === 0) throw authorizationError("VALIDATION_FAILED", "The Release Package is empty.", correlationId);
   return Buffer.concat(chunks);
+}
+
+async function readOrganizationArchiveBytes(request: IncomingMessage, correlationId: string): Promise<Uint8Array> {
+  const mediaType = request.headers["content-type"]?.split(";", 1)[0];
+  if (mediaType !== "application/json" && mediaType !== "application/gzip") {
+    throw authorizationError("VALIDATION_FAILED", "Choose a JSON or gzip Organization archive.", correlationId);
+  }
+  const compressed = mediaType === "application/gzip";
+  const limit = MAX_ARCHIVE_BYTES;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > limit) throw authorizationError("TOO_LARGE", `The Organization archive exceeds ${limit} uploaded bytes.`, correlationId);
+    chunks.push(bytes);
+  }
+  if (!size) throw authorizationError("VALIDATION_FAILED", "The Organization archive is empty.", correlationId);
+  const bytes = Buffer.concat(chunks);
+  if (!compressed) return bytes;
+  try { return await decompressArchive(bytes, { maxOutputLength: MAX_ARCHIVE_BYTES }); }
+  catch { throw authorizationError("VALIDATION_FAILED", "The gzip archive is invalid or exceeds 512,000,000 expanded bytes.", correlationId); }
 }
 
 async function readPluginBytes(request: IncomingMessage, correlationId: string): Promise<Uint8Array> {
@@ -1228,15 +1257,20 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           throw authorizationError("PERMISSION_DENIED", "Portable export is restricted to the active Organization.", correlationId);
         }
         const archive = await exportOrganizationArchive(options.pool, principal, correlationId);
-        sendArtifact(response, { contentType: "application/json", filename: "plenum-organization-archive.json",
-          bytes: new TextEncoder().encode(JSON.stringify(archive)) });
+        const bytes = new TextEncoder().encode(JSON.stringify(archive));
+        if (bytes.byteLength > MAX_ARCHIVE_BYTES) throw authorizationError("TOO_LARGE", "This archive exceeds the 512,000,000-byte portable limit. Use the documented database and object-store backup workflow.", correlationId);
+        const compressed = url.searchParams.get("format") === "gzip";
+        sendArtifact(response, { contentType: compressed ? "application/gzip" : "application/json",
+          filename: `plenum-organization-archive.json${compressed ? ".gz" : ""}`,
+          bytes: compressed ? await compressArchive(bytes) : bytes });
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/organizations\/([^/]+)\/archive\/import$/u))) {
         if (pathId(match[1], correlationId) !== principal.organizationId) {
           throw authorizationError("PERMISSION_DENIED", "Portable import is restricted to the active Organization.", correlationId);
         }
-        const bytes = await readPluginBytes(request, correlationId);
+        if (!principal.organizationRoles.includes("admin")) throw authorizationError("PERMISSION_DENIED", "Organization archive import requires Admin access.", correlationId);
+        const bytes = await readOrganizationArchiveBytes(request, correlationId);
         let archive: OrganizationArchive;
         try { archive = JSON.parse(new TextDecoder().decode(bytes)) as OrganizationArchive; }
         catch { throw authorizationError("INVALID_JSON", "The Organization archive is not valid JSON.", correlationId); }
@@ -1297,6 +1331,13 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           createProjectInput(await readBody(request, correlationId), correlationId), correlationId));
         return true;
       }
+      if (request.method === "POST" && url.pathname === "/v1/projects/import-package") {
+        const input = createProjectInput({ requestId: url.searchParams.get("requestId"), title: url.searchParams.get("title") }, correlationId);
+        const sha256 = url.searchParams.get("sha256") ?? "";
+        const bytes = await readPackageBytes(request, correlationId);
+        send(response, 201, await createProject(options.pool, principal, { ...input, sourcePackage: { bytes, sha256 } }, correlationId));
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/(archive|reopen)$/u))) {
         const projectId = pathId(match[1], correlationId);
         const input = projectLifecycleInput(await readBody(request, correlationId), correlationId);
@@ -1333,6 +1374,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/content-library$/u))) {
         send(response, 200, await listContentLibrary(options.pool, principal, pathId(match[1], correlationId), correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/form-retention-policies$/u))) {
+        send(response, 200, { policies: await listFormRetentionPolicies(options.pool, principal, pathId(match[1], correlationId), correlationId) });
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/content-library\/uploads$/u))) {
@@ -1557,6 +1602,59 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           options.replayAdapter, correlationId));
         return true;
       }
+      if (request.method === "POST" && url.pathname === "/v1/retention/form-attachments/enforce") {
+        if (!options.objectStore) throw authorizationError("CAPABILITY_UNAVAILABLE", "Attachment storage is not configured.", correlationId);
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).length) throw authorizationError("VALIDATION_FAILED", "Retention uses server policy and server time.", correlationId);
+        send(response, 200, await enforceFormAttachmentRetention(options.pool, principal, options.objectStore, correlationId));
+        return true;
+      }
+      if ((request.method === "GET" || request.method === "POST") && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-artifacts\/([^/]+)\/attachments(?:\/([^/]+)(\/rescan)?)?$/u))) {
+        const artifactId = pathId(match[2], correlationId);
+        const input = { pool: options.pool, principal, sessionId: pathId(match[1], correlationId), artifactId,
+          deviceId: deviceHeader(request, correlationId), correlationId,
+          ...(url.searchParams.get("activeSessionRoleId") === null ? {} : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }) };
+        if (request.method === "GET" && match[3] === undefined) send(response, 200, { attachments: await listFormAttachments(input) });
+        else {
+          if (!options.objectStore) throw authorizationError("CAPABILITY_UNAVAILABLE", "Attachment storage is not configured.", correlationId);
+          if (match[4] !== undefined) {
+            if (request.method !== "POST") throw authorizationError("VALIDATION_FAILED", "Rescan requires a Command.", correlationId);
+            const command = await readBody(request, correlationId) as unknown as CommandEnvelopeV1;
+            validateCommandEnvelope(command, correlationId);
+            send(response, 200, await rescanFormAttachment({ ...input, attachmentId: pathId(match[3], correlationId) }, options.objectStore, options.contentScanner, command, options.deploymentId));
+          } else if (request.method === "GET") {
+            const file = await downloadFormAttachment({ ...input, attachmentId: pathId(match[3], correlationId) }, options.objectStore);
+            response.writeHead(200, { "content-type": file.mediaType, "content-disposition": `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(file.fileName).replaceAll("'", "%27")}`,
+              "cache-control": "no-store", "x-content-type-options": "nosniff" }); response.end(file.bytes);
+          } else {
+            if (match[3] !== undefined) throw authorizationError("VALIDATION_FAILED", "Post uploads to the record attachment collection.", correlationId);
+            const body = await readBody(request, correlationId, 27_000_000);
+            const encoded = body.contentBase64;
+            if (Object.keys(body).some((key) => !["command", "attachmentId", "fileName", "mediaType", "contentBase64"].includes(key)) ||
+                typeof body.command !== "object" || body.command === null || Array.isArray(body.command) ||
+                typeof body.attachmentId !== "string" || typeof body.fileName !== "string" || typeof body.mediaType !== "string" ||
+                typeof encoded !== "string" || encoded.length > 26_666_668 || !/^[A-Za-z0-9+/]+={0,2}$/u.test(encoded)) throw authorizationError("VALIDATION_FAILED", "The attachment upload is invalid.", correlationId);
+            const command = body.command as unknown as CommandEnvelopeV1;
+            if (command.aggregateId !== artifactId) throw authorizationError("VALIDATION_FAILED", "The upload must target this record.", correlationId);
+            const bytes = Buffer.from(encoded, "base64");
+            if (bytes.toString("base64") !== encoded) throw authorizationError("VALIDATION_FAILED", "The encoded file is invalid.", correlationId);
+            send(response, 200, await uploadFormAttachment(input, options.objectStore, options.contentScanner,
+              { command, attachmentId: body.attachmentId, fileName: body.fileName, mediaType: body.mediaType, bytes }, options.deploymentId));
+          }
+        }
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-artifacts\/([^/]+)\/export$/u))) {
+        const format = url.searchParams.get("format");
+        if (format !== "json" && format !== "csv" && format !== "pdf") throw authorizationError("VALIDATION_FAILED", "Choose JSON, CSV or PDF.", correlationId);
+        const exported = await exportRuntimeArtifact({ pool: options.pool, principal, sessionId: pathId(match[1], correlationId),
+          artifactId: pathId(match[2], correlationId), deviceId: deviceHeader(request, correlationId), correlationId, format,
+          ...(url.searchParams.get("activeSessionRoleId") === null ? {} : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }) });
+        response.writeHead(200, { "content-type": exported.mediaType, "content-disposition": `attachment; filename="${exported.fileName}"`,
+          "cache-control": "no-store", "x-content-type-options": "nosniff" });
+        response.end(exported.bytes);
+        return true;
+      }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/runtime-artifacts\/([^/]+)\/history$/u))) {
         const before = url.searchParams.get("beforeVersion");
         if (before !== null && (!/^\d+$/u.test(before) || !Number.isSafeInteger(Number(before)) || Number(before) < 1)) {
@@ -1673,8 +1771,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/adjudications$/u))) {
         const sessionId = pathId(match[1], correlationId);
         const context = await withOrganizationTransaction(options.pool, principal.organizationId, (client) =>
-          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId }));
-        send(response, 200, { adjudications: await getAdjudications(options.pool, context) });
+          resolveSessionAccessContext(client, principal, { sessionId, deviceId: deviceHeader(request, correlationId), correlationId,
+            ...(url.searchParams.get("activeSessionRoleId") === null ? {} : { activeSessionRoleId: url.searchParams.get("activeSessionRoleId")! }) }));
+        send(response, 200, { adjudications: await getAdjudications(options.pool, context),
+          options: await getAdjudicationOptions(options.pool, context) });
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/readiness$/u))) {

@@ -13,6 +13,7 @@ import {
   type TemplateLibraryV1
 } from "@plenum/event-contracts";
 import type { OrganizationRole } from "@plenum/policy-engine";
+import { verifyReleasePackage } from "@plenum/release-compiler";
 import { copySimulationTemplate, type CoreDesignV1, type ScenarioV1 } from "@plenum/simulation-schema";
 import type { Pool, PoolClient } from "pg";
 
@@ -36,6 +37,7 @@ export interface CreateProjectInput {
   title: string;
   templateId?: string;
   includeScenario?: boolean;
+  sourcePackage?: { bytes: Uint8Array; sha256: string };
 }
 
 export interface ProjectLifecycleInput {
@@ -479,11 +481,16 @@ export async function createProject(
 ): Promise<ProjectMutationV1> {
   const title = input.title.trim();
   if (!uuid.test(input.requestId) || title.length < 1 || title.length > 200 ||
-      (input.templateId !== undefined && !uuid.test(input.templateId))) {
+      (input.templateId !== undefined && !uuid.test(input.templateId)) ||
+      (input.sourcePackage !== undefined && (input.templateId !== undefined ||
+        input.sourcePackage.bytes.byteLength === 0 || input.sourcePackage.bytes.byteLength > 32_000_000 ||
+        !/^[a-f0-9]{64}$/u.test(input.sourcePackage.sha256)))) {
     throw authorizationError("VALIDATION_FAILED", "Project creation fields are invalid.", correlationId);
   }
   const requestDigest = digest({ action: "project.create", title,
-    templateId: input.templateId ?? null, includeScenario: input.includeScenario === true });
+    templateId: input.templateId ?? null, includeScenario: input.includeScenario === true,
+    ...(input.sourcePackage === undefined ? {} : { sourcePackageSha256: createHash("sha256").update(input.sourcePackage.bytes).digest("hex"),
+      expectedPackageSha256: input.sourcePackage.sha256 }) });
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requirePortalAccess(client, principal, MANAGER_ROLES, correlationId);
     await lockMutationRequest(client, principal, input.requestId);
@@ -492,7 +499,17 @@ export async function createProject(
     const projectId = randomUUID();
     const scenarioId = randomUUID();
     let materialization: { coreDesign: CoreDesignV1; scenario: ScenarioV1 };
-    if (input.templateId === undefined) {
+    let sourcePackage: JsonObject | undefined;
+    if (input.sourcePackage !== undefined) {
+      let verified;
+      try { verified = verifyReleasePackage(input.sourcePackage.bytes, input.sourcePackage.sha256); }
+      catch { throw authorizationError("VALIDATION_FAILED", "The Release Package failed integrity or compatibility validation. Choose a supported, unmodified package.", correlationId); }
+      const copy = copySimulationTemplate(verified.release.coreDesign, verified.release.scenario, projectId, scenarioId, true);
+      materialization = { coreDesign: copy.coreDesign, scenario: copy.scenario };
+      // Provenance is historical source evidence, never a local approval or publication.
+      sourcePackage = { sha256: verified.packageDigest, contentDigest: verified.contentDigest,
+        releaseId: verified.release.manifest.releaseId, projectId: verified.release.manifest.projectId };
+    } else if (input.templateId === undefined) {
       materialization = { coreDesign: blankCoreDesign(), scenario: blankScenario(scenarioId) };
     } else {
       const template = (await client.query<{ core_design: CoreDesignV1; scenario: ScenarioV1 | null }>(
@@ -525,7 +542,8 @@ export async function createProject(
     const result: ProjectMutationV1 = { projectId, lifecycleStatus: "active", version: 1,
       editorUrl: `/studio/projects/${projectId}`, replayed: false };
     await recordMutation(client, principal, "project.create", input.requestId, requestDigest, result, correlationId,
-      { sourceTemplateId: input.templateId ?? null, includedScenario: input.includeScenario === true });
+      { sourceTemplateId: input.templateId ?? null, includedScenario: input.sourcePackage !== undefined || input.includeScenario === true,
+        ...(sourcePackage === undefined ? {} : { sourcePackage }) });
     return result;
   });
 }

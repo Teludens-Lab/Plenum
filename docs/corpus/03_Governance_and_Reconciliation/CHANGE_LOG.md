@@ -2,6 +2,10 @@
 
 This log replaces the four separate change logs and reconciliation records that the corpus previously carried (Foundation, Upstream, Alignment and per-document addenda). Those records are kept unchanged under `archive/03_Governance_and_Reconciliation/`. Each document still keeps its own change log table at the end.
 
+## 2026-11-08 — Owner confirmation and remaining questions resolved
+
+Decision Register v1.0.16 records explicit owner approval of OPEN-004/010/016/023, DEC-21–27, DEC-30–40 and both names in DEC-51. DEC-62–64 supersede the three amended historical entries DEC-23, DEC-35 and DEC-40. Supporting specifications and glossary now cite the approved decisions. All OPEN questions have recorded resolutions, including baseline-limited ones; specialist/release gates and implementation/evidence obligations remain separate. Register §7.5 tracks the latter. This documentation change neither deploys capabilities nor claims runtime conformance.
+
 ## 2026-10-26 — PS-545 capacity evidence completed
 
 PS-545 passed the OPEN-019 thresholds on the owner-approved lower-capacity equivalent: an exact 30/60-minute application soak, three consecutive final application/voting/voice/Extension sets, and representative segmented-LAN TURN/TLS media evidence. The performance report records that the soak immediately predates the final read-only information-flow Release cache; three targeted final-code repetitions, 23/23 database integrations, and the final report sets cover that change. PS-550 is eligible, while production-institution operations and release approval remain separate gates.
@@ -110,6 +114,6 @@ All section citations between current documents resolve to an existing heading, 
 
 Moved unchanged to `archive/` at their original relative paths: Foundation v0.2; PRD amendment v0.6a; architecture 02–07 and 09 at v1.2; the eleven Alignment, Foundation and Upstream governance records; Data Model, Synchronization Protocol, README and Source Alignment v1.0; the sixteen files of the v0.1 code slice (including migrations 002_integrity, 004_collaboration and 005_tenant_rls, which no longer exist in v0.2); the previous root README. Copies whose SHA-256 appears in the upstream provenance record were checked against it.
 
-## Still awaiting confirmation
+## Current approval and acceptance status
 
-See Decision Register §3 (Assumed decisions and outstanding specialist sign-offs) and OPEN-001 (approver identities).
+The former assumed decisions and four remaining OPEN questions were resolved on 2026-11-08; approver identities were already resolved by OPEN-001. Decision Register §3 controls remaining specialist/release gates, and §7.5 records implementation and evidence obligations. Earlier dated entries above remain historical records.

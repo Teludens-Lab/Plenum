@@ -7,6 +7,7 @@ import test, { after, before } from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
 import * as Y from "yjs";
+import { canonicalizeJson } from "@plenum/event-contracts";
 
 import {
   createOfflinePluginBundle,
@@ -16,6 +17,13 @@ import {
 
 import {
   archiveSession,
+  assignParticipant,
+  getRuntimeProjection,
+  exportRuntimeArtifact,
+  uploadFormAttachment, listFormAttachments, downloadFormAttachment, rescanFormAttachment, enforceFormAttachmentRetention,
+  executeOperatorSessionCommand,
+  executeOperatorInjectControl,
+  runScheduledInjects,
   beginOidcLogin,
   activateDisplayPrincipal,
   claimSeat,
@@ -67,6 +75,7 @@ import {
   submitRuntimeCommand,
   getEffectProposals,
   getAdjudications,
+  getAdjudicationOptions,
   exportExtensionProvenance,
   executePendingModelRun,
   computeBuiltInTally,
@@ -326,7 +335,9 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/037_organization_workforce.sql",
     "apps/server/migrations/038_identity_workforce_operations.sql",
     "apps/server/migrations/039_operational_security_events.sql",
-    "apps/server/migrations/040_operational_security_reader.sql"
+    "apps/server/migrations/040_operational_security_reader.sql",
+    "apps/server/migrations/041_form_attachments.sql",
+    "apps/server/migrations/042_inject_schedule_provenance.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -1626,7 +1637,20 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
   assert.ok(display.credential);
   assert.ok(await publishPendingRuntimeDeltas(app, ids.orgA) > 0);
 
+  const participantOnlyPerson = randomUUID();
+  await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Synthetic workforce participant without Organization Role')", [participantOnlyPerson]);
+  await owner.query("INSERT INTO identity.organization_workforce_members(organization_id,person_id,source,status) VALUES ($1,$2,'legacy','active')", [ids.orgA, participantOnlyPerson]);
   const staffed = await getReadiness(app, principal, accessIds.session, randomUUID());
+  assert.ok(staffed.staffing.people.some((person) => person.personId === participantOnlyPerson));
+  await owner.query("UPDATE identity.organization_workforce_members SET status='suspended',suspended_at=transaction_timestamp() WHERE organization_id=$1 AND person_id=$2", [ids.orgA, participantOnlyPerson]);
+  assert.equal((await getReadiness(app, principal, accessIds.session, randomUUID())).staffing.people.some((person) => person.personId === participantOnlyPerson), false);
+  assert.ok(staffed.staffing.people.length > 0);
+  assert.equal(staffed.staffing.people.some((person) => person.personId === ids.personB), false);
+  assert.ok(staffed.staffing.people.every((person) => Object.keys(person).sort().join(",") === "displayName,personId"));
+  const named = await getReadiness(app, principal, accessIds.session, randomUUID(), staffed.staffing.people[0].displayName);
+  assert.ok(named.staffing.people.every((person) => person.displayName.toLowerCase().includes(staffed.staffing.people[0].displayName.toLowerCase())));
+  await assert.rejects(getReadiness(app, { ...principal, organizationRoles: [] }, accessIds.session, randomUUID()),
+    (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
   const filtered = await getReadiness(app, principal, accessIds.session, randomUUID(), "red-lead");
   assert.equal(filtered.staffing.assignments.length, 1);
   assert.equal(filtered.staffing.assignments[0].seatId, "red-lead");
@@ -2938,6 +2962,518 @@ test("PS-300 SYNC-01 SYNC-02 AC-01 concurrent offline edits converge byte-for-by
   );
 });
 
+test("PS-830-T04/T05 bounded Forms and authoritative expressions publish, validate, project and export under the pinned Release", async () => {
+  const id = (n) => `83000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const fixture = JSON.parse(await readFile(new URL("../../../tests/platform/fixtures/structured-form-v2.json", import.meta.url), "utf8"));
+  const retention = await createRetentionPolicy(app, principalD, { policyKey: "ps830-attachment-proof", version: 1, scopeType: "organization", scopeReference: "*",
+    periodDays: 1, legalHoldBehavior: "retain", expiryAction: "delete", archiveDestination: "", approvalRequired: false }, randomUUID());
+  fixture.form.attachments = { contractId: "form-attachments-v1", allowedMediaTypes: ["text/plain", "application/pdf"] };
+  fixture.form.sections[0].fields.push({ id: id(210), key: "ratio", label: "Calculated ratio", type: "number", numeric: { unit: "ratio", precision: 2 },
+    computation: { contractId: "form-expression-v1", version: "ratio-1", expression: { kind: "operation", operator: "divide",
+      arguments: [{ kind: "field", key: "currency" }, { kind: "field", key: "number" }] } } },
+    { id: id(211), key: "summary", label: "Formatted summary", type: "formatted_text", formattedTextContractId: "formatted-text-v1" },
+    { id: id(212), key: "privateNote", label: "Private note", type: "short_text", readOnly: true, defaultValue: "Protected fixture value" });
+  fixture.payload.ratio = 9.8;
+  fixture.payload.summary = "A **safe** paragraph.\n\n- [Reference](https://example.org)";
+  for (const [index, kind] of ["resource", "capability", "state_variable", "stage", "session_role", "artifact"].entries()) {
+    fixture.form.sections[0].fields.push({ id: id(200 + index), key: `reference_${kind}`, label: `${kind} reference`, type: "entity_reference", entityReference: { kind, multiple: false } });
+  }
+  const core = {
+    methodologyContractId: "methodology-concepts-v1", pluginBindings: [],
+    teams: [{ id: id(1), name: "Proof Team", enabled: true, objectiveIds: [] }],
+    sessionRoles: [2, 3].map((n) => ({ id: id(n), name: n === 2 ? "Participant" : "Reviewer", capabilities: [], interfaceProfileIds: [id(4)], isControlRole: false, enabled: true })),
+    seats: [{ id: id(5), name: "Participant Seat", sessionRoleIds: [id(2)], teamId: id(1), minOccupancy: 1, maxOccupancy: 1, required: true, joinMode: "operator_assignment" }],
+    stageGroups: [], stages: [{ id: id(6), name: "Exercise", stageType: "exercise", allowedActivityIds: [], transitions: [] }],
+    forms: [fixture.form], artifactTypes: [{ id: id(7), key: "bounded", name: "Bounded record", formId: id(10), workflowId: id(8), informationPolicyId: id(9),
+      ownership: "team", allowedCreatorSessionRoleIds: [id(2)], decisionBearing: false, versioning: "full_history", exportable: true, retentionPolicyId: retention.policyId }],
+    workflows: [{ id: id(8), key: "bounded", name: "Bounded workflow", initialState: "draft",
+      states: [{ key: "draft", label: "Draft", kind: "draft" }, { key: "submitted", label: "Submitted", kind: "terminal" }],
+      transitions: [{ id: id(20), from: null, to: "draft", command: "artifact.create", allowedSessionRoleIds: [id(2)] },
+        { id: id(21), from: "draft", to: "draft", command: "artifact.edit", contentOnly: true, allowedSessionRoleIds: [id(2)] },
+        { id: id(22), from: "draft", to: "submitted", command: "artifact.submit", allowedSessionRoleIds: [id(2)] }] }],
+    informationPolicies: [{ id: id(9), name: "Exercise participants", classification: "public", grants: [{ audience: { public: true }, fieldsExcluded: ["privateNote"] }] },
+      { id: id(30), name: "Reviewer only", classification: "restricted", grants: [{ audience: { sessionRoleIds: [id(3)] } }] }],
+    resourceDefinitions: [{ id: id(31), name: "Public resource", unit: "units", ownership: "global", informationPolicyId: id(9) },
+      { id: id(32), name: "Restricted resource", unit: "units", ownership: "global", informationPolicyId: id(30) }],
+    capabilities: [{ id: id(33), name: "Exercise capability", states: ["available"], initialState: "available", informationPolicyId: id(9) }],
+    stateVariables: [{ id: id(34), name: "Exercise state", scope: "global", type: "integer", informationPolicyId: id(9), historyMode: "full" }],
+    communications: { messageChannels: [], routes: [], voiceChannels: [] }, reports: [],
+    interfaces: [{ id: id(4), name: "Exercise workspace", selectors: { sessionRoleIds: [id(2), id(3)] },
+      layout: { template: "single_column", regions: [{ id: id(23), modules: [{ id: id(24), moduleType: "artifact_form", configuration: { artifactTypeId: id(7) } }] }] }, navigation: { items: [] } }],
+    accessPolicy: { joinMethods: ["operator_assignment"], guests: { allowed: false, requiredFields: [], expiryHours: 1, includeInResearchExports: false, operatorApproval: true },
+      displays: [], reassignment: { allowedBy: "operator", crossTeamAllowed: false, exposureAcknowledgementRequired: true }, readiness: [] }
+  };
+  const project = await createProject(app, principalD, { requestId: randomUUID(), title: "PS-830 bounded form integration" }, randomUUID());
+  const draft = await getCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  const document = collaborativeDocument(draft.update);
+  const update = captureUpdate(document, () => document.transact(() => {
+    document.getMap("draft").set("coreDesign", core);
+    document.getMap("draft").set("scenario", { id: id(25), name: "Bounded exercise", description: "Synthetic contract proof", deliveryModes: ["in_person"], tags: [], injects: [] });
+  }));
+  const changed = await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update }, randomUUID());
+  assert.equal(changed.validation.valid, true, JSON.stringify(changed.validation.issues));
+  const hiddenCore = structuredClone(core);
+  hiddenCore.informationPolicies[0].grants[0].fieldsExcluded = ["currency"];
+  const hiddenUpdate = captureUpdate(document, () => document.transact(() => document.getMap("draft").set("coreDesign", hiddenCore)));
+  const hidden = await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update: hiddenUpdate }, randomUUID());
+  assert.equal(hidden.validation.valid, false);
+  assert.ok(hidden.validation.issues.some(({ message }) => /calculation cannot use an input excluded/u.test(message)));
+  await assert.rejects(freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID()), (error) => error.envelope?.error?.code === "VALIDATION_FAILED");
+  const repairedUpdate = captureUpdate(document, () => document.transact(() => document.getMap("draft").set("coreDesign", core)));
+  assert.equal((await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update: repairedUpdate }, randomUUID())).validation.valid, true);
+  const frozen = await freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  await approvePublicationFreeze(app, principalF, project.projectId, frozen.freezeId, "Review bounded fixture contracts.", randomUUID());
+  const published = await publishCollaborativeDraft(app, objectStore, principalD, project.projectId, { freezeId: frozen.freezeId,
+    releaseLabel: "Bounded form proof", semanticVersion: "1.0.0", methodologyVersion: "1.3.1", releaseNotes: "Synthetic contract proof",
+    warningsAcknowledged: true, classificationReviewId: "synthetic", accessibilityReviewStatus: "reviewed", retentionPolicyId: "synthetic", approvalNotes: "Synthetic fixture" }, randomUUID());
+  const created = await createSession(app, principal, project.projectId, published.releaseId, randomUUID(), ids.deploymentA);
+  const packageBytes = await exportReleasePackage(app, objectStore, principalD, published.releaseId, randomUUID());
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(packageBytes)).coreDesign.forms[0], fixture.form);
+  const operator = await resolvePrincipalCommandContext(app, principal, created.sessionId, ids.deviceA, randomUUID());
+  const command = (operationType, aggregateId, payload = {}, version = 0, deviceId = ids.deviceA) => ({ commandId: randomUUID(), deviceId, operationType,
+    aggregateId, expectedAggregateVersion: version, governingReleaseId: published.releaseId, payload });
+  const accepted = (receipt) => assert.equal(receipt.status, "accepted", JSON.stringify(receipt));
+  accepted(await configureSessionAccess(app, operator, command("session.configure", created.sessionId), randomUUID(), ids.deploymentA));
+  accepted(await assignParticipant(app, operator, command("participant.assign", randomUUID(), { personId: ids.personE, seatId: id(5), sessionRoleId: id(2) }), randomUUID(), ids.deploymentA));
+  accepted(await markSessionReady(app, operator, command("session.ready", created.sessionId), randomUUID(), ids.deploymentA));
+  const opened = await openSession(app, operator, command("session.open", created.sessionId), randomUUID(), ids.deploymentA);
+  accepted(opened);
+  accepted(await executeOperatorSessionCommand(app, operator, command("session.start", created.sessionId, { reason: "Exercise bounded forms", confirmed: true }, opened.aggregateVersion), randomUUID(), ids.deploymentA));
+  const context = await withOrganizationTransaction(app, ids.orgA, (client) => resolveSessionAccessContext(client, principalE,
+    { sessionId: created.sessionId, deviceId: accessIds.deviceE, activeSessionRoleId: id(2), correlationId: randomUUID() }));
+  const submit = (cmd) => submitRuntimeCommand(app, context, { ...cmd, deviceId: accessIds.deviceE }, randomUUID(), ids.deploymentA);
+  const recordId = randomUUID();
+  const valid = command("artifact.create", recordId, { artifactTypeKey: "bounded", content: { ...fixture.payload, ratio: "forged" } });
+  accepted(await submit(valid)); assert.equal((await submit(valid)).replayed, true);
+  const referencePayload = { ...fixture.payload, reference_resource: id(31), reference_capability: id(33), reference_state_variable: id(34),
+    reference_stage: id(6), reference_session_role: id(2), reference_artifact: recordId };
+  const linkedRecordId = randomUUID();
+  accepted(await submit(command("artifact.create", linkedRecordId, { artifactTypeKey: "bounded", content: referencePayload })));
+  for (const content of [{ ...fixture.payload, currency: 12.251 }, { ...fixture.payload, entity_reference: randomUUID() },
+    { ...fixture.payload, reference_resource: id(32) },
+    { ...fixture.payload, number: 0 }, { ...fixture.payload, number: "" }, { ...fixture.payload, summary: "[Unsafe](javascript:alert)" },
+    { ...fixture.payload, ratio: "x".repeat(262145) },
+    { ...fixture.payload, [id(12)]: Array.from({ length: 51 }, () => ({ amount: 1 })) }]) {
+    assert.equal((await submit(command("artifact.create", randomUUID(), { artifactTypeKey: "bounded", content }))).errorCode, "VALIDATION_FAILED");
+  }
+  assert.equal((await submit(command("artifact.edit", recordId, { content: { ...fixture.payload, locked: "forged" } }, 1))).errorCode, "PERMISSION_DENIED");
+  for (const privateNote of ["Protected fixture value", "Guessed value"]) assert.equal((await submit(command("artifact.edit", recordId,
+    { content: { ...fixture.payload, privateNote } }, 1))).errorCode, "PERMISSION_DENIED");
+  accepted(await submit(command("artifact.edit", recordId, { content: { ...fixture.payload, ratio: 999 } }, 1)));
+  accepted(await submit(command("artifact.submit", recordId, {}, 2)));
+  const projection = await getRuntimeProjection({ pool: app, principal: principalE, sessionId: created.sessionId, deviceId: accessIds.deviceE,
+    activeSessionRoleId: id(2), correlationId: randomUUID() });
+  const record = projection.artifacts.find(({ id }) => id === recordId);
+  assert.deepEqual(projection.artifacts.find(({ id }) => id === linkedRecordId).payload, referencePayload);
+  assert.deepEqual(record.payload, fixture.payload);
+  assert.equal(record.form.contractId, "structured-form-v2");
+  assert.equal(record.form.formVersion, "2");
+  assert.equal(record.form.fields.find(({ key }) => key === "locked").readOnly, true);
+  assert.equal(record.form.fields.find(({ key }) => key === "ratio").readOnly, true);
+  assert.equal(record.form.fields.find(({ key }) => key === "ratio").computation.version, "ratio-1");
+  assert.deepEqual(record.form.fields.find(({ key }) => key === "entity_reference").options, [{ value: id(1), label: "Proof Team" }]);
+  for (const [kind, expected] of [["resource", id(31)], ["capability", id(33)], ["state_variable", id(34)], ["stage", id(6)], ["session_role", id(2)], ["artifact", recordId]]) {
+    assert.ok(record.form.fields.find(({ key }) => key === `reference_${kind}`).options.some(({ value }) => value === expected), kind);
+  }
+  assert.equal(JSON.stringify(record.form).includes("Restricted resource"), false);
+  assert.equal(JSON.stringify(record).includes("privateNote"), false);
+  assert.equal(JSON.stringify(record).includes("Protected fixture value"), false);
+  assert.equal(JSON.stringify(projection.createTasks).includes("Protected fixture value"), false);
+  const exportInput = { pool: app, principal: principalE, sessionId: created.sessionId, deviceId: accessIds.deviceE,
+    activeSessionRoleId: id(2), correlationId: randomUUID(), artifactId: recordId };
+  const exported = await exportRuntimeArtifact({ ...exportInput, format: "json" });
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(exported.bytes)), { contractId: "form-interchange-v1", kind: "record", artifactId: recordId,
+    governingReleaseId: published.releaseId, formId: fixture.form.id, formVersion: "2", payload: fixture.payload });
+  const tables = await exportRuntimeArtifact({ ...exportInput, format: "csv" });
+  assert.equal(tables.mediaType, "application/zip");
+  assert.ok(Buffer.from(tables.bytes).includes(Buffer.from("records.csv")));
+  assert.ok(Buffer.from(tables.bytes).includes(Buffer.from("group-1.csv")));
+  assert.ok(Buffer.from(tables.bytes).includes(Buffer.from(recordId)));
+  const pdf = await exportRuntimeArtifact({ ...exportInput, format: "pdf" });
+  assert.equal(Buffer.from(pdf.bytes).subarray(0, 5).toString(), "%PDF-");
+  assert.ok(Buffer.from(pdf.bytes).includes(Buffer.from("Calculated ratio")));
+  await assert.rejects(exportRuntimeArtifact({ ...exportInput, format: "json", principal: { ...principalE, organizationId: ids.orgB } }), (error) => error.envelope?.error?.code !== undefined);
+  await assert.rejects(exportRuntimeArtifact({ ...exportInput, format: "json", sessionId: ids.sessionA }), (error) => error.envelope?.error?.code !== undefined);
+  await assert.rejects(exportRuntimeArtifact({ ...exportInput, format: "json", activeSessionRoleId: id(3) }), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(getRuntimeProjection({ ...exportInput, activeSessionRoleId: id(3) }), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  const archive = await exportOrganizationArchive(app, principalD, randomUUID());
+  const archivedRecord = archive.data.artifacts.find(({ id }) => id === recordId);
+  assert.deepEqual(archivedRecord.payload, { ...fixture.payload, privateNote: "Protected fixture value" });
+  assert.equal(archivedRecord.form_version, "2");
+  assert.equal(archivedRecord.governing_release_id, published.releaseId);
+  await assert.rejects(exportOrganizationArchive(app, principalE, randomUUID()), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  const nextCore = structuredClone(core);
+  nextCore.forms[0].formVersion = "3";
+  const nextFormula = nextCore.forms[0].sections[0].fields.find(({ key }) => key === "ratio").computation;
+  nextFormula.version = "ratio-2"; nextFormula.expression.operator = "multiply";
+  const nextUpdate = captureUpdate(document, () => document.transact(() => document.getMap("draft").set("coreDesign", nextCore)));
+  assert.equal((await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update: nextUpdate }, randomUUID())).validation.valid, true);
+  const nextFreeze = await freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  await approvePublicationFreeze(app, principalF, project.projectId, nextFreeze.freezeId, "Review next formula version.", randomUUID());
+  const nextRelease = await publishCollaborativeDraft(app, objectStore, principalD, project.projectId, { freezeId: nextFreeze.freezeId,
+    releaseLabel: "Next formula proof", semanticVersion: "2.0.0", methodologyVersion: "1.3.1", releaseNotes: "Formula version proof",
+    warningsAcknowledged: true, classificationReviewId: "synthetic", accessibilityReviewStatus: "reviewed", retentionPolicyId: "synthetic", approvalNotes: "Synthetic fixture" }, randomUUID());
+  assert.notEqual(nextRelease.releaseId, published.releaseId);
+  assert.deepEqual(await exportReleasePackage(app, objectStore, principalD, published.releaseId, randomUUID()), packageBytes);
+  const historical = (await getRuntimeProjection({ pool: app, principal: principalE, sessionId: created.sessionId, deviceId: accessIds.deviceE,
+    activeSessionRoleId: id(2), correlationId: randomUUID() })).artifacts.find(({ id }) => id === recordId);
+  assert.deepEqual(historical.payload, fixture.payload);
+  assert.equal(historical.form.formVersion, "2");
+  assert.equal(historical.form.fields.find(({ key }) => key === "ratio").computation.version, "ratio-1");
+
+  // PS-830-T06: public application entry points, real database and object store; synthetic scanner outcomes.
+  const fileRecord = randomUUID();
+  accepted(await submit(command("artifact.create", fileRecord, { artifactTypeKey: "bounded", content: fixture.payload })));
+  const fileInput = { ...exportInput, artifactId: fileRecord };
+  const cleanScanner = { async scan() { return { status: "clean", detail: "Synthetic clean scan fixture" }; } };
+  const infectedScanner = { async scan() { return { status: "infected", detail: "Synthetic infected scan fixture" }; } };
+  let fileVersion = 1;
+  const fileUpload = (bytes = new TextEncoder().encode("Synthetic attachment")) => ({ attachmentId: randomUUID(), fileName: "proof.txt", mediaType: "text/plain", bytes,
+    command: { ...command("artifact.attach_file", fileRecord, {}, fileVersion, accessIds.deviceE), activeSessionRoleId: id(2) } });
+  const upload = fileUpload();
+  const receipt = await uploadFormAttachment(fileInput, objectStore, cleanScanner, upload, ids.deploymentA);
+  accepted(receipt); fileVersion = receipt.aggregateVersion;
+  assert.equal((await uploadFormAttachment(fileInput, objectStore, cleanScanner, upload, ids.deploymentA)).replayed, true);
+  assert.equal((await listFormAttachments(fileInput)).length, 1);
+  const fileExport = JSON.parse(new TextDecoder().decode((await exportRuntimeArtifact({ ...fileInput, format: "json" })).bytes));
+  assert.equal(fileExport.attachmentManifest.bytesIncluded, false);
+  assert.equal(fileExport.attachmentManifest.files[0].id, upload.attachmentId);
+  assert.equal(fileExport.attachmentManifest.files[0].retentionPolicyId, retention.policyId);
+  const uploadEvidence = await withOrganizationTransaction(app, ids.orgA, (client) => client.query(
+    `SELECT (SELECT count(*) FROM sync.command_receipts WHERE organization_id=$1 AND command_id=$2)::integer AS receipts,
+      (SELECT count(*) FROM evidence.events WHERE organization_id=$1 AND command_id=$2 AND event_type='artifact.attachment_added')::integer AS events,
+      (SELECT count(*) FROM runtime.artifact_revisions WHERE organization_id=$1 AND command_id=$2)::integer AS revisions`, [ids.orgA, upload.command.commandId]));
+  assert.deepEqual(uploadEvidence.rows[0], { receipts: 1, events: 1, revisions: 1 });
+  const downloadedAttachment = await downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore);
+  assert.deepEqual(Array.from(downloadedAttachment.bytes), Array.from(upload.bytes));
+  assert.equal(downloadedAttachment.fileName, "proof.txt");
+  await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, { ...upload, bytes: new TextEncoder().encode("Different content") }, ids.deploymentA),
+    (error) => error.envelope?.error?.code === "IDEMPOTENCY_COLLISION");
+  const unavailable = fileUpload();
+  const failedScan = await uploadFormAttachment(fileInput, objectStore, undefined, unavailable, ids.deploymentA);
+  accepted(failedScan); fileVersion = failedScan.aggregateVersion;
+  assert.equal((await listFormAttachments(fileInput)).find(({ id }) => id === unavailable.attachmentId).available, false);
+  await assert.rejects(downloadFormAttachment({ ...fileInput, attachmentId: unavailable.attachmentId }, objectStore), (error) => error.envelope?.error?.code === "TARGET_NOT_FOUND");
+  const rescanCommand = { ...command("artifact.rescan_file", fileRecord, {}, fileVersion, accessIds.deviceE), activeSessionRoleId: id(2) };
+  const rescanned = await rescanFormAttachment({ ...fileInput, attachmentId: unavailable.attachmentId }, objectStore, cleanScanner, rescanCommand, ids.deploymentA);
+  accepted(rescanned); fileVersion = rescanned.aggregateVersion;
+  assert.equal((await rescanFormAttachment({ ...fileInput, attachmentId: unavailable.attachmentId }, objectStore, cleanScanner, rescanCommand, ids.deploymentA)).replayed, true);
+  const infected = await uploadFormAttachment(fileInput, objectStore, infectedScanner, fileUpload(), ids.deploymentA);
+  accepted(infected); fileVersion = infected.aggregateVersion;
+  assert.equal((await listFormAttachments(fileInput)).filter(({ scanStatus, available }) => scanStatus === "infected" && !available).length, 1);
+  const storeFailure = fileUpload();
+  const brokenStore = { ...objectStore, putImmutable: async () => { throw new Error("Synthetic storage outage"); }, get: objectStore.get.bind(objectStore), deleteIfDigest: objectStore.deleteIfDigest.bind(objectStore) };
+  await assert.rejects(uploadFormAttachment(fileInput, brokenStore, cleanScanner, storeFailure, ids.deploymentA), (error) => error.envelope?.error?.code === "CAPABILITY_UNAVAILABLE");
+  const recovered = await uploadFormAttachment(fileInput, objectStore, cleanScanner, storeFailure, ids.deploymentA);
+  accepted(recovered); fileVersion = recovered.aggregateVersion;
+  await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, { ...fileUpload(), mediaType: "application/pdf" }, ids.deploymentA), (error) => error.envelope?.error?.code === "VALIDATION_FAILED");
+  await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, fileUpload(new Uint8Array(20_000_001)), ids.deploymentA), (error) => error.envelope?.error?.code === "TOO_LARGE");
+  await assert.rejects(listFormAttachments({ ...fileInput, principal: { ...principalE, organizationId: ids.orgB } }), (error) => error.envelope?.error?.code !== undefined);
+  await assert.rejects(listFormAttachments({ ...fileInput, sessionId: ids.sessionA }), (error) => error.envelope?.error?.code !== undefined);
+  await assert.rejects(listFormAttachments({ ...fileInput, activeSessionRoleId: id(3) }), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  while ((await listFormAttachments(fileInput)).length < 10) {
+    const result = await uploadFormAttachment(fileInput, objectStore, cleanScanner, fileUpload(), ids.deploymentA); accepted(result); fileVersion = result.aggregateVersion;
+  }
+  await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, fileUpload(), ids.deploymentA), (error) => error.envelope?.error?.code === "TOO_LARGE");
+  const interruptedRecord = randomUUID();
+  accepted(await submit(command("artifact.create", interruptedRecord, { artifactTypeKey: "bounded", content: fixture.payload })));
+  const interruptedInput = { ...fileInput, artifactId: interruptedRecord };
+  const interruptedUpload = { ...fileUpload(), command: { ...command("artifact.attach_file", interruptedRecord, {}, 1, accessIds.deviceE), activeSessionRoleId: id(2) } };
+  let signalScan, continueScan;
+  const scanning = new Promise((resolve) => { signalScan = resolve; });
+  const scanBarrier = new Promise((resolve) => { continueScan = resolve; });
+  const interrupted = uploadFormAttachment(interruptedInput, objectStore, { async scan() { signalScan(); await scanBarrier; return { status: "clean", detail: "Synthetic delayed scanner" }; } }, interruptedUpload, ids.deploymentA);
+  await scanning;
+  accepted(await submit(command("artifact.edit", interruptedRecord, { content: fixture.payload }, 1)));
+  continueScan();
+  assert.equal((await interrupted).status, "needs_reconciliation");
+  assert.equal((await uploadFormAttachment(interruptedInput, objectStore, cleanScanner, interruptedUpload, ids.deploymentA)).replayed, true);
+  assert.deepEqual(await listFormAttachments(interruptedInput), []);
+  const reconciledUpload = { ...interruptedUpload, command: { ...interruptedUpload.command, commandId: randomUUID(), expectedAggregateVersion: 2 } };
+  const concurrentUploads = await Promise.all([uploadFormAttachment(interruptedInput, objectStore, cleanScanner, reconciledUpload, ids.deploymentA),
+    uploadFormAttachment(interruptedInput, objectStore, cleanScanner, reconciledUpload, ids.deploymentA)]);
+  concurrentUploads.forEach(accepted);
+  assert.equal(concurrentUploads.filter(({ replayed }) => replayed).length, 1);
+  assert.equal((await listFormAttachments(interruptedInput)).length, 1);
+
+  const largeRecord = randomUUID();
+  accepted(await submit(command("artifact.create", largeRecord, { artifactTypeKey: "bounded", content: fixture.payload })));
+  const largeInput = { ...fileInput, artifactId: largeRecord };
+  const twentyMb = new Uint8Array(20_000_000).fill(65);
+  for (let index = 0; index < 5; index++) accepted(await uploadFormAttachment(largeInput, objectStore, cleanScanner, { ...fileUpload(twentyMb),
+    command: { ...command("artifact.attach_file", largeRecord, {}, index + 1, accessIds.deviceE), activeSessionRoleId: id(2) } }, ids.deploymentA));
+  assert.equal((await listFormAttachments(largeInput)).reduce((sum, file) => sum + file.sizeBytes, 0), 100_000_000);
+  await assert.rejects(uploadFormAttachment(largeInput, objectStore, cleanScanner, { ...fileUpload(new Uint8Array([65])),
+    command: { ...command("artifact.attach_file", largeRecord, {}, 6, accessIds.deviceE), activeSessionRoleId: id(2) } }, ids.deploymentA), (error) => error.envelope?.error?.code === "TOO_LARGE");
+  const held = await placeLegalHold(app, principalD, { scopeType: "organization", scopeReference: "*", reason: "Synthetic attachment retention proof" }, randomUUID());
+  const future = new Date(Date.now() + 2 * 86_400_000);
+  assert.deepEqual(await enforceFormAttachmentRetention(app, principalD, objectStore, randomUUID(), future), { purged: 0, held: 10, failed: 0, batchFull: true });
+  await releaseLegalHold(app, principalD, held.holdId, "Synthetic proof complete", randomUUID());
+  const brokenDelete = { putImmutable: objectStore.putImmutable.bind(objectStore), get: objectStore.get.bind(objectStore), deleteIfDigest: async () => { throw new Error("Synthetic deletion outage"); } };
+  assert.deepEqual(await enforceFormAttachmentRetention(app, principalD, brokenDelete, randomUUID(), future), { purged: 0, held: 0, failed: 10, batchFull: true });
+  assert.deepEqual(await enforceFormAttachmentRetention(app, principalD, objectStore, randomUUID(), future), { purged: 10, held: 0, failed: 0, batchFull: true });
+  assert.deepEqual(await listFormAttachments(fileInput), []);
+  await assert.rejects(downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore), (error) => error.envelope?.error?.code === "TARGET_NOT_FOUND");
+  const largeFile = (await listFormAttachments(largeInput))[0];
+  let signalDownload, continueDownload;
+  const downloading = new Promise((resolve) => { signalDownload = resolve; });
+  const downloadBarrier = new Promise((resolve) => { continueDownload = resolve; });
+  const delayedDownload = downloadFormAttachment({ ...largeInput, attachmentId: largeFile.id }, {
+    putImmutable: objectStore.putImmutable.bind(objectStore), deleteIfDigest: objectStore.deleteIfDigest.bind(objectStore),
+    async get(key) { signalDownload(); await downloadBarrier; return objectStore.get(key); }
+  });
+  const deniedDownload = assert.rejects(delayedDownload, (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  await downloading;
+  accepted(await removeParticipants(app, operator, command("participant.remove_bulk", created.sessionId, { participantIds: [context.participantId], reason: "Synthetic revoked attachment access" }), randomUUID(), ids.deploymentA));
+  continueDownload(); await deniedDownload;
+  await assert.rejects(listFormAttachments(largeInput), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(exportRuntimeArtifact({ ...exportInput, format: "json" }), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, upload, ids.deploymentA), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+});
+
+test("PS-830-T07 REQ-030 published records, independent Inject recipients and authoritative schedules", async () => {
+  // Independent identity bootstrap: the earlier revocation test invalidates its own login.
+  const operatorPrincipal = { ...principal, authenticationSessionId: randomUUID() };
+  await owner.query(`INSERT INTO identity.authentication_sessions
+    (id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+    VALUES ($1,$2,$3,'https://issuer.example','operator-a','mfa','2099-01-01T00:00:00.000Z')`,
+    [operatorPrincipal.authenticationSessionId, ids.orgA, ids.personA]);
+  const id = (n) => `83100000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const roles = [id(2), id(3)];
+  const core = {
+    pluginBindings: [], teams: [{ id: id(1), name: "Proof Team", enabled: true, objectiveIds: [] }],
+    sessionRoles: roles.map((role, i) => ({ id: role, name: i ? "Reviewer" : "Participant", capabilities: i ? [{ capability: "inject.release" }] : [],
+      interfaceProfileIds: [id(4)], isControlRole: i === 1, enabled: true })),
+    seats: roles.map((role, i) => ({ id: id(5 + i), name: `Seat ${i + 1}`, sessionRoleIds: [role], teamId: id(1), minOccupancy: 1,
+      maxOccupancy: 1, required: true, joinMode: "operator_assignment" })),
+    stageGroups: [], stages: [{ id: id(7), name: "Exercise", stageType: "exercise", allowedActivityIds: [], transitions: [] }],
+    forms: [{ id: id(10), contractId: "structured-form-v2", formVersion: "2", name: "Action", sections: [
+      { id: id(11), title: "Action", fields: [{ id: id(12), key: "title", label: "Action title", type: "short_text", required: true }] },
+      { id: id(13), title: "Supporting steps", repeatable: true, maxEntries: 50, fields: [{ id: id(14), key: "description", label: "Step", type: "short_text" }] }
+    ] }],
+    artifactTypes: [{ id: id(15), key: "single-action", name: "Decision Record", formId: id(10), workflowId: id(16), informationPolicyId: id(17),
+      ownership: "team", allowedCreatorSessionRoleIds: roles, decisionBearing: true, versioning: "full_history", exportable: true }],
+    workflows: [{ id: id(16), key: "single-action", name: "Decision workflow", initialState: "draft", states: [{ key: "draft", label: "Draft", kind: "draft" }, { key: "closed", label: "Closed", kind: "terminal", holderSessionRoleIds: roles }],
+      transitions: [{ id: id(18), from: null, to: "draft", command: "artifact.create", allowedSessionRoleIds: roles },
+        { id: id(19), from: "draft", to: "draft", command: "artifact.edit", contentOnly: true, allowedSessionRoleIds: roles },
+        { id: id(24), from: "draft", to: "closed", command: "artifact.submit", allowedSessionRoleIds: roles }] }],
+    informationPolicies: [{ id: id(17), name: "Participants", classification: "public", grants: [{ audience: { public: true } }] }],
+    communications: { messageChannels: [], routes: [], voiceChannels: [] }, reports: [],
+    adjudicationModels: [{ id: id(20), name: "Joint review", mechanism: "manual", appliesToArtifactTypeIds: [id(15)], reviewerSessionRoleIds: [id(3)],
+      leadReviewerSessionRoleIds: [id(3)], perspectives: [], publicationScope: { public: true } }],
+    interfaces: [{ id: id(4), name: "Exercise workspace", selectors: { sessionRoleIds: roles }, layout: { template: "single_column", regions: [{ id: id(21),
+      modules: [{ id: id(22), moduleType: "artifact_form", configuration: { artifactTypeId: id(15) } }, { id: id(23), moduleType: "inject_inbox", configuration: {} }] }] }, navigation: { items: [] } }],
+    accessPolicy: { joinMethods: ["operator_assignment"], guests: { allowed: false, requiredFields: [], expiryHours: 1, includeInResearchExports: false, operatorApproval: true },
+      displays: [], reassignment: { allowedBy: "operator", crossTeamAllowed: false, exposureAcknowledgementRequired: true }, readiness: [] }
+  };
+  const injects = [[false, false], [true, false], [false, true], [true, true], [true, false]].map(([ack, response], index) => ({
+    id: id(40 + index), title: `Inject ${index + 1}`, contentId: id(30), recipients: { sessionRoleIds: roles }, releaseMode: "manual",
+    completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired: ack },
+    ...(response ? { requiredResponseArtifactTypeId: id(15) } : {})
+  }));
+  core.stateVariables = [{ id: id(90), name: "Scheduled delivery count", type: "integer", scope: "global",
+    informationPolicyId: id(17), historyMode: "full", minimum: 0, maximum: 10 }];
+  const schedules = [0, 3600, 3600, 3600, 3600].map((offset, index) => ({ id: id(60 + index), title: `Schedule ${index + 1}`,
+    contentId: id(30), recipients: { sessionRoleIds: roles }, releaseMode: "scheduled", scheduledOffsetSeconds: offset,
+    completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired: false },
+    ...(index === 0 ? { effects: [{ stateVariableId: id(90), operation: "increment", value: 1 }] } : {}) }));
+  const scenario = { id: id(29), name: "Decision and Inject proof", description: "Synthetic contract proof", deliveryModes: ["in_person"], tags: [],
+    content: [{ id: id(30), title: "Brief", type: "document", body: "Synthetic recipient brief", version: "1", informationPolicyId: id(17) }],
+    initialState: [{ stateVariableId: id(90), value: 0 }], injects: [...injects, ...schedules] };
+  const project = await createProject(app, principalD, { requestId: randomUUID(), title: "PS-830 Decision and Inject integration" }, randomUUID());
+  const draft = await getCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  const document = collaborativeDocument(draft.update);
+  const update = captureUpdate(document, () => document.transact(() => {
+    document.getMap("draft").set("coreDesign", core); document.getMap("draft").set("scenario", scenario);
+  }));
+  const changed = await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(), expectedGeneration: draft.generation, update }, randomUUID());
+  assert.equal(changed.validation.valid, true, JSON.stringify(changed.validation.issues));
+  const frozen = await freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  await approvePublicationFreeze(app, principalF, project.projectId, frozen.freezeId, "Review Decision and Inject rules.", randomUUID());
+  const published = await publishCollaborativeDraft(app, objectStore, principalD, project.projectId, { freezeId: frozen.freezeId,
+    releaseLabel: "Decision and Inject proof", semanticVersion: "1.0.0", methodologyVersion: "1.3.1", releaseNotes: "Synthetic contract proof",
+    warningsAcknowledged: true, classificationReviewId: "synthetic", accessibilityReviewStatus: "reviewed", retentionPolicyId: "synthetic", approvalNotes: "Synthetic fixture" }, randomUUID());
+  const created = await createSession(app, operatorPrincipal, project.projectId, published.releaseId, randomUUID(), ids.deploymentA);
+  const operator = await resolvePrincipalCommandContext(app, operatorPrincipal, created.sessionId, ids.deviceA, randomUUID());
+  let activeReleaseId = published.releaseId;
+  const command = (operationType, aggregateId, payload = {}, version = 0, deviceId = ids.deviceA) => ({ commandId: randomUUID(), deviceId, operationType,
+    aggregateId, expectedAggregateVersion: version, governingReleaseId: activeReleaseId, payload });
+  const accepted = (receipt) => assert.equal(receipt.status, "accepted", JSON.stringify(receipt));
+  accepted(await configureSessionAccess(app, operator, command("session.configure", created.sessionId), randomUUID(), ids.deploymentA));
+  for (const [index, personId] of [ids.personE, ids.personD].entries()) accepted(await assignParticipant(app, operator,
+    command("participant.assign", randomUUID(), { personId, seatId: id(5 + index), sessionRoleId: roles[index] }), randomUUID(), ids.deploymentA));
+  accepted(await markSessionReady(app, operator, command("session.ready", created.sessionId), randomUUID(), ids.deploymentA));
+  const opened = await openSession(app, operator, command("session.open", created.sessionId), randomUUID(), ids.deploymentA); accepted(opened);
+  const startCommand = command("session.start", created.sessionId, { reason: "Exercise configured requirements", confirmed: true }, opened.aggregateVersion);
+  accepted(await executeOperatorSessionCommand(app, operator, startCommand, randomUUID(), ids.deploymentA));
+  assert.equal((await executeOperatorSessionCommand(app, operator, startCommand, randomUUID(), ids.deploymentA)).replayed, true);
+  const contexts = await Promise.all([principalE, principalD].map((principal, index) => withOrganizationTransaction(app, ids.orgA, (client) => resolveSessionAccessContext(client, principal,
+    { sessionId: created.sessionId, deviceId: index ? accessIds.deviceD : accessIds.deviceE, requestedActiveSessionRoleId: roles[index], correlationId: randomUUID() }))));
+  const submit = (index, cmd) => submitRuntimeCommand(app, contexts[index], { ...cmd, deviceId: index ? accessIds.deviceD : accessIds.deviceE }, randomUUID(), ids.deploymentA);
+  const projection = (index) => getRuntimeProjection({ pool: app, principal: index ? principalD : principalE, sessionId: created.sessionId,
+    deviceId: index ? accessIds.deviceD : accessIds.deviceE, activeSessionRoleId: roles[index], correlationId: randomUUID() });
+  const actionIds = [randomUUID(), randomUUID()];
+  const privateResponseId = randomUUID();
+  accepted(await submit(1, command("artifact.create", privateResponseId, { artifactTypeKey: "single-action", content: { title: "Private response draft" } })));
+  for (const [index, artifactId] of actionIds.entries()) accepted(await submit(index, command("artifact.create", artifactId,
+    { artifactTypeKey: "single-action", content: { title: `Action ${index + 1}`, [id(13)]: [{ description: "First supporting step" }, { description: "Second supporting step" }] } })));
+  assert.equal((await submit(0, command("artifact.create", randomUUID(), { artifactTypeKey: "single-action", content: [{ title: "One" }, { title: "Two" }] }))).status, "rejected");
+  assert.equal((await submit(0, command("artifact.edit", actionIds[0], { content: ["malformed"] }, 1))).errorCode, "VALIDATION_FAILED");
+  assert.equal((await submit(1, command("adjudication.request", randomUUID(), { modelId: id(20), actionIds }))).errorCode, "REFERENCE_INVALID", "Unsubmitted draft remains private");
+  for (const [index, artifactId] of actionIds.entries()) accepted(await submit(index, command("artifact.submit", artifactId, {}, 1)));
+  assert.equal((await submit(1, command("adjudication.request", randomUUID(), { modelId: id(20), actionIds: [actionIds[0], actionIds[0]] }))).errorCode, "VALIDATION_FAILED");
+  const requestId = randomUUID();
+  accepted(await submit(1, command("adjudication.request", requestId, { modelId: id(20), actionIds })));
+  const request = (await getAdjudications(app, contexts[1])).find(({ id }) => id === requestId);
+  assert.equal(request.actionSnapshots.length, 2, "Two records produce two Actions, not four supporting steps");
+  assert.deepEqual(request.actionSnapshots.map(({ artifactId }) => artifactId).sort(), [...actionIds].sort());
+  assert.ok(request.actionSnapshots.every(({ artifactVersion }) => artifactVersion === 2));
+  accepted(await submit(1, command("adjudication.draft", requestId, { outcome: "accepted", rationale: "Both records reviewed", participantRationale: "Both Actions accepted", synthesis: "Joint human synthesis", confidence: 1, effects: [] }, 1)));
+  accepted(await submit(1, command("adjudication.publish", requestId, {}, 2)));
+  for (const [index, definition] of injects.entries()) {
+    const instanceId = randomUUID();
+    const release = command("inject.release", instanceId, { injectDefinitionId: definition.id });
+    const receipt = await submit(1, release); accepted(receipt);
+    assert.equal((await submit(1, release)).replayed, true);
+    assert.equal((await submit(1, command("inject.release", randomUUID(), { injectDefinitionId: definition.id }))).errorCode, "TARGET_EXISTS");
+    let views = await Promise.all([projection(0), projection(1)]);
+    assert.ok(views.every((view) => view.injects.filter(({ id }) => id === instanceId).length === 1));
+    const item = (view) => view.injects.find(({ id }) => id === instanceId);
+    if (index === 0) { assert.ok(views.every((view) => item(view).state === "closed" && item(view).recipientComplete)); continue; }
+    if (index === 4) {
+      accepted(await submit(1, command("inject.cancel", instanceId, {}, 1)));
+      assert.equal((await submit(0, command("inject.acknowledge", instanceId, {}, 2))).errorCode, "INVALID_TRANSITION");
+      continue;
+    }
+    if (definition.completionRequirements.acknowledgementRequired) {
+      if (index === 3) assert.equal((await submit(0, command("inject.respond", instanceId, { artifactId: actionIds[0] }, 1))).errorCode, "INVALID_TRANSITION");
+      const ack = command("inject.acknowledge", instanceId, {}, 1);
+      accepted(await submit(0, ack)); assert.equal((await submit(0, ack)).replayed, true);
+      views = await Promise.all([projection(0), projection(1)]);
+      assert.equal(item(views[1]).acknowledgedAt, null); assert.equal(item(views[0]).state, "released");
+      assert.equal((await submit(1, command("inject.acknowledge", instanceId, {}, 1))).errorCode, "STALE_AGGREGATE_VERSION");
+      accepted(await submit(1, command("inject.acknowledge", instanceId, {}, 2)));
+    }
+    if (definition.requiredResponseArtifactTypeId) {
+      const version = definition.completionRequirements.acknowledgementRequired ? 3 : 1;
+      if (index === 2) assert.equal((await submit(0, command("inject.acknowledge", instanceId, {}, version))).errorCode, "INVALID_TRANSITION");
+      assert.equal((await submit(0, command("inject.respond", instanceId, { artifactId: randomUUID() }, version))).errorCode, "TARGET_NOT_FOUND");
+      assert.equal((await submit(0, command("inject.respond", instanceId, { artifactId: privateResponseId }, version))).errorCode, "TARGET_NOT_FOUND");
+      assert.equal((await submit(0, { ...command("inject.respond", instanceId, { artifactId: actionIds[0] }, version), governingReleaseId: ids.releaseB })).errorCode, "INCOMPATIBLE_RELEASE");
+      accepted(await submit(0, command("inject.respond", instanceId, { artifactId: actionIds[0] }, version)));
+      views = await Promise.all([projection(0), projection(1)]);
+      assert.equal(item(views[0]).recipientComplete, true); assert.equal(item(views[1]).recipientComplete, false);
+      assert.notEqual(item(views[0]).state, "closed");
+      accepted(await submit(1, command("inject.respond", instanceId, { artifactId: actionIds[1] }, version + 1)));
+    }
+    assert.equal(item(await projection(0)).state, "closed");
+  }
+  accepted(await removeParticipants(app, operator, command("participant.remove_bulk", created.sessionId,
+    { participantIds: [contexts[0].participantId], reason: "Revoke synthetic recipient access" }), randomUUID(), ids.deploymentA));
+  await assert.rejects(projection(0), (error) => error.envelope?.error?.code === "PERMISSION_DENIED");
+  const revoked = await submit(0, command("inject.acknowledge", randomUUID(), {}, 1));
+  assert.equal(revoked.status, "rejected");
+
+  // Scheduled delivery is a causal effect of the accepted start/reschedule Command.
+  // No timer sleeps or direct domain writes are used to make work due.
+  const operatorView = () => getOperatorProjection(app, operatorPrincipal, created.sessionId, randomUUID());
+  const queued = async (index) => (await operatorView()).injectQueue.find(({ definitionId }) => definitionId === schedules[index].id);
+  const controlInject = (cmd) => executeOperatorInjectControl(app, operator, cmd, randomUUID(), ids.deploymentA);
+  const reschedule = (item, instant) => command("inject.reschedule", item.id,
+    { scheduledAt: instant, reason: "Exercise the authoritative schedule", confirmed: true }, item.version);
+  const worker = async () => {
+    const result = await runScheduledInjects(app, ids.orgA, ids.deploymentA);
+    assert.equal(result.failures.length, 0, JSON.stringify(result.failures.map(({ sessionId, error }) =>
+      ({ sessionId, message: error.message, code: error.code }))));
+    return result;
+  };
+  for (let index = 0; index < schedules.length; index++) assert.equal((await queued(index)).state, "scheduled");
+  assert.ok((await projection(1)).injects.every(({ definitionId }) => !schedules.some(({ id }) => id === definitionId)));
+  assert.equal((await submit(1, reschedule(await queued(1), "2099-01-01T00:00:00.000Z"))).errorCode, "PERMISSION_DENIED");
+  assert.equal((await runScheduledInjects(app, ids.orgB, ids.deploymentA)).released, 0);
+  assert.equal((await runScheduledInjects(app, ids.orgA, randomUUID())).released, 0);
+  const concurrent = await Promise.all([worker(), worker()]);
+  assert.ok(concurrent.every(({ failures }) => failures.length === 0), JSON.stringify(concurrent));
+  assert.equal(concurrent.reduce((total, result) => total + result.released, 0), 1);
+  const firstSchedule = await queued(0);
+  assert.equal(firstSchedule.state, "closed");
+  assert.equal((await worker()).released, 0);
+  assert.equal((await owner.query("SELECT value FROM runtime.state_values WHERE session_id=$1 AND state_variable_id=$2",
+    [created.sessionId, id(90)])).rows[0].value, 1);
+  const automatic = (await owner.query("SELECT actor_person_id,causation_id,body FROM evidence.events WHERE session_id=$1 AND aggregate_id=$2 AND event_type='inject.released'",
+    [created.sessionId, firstSchedule.id])).rows;
+  assert.equal(automatic.length, 1);
+  assert.equal(automatic[0].actor_person_id, null);
+  assert.equal(automatic[0].causation_id, startCommand.commandId);
+  assert.equal(automatic[0].body.trigger, "scheduled");
+  assert.equal((await owner.query("SELECT count(*)::integer AS count FROM runtime.inject_recipient_states WHERE inject_instance_id=$1",
+    [firstSchedule.id])).rows[0].count, 1, "A revoked assignment is not captured as a new recipient");
+
+  const change = reschedule(await queued(1), "2099-01-01T00:00:00.000Z");
+  accepted(await controlInject(change));
+  assert.equal((await controlInject(change)).replayed, true);
+  const sameVersion = await queued(1);
+  const competing = await Promise.all(["2080-01-01T00:00:00.000Z", "2081-01-01T00:00:00.000Z"].map((time) => controlInject(reschedule(sameVersion, time))));
+  assert.deepEqual(competing.map(({ status }) => status).sort(), ["accepted", "needs_reconciliation"]);
+  assert.equal((await controlInject(reschedule(await queued(1), "2030-02-30T12:00:00.000Z"))).errorCode, "VALIDATION_FAILED");
+  assert.equal((await controlInject(reschedule(firstSchedule, "2099-01-01T00:00:00.000Z"))).errorCode, "INVALID_TRANSITION");
+  const dueChange = reschedule(await queued(1), "2000-01-01T00:00:00.000Z");
+  accepted(await controlInject(dueChange));
+  assert.equal((await worker()).released, 1);
+  assert.equal((await queued(1)).state, "closed");
+  const cancelled = await queued(2);
+  accepted(await controlInject(command("inject.cancel", cancelled.id, { reason: "Cancel before delivery", confirmed: true }, cancelled.version)));
+  assert.equal((await controlInject(reschedule(await queued(2), "2000-01-01T00:00:00.000Z"))).errorCode, "INVALID_TRANSITION");
+
+  // Live activation creates only new schedules, anchored to the original start.
+  const nextDraft = await getCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  const nextDocument = collaborativeDocument(nextDraft.update);
+  const nextScenario = structuredClone(scenario);
+  nextScenario.injects.find(({ id: definitionId }) => definitionId === schedules[3].id).scheduledOffsetSeconds = 0;
+  const addedSchedule = { ...schedules[1], id: id(65), title: "Live schedule", scheduledOffsetSeconds: 0 };
+  nextScenario.injects.push(addedSchedule);
+  const nextUpdate = captureUpdate(nextDocument, () => nextDocument.transact(() => nextDocument.getMap("draft").set("scenario", nextScenario)));
+  const nextChanged = await applyStudioUpdate(app, principalD, { projectId: project.projectId, updateId: randomUUID(), connectionId: randomUUID(),
+    expectedGeneration: nextDraft.generation, update: nextUpdate }, randomUUID());
+  assert.equal(nextChanged.validation.valid, true, JSON.stringify(nextChanged.validation.issues));
+  const nextFreeze = await freezeCollaborativeDraft(app, principalD, project.projectId, randomUUID());
+  await approvePublicationFreeze(app, principalF, project.projectId, nextFreeze.freezeId, "Review live scheduling changes.", randomUUID());
+  const nextRelease = await publishCollaborativeDraft(app, objectStore, principalD, project.projectId, { freezeId: nextFreeze.freezeId,
+    releaseLabel: "Live scheduled Inject proof", semanticVersion: "1.1.0", methodologyVersion: "1.3.1", releaseNotes: "Add one scheduled Inject",
+    warningsAcknowledged: true, classificationReviewId: "synthetic", accessibilityReviewStatus: "reviewed", retentionPolicyId: "synthetic", approvalNotes: "Synthetic fixture" }, randomUUID());
+  const impact = await getReleaseImpact(app, operatorPrincipal, created.sessionId, nextRelease.releaseId, randomUUID());
+  assert.deepEqual(impact.report.blockedReasons, []);
+  const review = await reviewReleaseImpact(app, principalF, created.sessionId, { candidateReleaseId: nextRelease.releaseId,
+    reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" }, randomUUID());
+  const activation = command("release.activate", created.sessionId, { candidateReleaseId: nextRelease.releaseId,
+    impactReviewId: review.impactReviewId, reportDigest: impact.reportDigest, existingInstanceHandling: "keep_existing" }, impact.activationSequence);
+  accepted(await activateRelease(app, operatorPrincipal, operator, activation, randomUUID(), ids.deploymentA));
+  assert.equal((await activateRelease(app, operatorPrincipal, operator, activation, randomUUID(), ids.deploymentA)).replayed, true);
+  activeReleaseId = nextRelease.releaseId;
+  const pins = (await owner.query("SELECT inject_definition_id,governing_release_id,scheduled_at FROM runtime.inject_instances WHERE session_id=$1", [created.sessionId])).rows;
+  assert.ok(pins.filter(({ inject_definition_id }) => inject_definition_id !== addedSchedule.id).every(({ governing_release_id }) => governing_release_id === published.releaseId));
+  assert.equal(pins.find(({ inject_definition_id }) => inject_definition_id === addedSchedule.id).governing_release_id, nextRelease.releaseId);
+  const startedAt = (await owner.query("SELECT occurred_at FROM evidence.events WHERE session_id=$1 AND event_type='session.started'", [created.sessionId])).rows[0].occurred_at;
+  assert.equal(pins.find(({ inject_definition_id }) => inject_definition_id === addedSchedule.id).scheduled_at.toISOString(), startedAt.toISOString());
+  assert.equal((await worker()).released, 1);
+  assert.equal((await queued(3)).state, "scheduled", "Existing deadline survives the changed live definition");
+
+  const lifecycle = async (operationType) => executeOperatorSessionCommand(app, operator,
+    command(operationType, created.sessionId, { reason: "Exercise schedule lifecycle fencing", confirmed: true }, (await operatorView()).sessionVersion), randomUUID(), ids.deploymentA);
+  accepted(await lifecycle("session.pause"));
+  accepted(await controlInject(reschedule(await queued(3), "2000-01-01T00:00:00.000Z")));
+  assert.equal((await worker()).released, 0);
+  assert.equal((await queued(3)).state, "scheduled");
+  accepted(await lifecycle("session.resume"));
+  assert.equal((await worker()).released, 1);
+  accepted(await controlInject(reschedule(await queued(4), "2000-01-01T00:00:00.000Z")));
+  accepted(await lifecycle("session.complete"));
+  assert.equal((await worker()).released, 0);
+  accepted(await lifecycle("session.lock"));
+  assert.equal((await worker()).released, 0);
+  assert.equal((await queued(4)).state, "scheduled");
+});
+
 test("PS-300 AC-02 publication freezes one valid state vector and later edits remain in the next Draft", async () => {
   await getCollaborativeDraft(app, principalF, ids.projectA, randomUUID());
   await assert.rejects(
@@ -2949,10 +3485,18 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
   const workflows = repairedDocument.getMap("draft").get("coreDesign").get("workflows");
   const workflow = workflows.get(0);
   assert.ok(workflow instanceof Y.Map);
-  const repair = captureUpdate(repairedDocument, () => workflow.set("initialState", "draft"));
+  const repair = captureUpdate(repairedDocument, () => repairedDocument.transact(() => {
+    workflow.set("initialState", "draft");
+    const core = repairedDocument.getMap("draft").get("coreDesign");
+    core.set("methodologyContractId", "methodology-concepts-v1");
+    core.set("methodologyConcepts", [{ key: "poll", label: "Poll", enabled: false, dependsOn: [] }]);
+    core.set("polls", [{ id: "ps830-retained-poll", question: "Retained unfinished authoring" }]);
+    core.get("adjudicationModels").get(0).set("output", { outcomeCategories: ["accepted", "returned"], rationaleRequired: true,
+      confidenceRequired: false, stateEffects: [], followOnInjectIds: [] });
+  }));
   const ready = await applyStudioUpdate(app, principalD, { projectId: ids.projectA, updateId: randomUUID(), connectionId: randomUUID(),
     expectedGeneration: invalid.generation, update: repair }, randomUUID());
-  assert.equal(ready.validation.valid, true);
+  assert.equal(ready.validation.valid, true, JSON.stringify(ready.validation.issues));
   const frozenDescription = ready.materialization.scenario.description;
 
   let signalUpload;
@@ -3031,15 +3575,19 @@ test("PS-300 AC-02 publication freezes one valid state vector and later edits re
     [ids.orgA, ids.personF]);
 
   const evidence = await owner.query(
-    `SELECT r.snapshot,r.source_freeze_id,f.generation
+    `SELECT r.snapshot,r.source_freeze_id,f.generation,f.materialization
        FROM studio.definition_revisions r JOIN studio.publication_freezes f ON f.id=r.source_freeze_id
       WHERE r.id=$1`, [published.definitionRevisionId]
   );
   assert.equal(evidence.rows[0].snapshot.scenario.description, frozenDescription);
   assert.equal(evidence.rows[0].source_freeze_id, published.freezeId);
+  // PS-830-T03: Runtime reads this executable revision; approved authored content survives in the freeze and next Draft.
+  assert.deepEqual(evidence.rows[0].snapshot.coreDesign.polls, []);
+  assert.equal(evidence.rows[0].materialization.coreDesign.polls[0].id, "ps830-retained-poll");
   assert.equal(Number(evidence.rows[0].generation), ready.generation);
   const nextDraft = await getCollaborativeDraft(app, principalD, ids.projectA, randomUUID());
   assert.equal(nextDraft.materialization.scenario.description, "This edit belongs only to the next Draft.");
+  assert.equal(nextDraft.materialization.coreDesign.polls[0].id, "ps830-retained-poll");
   await assert.rejects(owner.query("UPDATE studio.definition_revisions SET snapshot='{}'::jsonb WHERE id=$1", [published.definitionRevisionId]), /append-only/iu);
 
   await owner.query(
@@ -3248,15 +3796,32 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   assert.ok(divergedReplay.divergences.some(({ code }) => code === "event_reordered" || code === "missing_event"));
 
   const archive = await exportOrganizationArchive(app, principalD, randomUUID(), new Date("2026-10-23T12:00:00.000Z"));
+  assert.equal(archive.archiveVersion, 2);
+  assert.equal(archive.restoreContract, "plenum-organization-logical-v2");
   assert.equal(archive.dataSha256.length, 64);
   assert.equal(archive.data.persons.some(({ id }) => id === ids.personC), true);
   assert.equal(archive.data.analyticalRecords.some(({ id }) => id === analysis.analysisId), true);
   assert.equal(archive.excludedDataClasses.includes("secret_ballot_choices"), true);
   const target = await createCleanArchiveTarget(archive);
   try {
-    const imported = await importOrganizationArchive(target.app, principalD, archive, randomUUID());
+    const incomplete = { ...archive, data: { ...archive.data } };
+    delete incomplete.data.injectInstances;
+    incomplete.dataSha256 = createHash("sha256").update(canonicalizeJson(incomplete.data)).digest("hex");
+    await assert.rejects(importOrganizationArchive(target.app, principalD, incomplete, randomUUID()), /dataset injectInstances is invalid/u);
+    const broken = { ...archive, data: { ...archive.data, injectInstances: structuredClone(archive.data.injectInstances) } };
+    assert.ok(broken.data.injectInstances.length > 0);
+    broken.data.injectInstances[0].governing_release_id = randomUUID();
+    broken.dataSha256 = createHash("sha256").update(canonicalizeJson(broken.data)).digest("hex");
+    await assert.rejects(importOrganizationArchive(target.app, principalD, broken, randomUUID()), (error) => error.code === "23503");
+    assert.equal((await target.owner.query("SELECT count(*)::integer AS count FROM runtime.sessions")).rows[0].count, 0, "Late restore failure rolls back earlier datasets");
+    const imports = await Promise.all([importOrganizationArchive(target.app, principalD, archive, randomUUID()),
+      importOrganizationArchive(target.app, principalD, archive, randomUUID())]);
+    assert.deepEqual(imports.map(({ replayed }) => replayed).sort(), [false, true]);
+    const imported = imports.find(({ replayed }) => !replayed);
     assert.equal(imported.replayed, false);
     assert.ok(imported.restoredRows > 0);
+    const roundTrip = await exportOrganizationArchive(target.app, principalD, randomUUID());
+    for (const key of Object.keys(archive.data)) assert.deepEqual(roundTrip.data[key], archive.data[key], `${key} preserves exact historical rows`);
     const restoredTables = {
       projects: "studio.simulation_projects", simulationTemplates: "studio.simulation_templates",
       projectCollaborators: "studio.project_collaborators", projectMutationReceipts: "studio.project_mutation_receipts",
@@ -3288,6 +3853,19 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   } finally {
     await target.close();
   }
+});
+
+test("PS-830 archive v1 remains readable without fabricated v2 datasets", async () => {
+  const archive = JSON.parse(await readFile(new URL("../../../tests/platform/fixtures/organization-archive-v1.json", import.meta.url), "utf8"));
+  assert.deepEqual([archive.archiveVersion, archive.restoreContract], [1, "plenum-organization-logical-v1"]);
+  const target = await createCleanArchiveTarget(archive);
+  try {
+    const imported = await importOrganizationArchive(target.app, principalD, archive, randomUUID());
+    assert.equal(imported.replayed, false);
+    const projects = await target.owner.query("SELECT count(*)::integer AS count FROM studio.simulation_projects WHERE organization_id=$1", [ids.orgA]);
+    assert.equal(projects.rows[0].count, 0);
+    assert.equal((await importOrganizationArchive(target.app, principalD, archive, randomUUID())).replayed, true);
+  } finally { await target.close(); }
 });
 
 test("PS-400-T02 consumes counted capabilities atomically and applies or cancels pinned delayed effects once", async () => {
@@ -3349,7 +3927,12 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
       perspectives: [{ id: "operational", label: "Operational", reviewerSessionRoleIds: ["ps410-reviewer"] }],
       rules: [{ id: "ready", label: "Both Actions are ready", when: { operator: "all", conditions: [
         { fact: "actions.ready", operator: "equals", value: true }
-      ] }, outcome: "accept" }], publicationScope: { public: true } }],
+      ] }, outcome: "accept" }], publicationScope: { public: true } },
+      { id: "rubric-resolution", name: "Rubric resolution", mechanism: "rubric",
+        appliesToArtifactTypeIds: ["action"], reviewerSessionRoleIds: ["ps410-reviewer"],
+        leadReviewerSessionRoleIds: ["ps410-reviewer"], perspectives: [], publicationScope: { public: true },
+        rubric: [{ id: "feasibility", label: "Feasibility", weight: 2, minimum: 0, maximum: 5,
+          anchors: [{ score: 0, label: "No workable fallback" }, { score: 5, label: "Feasible fallback" }] }] }],
     artifactTypes: [{ id: "action", key: "action", decisionBearing: true }], stateVariables: []
   }, scenario: {} };
   await owner.query(`INSERT INTO studio.definition_revisions
@@ -3395,6 +3978,10 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
   const command = (commandId, operationType, version, payload) => ({ commandId, deviceId: ids.deviceA,
     operationType, aggregateId: requestId, expectedAggregateVersion: version, governingReleaseId: releaseId,
     activeSessionRoleId: "ps410-reviewer", payload });
+  const requestOptions = await getAdjudicationOptions(app, context);
+  assert.equal(requestOptions.length, 2);
+  assert.deepEqual(new Set(requestOptions[0].actions.map(({ id }) => id)), new Set([actionA, actionB]));
+  assert.ok(requestOptions[0].actions.some(({ label }) => label === "Synthetic Action A"));
   const ineligible = await submitRuntimeCommand(app, context, { ...command("26000000-0000-4000-8000-00000000001a",
     "adjudication.request", 0, { modelId: "rules-resolution", actionIds: [nonAction] }), aggregateId: invalidRequestId },
     randomUUID(), ids.deploymentA);
@@ -3409,6 +3996,7 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
   await owner.query("UPDATE runtime.artifact_instances SET creator_participant_id=$1,visible_role_ids='{}' WHERE id=ANY($2::uuid[])",
     [outsiderParticipantId, [actionA, actionB]]);
   assert.deepEqual(await getAdjudications(app, context), []);
+  assert.ok((await getAdjudicationOptions(app, context)).every(({ actions }) => actions.length === 0));
   const policyDenied = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-00000000001c",
     "adjudication.review", 1, { perspectiveId: "operational", recommendation: "approve", rationale: "No current evidence access",
       confidence: 0.8, evidenceArtifactIds: [actionA] }), randomUUID(), ids.deploymentA);
@@ -3420,6 +4008,7 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
     deviceId: outsiderDeviceId, seatAssignmentIds: [outsiderAssignmentId], seatId: "ps410-outsider-seat", activeSessionRoleId: "ps410-outsider",
     organizationRoles: [] };
   assert.deepEqual(await getAdjudications(app, hiddenContext), []);
+  assert.deepEqual(await getAdjudicationOptions(app, hiddenContext), []);
   const reviewed = await submitRuntimeCommand(app, context, command("26000000-0000-4000-8000-000000000012",
     "adjudication.review", 1, { perspectiveId: "operational", recommendation: "approve", rationale: "Evidence supports approval",
       hiddenAnalyticalNotes: "Restricted reviewer note", confidence: 0.8, evidenceArtifactIds: [actionA] }), randomUUID(), ids.deploymentA);
@@ -3464,6 +4053,27 @@ test("PS-410-T02 preserves reviewer inputs, denies direct publication, and accep
   assert.ok(delivery.rows[0].released_at instanceof Date && delivery.rows[0].delivered_at instanceof Date);
   assert.ok(delivery.rows[0].released_at < delivery.rows[0].delivered_at);
   assert.equal(delivery.rows[0].viewed_at, null);
+  const rubricRequestId = randomUUID();
+  const rubricCommand = (operation, version, payload) => ({ ...command(randomUUID(), operation, version, payload), aggregateId: rubricRequestId });
+  assert.equal((await submitRuntimeCommand(app, context, rubricCommand("adjudication.request", 0,
+    { modelId: "rubric-resolution", actionIds: [actionA] }), randomUUID(), ids.deploymentA)).status, "accepted");
+  const rubricView = (await getAdjudications(app, context)).find(({ id }) => id === rubricRequestId);
+  assert.deepEqual(rubricView.rubric, adjudicationDefinition.coreDesign.adjudicationModels[1].rubric);
+  for (const scores of [{}, { feasibility: -1 }, { feasibility: 6 }, { feasibility: "4" }]) {
+    const receipt = await submitRuntimeCommand(app, context, rubricCommand("adjudication.draft", 1,
+      { ...draftPayload, rubricScores: scores }), randomUUID(), ids.deploymentA);
+    assert.deepEqual([receipt.status, receipt.errorCode], ["rejected", "VALIDATION_FAILED"]);
+  }
+  assert.equal((await submitRuntimeCommand(app, context, rubricCommand("adjudication.draft", 1,
+    { ...draftPayload, rubricScores: { feasibility: 4 } }), randomUUID(), ids.deploymentA)).status, "accepted");
+  const scored = (await getAdjudications(app, context)).find(({ id }) => id === rubricRequestId);
+  assert.deepEqual(scored.record.suggestion, { weightedScore: 4 });
+  assert.equal(scored.record.explanationTrace.find(({ source }) => source === "rubric").details.score, 4);
+  assert.equal((await submitRuntimeCommand(app, context, rubricCommand("adjudication.publish", 2, {}),
+    randomUUID(), ids.deploymentA)).status, "accepted");
+  const rubricParticipant = (await getAdjudications(app, hiddenContext)).find(({ id }) => id === rubricRequestId);
+  assert.equal(rubricParticipant.rubric, undefined);
+  assert.equal(rubricParticipant.record.suggestion, null);
 });
 
 test("AC-07/AC-11 SYNC-09 EXT-15 activates reviewed Releases without rewriting live history", async () => {
@@ -3619,6 +4229,33 @@ test("SYNC-13 creates, anchors, exports, and independently verifies a due Eviden
     async anchorCheckpoint() { throw new Error("synthetic custodian outage"); }
   }, new Date(Date.now() + 6 * 60 * 1_000)), /custodian outage/iu);
   assert.equal((await owner.query("SELECT count(*) FROM evidence.checkpoint_batches WHERE session_id=$1", [ids.sessionB])).rows[0].count, "0");
+});
+
+test("PS-830-T08 imports a portable Package as an atomic local Draft without foreign approval authority", async () => {
+  const bytes = await readFile(new URL("../../../definitions/fractured-order/fractured-order-release.json", import.meta.url));
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const original = JSON.parse(bytes.toString("utf8"));
+  const input = { requestId: randomUUID(), title: "Official Package local Draft", sourcePackage: { bytes, sha256 } };
+  const results = await Promise.all([createProject(app, principalD, input, randomUUID()), createProject(app, principalD, input, randomUUID())]);
+  assert.deepEqual(results.map(({ replayed }) => replayed).sort(), [false, true]);
+  assert.equal(results[0].projectId, results[1].projectId);
+  const projectId = results[0].projectId;
+  const document = (await owner.query("SELECT document FROM studio.drafts WHERE project_id=$1", [projectId])).rows[0].document;
+  assert.deepEqual(document.coreDesign, original.coreDesign);
+  assert.notEqual(document.scenario.id, original.scenario.id);
+  assert.deepEqual({ ...document.scenario, id: original.scenario.id }, original.scenario);
+  assert.equal(Number((await owner.query("SELECT count(*) FROM registry.releases WHERE project_id=$1", [projectId])).rows[0].count), 0);
+  const audit = (await owner.query("SELECT details FROM evidence.audit_records WHERE target_ref=$1 AND action='project.create'", [`simulation_project:${projectId}`])).rows[0].details;
+  assert.equal(audit.sourcePackage.sha256, sha256);
+  assert.equal(audit.sourcePackage.releaseId, original.manifest.releaseId);
+  await assert.rejects(createProject(app, principalF, { ...input, requestId: randomUUID() }, randomUUID()),
+    (error) => error.envelope?.error.code === "ACCESS_REVOKED");
+  const invalid = { ...input, requestId: randomUUID(), title: "Corrupted Package must remain atomic",
+    sourcePackage: { bytes: Buffer.concat([bytes, Buffer.from(" ")]), sha256 } };
+  await assert.rejects(createProject(app, principalD, invalid, randomUUID()), (error) => error.envelope?.error.code === "VALIDATION_FAILED");
+  assert.equal(Number((await owner.query("SELECT count(*) FROM studio.simulation_projects WHERE title=$1", [invalid.title])).rows[0].count), 0);
+  await assert.rejects(createProject(app, principalD, { ...invalid, requestId: input.requestId }, randomUUID()),
+    (error) => error.envelope?.error.code === "IDEMPOTENCY_COLLISION");
 });
 
 test("PS-810 stores immutable security evidence without granting application read access", async () => {

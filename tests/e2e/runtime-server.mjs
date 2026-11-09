@@ -10,6 +10,7 @@ import {
   createDatabasePool,
   createRuntimeHttpHandler,
   LocalObjectStore,
+  startScheduledInjectWorker,
   withOrganizationTransaction
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
@@ -19,6 +20,7 @@ import { fixture } from "./fixture.mjs";
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
 const localUserTest = process.argv.includes("--local-user-test");
+const goldenJourney = process.argv.includes("--golden-journey");
 const seedUserTest = process.argv.includes("--seed-user-test");
 const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
 if (seedUserTest && !localUserTest) throw new Error("--seed-user-test requires --local-user-test");
@@ -105,7 +107,10 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
   expiresAt: new Date("2099-01-01T00:00:00.000Z")
 }]));
 
-const objectRoot = await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
+const goldenDatabase = new URL(databaseUrl).pathname.slice(1);
+if (goldenJourney && !/^plenum_ps830_g_browser[0-9]+$/u.test(goldenDatabase)) throw new Error("Golden server requires its dedicated database");
+const objectRoot = goldenJourney ? join(process.cwd(), "output", "playwright", "golden-journey", "objects", goldenDatabase)
+  : await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
 const objectStore = new LocalObjectStore(objectRoot);
 const contentScanner = {
   async scan(bytes) {
@@ -119,6 +124,7 @@ const contentScanner = {
 let packagesSeeded = false;
 let packageSeedPromise;
 async function ensureFixturePackages() {
+  if (goldenJourney) return; // Golden Packages exist only after publication through the product UI.
   if (packagesSeeded) return;
   if (packageSeedPromise !== undefined) return packageSeedPromise;
   packageSeedPromise = (async () => {
@@ -311,17 +317,22 @@ server.listen(runtimePort, "127.0.0.1", () => console.log(
   `${localUserTest ? "PS-710 through PS-790 local user-test" : "PS-150 browser fixture"} listening on http://127.0.0.1:${runtimePort}${localUserTest ? `; PS-740 files: ${userTestFixtureRoot}; PS-790 files: ${join(process.cwd(), "output", "user-test", "ps-790")}` : ""}`
 ));
 
+const stopInjectWorker = startScheduledInjectWorker(pool, fixture.organizationId, fixture.deploymentId, (error, sessionId) => {
+  const code = typeof error?.code === "string" && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : "unexpected";
+  console.error(JSON.stringify({ event: "inject.schedule_failed", code, sessionId }));
+});
 let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
   const forcedExit = setTimeout(() => process.exit(0), 2_000);
   try {
+    await stopInjectWorker();
     await collaboration.close();
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
     await pool.end();
-    await rm(objectRoot, { recursive: true, force: true });
+    if (!goldenJourney) await rm(objectRoot, { recursive: true, force: true });
   } finally {
     clearTimeout(forcedExit);
     process.exit(0);

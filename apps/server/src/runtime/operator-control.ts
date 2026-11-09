@@ -5,7 +5,7 @@ import type { Pool, PoolClient } from "pg";
 import { authorizationError } from "../errors.js";
 import { executeStageCommand } from "./artifact-workflow.js";
 import { processPrincipalSessionCommand, type CommandDecision, type PrincipalSessionCommandContext } from "./commands/processor.js";
-import { executeInformationCommand } from "./information-flow.js";
+import { executeInformationCommand, scheduleConfiguredInjects } from "./information-flow.js";
 
 const sessionTransitions: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   "session.start": { open: "active" },
@@ -94,6 +94,10 @@ export async function executeOperatorSessionCommand(
       }
       if (next === undefined) {
         return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "That Session control is not valid in the current state." };
+      }
+      if (command.operationType === "session.start") {
+        const schedulingFailure = await scheduleConfiguredInjects({ client, context, command, activeReleaseId, sessionStatus });
+        if (schedulingFailure) return schedulingFailure;
       }
       const nextVersion = version + 1;
       await client.query(

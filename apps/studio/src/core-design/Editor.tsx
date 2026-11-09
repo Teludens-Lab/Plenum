@@ -1,5 +1,9 @@
 import { Children, isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import { SectionIcon } from "./SectionIcon.js";
+import { FormExpressionEditor } from "./FormExpressionEditor.js";
+import { FormInterchange } from "./FormInterchange.js";
+import { FormAttachments } from "./FormAttachments.js";
+import { StageCompletionRequirements } from "./StageCompletionRequirements.js";
 import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type ContentLibraryItemV1, type ContentLibraryV1,
   type RolePreviewV1, type StudioRehearsalV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
 import type {
@@ -7,6 +11,9 @@ import type {
   RuntimeStageDefinitionV1,
   ScenarioV1
 } from "@plenum/simulation-schema";
+import { METHODOLOGY_CONTRACT_ID, METHODOLOGY_CONCEPT_REGISTRY, methodologyControls, validateMethodologyConcepts,
+  BASIC_FIELD_TYPES, ENTITY_REFERENCE_KINDS, FORM_LIMITS, STRUCTURED_FORM_CONTRACT_ID, numericField,
+  FORM_EXPRESSION_CONTRACT_ID, FORMATTED_TEXT_CONTRACT_ID, type RuntimeFormDefinitionV1, type RuntimeFormFieldDefinitionV1 } from "@plenum/simulation-schema";
 
 import { StudioCollaborationClient } from "../collaboration/client.js";
 import { PollEditor } from "../polls/PollEditor.js";
@@ -16,8 +23,8 @@ import { CompositionEditor } from "../compositions/CompositionEditor.js";
 import { AdvancedLogicEditor } from "../advanced-logic/AdvancedLogicEditor.js";
 import { AdjudicationEditor } from "../adjudication/AdjudicationEditor.js";
 import {
-  FIELD_TYPES, METHODOLOGY_CONCEPTS, MODULE_TYPES, basicForm, basicInterface, basicStage,
-  basicWorkflow, coreArray, dec42Workflow, defaultGrant, identifier
+  FIELD_TYPES, MODULE_TYPES, basicForm, basicInterface, basicStage,
+  basicWorkflow, coreArray, dec42Workflow, defaultGrant, identifier, stageChoiceLabel
 } from "./model.js";
 
 export type Path = readonly (string | number)[];
@@ -139,8 +146,60 @@ export function AddButton({ label, onClick, disabled = false }: { label: string;
   return <button className="btn-secondary" type="button" disabled={disabled} onClick={onClick}>{label}</button>;
 }
 
+function StructuredFieldRules({ field, fields, path, client, states, groups }: {
+  field: RuntimeFormFieldDefinitionV1; fields: RuntimeFormFieldDefinitionV1[]; path: Path; client: StudioCollaborationClient;
+  states: Array<{ key: string; label: string }>;
+  groups: RuntimeFormDefinitionV1["sections"];
+}) {
+  return <>
+    {!["artifact_reference", "entity_reference", "multi_select"].includes(field.type) ? <>
+      <label><input type="checkbox" checked={field.computation !== undefined} onChange={(event) => event.target.checked
+        ? client.setAtPath([...path, "computation"], { contractId: FORM_EXPRESSION_CONTRACT_ID, version: "1", expression: { kind: "literal", value: numericField(field.type) ? 0 : field.type === "yes_no" ? false : "" } })
+        : client.deleteAtPath([...path, "computation"])} />Compute this field</label>
+      {field.computation ? <>
+        <TextField id={`formula-version-${field.id}`} label="Formula version" value={field.computation.version} path={[...path, "computation", "version"]} client={client} />
+        <p className="hint">Read-only result, recalculated by the server. Missing inputs and calculation errors prevent submission.</p>
+        <FormExpressionEditor expression={field.computation.expression} fields={fields.filter(({ key }) => key !== field.key)} groups={groups}
+          onChange={(expression) => client.setAtPath([...path, "computation", "expression"], expression)} />
+      </> : null}
+    </> : null}
+    {numericField(field.type) ? <>
+      <TextField id={`unit-${field.id}`} label="Unit (currency code or measurement)" value={field.numeric?.unit ?? ""} path={[...path, "numeric", "unit"]} client={client} />
+      <TextField id={`precision-${field.id}`} label="Decimal places (0–6)" value={field.numeric?.precision ?? 0} type="number" path={[...path, "numeric", "precision"]} client={client} />
+    </> : null}
+    {field.type === "entity_reference" ? <>
+      <SelectField id={`entity-kind-${field.id}`} label="Referenced entity" value={field.entityReference?.kind ?? "team"}
+        options={ENTITY_REFERENCE_KINDS.map((kind) => ({ value: kind, label: kind.replaceAll("_", " ") }))} path={[...path, "entityReference", "kind"]} client={client} />
+      <CheckField id={`entity-multiple-${field.id}`} label="Allow multiple references" checked={field.entityReference?.multiple === true} path={[...path, "entityReference", "multiple"]} client={client} />
+      <p className="hint">Participants can choose only references authorized by the server in their Session and Role.</p>
+    </> : null}
+    <MultiCheck legend="Editable in Workflow states (none means normal workflow rules)" values={field.editableInWorkflowStates ?? []}
+      options={states.map(({ key, label }) => ({ value: key, label }))} path={[...path, "editableInWorkflowStates"]} client={client} />
+    {(["visibleWhen", "requiredWhen"] as const).map((key) => {
+      const condition = field[key];
+      const label = key === "visibleWhen" ? "Conditional visibility" : "Conditional requiredness";
+      const candidates = fields.filter((candidate) => candidate.id !== field.id);
+      const source = fields.find((candidate) => candidate.key === condition?.field);
+      return condition === undefined ? <AddButton key={key} label={`Add ${label.toLowerCase()}`} disabled={candidates.length === 0} onClick={() =>
+        client.setAtPath([...path, key], { field: candidates[0]!.key, operator: "present" })} /> : <fieldset className="nested-editor" key={key}><legend>{label}</legend>
+        <SelectField id={`${key}-source-${field.id}`} label="Source field" value={condition.field} options={candidates.map(({ key, label }) => ({ value: key, label }))} path={[...path, key, "field"]} client={client} />
+        <SelectField id={`${key}-operator-${field.id}`} label="Comparison" value={condition.operator} options={["equals", "not_equals", "includes", "present"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={[...path, key, "operator"]} client={client} />
+        {condition.operator === "present" ? null : source?.type === "yes_no" ? <label htmlFor={`${key}-value-${field.id}`}>Comparison value
+          <select id={`${key}-value-${field.id}`} value={typeof condition.value === "boolean" ? String(condition.value) : ""}
+            onChange={(event) => event.target.value === "" ? client.deleteAtPath([...path, key, "value"]) : client.setAtPath([...path, key, "value"], event.target.value === "true")}>
+            <option value="">Choose a value</option><option value="true">Yes</option><option value="false">No</option>
+          </select></label>
+          : <TextField id={`${key}-value-${field.id}`} label="Comparison value" value={typeof condition.value === "string" || typeof condition.value === "number" ? condition.value : ""}
+            type={numericField(source?.type ?? "") ? "number" : "text"} path={[...path, key, "value"]} client={client} />}
+        <button className="btn-secondary" type="button" onClick={() => client.deleteAtPath([...path, key])}>Remove {label.toLowerCase()}</button>
+      </fieldset>;
+    })}
+  </>;
+}
+
 function TeamEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
   const teams = coreArray(core, "teams");
+  const cells = coreArray(core, "teamCells");
   const objectives = coreArray(core, "objectives");
   const resources = coreArray(core, "resourceDefinitions");
   const duplicateTeam = (team: (typeof teams)[number]) => client.appendAtPath(["coreDesign", "teams"], {
@@ -157,6 +216,18 @@ function TeamEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
         <TextField id={`team-briefing-${team.id}`} label="Team briefing" value={team.briefing ?? ""} path={["coreDesign", "teams", index, "briefing"]} client={client} multiline />
         <MultiCheck legend="Objectives" values={team.objectiveIds} options={objectives.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "teams", index, "objectiveIds"]} client={client} />
         <MultiCheck legend="Resources" values={team.resourceDefinitionIds ?? []} options={resources.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "teams", index, "resourceDefinitionIds"]} client={client} />
+        {[...new Set(cells.filter((cell) => cell.teamId === team.id).map((cell) => cell.kind))].map((kind) =>
+          <fieldset className="nested-editor" key={kind}><legend>{kind.replaceAll("_", " ")} cells</legend>
+            <p className="hint">Enabled cells appear in this Team's scoped forms and completion requirements. Disable a cell to leave it out of the next Release.</p>
+            {cells.map((cell, cellIndex) => cell.teamId === team.id && cell.kind === kind ?
+              <div className="field-row" key={cell.id}>
+                <TextField id={`cell-name-${cell.id}`} label="Cell name" value={cell.name} path={["coreDesign", "teamCells", cellIndex, "name"]} client={client} />
+                <CheckField id={`cell-enabled-${cell.id}`} label={`${cell.name || "Cell"} enabled`} checked={cell.enabled} path={["coreDesign", "teamCells", cellIndex, "enabled"]} client={client} />
+              </div> : null)}
+            <AddButton label={`Add ${kind.replaceAll("_", " ")} cell`} onClick={() => client.appendAtPath(["coreDesign", "teamCells"], {
+              id: identifier(), teamId: team.id, kind, name: "New cell", enabled: true
+            })} />
+          </fieldset>)}
         <fieldset className="nested-editor"><legend>Relationships</legend>{(team.relationships ?? []).map((relationship, relationshipIndex) => <div className="field-row" key={relationship.id}>
           <SelectField id={`team-relationship-target-${relationship.id}`} label="Related Team" value={relationship.targetTeamId}
             options={teams.filter(({ id }) => id !== team.id).map(({ id, name }) => ({ value: id, label: name }))}
@@ -194,7 +265,7 @@ function RoleEditor({ core, client }: { core: CoreDesignV1; client: StudioCollab
         <TextField id={`role-capabilities-${role.id}`} label="Capabilities (comma separated)" value={role.capabilities.map(({ capability }) => capability).join(", ")} path={["coreDesign", "sessionRoles", index, "capabilities"]} client={client} transform={(value) => value.split(",").map((capability) => capability.trim()).filter(Boolean).map((capability) => ({ capability }))} />
         <TextField id={`role-clearance-${role.id}`} label="Information clearance" value={role.informationClearance ?? ""} path={["coreDesign", "sessionRoles", index, "informationClearance"]} client={client} />
         <MultiCheck legend="Eligible Teams" values={role.allowedTeamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "allowedTeamIds"]} client={client} />
-        <MultiCheck legend="Available Stages (none means all)" values={role.allowedStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "allowedStageIds"]} client={client} />
+        <MultiCheck legend="Available Stages (none means all)" values={role.allowedStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "sessionRoles", index, "allowedStageIds"]} client={client} />
         <MultiCheck legend="Interface Profiles" values={role.interfaceProfileIds} options={interfaces.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "sessionRoles", index, "interfaceProfileIds"]} client={client} />
         <CheckField id={`role-control-${role.id}`} label="Control role" checked={role.isControlRole} path={["coreDesign", "sessionRoles", index, "isControlRole"]} client={client} />
         <ItemActions path={["coreDesign", "sessionRoles"]} index={index} count={roles.length} client={client} label={role.name || "Session Role"} duplicate={() => client.appendAtPath(["coreDesign", "sessionRoles"], { ...structuredClone(role), id: identifier(), name: `${role.name} copy` })} />
@@ -295,7 +366,7 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
           options={[{ value: "exclusive", label: "Choose one passing branch" }, { value: "parallel", label: "Start all passing branches" }]}
           path={["coreDesign", "stages", index, "transitionMode"]} client={client} />
         {stage.transitionMode === "parallel" && <SelectField id={`stage-parallel-join-${stage.id}`} label="Parallel join Stage" value={stage.parallelJoinStageId ?? ""}
-          options={[{ value: "", label: "Choose a join Stage" }, ...stages.filter(({ id, joinMode }) => id !== stage.id && joinMode !== undefined).map(({ id, name }) => ({ value: id, label: name }))]}
+          options={[{ value: "", label: "Choose a join Stage" }, ...stages.filter(({ id, joinMode }) => id !== stage.id && joinMode !== undefined).map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))]}
           path={["coreDesign", "stages", index, "parallelJoinStageId"]} client={client} emptyDeletes />}
         <SelectField id={`stage-join-mode-${stage.id}`} label="Incoming merge behavior" value={stage.joinMode ?? ""}
           options={[{ value: "", label: "Not a merge" }, { value: "all", label: "Wait for all branches" }, { value: "first", label: "Accept first branch" }]}
@@ -308,9 +379,10 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
           <CheckField id={`stage-control-return-${stage.id}`} label="Allow return to previous" checked={stage.operatorControls.allowReturnToPrevious} path={["coreDesign", "stages", index, "operatorControls", "allowReturnToPrevious"]} client={client} />
           <CheckField id={`stage-control-reason-${stage.id}`} label="Require reason for control action" checked={stage.operatorControls.requireReason} path={["coreDesign", "stages", index, "operatorControls", "requireReason"]} client={client} />
         </fieldset>
+        <StageCompletionRequirements core={core} stage={stage} stageIndex={index} client={client} />
         <fieldset className="nested-editor"><legend>Transitions</legend>{stage.transitions.map((transition, transitionIndex) => <div className="field-row" key={transition.id}>
           <SelectField id={`stage-transition-target-${transition.id}`} label="Target Stage" value={transition.targetStageId}
-            options={stages.filter(({ id }) => id !== stage.id).map(({ id, name }) => ({ value: id, label: name }))}
+            options={stages.filter(({ id }) => id !== stage.id).map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))}
             path={["coreDesign", "stages", index, "transitions", transitionIndex, "targetStageId"]} client={client} />
           <TextField id={`stage-transition-label-${transition.id}`} label="Transition label" value={transition.label ?? ""}
             path={["coreDesign", "stages", index, "transitions", transitionIndex, "label"]} client={client} />
@@ -343,7 +415,7 @@ function StageEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
   </Workspace>;
 }
 
-function FormsEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
+function FormsEditor({ projectId, core, client }: { projectId: string; core: CoreDesignV1; client: StudioCollaborationClient }) {
   const forms = coreArray(core, "forms");
   const artifacts = coreArray(core, "artifactTypes");
   const workflows = coreArray(core, "workflows");
@@ -370,6 +442,14 @@ function FormsEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
       const artifactIndex = artifacts.findIndex((item) => item.id === artifact?.id);
       return <details className="editor-item" id={`forms-${form.id}`} key={form.id}><summary><span>{artifact?.name ?? form.name}</span><span className="item-id">{form.id}</span></summary><div className="item-body">
         <TextField id={`form-name-${form.id}`} label="Form name" value={form.name} path={["coreDesign", "forms", formIndex, "name"]} client={client} />
+        <TextField id={`form-version-${form.id}`} label="Form version" value={form.formVersion} path={["coreDesign", "forms", formIndex, "formVersion"]} client={client} />
+        <FormInterchange form={form} apply={(candidate) => client.setAtPath(["coreDesign", "forms", formIndex], candidate)} />
+        {form.contractId && artifact ? <FormAttachments projectId={projectId} artifactTypeId={artifact.id} form={form} formIndex={formIndex} artifactIndex={artifactIndex}
+          retentionPolicyId={artifact.retentionPolicyId} client={client} /> : null}
+        {form.contractId === undefined ? <AddButton label="Use approved form rules" onClick={() => client.transact(() => {
+          client.setAtPath(["coreDesign", "forms", formIndex, "contractId"], STRUCTURED_FORM_CONTRACT_ID);
+          client.setAtPath(["coreDesign", "forms", formIndex, "formVersion"], `${form.formVersion}-structured-v2`);
+        })} /> : <p className="hint">Up to {FORM_LIMITS.fields} fields, {FORM_LIMITS.sections} sections and {FORM_LIMITS.entries} entries per repeating group. Structured content is limited to {FORM_LIMITS.structuredBytes} UTF-8 JSON bytes. Published versions stay unchanged.</p>}
         {artifact === undefined ? <p className="status-error">This Form is not linked to an Artifact Type.</p> : <div className="grid-fields">
           <TextField id={`artifact-name-${artifact.id}`} label="Artifact Type name" value={artifact.name} path={["coreDesign", "artifactTypes", artifactIndex, "name"]} client={client} />
           <TextField id={`artifact-key-${artifact.id}`} label="Stable key" value={artifact.key} path={["coreDesign", "artifactTypes", artifactIndex, "key"]} client={client} />
@@ -378,45 +458,65 @@ function FormsEditor({ core, client }: { core: CoreDesignV1; client: StudioColla
           <SelectField id={`artifact-policy-${artifact.id}`} label="Information Policy" value={artifact.informationPolicyId} options={policies.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "informationPolicyId"]} client={client} />
           <MultiCheck legend="Creator Session Roles" values={artifact.allowedCreatorSessionRoleIds} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "allowedCreatorSessionRoleIds"]} client={client} />
           <MultiCheck legend="Recipient Session Roles" values={artifact.recipientSessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "recipientSessionRoleIds"]} client={client} />
-          <MultiCheck legend="Available Stages (none means all)" values={artifact.availableStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "artifactTypes", artifactIndex, "availableStageIds"]} client={client} />
+          <MultiCheck legend="Available Stages (none means all)" values={artifact.availableStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "artifactTypes", artifactIndex, "availableStageIds"]} client={client} />
           <SelectField id={`artifact-versioning-${artifact.id}`} label="Version history" value={artifact.versioning} options={["none", "draft_versions", "full_history"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "artifactTypes", artifactIndex, "versioning"]} client={client} />
-          <TextField id={`artifact-retention-${artifact.id}`} label="Retention policy reference" value={artifact.retentionPolicyId ?? ""} path={["coreDesign", "artifactTypes", artifactIndex, "retentionPolicyId"]} client={client} emptyDeletes />
+          {form.attachments ? null : <TextField id={`artifact-retention-${artifact.id}`} label="Retention policy reference" value={artifact.retentionPolicyId ?? ""} path={["coreDesign", "artifactTypes", artifactIndex, "retentionPolicyId"]} client={client} emptyDeletes />}
           <CheckField id={`artifact-decision-${artifact.id}`} label="Decision-bearing" checked={artifact.decisionBearing} path={["coreDesign", "artifactTypes", artifactIndex, "decisionBearing"]} client={client} />
+          {artifact.decisionBearing && <p className="hint">Each Decision Record contains one Action. Repeating fields describe that Action; use separate records for separate Actions. An adjudication can resolve several records together.</p>}
           <CheckField id={`artifact-export-${artifact.id}`} label="Exportable" checked={artifact.exportable} path={["coreDesign", "artifactTypes", artifactIndex, "exportable"]} client={client} />
         </div>}
         {form.sections.map((section, sectionIndex) => <fieldset className="nested-editor" key={section.id}><legend>{section.title ?? "Form section"}</legend>
-          <TextField id={`section-title-${section.id}`} label="Section title" value={section.title ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "title"]} client={client} />
-          <TextField id={`section-description-${section.id}`} label="Section description" value={section.description ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "description"]} client={client} emptyDeletes />
-          <CheckField id={`section-repeatable-${section.id}`} label="Repeatable section" checked={section.repeatable === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "repeatable"]} client={client} />
+          <TextField id={`section-title-${form.id}-${section.id}`} label="Section title" value={section.title ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "title"]} client={client} />
+          <TextField id={`section-description-${form.id}-${section.id}`} label="Section description" value={section.description ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "description"]} client={client} emptyDeletes />
+          <CheckField id={`section-repeatable-${form.id}-${section.id}`} label="Repeatable section" checked={section.repeatable === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "repeatable"]} client={client} />
+          {section.repeatable ? <div className="grid-fields">
+            <TextField id={`section-item-${section.id}`} label="Item label" value={section.itemLabel ?? "Item"} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "itemLabel"]} client={client} />
+            <TextField id={`section-min-${section.id}`} label="Minimum entries" value={section.minItems ?? 0} type="number" path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "minItems"]} client={client} />
+            <TextField id={`section-max-${section.id}`} label="Maximum entries" value={section.maxItems ?? FORM_LIMITS.entries} type="number" path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "maxItems"]} client={client} />
+          </div> : null}
           {section.fields.map((field, fieldIndex) => <fieldset className="nested-editor" key={field.id}><legend>{field.label || `Field ${fieldIndex + 1}`}</legend><div className="grid-fields">
-            <TextField id={`field-label-${field.id}`} label="Field label" value={field.label} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "label"]} client={client} />
-            <TextField id={`field-key-${field.id}`} label="Field key" value={field.key} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "key"]} client={client} />
-            <SelectField id={`field-type-${field.id}`} label="Field type" value={field.type} options={FIELD_TYPES.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "type"]} client={client} />
-            <TextField id={`field-help-${field.id}`} label="Help text" value={field.helpText ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "helpText"]} client={client} emptyDeletes />
-            <TextField id={`field-reporting-${field.id}`} label="Reporting label" value={field.reportingLabel ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "reportingLabel"]} client={client} emptyDeletes />
-            <SelectField id={`field-classification-${field.id}`} label="Data classification" value={field.dataClassification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "dataClassification"]} client={client} />
-            <TextField id={`field-default-${field.id}`} label="Default value" value={typeof field.defaultValue === "string" || typeof field.defaultValue === "number" ? field.defaultValue : ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "defaultValue"]} client={client} emptyDeletes />
-            {(field.type === "single_select" || field.type === "multi_select") && <TextField id={`field-options-${field.id}`} label="Choices (value: label, comma separated)" value={(field.options ?? []).map(({ value, label }) => `${value}: ${label}`).join(", ")} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "options"]} client={client} transform={(value) => value.split(",").map((choice) => choice.trim()).filter(Boolean).map((choice) => { const [optionValue, ...label] = choice.split(":"); return { value: optionValue?.trim() ?? "", label: label.join(":").trim() || optionValue?.trim() || "" }; })} />}
-            <TextField id={`field-min-${field.id}`} label={field.type === "number" ? "Minimum value" : "Minimum length"} value={field.type === "number" ? field.validation?.min ?? "" : field.validation?.minLength ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "validation", field.type === "number" ? "min" : "minLength"]} client={client} type="number" emptyDeletes />
-            <TextField id={`field-max-${field.id}`} label={field.type === "number" ? "Maximum value" : "Maximum length"} value={field.type === "number" ? field.validation?.max ?? "" : field.validation?.maxLength ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "validation", field.type === "number" ? "max" : "maxLength"]} client={client} type="number" emptyDeletes />
-            <CheckField id={`field-required-${field.id}`} label="Required" checked={field.required === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "required"]} client={client} />
-            <CheckField id={`field-readonly-${field.id}`} label="Read-only" checked={field.readOnly === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "readOnly"]} client={client} />
+            <TextField id={`field-label-${form.id}-${field.id}`} label="Field label" value={field.label} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "label"]} client={client} />
+            <TextField id={`field-key-${form.id}-${field.id}`} label="Field key" value={field.key} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "key"]} client={client} />
+            <div className="field"><label htmlFor={`field-type-${form.id}-${field.id}`}>Field type</label><select id={`field-type-${form.id}-${field.id}`} value={field.type} onChange={(event) => client.transact(() => {
+              const path: Path = ["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex];
+              const type = event.target.value;
+              client.setAtPath([...path, "type"], type);
+              if (!numericField(type)) client.deleteAtPath([...path, "numeric"]);
+              if (type === "currency" || type === "percentage") client.setAtPath([...path, "numeric"], { unit: type === "percentage" ? "%" : "", precision: 2 });
+              if (type === "entity_reference") client.setAtPath([...path, "entityReference"], { kind: "team", multiple: false });
+              else client.deleteAtPath([...path, "entityReference"]);
+              if (type === "formatted_text") client.setAtPath([...path, "formattedTextContractId"], FORMATTED_TEXT_CONTRACT_ID);
+              else client.deleteAtPath([...path, "formattedTextContractId"]);
+            })}>{(form.contractId ? BASIC_FIELD_TYPES : FIELD_TYPES).map((type) => <option key={type} value={type}>{type.replaceAll("_", " ")}</option>)}</select></div>
+            {form.contractId ? <StructuredFieldRules field={field} fields={section.repeatable ? section.fields : form.sections.filter((item) => !item.repeatable).flatMap((item) => item.fields)}
+              path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex]} client={client}
+              states={workflows.find(({ id }) => id === artifact?.workflowId)?.states ?? []}
+              groups={section.repeatable ? [] : form.sections.filter((item) => item.repeatable)} /> : null}
+            <TextField id={`field-help-${form.id}-${field.id}`} label="Help text" value={field.helpText ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "helpText"]} client={client} emptyDeletes />
+            <TextField id={`field-reporting-${form.id}-${field.id}`} label="Reporting label" value={field.reportingLabel ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "reportingLabel"]} client={client} emptyDeletes />
+            <SelectField id={`field-classification-${form.id}-${field.id}`} label="Data classification" value={field.dataClassification ?? "internal"} options={["public", "internal", "confidential", "restricted"].map((value) => ({ value, label: value }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "dataClassification"]} client={client} />
+            <TextField id={`field-default-${form.id}-${field.id}`} label="Default value" value={typeof field.defaultValue === "string" || typeof field.defaultValue === "number" ? field.defaultValue : ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "defaultValue"]} client={client} emptyDeletes />
+            {(field.type === "single_select" || field.type === "multi_select") && <TextField id={`field-options-${form.id}-${field.id}`} label="Choices (value: label, comma separated)" value={(field.options ?? []).map(({ value, label }) => `${value}: ${label}`).join(", ")} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "options"]} client={client} transform={(value) => value.split(",").map((choice) => choice.trim()).filter(Boolean).map((choice) => { const [optionValue, ...label] = choice.split(":"); return { value: optionValue?.trim() ?? "", label: label.join(":").trim() || optionValue?.trim() || "" }; })} />}
+            <TextField id={`field-min-${form.id}-${field.id}`} label={numericField(field.type) ? "Minimum value" : "Minimum length"} value={numericField(field.type) ? field.validation?.min ?? "" : field.validation?.minLength ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "validation", numericField(field.type) ? "min" : "minLength"]} client={client} type="number" emptyDeletes />
+            <TextField id={`field-max-${form.id}-${field.id}`} label={numericField(field.type) ? "Maximum value" : "Maximum length"} value={numericField(field.type) ? field.validation?.max ?? "" : field.validation?.maxLength ?? ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "validation", numericField(field.type) ? "max" : "maxLength"]} client={client} type="number" emptyDeletes />
+            <CheckField id={`field-required-${form.id}-${field.id}`} label="Required" checked={field.required === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "required"]} client={client} />
+            <CheckField id={`field-readonly-${form.id}-${field.id}`} label="Read-only" checked={field.readOnly === true} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "readOnly"]} client={client} />
             <MultiCheck legend="Editable by Session Roles (none means normal workflow rules)" values={field.editableBySessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "editableBySessionRoleIds"]} client={client} />
-            {field.visibleWhen === undefined ? <AddButton label="Add conditional visibility" disabled={section.fields.length < 2} onClick={() => { const source = section.fields.find(({ id }) => id !== field.id); if (source !== undefined) client.setAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen"], { field: source.key, operator: "equals", value: "" }); }} /> : <fieldset className="nested-editor"><legend>Conditional visibility</legend><div className="field-row">
-              <SelectField id={`field-condition-source-${field.id}`} label="Source field" value={field.visibleWhen.field} options={section.fields.filter(({ id }) => id !== field.id).map(({ key, label }) => ({ value: key, label }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "field"]} client={client} />
-              <SelectField id={`field-condition-operator-${field.id}`} label="Comparison" value={field.visibleWhen.operator} options={["equals", "not_equals", "includes", "present"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "operator"]} client={client} />
-              {field.visibleWhen.operator !== "present" && <TextField id={`field-condition-value-${field.id}`} label="Value" value={typeof field.visibleWhen.value === "string" || typeof field.visibleWhen.value === "number" ? field.visibleWhen.value : ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "value"]} client={client} />}
+            {form.contractId === undefined && (field.visibleWhen === undefined ? <AddButton label="Add conditional visibility" disabled={section.fields.length < 2} onClick={() => { const source = section.fields.find(({ id }) => id !== field.id); if (source !== undefined) client.setAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen"], { field: source.key, operator: "equals", value: "" }); }} /> : <fieldset className="nested-editor"><legend>Conditional visibility</legend><div className="field-row">
+              <SelectField id={`field-condition-source-${form.id}-${field.id}`} label="Source field" value={field.visibleWhen.field} options={section.fields.filter(({ id }) => id !== field.id).map(({ key, label }) => ({ value: key, label }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "field"]} client={client} />
+              <SelectField id={`field-condition-operator-${form.id}-${field.id}`} label="Comparison" value={field.visibleWhen.operator} options={["equals", "not_equals", "includes", "present"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "operator"]} client={client} />
+              {field.visibleWhen.operator !== "present" && <TextField id={`field-condition-value-${form.id}-${field.id}`} label="Value" value={typeof field.visibleWhen.value === "string" || typeof field.visibleWhen.value === "number" ? field.visibleWhen.value : ""} path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen", "value"]} client={client} />}
               <button className="btn-danger compact" type="button" onClick={() => client.deleteAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields", fieldIndex, "visibleWhen"])}>Remove condition</button>
-            </div><p className="rule-sentence">Show “{field.label}” when “{section.fields.find(({ key }) => key === field.visibleWhen?.field)?.label ?? field.visibleWhen.field}” {field.visibleWhen.operator.replaceAll("_", " ")}{field.visibleWhen.operator === "present" ? "." : ` “${String(field.visibleWhen.value ?? "")}”.`}</p></fieldset>}
+            </div><p className="rule-sentence">Show “{field.label}” when “{section.fields.find(({ key }) => key === field.visibleWhen?.field)?.label ?? field.visibleWhen.field}” {field.visibleWhen.operator.replaceAll("_", " ")}{field.visibleWhen.operator === "present" ? "." : ` “${String(field.visibleWhen.value ?? "")}”.`}</p></fieldset>)}
             <ItemActions path={["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields"]} index={fieldIndex} count={section.fields.length} client={client} label={field.label || "field"} duplicate={() => client.appendAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields"], { ...structuredClone(field), id: identifier(), key: `${field.key}_copy`, label: `${field.label} copy` })} />
           </div></fieldset>)}
-          <AddButton label="Add field" onClick={() => client.appendAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields"], { id: identifier(), key: `field_${section.fields.length + 1}`, label: "New field", type: "short_text", required: false })} />
+          <AddButton label="Add field" disabled={form.contractId !== undefined && form.sections.reduce((count, section) => count + section.fields.length, 0) >= FORM_LIMITS.fields} onClick={() => client.appendAtPath(["coreDesign", "forms", formIndex, "sections", sectionIndex, "fields"], { id: identifier(), key: `field_${section.fields.length + 1}`, label: "New field", type: "short_text", required: false })} />
         </fieldset>)}
-        <AddButton label="Add Form section" onClick={() => client.appendAtPath(["coreDesign", "forms", formIndex, "sections"], { id: identifier(), title: "New section", fields: [] })} />
+        <AddButton label="Add Form section" disabled={form.contractId !== undefined && form.sections.length >= FORM_LIMITS.sections} onClick={() => client.appendAtPath(["coreDesign", "forms", formIndex, "sections"], { id: identifier(), title: "New section", fields: [] })} />
         <fieldset className="form-preview"><legend>Form preview</legend><div className="preview-controls">
           <label htmlFor={`preview-size-${form.id}`}>Viewport<select id={`preview-size-${form.id}`} value={previewSize} onChange={(event) => setPreviewSize(event.target.value as typeof previewSize)}><option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select></label>
           <label htmlFor={`preview-mode-${form.id}`}>Mode<select id={`preview-mode-${form.id}`} value={previewMode} onChange={(event) => setPreviewMode(event.target.value as typeof previewMode)}><option value="entry">Data entry</option><option value="read_only">Read-only review</option><option value="completed">Completed Artifact</option></select></label>
-        </div><div className={`form-preview-canvas preview-${previewSize}`} aria-label={`${form.name} ${previewSize} ${previewMode.replaceAll("_", " ")} preview`}><h3>{form.name}</h3>{form.sections.map((section) => <section key={section.id}><h4>{section.title}</h4>{section.description === undefined ? null : <p>{section.description}</p>}{section.fields.map((field) => <label className="field" key={field.id}>{field.label}{field.required === true ? " (required)" : ""}{field.type === "long_text" ? <textarea rows={3} disabled={previewMode !== "entry" || field.readOnly === true} defaultValue={previewMode === "completed" ? String(field.defaultValue ?? "Example response") : String(field.defaultValue ?? "")} /> : field.type === "single_select" || field.type === "multi_select" ? <select disabled={previewMode !== "entry" || field.readOnly === true} multiple={field.type === "multi_select"}>{(field.options ?? []).map((option) => <option key={option.value}>{option.label}</option>)}</select> : <input type={field.type === "number" ? "number" : "text"} disabled={previewMode !== "entry" || field.readOnly === true} defaultValue={previewMode === "completed" ? String(field.defaultValue ?? "Example response") : String(field.defaultValue ?? "")} />}{field.helpText === undefined ? null : <span className="hint">{field.helpText}</span>}</label>)}</section>)}</div></fieldset>
+        </div><div className={`form-preview-canvas preview-${previewSize}`} aria-label={`${form.name} ${previewSize} ${previewMode.replaceAll("_", " ")} preview`}><h3>{form.name}</h3>{form.sections.map((section) => <section key={section.id}><h4>{section.title}</h4>{section.description === undefined ? null : <p>{section.description}</p>}{section.fields.map((field) => <label className="field" key={field.id}>{field.label}{field.required === true ? " (required)" : ""}{field.computation ? <output>Calculated when inputs are provided</output> : field.type === "long_text" || field.type === "formatted_text" ? <textarea rows={3} disabled={previewMode !== "entry" || field.readOnly === true} defaultValue={previewMode === "completed" ? String(field.defaultValue ?? "Example response") : String(field.defaultValue ?? "")} /> : field.type === "yes_no" ? <select disabled={previewMode !== "entry" || field.readOnly === true}><option value="">Select an answer</option><option>Yes</option><option>No</option></select> : field.type === "single_select" || field.type === "multi_select" || field.type === "entity_reference" ? <select disabled={previewMode !== "entry" || field.readOnly === true} multiple={field.type === "multi_select"}>{(field.options ?? []).map((option) => <option key={option.value}>{option.label}</option>)}</select> : <input type={numericField(field.type) ? "number" : field.type === "date" || field.type === "time" ? field.type : field.type === "date_time" ? "datetime-local" : "text"} disabled={previewMode !== "entry" || field.readOnly === true} defaultValue={previewMode === "completed" ? String(field.defaultValue ?? "Example response") : String(field.defaultValue ?? "")} />}{field.helpText === undefined ? null : <span className="hint">{field.helpText}</span>}</label>)}</section>)}</div></fieldset>
       </div></details>;
     })}</div>
     <AddButton label="Add Form and Artifact Type" disabled={workflows.length === 0 || policies.length === 0 || roles.length === 0} onClick={addFormAndArtifact} />
@@ -526,7 +626,7 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
       <SelectField id={`channel-policy-${channel.id}`} label="Information Policy" value={channel.informationPolicyId ?? ""} options={policies.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "messageChannels", index, "informationPolicyId"]} client={client} />
       <SelectField id={`channel-artifact-${channel.id}`} label="Structured Artifact Type (optional)" value={channel.structuredArtifactTypeId ?? ""} options={[{ value: "", label: "Free text" }, ...artifacts.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "communications", "messageChannels", index, "structuredArtifactTypeId"]} client={client} emptyDeletes />
       <TextField id={`channel-retention-${channel.id}`} label="Retention policy reference" value={channel.retentionPolicyId ?? ""} path={["coreDesign", "communications", "messageChannels", index, "retentionPolicyId"]} client={client} emptyDeletes />
-      <MultiCheck legend="Active Stages (none means all)" values={channel.activeStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "messageChannels", index, "activeStageIds"]} client={client} />
+      <MultiCheck legend="Active Stages (none means all)" values={channel.activeStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "communications", "messageChannels", index, "activeStageIds"]} client={client} />
       <CheckField id={`channel-attachments-${channel.id}`} label="Allow governed attachments" checked={channel.supportsAttachments} path={["coreDesign", "communications", "messageChannels", index, "supportsAttachments"]} client={client} />
       <CheckField id={`channel-threading-${channel.id}`} label="Thread messages" checked={channel.supportsThreading} path={["coreDesign", "communications", "messageChannels", index, "supportsThreading"]} client={client} />
       <CheckField id={`channel-approval-${channel.id}`} label="Approval required" checked={channel.approvalRequired === true} path={["coreDesign", "communications", "messageChannels", index, "approvalRequired"]} client={client} />
@@ -547,7 +647,7 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
         <MultiCheck legend="Recipient Session Roles" values={route.recipient.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "routes", index, "recipient", "sessionRoleIds"]} client={client} />
         <MultiCheck legend="Recipient Teams" values={route.recipient.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "routes", index, "recipient", "teamIds"]} client={client} />
         <CheckField id={`route-recipient-public-${route.id}`} label="Public recipient" checked={route.recipient.public === true} path={["coreDesign", "communications", "routes", index, "recipient", "public"]} client={client} />
-        <MultiCheck legend="Active Stages (none means all)" values={route.activeStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "routes", index, "activeStageIds"]} client={client} />
+        <MultiCheck legend="Active Stages (none means all)" values={route.activeStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "communications", "routes", index, "activeStageIds"]} client={client} />
         <p className="rule-sentence">{routeLabel(route)}{policy === undefined ? ". Information Policy is missing." : ` under ${policy.name} (${policy.classification ?? "internal"}).`}</p>
         {leakage && <p className="status-error" role="alert">A non-public Information Policy cannot use a public recipient. Publication remains blocked.</p>}
         <ItemActions path={["coreDesign", "communications", "routes"]} index={index} count={routes.length} client={client} label="Communication Route" />
@@ -567,7 +667,7 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
   const artifacts = coreArray(core, "artifactTypes");
   const variables = coreArray(core, "stateVariables");
   return <Workspace id="injects" title="Injects" intro="Author release logic, recipients, required responses, dependencies, and operator notes; the timeline previews pacing without changing Runtime state.">
-    <div className="inject-timeline" aria-label="Inject timeline"><h3>Timeline preview</h3>{stages.map((stage) => <section key={stage.id}><h4>{stage.name}</h4><ul>{injects.filter((inject) => inject.stageId === stage.id).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section>)}<section><h4>Manual or unassigned</h4><ul>{injects.filter((inject) => inject.stageId === undefined).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section></div>
+    <div className="inject-timeline" aria-label="Inject timeline"><h3>Timeline preview</h3>{stages.map((stage) => <section key={stage.id}><h4>{stageChoiceLabel(core, stage.id)}</h4><ul>{injects.filter((inject) => inject.stageId === stage.id).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section>)}<section><h4>Manual or unassigned</h4><ul>{injects.filter((inject) => inject.stageId === undefined).map((inject) => <li key={inject.id}>{inject.title} — {inject.releaseMode.replaceAll("_", " ")}</li>)}</ul></section></div>
     <div className="editor-list">{injects.map((inject, index) => <details className="editor-item" id={`injects-${inject.id}`} key={inject.id}><summary><span>{inject.title}</span><span className="badge badge-muted">{inject.releaseMode.replaceAll("_", " ")}</span></summary><div className="item-body grid-fields">
       <TextField id={`inject-title-${inject.id}`} label="Inject title" value={inject.title} path={["scenario", "injects", index, "title"]} client={client} />
       <TextField id={`inject-sender-${inject.id}`} label="Sender identity" value={inject.senderIdentity ?? ""} path={["scenario", "injects", index, "senderIdentity"]} client={client} emptyDeletes />
@@ -584,8 +684,9 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
           if (mode === "gate" && variables[0] !== undefined) client.setAtPath(["scenario", "injects", index, "releaseGate"], { operator: "all", conditions: [{ fact: `state.${variables[0].id}`, operator: "equals", value: "" }] });
         });
       }}><option value="manual">Manual</option><option value="scheduled">Scheduled</option><option value="stage_entry">Stage entry</option><option value="stage_exit">Stage exit</option><option value="gate">Conditional Gate</option></select></div>
-      {(inject.releaseMode === "stage_entry" || inject.releaseMode === "stage_exit") && <SelectField id={`inject-stage-${inject.id}`} label="Stage" value={inject.stageId ?? ""} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["scenario", "injects", index, "stageId"]} client={client} />}
-      {inject.releaseMode === "scheduled" && <TextField id={`inject-offset-${inject.id}`} label="Scheduled offset in seconds" value={inject.scheduledOffsetSeconds ?? 0} type="number" path={["scenario", "injects", index, "scheduledOffsetSeconds"]} client={client} />}
+      {(inject.releaseMode === "stage_entry" || inject.releaseMode === "stage_exit") && <SelectField id={`inject-stage-${inject.id}`} label="Stage" value={inject.stageId ?? ""} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["scenario", "injects", index, "stageId"]} client={client} />}
+      {inject.releaseMode === "scheduled" && <div><TextField id={`inject-offset-${inject.id}`} label="Scheduled offset in seconds" value={inject.scheduledOffsetSeconds ?? 0} type="number" path={["scenario", "injects", index, "scheduledOffsetSeconds"]} client={client} />
+        <p className="hint">Seconds after the Session starts, measured by server UTC time. Pausing holds delivery until the Session resumes. An Operator can reschedule an unreleased Inject.</p></div>}
       {inject.releaseMode === "gate" && variables.length === 0 && <p className="status-error">Add a State Variable before configuring this conditional Inject.</p>}
       {inject.releaseMode === "gate" && variables[0] !== undefined && <><div className="field"><label htmlFor={`inject-gate-variable-${inject.id}`}>State Value</label><select id={`inject-gate-variable-${inject.id}`} value={(inject.releaseGate?.conditions[0] as { fact?: string } | undefined)?.fact?.replace(/^state\./u, "") ?? variables[0].id} onChange={(event) => client.setAtPath(["scenario", "injects", index, "releaseGate", "conditions", 0, "fact"], `state.${event.target.value}`)}>{variables.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></div>
         <p className="hint">State Value references are stored as <code>state.&lt;id&gt;</code>; validation will focus any incomplete Gate.</p></>}
@@ -593,14 +694,22 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
       <MultiCheck legend="Recipient Teams" values={inject.recipients.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["scenario", "injects", index, "recipients", "teamIds"]} client={client} />
       <CheckField id={`inject-public-${inject.id}`} label="Public recipients" checked={inject.recipients.public === true} path={["scenario", "injects", index, "recipients", "public"]} client={client} />
       <CheckField id={`inject-control-${inject.id}`} label="Include control roles" checked={inject.recipients.includeControlRoles === true} path={["scenario", "injects", index, "recipients", "includeControlRoles"]} client={client} />
+      <div className="field"><label htmlFor={`inject-acknowledgement-${inject.id}`}>Acknowledgement requirement</label>
+        <select id={`inject-acknowledgement-${inject.id}`} value={inject.completionRequirements === undefined ? "legacy" : String(inject.completionRequirements.acknowledgementRequired)}
+          onChange={(event) => event.target.value === "legacy" ? client.deleteAtPath(["scenario", "injects", index, "completionRequirements"])
+            : client.setAtPath(["scenario", "injects", index, "completionRequirements"], { contractId: "inject-completion-v1", acknowledgementRequired: event.target.value === "true" })}>
+          {inject.completionRequirements === undefined && <option value="legacy">Historical rules: acknowledgement required</option>}
+          <option value="true">Required from every recipient</option><option value="false">No acknowledgement required</option>
+        </select></div>
+      <p className="hint">Configured Injects close when every recipient completes the required steps. With no acknowledgement or response required, release completes the Inject. Each recipient's progress is tracked separately.</p>
       <SelectField id={`inject-response-${inject.id}`} label="Required response Artifact Type" value={inject.requiredResponseArtifactTypeId ?? ""} options={[{ value: "", label: "No required response" }, ...artifacts.map(({ id, name }) => ({ value: id, label: name }))]} path={["scenario", "injects", index, "requiredResponseArtifactTypeId"]} client={client} emptyDeletes />
       {inject.requiredResponseArtifactTypeId !== undefined && <TextField id={`inject-deadline-${inject.id}`} label="Response deadline in seconds" value={inject.responseDeadlineSeconds ?? 0} type="number" path={["scenario", "injects", index, "responseDeadlineSeconds"]} client={client} />}
       <MultiCheck legend="Follow-on Injects" values={inject.followOnInjectIds ?? []} options={injects.filter(({ id }) => id !== inject.id).map(({ id, title }) => ({ value: id, label: title }))} path={["scenario", "injects", index, "followOnInjectIds"]} client={client} />
       <SelectField id={`inject-control-notes-${inject.id}`} label="Control notes content" value={inject.controlNotesContentId ?? ""} options={[{ value: "", label: "No control notes" }, ...content.map(({ id, title }) => ({ value: id, label: title }))]} path={["scenario", "injects", index, "controlNotesContentId"]} client={client} emptyDeletes />
-      <p className="rule-sentence">Release “{inject.title}” {inject.releaseMode.replaceAll("_", " ")}{inject.stageId === undefined ? "" : ` at ${stages.find(({ id }) => id === inject.stageId)?.name ?? "a missing Stage"}`} to {inject.recipients.public === true ? "the public audience" : `${(inject.recipients.sessionRoleIds?.length ?? 0) + (inject.recipients.teamIds?.length ?? 0)} selected recipient groups`}.</p>
+      <p className="rule-sentence">Release “{inject.title}” {inject.releaseMode.replaceAll("_", " ")}{inject.stageId === undefined ? "" : ` at ${stageChoiceLabel(core, inject.stageId)}`} to {inject.recipients.public === true ? "the public audience" : `${(inject.recipients.sessionRoleIds?.length ?? 0) + (inject.recipients.teamIds?.length ?? 0)} selected recipient groups`}.</p>
       <ItemActions path={["scenario", "injects"]} index={index} count={injects.length} client={client} label={inject.title} />
     </div></details>)}</div>
-    <AddButton label="Add Inject" disabled={content.length === 0 || roles.length === 0} onClick={() => client.appendAtPath(["scenario", "injects"], { id: identifier(), title: "New Inject", contentId: content[0]?.id ?? "", senderIdentity: "Control", recipients: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, releaseMode: "manual", effects: [], followOnInjectIds: [] })} />
+    <AddButton label="Add Inject" disabled={content.length === 0 || roles.length === 0} onClick={() => client.appendAtPath(["scenario", "injects"], { id: identifier(), title: "New Inject", completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired: true }, contentId: content[0]?.id ?? "", senderIdentity: "Control", recipients: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, releaseMode: "manual", effects: [], followOnInjectIds: [] })} />
     {(content.length === 0 || roles.length === 0) && <p className="hint">Add Scenario content and a Session Role before creating an Inject.</p>}
   </Workspace>;
 }
@@ -795,7 +904,7 @@ function InterfaceEditor({ projectId, core, client }: { projectId: string; core:
       <SelectField id={`interface-layout-${profile.id}`} label="Layout template" value={profile.layout.template} options={["single_column", "main_sidebar", "dashboard", "workspace"].map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "template"]} client={client} />
       <MultiCheck legend="Session Roles" values={profile.selectors.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "sessionRoleIds"]} client={client} />
       <MultiCheck legend="Teams (none means all)" values={profile.selectors.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "teamIds"]} client={client} />
-      <MultiCheck legend="Visible Stages (none means all)" values={profile.selectors.stageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "selectors", "stageIds"]} client={client} />
+      <MultiCheck legend="Visible Stages (none means all)" values={profile.selectors.stageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "interfaces", index, "selectors", "stageIds"]} client={client} />
       {profile.layout.regions.map((region, regionIndex) => <fieldset className="nested-editor" key={region.id}><legend>Region {regionIndex + 1}</legend>
         {region.modules.map((module, moduleIndex) => <div className="field-row" key={module.id}>
           <TextField id={`module-title-${module.id}`} label="Module title" value={module.title ?? ""} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "title"]} client={client} />
@@ -814,31 +923,26 @@ function InterfaceEditor({ projectId, core, client }: { projectId: string; core:
   </Workspace>;
 }
 
-function MethodologyEditor({ core, client }: { core: CoreDesignV1; client: StudioCollaborationClient }) {
-  const concepts = coreArray(core, "methodologyConcepts");
-  const authoredCounts: Record<string, number> = {
-    team: coreArray(core, "teams").length, stage: coreArray(core, "stages").length,
-    session_role: coreArray(core, "sessionRoles").length, seat: coreArray(core, "seats").length,
-    artifact_type: coreArray(core, "artifactTypes").length, workflow_definition: coreArray(core, "workflows").length,
-    information_policy: coreArray(core, "informationPolicies").length, decision_record: coreArray(core, "decisionTraceability").length,
-    research_question: coreArray(core, "researchQuestions").length
-  };
+function MethodologyEditor({ core, scenario, client }: { core: CoreDesignV1; scenario: ScenarioV1; client: StudioCollaborationClient }) {
+  const concepts = methodologyControls(core);
   const changeConcept = (index: number, enabled: boolean) => {
-    const concept = concepts[index];
-    if (concept === undefined || enabled) return client.setAtPath(["coreDesign", "methodologyConcepts", index, "enabled"], enabled);
-    const dependents = concepts.filter((candidate) => candidate.enabled && candidate.dependsOn.includes(concept.key)).map(({ label }) => label);
-    const authored = authoredCounts[concept.key] ?? 0;
-    const impact = [...dependents.map((label) => `${label} depends on it`), ...(authored === 0 ? [] : [`${authored} authored item${authored === 1 ? "" : "s"} remain`])];
-    if (impact.length === 0 || confirm(`Disable ${concept.label}? ${impact.join("; ")}. Publication will remain blocked until dependencies are resolved.`)) {
-      client.setAtPath(["coreDesign", "methodologyConcepts", index, "enabled"], false);
-    }
+    if (METHODOLOGY_CONCEPT_REGISTRY[index]?.mandatory) return;
+    client.transact(() => {
+      client.setAtPath(["coreDesign", "methodologyContractId"], METHODOLOGY_CONTRACT_ID);
+      const authoredIndex = coreArray(core, "methodologyConcepts").findIndex(({ key }) => key === concepts[index]?.key);
+      if (authoredIndex >= 0) client.setAtPath(["coreDesign", "methodologyConcepts", authoredIndex, "enabled"], enabled);
+      else client.setAtPath(["coreDesign", "methodologyConcepts"], concepts.map((concept, position) => position === index ? { ...concept, enabled } : concept));
+    });
   };
-  return <Workspace id="methodology" title="Methodology" intro="These optional controls are a visible proposal pending OPEN-004. Disabled concepts retain authored content, and unresolved dependencies block Publication.">
-    {concepts.length === 0 ? <AddButton label="Add methodology controls" onClick={() => client.setAtPath(["coreDesign", "methodologyConcepts"], METHODOLOGY_CONCEPTS)} /> :
-      <div className="concept-grid">{concepts.map((concept, index) => <div className="concept-row" key={concept.key}>
-        <label className="choice" htmlFor={`concept-${concept.key}`}><input id={`concept-${concept.key}`} type="checkbox" checked={concept.enabled} onChange={(event) => changeConcept(index, event.target.checked)} />{concept.label}</label>
-        <span>{concept.dependsOn.length === 0 ? "No dependencies" : `Depends on ${concept.dependsOn.join(", ")}`}</span>
-      </div>)}</div>}
+  const issues = validateMethodologyConcepts({ coreDesign: core, scenario });
+  return <Workspace id="methodology" title="Methodology" intro="Choose the mechanics this simulation uses. Disabled content stays in your Draft. Resolve references from enabled elements before publishing.">
+    <div className="concept-grid">{concepts.map((concept, index) => <div className="concept-row" key={concept.key}>
+      <label className="choice" htmlFor={`concept-${concept.key}`}><input id={`concept-${concept.key}`} type="checkbox" checked={concept.enabled}
+        disabled={METHODOLOGY_CONCEPT_REGISTRY[index]?.mandatory} aria-describedby={`concept-help-${concept.key}`}
+        onChange={(event) => changeConcept(index, event.target.checked)} />{concept.label}</label>
+      <span id={`concept-help-${concept.key}`}>{METHODOLOGY_CONCEPT_REGISTRY[index]?.mandatory ? "Required foundation" : concept.enabled ? "Enabled for the next Release" : "Disabled; authored content retained"}</span>
+    </div>)}</div>
+    <p role="status">{issues.length === 0 ? "No concept dependencies are blocking publication." : `${issues.length} concept issue${issues.length === 1 ? " needs" : "s need"} attention. Open Draft checks to locate each affected element.`}</p>
   </Workspace>;
 }
 
@@ -1143,7 +1247,7 @@ function RolePreview({ projectId, core }: { projectId: string; core: CoreDesignV
     <div className="actions"><a className="btn-primary link-button" href={`/projects/${projectId}/demo`}>Open full QA demo</a></div>
     <div className="preview-controls">
       <label>Session Role<select value={sessionRoleId} onChange={(event) => setSessionRoleId(event.target.value)}>{roles.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
-      <label>Stage<select value={stageId} onChange={(event) => setStageId(event.target.value)}>{stages.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
+      <label>Stage<select value={stageId} onChange={(event) => setStageId(event.target.value)}>{stages.map(({ id }) => <option key={id} value={id}>{stageChoiceLabel(core, id)}</option>)}</select></label>
       <label>Team<select value={teamId} onChange={(event) => setTeamId(event.target.value)}><option value="">No Team</option>{eligibleTeams.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></label>
       <button className="btn-primary" type="button" disabled={sessionRoleId === "" || stageId === ""} onClick={() => void load()}>Preview interface</button>
     </div><p aria-live="polite">{message}</p>
@@ -1214,13 +1318,13 @@ export function VisualCoreDesignEditor({ projectId, client, core, scenario, insp
 
   const workspaces: readonly (readonly [EditorSectionId, React.ReactNode])[] = [
     ["overview", <ScenarioEditor projectId={projectId} core={core} scenario={scenario} client={client} />],
-    ["methodology", <MethodologyEditor core={core} client={client} />],
+    ["methodology", <MethodologyEditor core={core} scenario={scenario} client={client} />],
     ["teams", <TeamEditor core={core} client={client} />],
     ["roles", <RoleEditor core={core} client={client} />],
     ["seats", <SeatEditor core={core} client={client} />],
     ["activities", <ActivityEditor core={core} client={client} />],
     ["stages", <StageEditor core={core} client={client} />],
-    ["forms", <FormsEditor core={core} client={client} />],
+    ["forms", <FormsEditor projectId={projectId} core={core} client={client} />],
     ["workflows", <WorkflowEditor core={core} client={client} />],
     ["policies", <PolicyEditor core={core} client={client} />],
     ["communications", <CommunicationsEditor core={core} client={client} />],

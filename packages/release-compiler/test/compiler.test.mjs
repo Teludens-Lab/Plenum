@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { canonicalizeJson } from "../../event-contracts/dist/index.js";
+import { METHODOLOGY_CONTRACT_ID } from "../../simulation-schema/dist/index.js";
 
 import {
   classifyReleaseCompatibility,
@@ -74,6 +77,29 @@ const input = {
   validationReportId: "60000000-0000-4000-8000-000000000001"
 };
 
+test("PS-830-T03 compiled execution excludes inactive authored definitions and retains historical packages", async () => {
+  const original = JSON.parse(await readFile(new URL("../../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"));
+  const oldBytes = new TextEncoder().encode(JSON.stringify(original));
+  // The versioned historical fixture remains untouched and compiles with its original compiler contract.
+  const old = compileRelease({ ...input, materialization: { coreDesign: original.coreDesign, scenario: original.scenario } });
+  assert.equal(old.release.manifest.compilerVersion, "0.1.0");
+  assert.equal(verifyReleasePackage(old.bytes, old.packageDigest).contentDigest, old.contentDigest);
+  const draft = { ...structuredClone(input), materialization: { coreDesign: structuredClone(original.coreDesign), scenario: structuredClone(original.scenario) } };
+  draft.materialization.coreDesign.methodologyContractId = METHODOLOGY_CONTRACT_ID;
+  draft.materialization.coreDesign.adjudicationModels[0].output = { outcomeCategories: ["accepted", "returned"], rationaleRequired: true,
+    confidenceRequired: false, stateEffects: [], followOnInjectIds: [] };
+  draft.materialization.coreDesign.methodologyConcepts = [{ key: "poll", label: "Ballot", enabled: false, dependsOn: [] }];
+  draft.materialization.coreDesign.polls = [{ id: "retained-poll", question: "Retained in the Draft" }];
+  const compiled = compileRelease(draft);
+  assert.equal(compiled.release.manifest.compilerVersion, "0.2.0");
+  assert.deepEqual(compiled.release.coreDesign.polls, []);
+  assert.equal(draft.materialization.coreDesign.polls.length, 1);
+  assert.deepEqual(verifyReleasePackage(compiled.bytes, compiled.packageDigest).release.coreDesign.polls, []);
+  draft.materialization.coreDesign.methodologyConcepts.push({ key: "evidence", label: "Optional", enabled: false, dependsOn: [] });
+  assert.throws(() => compileRelease(draft), /mandatory foundation/u);
+  assert.deepEqual(new TextEncoder().encode(JSON.stringify(original)), oldBytes);
+});
+
 test("AC-02/AC-06 PS-130-T01 compiles deterministic canonical Release bytes", () => {
   const first = compileRelease(input);
   const reordered = compileRelease({
@@ -87,6 +113,23 @@ test("AC-02/AC-06 PS-130-T01 compiles deterministic canonical Release bytes", ()
   assert.deepEqual(first.bytes, reordered.bytes);
   assert.equal(first.packageDigest, reordered.packageDigest);
   assert.equal(verifyReleasePackage(first.bytes, first.packageDigest).release.manifest.releaseId, input.releaseId);
+});
+
+test("PS-830-T04 preserves the versioned Form contract in portable packages and rejects a legacy compiler pin", async () => {
+  const original = JSON.parse(await readFile(new URL("../../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"));
+  const fixture = JSON.parse(await readFile(new URL("../../../tests/platform/fixtures/structured-form-v2.json", import.meta.url), "utf8"));
+  for (const section of fixture.form.sections) for (const field of section.fields) delete field.editableBySessionRoleIds;
+  original.coreDesign.forms.push(fixture.form);
+  original.coreDesign.artifactTypes.push({ ...original.coreDesign.artifactTypes[0], id: "83000000-0000-4000-8000-000000000007",
+    key: "bounded", name: "Bounded record", formId: fixture.form.id });
+  const compiled = compileRelease({ ...input, materialization: { coreDesign: original.coreDesign, scenario: original.scenario } });
+  assert.equal(compiled.release.manifest.compilerVersion, "0.2.0");
+  assert.deepEqual(verifyReleasePackage(compiled.bytes, compiled.packageDigest).release.coreDesign.forms.at(-1), fixture.form);
+  const wrongPin = JSON.parse(new TextDecoder().decode(compiled.bytes));
+  wrongPin.manifest.compilerVersion = "0.1.0";
+  wrongPin.manifestDigest = createHash("sha256").update(canonicalizeJson(wrongPin.manifest)).digest("hex");
+  const bytes = new TextEncoder().encode(canonicalizeJson(wrongPin));
+  assert.throws(() => verifyReleasePackage(bytes, createHash("sha256").update(bytes).digest("hex")), /Structured Forms require compiler 0.2.0/u);
 });
 
 test("PS-130-T02 rejects tampering, secrets, Participant data and unpinned dependencies", () => {

@@ -3,7 +3,7 @@ import type { CoreDesignV1, RuntimePollDefinitionV1 } from "@plenum/simulation-s
 
 import { StudioCollaborationClient } from "../collaboration/client.js";
 import { AddButton, CheckField, ItemActions, MultiCheck, SelectField, TextField, Workspace } from "../core-design/Editor.js";
-import { basicPoll, coreArray, identifier } from "../core-design/model.js";
+import { basicPoll, coreArray, identifier, stageChoiceLabel } from "../core-design/model.js";
 
 const words = (value: string) => value.replaceAll("_", " ");
 
@@ -99,8 +99,8 @@ export function PollEditor({ core, client }: { core: CoreDesignV1; client: Studi
 
           <SelectField id={`poll-open-${poll.id}`} label="Open trigger" value={poll.openTrigger.mode} options={["manual", "scheduled", "stage_entry"].map((value) => ({ value, label: words(value) }))} path={[...base, "openTrigger", "mode"]} client={client} />
           <SelectField id={`poll-close-${poll.id}`} label="Close trigger" value={poll.closeTrigger.mode} options={["manual", "scheduled", "stage_exit"].map((value) => ({ value, label: words(value) }))} path={[...base, "closeTrigger", "mode"]} client={client} />
-          {poll.openTrigger.mode === "stage_entry" && <SelectField id={`poll-open-stage-${poll.id}`} label="Open at Stage" value={poll.openTrigger.stageId ?? ""} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={[...base, "openTrigger", "stageId"]} client={client} />}
-          {poll.closeTrigger.mode === "stage_exit" && <SelectField id={`poll-close-stage-${poll.id}`} label="Close after Stage" value={poll.closeTrigger.stageId ?? ""} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={[...base, "closeTrigger", "stageId"]} client={client} />}
+          {poll.openTrigger.mode === "stage_entry" && <SelectField id={`poll-open-stage-${poll.id}`} label="Open at Stage" value={poll.openTrigger.stageId ?? ""} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={[...base, "openTrigger", "stageId"]} client={client} />}
+          {poll.closeTrigger.mode === "stage_exit" && <SelectField id={`poll-close-stage-${poll.id}`} label="Close after Stage" value={poll.closeTrigger.stageId ?? ""} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={[...base, "closeTrigger", "stageId"]} client={client} />}
           {poll.openTrigger.mode === "scheduled" && <TextField id={`poll-open-offset-${poll.id}`} label="Open offset from Session start (seconds)" type="number" value={poll.openTrigger.offsetSeconds ?? 0} path={[...base, "openTrigger", "offsetSeconds"]} client={client} />}
           {poll.closeTrigger.mode === "scheduled" && <TextField id={`poll-close-offset-${poll.id}`} label="Close offset from Session start (seconds)" type="number" value={poll.closeTrigger.offsetSeconds ?? 0} path={[...base, "closeTrigger", "offsetSeconds"]} client={client} />}
           <TextField id={`poll-grace-${poll.id}`} label="Deadline grace (seconds)" type="number" value={poll.deadlinePolicy.graceSeconds} path={[...base, "deadlinePolicy", "graceSeconds"]} client={client} />

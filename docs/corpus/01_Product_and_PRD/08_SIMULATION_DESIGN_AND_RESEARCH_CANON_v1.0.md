@@ -6,11 +6,11 @@
 |---|---|
 | Document ID | CANON |
 | Number | 08 |
-| Version | 1.0.2 |
-| Date | 2026-10-19 |
-| Status | Draft — reconstructed (DEC-22, Assumed). OPEN-026 is resolved; formal corpus ratification remains governed by OPEN-001. |
+| Version | 1.0.3 |
+| Date | 2026-11-08 |
+| Status | Approved reconstructed Canon; DEC-22 confirmed 2026-11-08. Decision Register governs status; implementation and release evidence remain separate. |
 | Owner | Methodology Lead |
-| Approvers | Methodology Lead; Product Owner (role placeholders — OPEN-001) |
+| Approvers | Sethu Nguna as Methodology Lead and Product Owner (resolved OPEN-001) |
 | Reads from | 01 PRD; Decision Register; Glossary |
 | Read by | 02 Platform; 03 Schema; 04 Studio; 05 Runtime; 06 Data, Security and Reporting |
 | Authority | Defines the methodological concepts, design obligations, adjudication and control doctrine, and research and analytical rules that the platform must support. |
@@ -33,32 +33,35 @@ Platform mechanisms live in 02–06 and 09. When a mechanism and this Canon disa
 
 ## 2. Methodology Concepts
 
-DEC-01 requires that fundamental concepts are preserved and that individual concepts can be disabled under dependency rules. The classification below is a **proposal** pending OPEN-004.
+Concept activation is governed by DEC-01 and resolved OPEN-004 (Decision Register §7.1). The following registry describes the consequences for design validation; the Register owns the approved classification and dependency rules.
 
 ### 2.1 Concept registry
 
-| Concept | Purpose | Proposed activation | Depends on |
+| Concept | Purpose | Activation / validation consequence | Depends on |
 |---|---|---|---|
 | Stage | Structures simulation time and progression (DEC-33). | Always enabled | — |
 | Session Role | Assigns responsibility and capability. | Always enabled | — |
 | Seat | Binds Participants to Session Roles. | Always enabled | Session Role |
-| Artifact Type | Structured records Participants create. | Always enabled | Form; Workflow Definition |
-| Workflow Definition | Lifecycle of Artifacts. | Always enabled | Session Role |
+| Form | Defines structured submission fields under OPEN-010. | Required when an Artifact Type is used | Enabled concepts actually referenced by fields |
+| Artifact Type | Structured records Participants create. | Required when Participants create Artifacts | Form; Workflow Definition; Information Policy |
+| Workflow Definition | Lifecycle of Artifacts. | Required for enabled Artifact Types | Session Role |
 | Information Policy | Who may see what, and when (DEC-10). | Always enabled | Session Role |
 | Evidence | Institutional record of activity (DEC-20). | Always enabled | — |
 | Team | Groups Participants with shared objectives and resources. | Optional | Seat |
-| Decision Record | Committed choices with traceability (§4). | Optional, enabled by default | Artifact Type |
+| Decision Record | Committed choices with traceability (§4). | Optional; template selects its default | Artifact Type |
 | Inject | Designed release of information (DEC-34). | Optional | Information Policy |
 | Communication | Channels and routes between actors. | Optional | Information Policy |
 | State Variable | Quantified world state. | Optional | — |
-| Capability | Instruments actors can use and lose. | Optional | State Variable or Resource |
+| Capability | Instruments actors can use and lose. | Optional | Resource when resource-consuming; other dependencies follow actual references |
 | Resource | Consumable or allocatable assets. | Optional | — |
 | Objective | Goals for teams, roles or the Session. | Optional | — |
-| Adjudication Model | Resolution of Decision Records (§8). | Optional | Decision Record |
+| Adjudication Model | Resolution of Decision Records (§8). | Optional | Decision Record; declared resolution/output contract |
 | Effect | Consequences applied by Outcomes or Injects. | Optional | State Variable, Capability, Resource or Inject |
-| Control Intervention | Bounded operator action outside normal flow (§7). | Always enabled | Session Role |
+| Control Intervention | Bounded operator action outside normal flow (§7). | Special interventions optional; basic authorized Session administration remains available | Session Role |
 | Research Question | Why the simulation exists analytically (§5). | Optional, required when research exports are enabled | — |
-| Measurement Definition | Versioned metrics (§10.2). | Optional | Research Question |
+| Measurement Definition | Versioned metrics (§10.2). | Required and linked when research exports are enabled | Research Question |
+| Orientation | Release-configured readiness requirements. | Optional | Enabled forms, roles and gates actually referenced |
+| Voice and Polls | Core platform capabilities selected per simulation. | Optional per simulation | Applicable information, recipient and permission contracts |
 
 ### 2.2 Dependency rule
 
@@ -80,7 +83,7 @@ OPEN-026 establishes the boundary: the platform supplies reusable Orientation/co
 
 ## 4. Decision-centric design
 
-A **Decision Record** is an Artifact of a decision-bearing type (DEC-35). An **Action** is one executable component of a Decision Record.
+Decision Record and Action cardinality follow DEC-63 and resolved OPEN-018. The traceability matrix below applies to the single Action within each Decision Record; an adjudication may link multiple records.
 
 The Runtime must preserve, for every Decision Record:
 
@@ -94,12 +97,12 @@ The Runtime must preserve, for every Decision Record:
 | Constraints | Stated limits that applied. |
 | Confidence | Authors' stated confidence. |
 | Timing | Draft start, submission and approval times in simulation and wall-clock time. |
-| Actions | The executable components. |
+| Action | The single executable Action. |
 | Adjudication | The Adjudication Records that resolved it. |
 | Outcomes and Effects | What resulted. |
 | Measures | Measurement values computed from it. |
 
-The default decision lifecycle is in Glossary §7.4. Unresolved modeling questions — multiple Actions per decision, co-authorship rules, revision after submission, one adjudication over several Actions, delayed effects — are OPEN-018.
+The default decision lifecycle is in Glossary §7.4. Resolved OPEN-018 and DEC-63 govern Action cardinality, co-authorship, revisions, multi-record adjudication and delayed effects; implementations must demonstrate conformance.
 
 ## 5. Research and decision architecture
 
@@ -233,7 +236,7 @@ This table merges the Foundation's categories (methodology core, FO configuratio
 
 ## 13. Open methodology questions
 
-OPEN-004 (concept activation and dependencies) and OPEN-010 (form constraints) remain open. OPEN-005, the PS-400 baseline of OPEN-006, OPEN-008 and OPEN-018 are resolved.
+OPEN-004 and OPEN-010 were resolved on 2026-11-08. Their implementation and evidence obligations are tracked in Decision Register §7.5. OPEN-005, the PS-400 baseline of OPEN-006, OPEN-008 and OPEN-018 remain resolved; approval does not establish complete implementation.
 
 ## Change log
 
@@ -241,3 +244,4 @@ OPEN-004 (concept activation and dependencies) and OPEN-010 (form constraints) r
 |---|---|---|
 | 1.0.0 | 2026-10-17 | Reconstructed from Foundation §3, §5, §8; Studio §20–§22; Runtime §17, §19, §21–§23; Schema §24–§27 and v1.2 addendum; Data §20–§22; Roadmap §2. |
 | 1.0.1 | 2026-10-17 | Stated that section numbers in the 1.0.0 entry refer to the archived source documents. |
+| 1.0.3 | 2026-11-08 | Aligned concept registry with resolved OPEN-004, confirmed Canon status and DEC-63; distinguished approved targets from implementation evidence. |

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "dependencies": { "@plenum/simulation-schema": "0.1.0" },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

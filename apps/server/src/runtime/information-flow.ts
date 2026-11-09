@@ -10,6 +10,7 @@ import type {
   RuntimeProposalThreadProtocolV1,
   StateVariableDefinitionV1
 } from "@plenum/simulation-schema";
+import { injectCompletion } from "@plenum/simulation-schema";
 import type { PoolClient } from "pg";
 import { evaluateGate } from "@plenum/workflow-engine";
 
@@ -19,13 +20,16 @@ import type { CommandDecision, CommandExecutionContext, PrincipalCommandExecutio
 import { applyDueStateValueChanges, applyStateValueChange, initializeWorldState, readWorldStateFacts,
   scheduleStateValueChange } from "./state/world-state.js";
 
+type SessionScope = Pick<SessionAccessContextV1, "organizationId" | "sessionId">;
+type InjectCause = SessionScope & { principalId: string; participantId?: string; authorityEpoch: number };
+
 interface InformationRelease {
   coreDesign: {
     teams: Array<{ id: string; name: string }>;
     sessionRoles: Array<{ id: string; isControlRole?: boolean; capabilities?: Array<{ capability: string }> }>;
     seats: Array<{ id: string; sessionRoleIds: string[]; teamId?: string }>;
     stages: Array<{ id: string }>;
-    artifactTypes: Array<{ id: string; key: string; allowedTeamIds?: string[] }>;
+    artifactTypes: Array<{ id: string; key: string; informationPolicyId: string; allowedTeamIds?: string[] }>;
     informationPolicies: Array<{
       id: string;
       grants: Array<{ audience: RuntimeActorSelectorV1; fieldsExcluded?: string[] }>;
@@ -76,6 +80,7 @@ interface Recipient {
 
 interface InjectInstanceRow {
   id: string;
+  governing_release_id: string;
   inject_definition_id: string;
   state: string;
   version: string;
@@ -109,7 +114,7 @@ function json(value: unknown): JsonObject | undefined {
 
 async function readInformationRelease(
   client: PoolClient,
-  context: SessionAccessContextV1,
+  context: SessionScope,
   releaseId: string,
   correlationId: string
 ): Promise<InformationRelease> {
@@ -212,7 +217,7 @@ function policyContent(
 async function recipientsFor(
   client: PoolClient,
   release: InformationRelease,
-  context: SessionAccessContextV1,
+  context: SessionScope,
   selector: RuntimeActorSelectorV1
 ): Promise<Recipient[]> {
   const result = await client.query<{ participant_id: string; session_role_id: string; seat_id: string }>(
@@ -254,7 +259,7 @@ async function currentStageId(client: PoolClient, context: SessionAccessContextV
 
 async function addDeliveries(
   client: PoolClient,
-  context: SessionAccessContextV1,
+  context: SessionScope,
   recordType: "message" | "inject",
   recordId: string,
   recipients: readonly Recipient[]
@@ -646,7 +651,7 @@ async function executeMessageSend(input: CommandExecutionContext, release: Infor
 
 async function insertInjectRecipients(
   client: PoolClient,
-  context: SessionAccessContextV1,
+  context: SessionScope,
   instanceId: string,
   recipients: readonly Recipient[]
 ): Promise<void> {
@@ -663,27 +668,39 @@ async function insertInjectRecipients(
 
 async function releaseInject(
   client: PoolClient,
-  context: SessionAccessContextV1,
+  context: InjectCause,
   releaseId: string,
   release: InformationRelease,
   definition: RuntimeInjectDefinitionV1,
   instanceId: string,
-  commandId: string
-): Promise<boolean> {
+  commandId: string,
+  scheduledVersion?: number
+): Promise<number | undefined> {
   const selected = await recipientsFor(client, release, context, definition.recipients);
   const content = release.scenario.content.find(({ id }) => id === definition.contentId);
   const policy = release.coreDesign.informationPolicies.find(({ id }) => id === content?.informationPolicyId);
   const recipients = policy === undefined ? [] : selected.filter((recipient) => policy.grants.some(({ audience }) =>
     selectorAllows(audience, recipient.sessionRoleId, recipient)));
-  if (recipients.length === 0) throw new Error(`Inject ${definition.id} resolved no recipients`);
-  const inserted = await client.query(
+  if (recipients.length === 0) {
+    if (scheduledVersion !== undefined) return undefined;
+    throw new Error(`Inject ${definition.id} resolved no recipients`);
+  }
+  const state = injectCompletion(definition, { total: recipients.length, acknowledged: 0, responded: 0 }).state;
+  const inserted = scheduledVersion === undefined ? await client.query(
     `INSERT INTO runtime.inject_instances
-       (id,organization_id,session_id,governing_release_id,inject_definition_id,state,title,content_id,released_at,version)
-     VALUES ($1,$2,$3,$4,$5,'released',$6,$7,transaction_timestamp(),1)
+       (id,organization_id,session_id,governing_release_id,inject_definition_id,state,title,content_id,released_at,closed_at,version)
+     VALUES ($1,$2,$3,$4,$5,$8,$6,$7,transaction_timestamp(),CASE WHEN $8='closed' THEN transaction_timestamp() END,1)
      ON CONFLICT (session_id,inject_definition_id) DO NOTHING RETURNING id`,
-    [instanceId, context.organizationId, context.sessionId, releaseId, definition.id, definition.title, definition.contentId]
+    [instanceId, context.organizationId, context.sessionId, releaseId, definition.id, definition.title, definition.contentId,
+      state]
+  ) : await client.query(
+    `UPDATE runtime.inject_instances SET state=$1,released_at=transaction_timestamp(),
+       closed_at=CASE WHEN $1='closed' THEN transaction_timestamp() END,version=version+1
+      WHERE organization_id=$2 AND session_id=$3 AND id=$4 AND governing_release_id=$5
+        AND state='scheduled' AND version=$6 AND scheduled_at<=transaction_timestamp() RETURNING id`,
+    [state,context.organizationId,context.sessionId,instanceId,releaseId,scheduledVersion]
   );
-  if (inserted.rowCount !== 1) return false;
+  if (inserted.rowCount !== 1) return undefined;
   await insertInjectRecipients(client, context, instanceId, recipients);
   await initializeWorldState(client, {
     organizationId: context.organizationId, sessionId: context.sessionId, governingReleaseId: releaseId
@@ -700,17 +717,18 @@ async function releaseInject(
     if ((effect.delaySeconds ?? 0) > 0) await scheduleStateValueChange(client, worldContext, effect, effectIndex, source);
     else await applyStateValueChange(client, worldContext, effect, source, variable === undefined ? {} : { definition: variable });
   }
-  return true;
+  return scheduledVersion === undefined ? 1 : scheduledVersion + 1;
 }
 
-async function recordAutomaticInjectRelease(
+async function recordInjectEvent(
   client: PoolClient,
-  context: SessionAccessContextV1,
+  context: InjectCause,
   releaseId: string,
   commandId: string,
   instanceId: string,
   definitionId: string,
-  gateExplanations?: ReturnType<typeof evaluateGate>["explanations"]
+  options: { eventType?: "inject.released" | "inject.scheduled"; version?: number; automatic?: boolean;
+    scheduledAt?: string; gateExplanations?: ReturnType<typeof evaluateGate>["explanations"] } = {}
 ): Promise<void> {
   const sequence = await client.query<{ sequence: string }>(
     `UPDATE evidence.session_sequences SET next_sequence=next_sequence+1
@@ -724,16 +742,97 @@ async function recordAutomaticInjectRelease(
     `INSERT INTO evidence.events
        (id,organization_id,session_id,sequence,event_type,event_version,actor_person_id,actor_participant_id,
         governing_release_id,authority_epoch,body,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at)
-     VALUES ($1,$2,$3,$4,'inject.released',1,$5,$6,$7,$8,$9::jsonb,$10,$10,$11,1,transaction_timestamp())`,
-    [eventId, context.organizationId, context.sessionId, evidenceSequence, context.principalId, context.participantId,
+     VALUES ($1,$2,$3,$4,$12,1,$5,$6,$7,$8,$9::jsonb,$10,$10,$11,$13,transaction_timestamp())`,
+    [eventId, context.organizationId, context.sessionId, evidenceSequence,
+      options.automatic ? null : context.principalId, options.automatic ? null : context.participantId ?? null,
       releaseId, context.authorityEpoch, JSON.stringify({ injectInstanceId: instanceId, injectDefinitionId: definitionId,
-        ...(gateExplanations === undefined ? {} : { gateExplanations }) }),
-      commandId, instanceId]
+        ...(options.gateExplanations === undefined ? {} : { gateExplanations: options.gateExplanations }),
+        ...(options.scheduledAt === undefined ? {} : { scheduledAt: options.scheduledAt }),
+        ...(options.automatic ? { trigger: "scheduled", schedulingCommandId: commandId } : {}) }),
+      commandId, instanceId, options.eventType ?? "inject.released", options.version ?? 1]
   );
   await client.query(
     "INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id) VALUES ($1,$2,$3,$4)",
     [randomUUID(), context.organizationId, context.sessionId, eventId]
   );
+}
+
+/** Called inside Session start or live activation, before its Receipt is committed.
+ * New definitions use the original accepted start; existing instances keep their pins. */
+export async function scheduleConfiguredInjects(input: PrincipalCommandExecutionContext): Promise<CommandDecision | null> {
+  const { client, context, activeReleaseId, command } = input;
+  // Historical Releases may predate information-flow definitions entirely.
+  const configured = await client.query(
+    `SELECT 1 FROM registry.releases release JOIN studio.definition_revisions revision
+       ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+      WHERE release.organization_id=$1 AND release.id=$2
+        AND revision.snapshot @? '$.scenario.injects[*] ? (@.releaseMode == "scheduled")'`,
+    [context.organizationId, activeReleaseId]
+  );
+  if (configured.rowCount === 0) return null;
+  const release = await readInformationRelease(client, context, activeReleaseId, command.commandId);
+  const existing = await client.query<{ inject_definition_id: string }>(
+    "SELECT inject_definition_id FROM runtime.inject_instances WHERE organization_id=$1 AND session_id=$2",
+    [context.organizationId, context.sessionId]
+  );
+  const instantiated = new Set(existing.rows.map(({ inject_definition_id }) => inject_definition_id));
+  const definitions = release.scenario.injects.filter(({ id, releaseMode }) => releaseMode === "scheduled" && !instantiated.has(id));
+  if (definitions.length === 0) return null;
+  const clock = command.operationType === "session.start"
+    ? (await client.query<{ now: Date }>("SELECT transaction_timestamp() AS now")).rows[0]!.now
+    : (await client.query<{ occurred_at: Date }>(
+      `SELECT occurred_at FROM evidence.events WHERE organization_id=$1 AND session_id=$2
+         AND event_type='session.started' ORDER BY sequence LIMIT 1`, [context.organizationId, context.sessionId]
+    )).rows[0]?.occurred_at;
+  if (!clock) return { status: "rejected", errorCode: "VALIDATION_FAILED",
+    message: "Scheduled Injects require the accepted Session start time in retained Evidence." };
+  const schedules = definitions.map((definition) => ({ definition,
+    due: new Date(clock.getTime() + Number(definition.scheduledOffsetSeconds) * 1000) }));
+  const invalid = schedules.find(({ due }) => !Number.isFinite(due.getTime()) || due.getUTCFullYear() > 9999);
+  if (invalid) return { status: "rejected", errorCode: "VALIDATION_FAILED",
+    message: `The scheduled offset for ${invalid.definition.title} is outside the supported UTC date range.` };
+  for (const { definition, due } of schedules) {
+    const id = randomUUID();
+    const inserted = await client.query(
+      `INSERT INTO runtime.inject_instances
+         (id,organization_id,session_id,governing_release_id,inject_definition_id,state,title,content_id,
+          scheduled_at,scheduling_command_id,scheduled_by_person_id,version)
+       VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10,1)
+       ON CONFLICT (session_id,inject_definition_id) DO NOTHING RETURNING id`,
+      [id,context.organizationId,context.sessionId,activeReleaseId,definition.id,definition.title,definition.contentId,
+        due,command.commandId,context.principalId]
+    );
+    if (inserted.rowCount === 1) await recordInjectEvent(client, context, activeReleaseId, command.commandId, id, definition.id,
+      { eventType: "inject.scheduled", scheduledAt: due.toISOString() });
+  }
+  return null;
+}
+
+/** The caller holds this Session's authority and lifecycle locks. Delivery is a
+ * causal effect of the accepted scheduling Command, not an impersonated user action. */
+export async function releaseDueScheduledInjects(client: PoolClient, context: SessionScope & { authorityEpoch: number }): Promise<number> {
+  const due = await client.query<{ id: string; governing_release_id: string; inject_definition_id: string;
+    scheduling_command_id: string; scheduled_by_person_id: string; scheduled_at: Date; version: string }>(
+    `SELECT id,governing_release_id,inject_definition_id,scheduling_command_id,scheduled_by_person_id,scheduled_at,version
+       FROM runtime.inject_instances WHERE organization_id=$1 AND session_id=$2 AND state='scheduled'
+        AND scheduling_command_id IS NOT NULL AND scheduled_at<=transaction_timestamp()
+       ORDER BY scheduled_at,id LIMIT 100 FOR UPDATE`,
+    [context.organizationId,context.sessionId]
+  );
+  let released = 0;
+  for (const row of due.rows) {
+    const cause = { ...context, principalId: row.scheduled_by_person_id };
+    const release = await readInformationRelease(client, context, row.governing_release_id, row.scheduling_command_id);
+    const definition = release.scenario.injects.find(({ id }) => id === row.inject_definition_id);
+    if (!definition || definition.releaseMode !== "scheduled") throw new Error("Scheduled Inject lacks its pinned definition");
+    const version = await releaseInject(client, cause, row.governing_release_id, release, definition, row.id,
+      row.scheduling_command_id, Number(row.version));
+    if (version === undefined) continue; // No currently authorized recipients; retain the due schedule for retry.
+    await recordInjectEvent(client, cause, row.governing_release_id, row.scheduling_command_id, row.id, definition.id,
+      { version, automatic: true, scheduledAt: row.scheduled_at.toISOString() });
+    released++;
+  }
+  return released;
 }
 
 export async function releaseStageInjects(
@@ -746,7 +845,7 @@ export async function releaseStageInjects(
   for (const definition of release.scenario.injects.filter((inject) => inject.releaseMode === mode && inject.stageId === stageId)) {
     const instanceId = randomUUID();
     if (!await releaseInject(input.client, input.context, input.activeReleaseId, release, definition, instanceId, input.command.commandId)) continue;
-    await recordAutomaticInjectRelease(input.client, input.context, input.activeReleaseId, input.command.commandId, instanceId, definition.id);
+    await recordInjectEvent(input.client, input.context, input.activeReleaseId, input.command.commandId, instanceId, definition.id);
     released.push(instanceId);
   }
   return released;
@@ -782,8 +881,8 @@ export async function releaseGateInjects(input: CommandExecutionContext): Promis
     if (!evaluation.passed) continue;
     const instanceId = randomUUID();
     if (!await releaseInject(input.client, input.context, input.activeReleaseId, release, definition, instanceId, input.command.commandId)) continue;
-    await recordAutomaticInjectRelease(input.client, input.context, input.activeReleaseId, input.command.commandId,
-      instanceId, definition.id, evaluation.explanations);
+    await recordInjectEvent(input.client, input.context, input.activeReleaseId, input.command.commandId,
+      instanceId, definition.id, { gateExplanations: evaluation.explanations });
     released.push(instanceId);
   }
   return released;
@@ -793,7 +892,7 @@ async function updateInjectAggregateState(
   client: PoolClient,
   context: SessionAccessContextV1,
   instanceId: string,
-  requiresResponse: boolean
+  definition: RuntimeInjectDefinitionV1
 ): Promise<number> {
   const result = await client.query<{ total: string; acknowledged: string; responded: string }>(
     `SELECT count(*) AS total,count(acknowledged_at) AS acknowledged,count(responded_at) AS responded
@@ -805,14 +904,15 @@ async function updateInjectAggregateState(
   const total = Number(row?.total ?? 0);
   const acknowledged = Number(row?.acknowledged ?? 0);
   const responded = Number(row?.responded ?? 0);
-  const state = requiresResponse && responded === total ? "responded" : acknowledged === total ? "acknowledged" : "released";
+  const progress = injectCompletion(definition, { total, acknowledged, responded });
   const updated = await client.query<{ version: string }>(
     `UPDATE runtime.inject_instances SET state=$1,
        acknowledged_at=CASE WHEN $2 THEN COALESCE(acknowledged_at,transaction_timestamp()) ELSE acknowledged_at END,
        responded_at=CASE WHEN $3 THEN COALESCE(responded_at,transaction_timestamp()) ELSE responded_at END,
+       closed_at=CASE WHEN $1='closed' THEN COALESCE(closed_at,transaction_timestamp()) ELSE closed_at END,
        version=version+1
       WHERE organization_id=$4 AND session_id=$5 AND id=$6 RETURNING version`,
-    [state, acknowledged === total, responded === total && requiresResponse, context.organizationId, context.sessionId, instanceId]
+    [progress.state, progress.allAcknowledged, progress.allResponded && progress.responseRequired, context.organizationId, context.sessionId, instanceId]
   );
   const version = Number(updated.rows[0]?.version);
   if (!Number.isSafeInteger(version)) throw new Error("Inject version update failed");
@@ -825,7 +925,7 @@ async function executeInjectCommand(
   operatorAuthority = false
 ): Promise<CommandDecision> {
   const { client, context, command, activeReleaseId } = input;
-  if (command.governingReleaseId !== activeReleaseId) {
+  if (command.operationType === "inject.release" && command.governingReleaseId !== activeReleaseId) {
     return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "Injects use the active Release." };
   }
   if (command.operationType === "inject.release") {
@@ -849,14 +949,40 @@ async function executeInjectCommand(
   }
 
   const result = await client.query<InjectInstanceRow>(
-    `SELECT id,inject_definition_id,state,version FROM runtime.inject_instances
+    `SELECT id,governing_release_id,inject_definition_id,state,version FROM runtime.inject_instances
       WHERE organization_id=$1 AND session_id=$2 AND id=$3 FOR UPDATE`,
     [context.organizationId, context.sessionId, command.aggregateId]
   );
   const instance = result.rows[0];
   if (instance === undefined) return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Inject was not found." };
+  if (!operatorAuthority && command.governingReleaseId !== instance.governing_release_id) {
+    return { status: "needs_reconciliation", errorCode: "INCOMPATIBLE_RELEASE", message: "Use this Inject's Governing Release." };
+  }
+  release = await readInformationRelease(client, context as SessionAccessContextV1, instance.governing_release_id, command.commandId);
   const definition = release.scenario.injects.find(({ id }) => id === instance.inject_definition_id);
   if (definition === undefined) throw new Error(`Release lacks Inject Definition ${instance.inject_definition_id}`);
+  if (command.operationType === "inject.reschedule") {
+    if (!operatorAuthority) return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the assigned Session Operator may reschedule Injects." };
+    if (command.expectedAggregateVersion !== Number(instance.version)) return { status: "needs_reconciliation",
+      errorCode: "STALE_AGGREGATE_VERSION", message: `The Inject is at version ${instance.version}.` };
+    if (instance.state !== "scheduled" || definition.releaseMode !== "scheduled") return { status: "rejected",
+      errorCode: "INVALID_TRANSITION", message: "Only an unreleased scheduled Inject can be rescheduled." };
+    const value = command.payload.scheduledAt;
+    const instant = typeof value === "string" ? new Date(value) : new Date(NaN);
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value) ||
+      !Number.isFinite(instant.getTime()) || instant.toISOString() !== (value.includes(".") ? value : value.replace("Z", ".000Z"))) {
+      return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Choose a valid UTC date and time for the Inject." };
+    }
+    const version = Number(instance.version) + 1;
+    await client.query(
+      `UPDATE runtime.inject_instances SET scheduled_at=$1,version=$2,scheduling_command_id=$3,scheduled_by_person_id=$4
+        WHERE organization_id=$5 AND session_id=$6 AND id=$7`,
+      [instant,version,command.commandId,context.principalId,context.organizationId,context.sessionId,instance.id]
+    );
+    return { status: "accepted", aggregateVersion: version, eventType: "inject.scheduled",
+      eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id, scheduledAt: instant.toISOString(),
+        rescheduled: true, reason: command.payload.reason ?? null } };
+  }
   if (command.operationType === "inject.cancel") {
     const role = release.coreDesign.sessionRoles.find(({ id }) => id === ("activeSessionRoleId" in context ? context.activeSessionRoleId : undefined));
     if (!operatorAuthority && !role?.capabilities?.some(({ capability }) => capability === "inject.release")) {
@@ -881,6 +1007,16 @@ async function executeInjectCommand(
     return { status: "rejected", errorCode: "CAPABILITY_UNAVAILABLE", message: "This Inject operation is participant-scoped." };
   }
   const participantContext = context as SessionAccessContextV1;
+  const actor = actorFor(release, participantContext);
+  const content = release.scenario.content.find(({ id }) => id === definition.contentId);
+  const policy = release.coreDesign.informationPolicies.find(({ id }) => id === content?.informationPolicyId);
+  if (!actor || !selectorAllows(definition.recipients, participantContext.activeSessionRoleId, actor) ||
+      !policy?.grants.some(({ audience }) => selectorAllows(audience, participantContext.activeSessionRoleId, actor))) {
+    return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The Inject was not found." };
+  }
+  if (["cancelled", "expired", "closed"].includes(instance.state)) {
+    return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This Inject no longer accepts recipient actions." };
+  }
 
   const recipient = await client.query<{ version: string; acknowledged_at: Date | null; responded_at: Date | null }>(
     `SELECT version,acknowledged_at,responded_at FROM runtime.inject_recipient_states
@@ -894,6 +1030,9 @@ async function executeInjectCommand(
     return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: `The Inject is at version ${instanceVersion}.` };
   }
   if (command.operationType === "inject.acknowledge") {
+    if (definition.completionRequirements?.acknowledgementRequired === false) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This Inject does not require acknowledgement." };
+    }
     if (recipientState.acknowledged_at !== null) return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The Inject is already acknowledged." };
     const recipientVersion = Number(recipientState.version) + 1;
     await client.query(
@@ -906,7 +1045,7 @@ async function executeInjectCommand(
         WHERE organization_id=$1 AND record_type='inject' AND record_id=$2 AND participant_id=$3`,
       [context.organizationId, instance.id, participantContext.participantId]
     );
-    const version = await updateInjectAggregateState(client, participantContext, instance.id, definition.requiredResponseArtifactTypeId !== undefined);
+    const version = await updateInjectAggregateState(client, participantContext, instance.id, definition);
     return { status: "accepted", aggregateVersion: version, eventType: "inject.acknowledged",
       eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id } };
   }
@@ -914,20 +1053,24 @@ async function executeInjectCommand(
     if (definition.requiredResponseArtifactTypeId === undefined) {
       return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "This Inject does not require a response Artifact." };
     }
-    if (recipientState.acknowledged_at === null || recipientState.responded_at !== null) {
-      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "A response requires one prior acknowledgement and can be recorded once." };
+    if ((definition.completionRequirements?.acknowledgementRequired !== false && recipientState.acknowledged_at === null) || recipientState.responded_at !== null) {
+      return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "Complete any required acknowledgement first. A response can be recorded once." };
     }
     const artifactId = text(command.payload.artifactId);
     const artifactType = release.coreDesign.artifactTypes.find(({ id }) => id === definition.requiredResponseArtifactTypeId);
     if (artifactId === undefined || artifactType === undefined) {
       return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "A valid response Artifact is required." };
     }
-    const artifact = await client.query<{ artifact_type_key: string }>(
-      `SELECT artifact_type_key FROM runtime.artifact_instances
-        WHERE organization_id=$1 AND session_id=$2 AND id=$3`,
-      [context.organizationId, context.sessionId, artifactId]
+    const artifact = await client.query<{ artifact_type_key: string; owner_team_id: string | null; payload: JsonObject }>(
+      `SELECT artifact_type_key,owner_team_id,payload FROM runtime.artifact_instances
+        WHERE organization_id=$1 AND session_id=$2 AND id=$3 AND governing_release_id=$4
+          AND (creator_participant_id=$5 OR $6=ANY(visible_role_ids)) FOR SHARE`,
+      [context.organizationId, context.sessionId, artifactId, instance.governing_release_id, participantContext.participantId, participantContext.activeSessionRoleId]
     );
-    if (artifact.rows[0]?.artifact_type_key !== artifactType.key) {
+    const response = artifact.rows[0];
+    const responsePolicy = release.coreDesign.informationPolicies.find(({ id }) => id === artifactType.informationPolicyId);
+    if (response?.artifact_type_key !== artifactType.key || !responsePolicy?.grants.some(({ audience }) =>
+      selectorAllows(audience, participantContext.activeSessionRoleId, actor, response.owner_team_id ?? undefined, response.payload))) {
       return { status: "rejected", errorCode: "TARGET_NOT_FOUND", message: "The response Artifact was not found." };
     }
     const recipientVersion = Number(recipientState.version) + 1;
@@ -937,7 +1080,7 @@ async function executeInjectCommand(
         WHERE organization_id=$3 AND inject_instance_id=$4 AND participant_id=$5`,
       [artifactId, recipientVersion, context.organizationId, instance.id, participantContext.participantId]
     );
-    const version = await updateInjectAggregateState(client, participantContext, instance.id, true);
+    const version = await updateInjectAggregateState(client, participantContext, instance.id, definition);
     return { status: "accepted", aggregateVersion: version, eventType: "inject.responded",
       eventPayload: { injectInstanceId: instance.id, injectDefinitionId: definition.id, responseArtifactId: artifactId } };
   }
@@ -998,10 +1141,10 @@ export async function getInformationProjection(
     [context.organizationId, context.sessionId, context.participantId]
   );
   const injectRows = await client.query<{
-    id: string; inject_definition_id: string; state: RuntimeInjectV1["state"]; content_id: string;
+    id: string; governing_release_id: string; inject_definition_id: string; state: RuntimeInjectV1["state"]; content_id: string;
     released_at: Date; acknowledged_at: Date | null; responded_at: Date | null; version: string;
   }>(
-    `SELECT instance.id,instance.inject_definition_id,instance.state,instance.content_id,recipient.released_at,
+    `SELECT instance.id,instance.governing_release_id,instance.inject_definition_id,instance.state,instance.content_id,recipient.released_at,
             recipient.acknowledged_at,recipient.responded_at,instance.version
        FROM runtime.inject_instances instance
        JOIN runtime.inject_recipient_states recipient
@@ -1013,17 +1156,20 @@ export async function getInformationProjection(
   );
   const injects: RuntimeInjectV1[] = [];
   for (const row of injectRows.rows) {
-    const definition = release.scenario.injects.find(({ id }) => id === row.inject_definition_id);
-    const contentDefinition = release.scenario.content.find(({ id }) => id === row.content_id);
-    const policy = release.coreDesign.informationPolicies.find(({ id }) => id === contentDefinition?.informationPolicyId);
+    const pinned = await readInformationRelease(client, context, row.governing_release_id, correlationId);
+    const pinnedActor = actorFor(pinned, context);
+    const definition = pinned.scenario.injects.find(({ id }) => id === row.inject_definition_id);
+    const contentDefinition = pinned.scenario.content.find(({ id }) => id === row.content_id);
+    const policy = pinned.coreDesign.informationPolicies.find(({ id }) => id === contentDefinition?.informationPolicyId);
     if (definition === undefined || contentDefinition === undefined || policy === undefined ||
-        !policy.grants.some(({ audience }) => selectorAllows(audience, context.activeSessionRoleId, actor))) continue;
-    const rawContent = injectContent(release, row.content_id);
+        pinnedActor === undefined || !selectorAllows(definition.recipients, context.activeSessionRoleId, pinnedActor) ||
+        !policy.grants.some(({ audience }) => selectorAllows(audience, context.activeSessionRoleId, pinnedActor))) continue;
+    const rawContent = injectContent(pinned, row.content_id);
     const content = rawContent === undefined ? undefined : policyContent(
-      release,
+      pinned,
       contentDefinition.informationPolicyId,
       context.activeSessionRoleId,
-      actor,
+      pinnedActor,
       rawContent
     );
     if (content === undefined) continue;
@@ -1037,6 +1183,11 @@ export async function getInformationProjection(
       acknowledgedAt: row.acknowledged_at?.toISOString() ?? null,
       respondedAt: row.responded_at?.toISOString() ?? null,
       requiredResponseArtifactTypeId: definition.requiredResponseArtifactTypeId ?? null,
+      governingReleaseId: row.governing_release_id,
+      acknowledgementRequired: definition.completionRequirements?.acknowledgementRequired ?? true,
+      recipientComplete: injectCompletion(definition, { total: 1, acknowledged: row.acknowledged_at === null ? 0 : 1,
+        responded: row.responded_at === null ? 0 : 1 }).complete,
+      responseArtifactTypeKey: pinned.coreDesign.artifactTypes.find(({ id }) => id === definition.requiredResponseArtifactTypeId)?.key ?? null,
       version: Number(row.version)
     });
   }

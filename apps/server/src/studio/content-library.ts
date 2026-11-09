@@ -15,18 +15,11 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import type { ObjectStore } from "../registry/object-store.js";
+import { detectedMediaType, scanContent, type ContentScanner } from "../security/content-scanning.js";
+export type { ContentScanResult, ContentScanner } from "../security/content-scanning.js";
 
 const MAX_CONTENT_BYTES = 512 * 1024;
 const allowedMediaTypes = new Set(["text/plain", "text/markdown", "application/pdf", "image/png", "image/jpeg"]);
-
-export interface ContentScanResult {
-  status: "clean" | "infected";
-  detail: string;
-}
-
-export interface ContentScanner {
-  scan(bytes: Uint8Array, mediaType: string): Promise<ContentScanResult>;
-}
 
 export interface UploadContentInput {
   requestId: string;
@@ -56,15 +49,6 @@ interface ContentRow {
 
 function sha256(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
-}
-
-function detectedMediaType(bytes: Uint8Array): string | undefined {
-  if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value)) return "image/png";
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
-  if (Buffer.from(bytes.subarray(0, 5)).toString("ascii") === "%PDF-") return "application/pdf";
-  const text = Buffer.from(bytes).toString("utf8");
-  if (!text.includes("\u0000") && Buffer.byteLength(text, "utf8") === bytes.byteLength) return "text";
-  return undefined;
 }
 
 function validateUpload(input: UploadContentInput, correlationId: string): void {
@@ -182,17 +166,7 @@ export async function uploadContentVersion(
 
   const objectKey = `studio-content/${principal.organizationId}/${projectId}/${input.requestId}/${contentSha256}`;
   await objectStore.putImmutable(objectKey, input.bytes, contentSha256);
-  let scanStatus: "clean" | "infected" | "failed" = "failed";
-  let scanDetail = "No approved malware scanner is configured; content remains unavailable.";
-  if (scanner !== undefined) {
-    try {
-      const scan = await scanner.scan(input.bytes, input.mediaType);
-      scanStatus = scan.status;
-      scanDetail = scan.detail.slice(0, 1000);
-    } catch {
-      scanDetail = "The malware scan failed; content remains unavailable.";
-    }
-  }
+  const { status: scanStatus, detail: scanDetail } = await scanContent(scanner, input.bytes, input.mediaType);
 
   try {
     return await withOrganizationTransaction(pool, principal.organizationId, async (client) => {

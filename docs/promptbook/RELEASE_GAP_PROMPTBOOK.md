@@ -1,6 +1,6 @@
 # Plenum release-gap closure promptbook
 
-Updated: 2026-10-20.
+Historical guide: 2026-10-20. Current remaining sequence: [APPROVAL_IMPLEMENTATION_PROMPTBOOK.md](APPROVAL_IMPLEMENTATION_PROMPTBOOK.md), updated 2026-11-08. Its canonical PS-815–850 tasks and current Decision Register supersede the starting-point/status and unresolved-policy descriptions below; retain this file as historical evidence guidance, not the current execution queue.
 
 ## Purpose
 

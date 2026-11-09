@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | TSD |
 | Number | 02 |
-| Version | 1.3.2 |
-| Date | 2026-10-21 |
+| Version | 1.3.3 |
+| Date | 2026-11-08 |
 | Status | Draft for review. v1.2 amendments merged into the body (DEC-26). |
 | Owner | Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -173,7 +173,7 @@ Air-gapped installations must not require any outbound call for authentication, 
 
 ### 5.1 Session authority across profiles
 
-Each live Session has exactly one Session Authority (ADR-001, INV-017), bound to a Deployment ID and an Authority Epoch. A connection timeout never elects a new writer. Authority transfer is an explicit, operator-run, fenced procedure (OPEN-016). Automatic cloud-to-LAN failover is out of scope. For air-gapped Sessions, authority is local from creation.
+Each live Session has exactly one Session Authority (ADR-001, INV-017), bound to a Deployment ID and an Authority Epoch. A connection timeout never elects a new writer. Authority transfer follows resolved OPEN-016 (Decision Register §7.3); its readiness and timing claims require the evidence in §7.5. Automatic cloud-to-LAN failover is out of scope. For air-gapped Sessions, authority is local from creation.
 
 An individually disconnected client is never a second authority: it may keep authorized views, Drafts and an Offline Outbox (INV-018).
 
@@ -494,7 +494,7 @@ The DEC-16 workload (500 Participants per Session, 10 concurrent Sessions, up to
 
 ## 26. Open technical decisions
 
-OPEN-016 (authority transfer), OPEN-022 (JSON Schema compatibility, workflow engine, policy engine, scientific-model sandboxes, report generation), and OPEN-029 (plugin trust operations). OPEN-002 is resolved by Product Owner approval on 2026-10-20; OPEN-012 is resolved by the exact-version, deterministic-adapter policy; OPEN-020 and OPEN-021 are resolved.
+OPEN-016 was resolved on 2026-11-08; OPEN-002, OPEN-012, OPEN-020, OPEN-021, OPEN-022 and OPEN-029 also have recorded resolutions, including baseline limitations. Consult Decision Register §§3 and 7 for authority and scope, and §7.5 for transfer implementation and evidence obligations. No automatic availability claim follows from policy approval.
 
 ## Change log
 
@@ -504,3 +504,4 @@ OPEN-016 (authority transfer), OPEN-022 (JSON Schema compatibility, workflow eng
 | 1.3.1 | 2026-10-17 | Added polling, voice and extension services, schemas, deployment components, transports and failure modes; replaced the §18 plugin interface with a summary of 10 Extension Framework; recorded the media-stack exception (DEC-49). |
 | 1.3.0 | 2026-10-17 | Merged v1.2 amendment into body; adopted Glossary terms (Session, Simulation Release, Stage, Session Access Context); removed "workspace"; replaced Supabase stack with ADR-006 to ADR-013; removed AI-assisted design services (DEC-41); added deployment profile table, authoritative source table, command pipeline and realtime transport; renumbered sections. |
 | 1.2.0 | 2026-10-17 | Controlled alignment amendment (archived). |
+| 1.3.3 | 2026-11-08 | Aligned architecture decision status and operator-transfer readiness references with owner approval. |

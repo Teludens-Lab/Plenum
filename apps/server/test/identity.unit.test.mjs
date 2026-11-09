@@ -13,6 +13,31 @@ import {
   verifyOidcIdToken
 } from "../dist/index.js";
 import { resolveRuntimeInterfaceProfile } from "../dist/runtime/artifact-workflow.js";
+import { artifactFieldAccess, visibleArtifactForm, visibleArtifactPayload, preserveProtectedArtifactValues } from "../dist/runtime/artifact-visibility.js";
+
+test("PS-830-T06 protected record fields are omitted and survive authorized edits without a value oracle", () => {
+  const allows = artifactFieldAccess([{ fieldsExcluded: ["secret", "nested.private", "items.private"] }]);
+  const payload = { title: "Visible", secret: "Protected", nested: { public: 1, private: 2 }, items: [{ public: 3, private: 4 }] };
+  const visible = { title: "Visible", nested: { public: 1 }, items: [{ public: 3 }] };
+  assert.deepEqual(visibleArtifactPayload(payload, allows), visible);
+  assert.deepEqual(preserveProtectedArtifactValues(payload, { ...visible, title: "Edited" }, allows), { ...payload, title: "Edited" });
+  for (const next of [{ ...visible, secret: "Protected" }, { ...visible, secret: "Wrong" }, { ...visible, nested: null },
+    { ...visible, items: [] }, { ...visible, items: [{ private: 4 }] }]) assert.throws(() => preserveProtectedArtifactValues(payload, next, allows));
+  assert.deepEqual(preserveProtectedArtifactValues({ optional: { public: 1 } }, {}, allows), {});
+  assert.deepEqual(preserveProtectedArtifactValues(payload, { title: "Only title" }, allows), {
+    title: "Only title", secret: "Protected", nested: { private: 2 }, items: [{ private: 4 }]
+  });
+  assert.deepEqual(visibleArtifactPayload(payload, artifactFieldAccess([{ fieldsExcluded: ["secret"] }, {}])), payload);
+  assert.deepEqual(visibleArtifactPayload(payload, artifactFieldAccess([])), {});
+  const form = { id: "f", name: "Form", formVersion: "2", sections: [{ id: "s", fields: [
+    { id: "title", key: "title", type: "short_text", label: "Title" }, { id: "secret", key: "secret", type: "short_text", label: "Secret", defaultValue: "Protected" },
+    { id: "condition", key: "condition", type: "short_text", label: "Conditional", visibleWhen: { field: "secret", operator: "present" } }
+  ] }], rules: [{ message: "Protected" }] };
+  const projected = visibleArtifactForm(form, allows);
+  assert.deepEqual(projected.sections[0].fields.map(({ key }) => key), ["title"]);
+  assert.equal(JSON.stringify(projected).includes("Protected"), false);
+  assert.equal(form.sections[0].fields.length, 3);
+});
 
 const issuer = "https://issuer.example";
 const audience = "plenum";

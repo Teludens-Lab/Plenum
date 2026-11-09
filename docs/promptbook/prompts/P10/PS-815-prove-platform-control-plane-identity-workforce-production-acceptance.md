@@ -22,6 +22,7 @@ Authoritative sources and sections:
 - `docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md` — 07 Roadmap sections 13 and 15
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — ADR-012
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — ADR-015
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register sections 3, 5.7 and 7.1 through 7.5
 
 Observed source evidence:
 
@@ -53,6 +54,11 @@ Run every Node/npm command with Node 24 or newer. Record `node --version` at pre
 - SCIM credentials, group mappings, provisioning telemetry, retry, reconciliation and session-revocation behavior
 - Invitation delivery receipts, bounce handling, revocation, reissue and expiry
 - Supported staging tenants, mail provider, devices, browsers and assistive technologies
+- Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth
+- Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates
+- Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A
+- Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests
+- Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning
 
 Read callers, tests, fixtures, configuration, exports, migrations, and public contracts that touch the change. Verify real paths before creating any unobserved path.
 
@@ -83,6 +89,7 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 ## Implementation
 
+- Resume the recorded internal-PASS/external-NOT-RUN handoff; inspect PS-810 deferred environment gates and name the provider, mail, human and approval evidence still needed. Do not redo valid unaffected checks merely to recreate history
 - Freeze one staging release candidate and record source, image, lockfile, migration and configuration digests before external testing
 - Configure separately approved Entra ID and Okta provider revisions and execute OIDC, supported brokered SAML and SCIM preflight without displacing the known-good revision
 - Run joiner, mover, leaver, reactivation, group, entitlement, denial and active-session termination journeys with synthetic identities
@@ -161,14 +168,18 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Emergency Platform Administrator access remains independent of customer identity systems
 - Evidence contains correlation identifiers and outcomes without secrets, tokens, assertions or personal data
 - FAIL and NOT RUN are never translated into PASS or production approval
+- After PS-830 or PS-845 changes shared auth, routing, schemas, deployment or frontend paths, re-run affected identity/workforce gates on the final candidate; obtain final attributable human confirmation rather than transferring an old signature
 
-The approval gate is: PS-815 passes only when the required Entra ID, Okta, invitation, recovery, device and assistive-technology evidence is PASS; any FAIL or NOT RUN blocks PS-820, while final platform production approval remains PS-850.. A task may be implementation-complete without being release-approved.
+The approval gate is: Internal acceptance is historically PASS; full subsystem acceptance still requires the real-provider, mail, desktop/AT and named approval evidence. The recorded 2026-11-07 owner exception permits PS-820 work only; it does not waive any final gate. Missing evidence blocks PS-815 completion and PS-850 GO, not independent safe preparation. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
 - Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md with the exact subsystem acceptance result
 - Index sanitized provider logs, request and operation identifiers, invitation receipts, recovery evidence and human test records by release-candidate digest
-- Record every defect, waiver and approval owner; leave FAIL and NOT RUN gates explicit for PS-820 and PS-850
+- Record every defect, waiver and approval owner; leave FAIL and NOT RUN gates explicit for PS-850 and retain the recorded PS-820 prerequisite exception
+- Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries
+- Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels
+- Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.
 

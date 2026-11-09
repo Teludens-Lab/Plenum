@@ -1,4 +1,21 @@
 /** Canonical release types owned by Simulation Schema v1.3.1. */
+import { assertStructuredFormContract, basicFieldValueIssue, structuredPayloadIssues } from "./forms.js";
+import { assertFormExpressions, type FormComputationV1 } from "./form-expressions.js";
+import { assertInjectCompletion, type InjectCompletionRequirementsV1 } from "./inject-completion.js";
+export { INJECT_COMPLETION_CONTRACT_ID, injectCompletionV1Schema, injectCompletion, assertInjectCompletion } from "./inject-completion.js";
+export type { InjectCompletionRequirementsV1 } from "./inject-completion.js";
+export { FORM_EXPRESSION_CONTRACT_ID, EXPRESSION_OPERATORS, formExpressionV1Schema, assertFormExpressions, recomputeFormValues } from "./form-expressions.js";
+export type { FormComputationV1, FormExpressionV1 } from "./form-expressions.js";
+export { FORMATTED_TEXT_CONTRACT_ID, formattedTextV1Schema, parseFormattedText } from "./formatted-text.js";
+export type { FormattedInlineV1, FormattedBlockV1 } from "./formatted-text.js";
+export { FORM_INTERCHANGE_CONTRACT_ID, formInterchangeV1Schema, importFormDefinition, importFormRecord, parseFormCsv, previewFormCsv, formRecordTables } from "./form-interchange.js";
+export type { FormDefinitionExportV1, FormRecordExportV1 } from "./form-interchange.js";
+export { STRUCTURED_FORM_CONTRACT_ID, FORM_LIMITS, BASIC_FIELD_TYPES, ENTITY_REFERENCE_KINDS, numericField, multipleField,
+  structuredFormV2Schema, assertStructuredFormContract, structuredPayloadIssues, fieldEditable, resolveTeamCellFieldOptions,
+  FORM_ATTACHMENT_CONTRACT_ID, FORM_ATTACHMENT_MEDIA_TYPES, formAttachmentPolicyV1Schema, formAttachmentMediaTypeLabel } from "./forms.js";
+import type { EntityReferenceV2, NumericPresentationV2 } from "./forms.js";
+export type { EntityReferenceV2, NumericPresentationV2, FormAttachmentPolicyV1 } from "./forms.js";
+export { METHODOLOGY_CONTRACT_ID, METHODOLOGY_CONCEPT_REGISTRY, methodologyConceptsV1Schema, methodologyControls, projectEnabledConcepts, validateMethodologyConcepts } from "./concepts.js";
 
 export const SIMULATION_SCHEMA_VERSION = "1.3.1";
 export const RELEASE_MANIFEST_CONTRACT_ID = "release-manifest-v1";
@@ -177,7 +194,7 @@ export interface ModelCompositionV1 {
   dependencyClosure?: Array<{ pluginId: string; version: string; digest: string }>;
 }
 
-export type RuntimeFieldTypeV1 = "short_text" | "long_text" | "number" | "single_select" | "multi_select" | "artifact_reference";
+export type RuntimeFieldTypeV1 = typeof import("./forms.js").BASIC_FIELD_TYPES[number];
 
 export type PlatformTargetProfileV1 = "cloud" | "institutional" | "air_gapped";
 export type VoiceChannelModeV1 = "radio_ptt" | "open_room" | "private_call" | "broadcast";
@@ -226,6 +243,8 @@ export interface RuntimeFieldValidationV1 {
 }
 
 export interface RuntimeFormFieldDefinitionV1 {
+  computation?: FormComputationV1;
+  formattedTextContractId?: "formatted-text-v1";
   id: string;
   key: string;
   label: string;
@@ -238,6 +257,9 @@ export interface RuntimeFormFieldDefinitionV1 {
   dataClassification?: RuntimeDataClassificationV1;
   reportingLabel?: string;
   editableBySessionRoleIds?: string[];
+  editableInWorkflowStates?: string[];
+  numeric?: NumericPresentationV2;
+  entityReference?: EntityReferenceV2;
   options?: Array<{ value: string; label: string; description?: string }>;
   control?: "cards" | "select" | "range";
   optionSource?: RuntimeFieldOptionSourceV1;
@@ -247,6 +269,8 @@ export interface RuntimeFormFieldDefinitionV1 {
 }
 
 export interface RuntimeFormDefinitionV1 {
+  contractId?: "structured-form-v2";
+  attachments?: import("./forms.js").FormAttachmentPolicyV1;
   id: string;
   name: string;
   formVersion: string;
@@ -379,10 +403,12 @@ export interface RuntimeInjectDefinitionV1 {
   senderIdentity?: string;
   recipients: RuntimeActorSelectorV1;
   releaseMode: "manual" | "scheduled" | "stage_entry" | "stage_exit" | "gate";
+  /** Server UTC seconds after accepted Session start; pause defers delivery, not the deadline. */
   scheduledOffsetSeconds?: number;
   stageId?: string;
   releaseGate?: GateV1;
   requiredResponseArtifactTypeId?: string;
+  completionRequirements?: InjectCompletionRequirementsV1;
   responseDeadlineSeconds?: number;
   effects?: StateEffectV1[];
   followOnInjectIds?: string[];
@@ -493,6 +519,7 @@ export interface RuntimeArtifactTypeDefinitionV1 {
   allowedTeamIds?: string[];
   availableStageIds?: string[];
   ownership: "individual" | "team" | "session";
+  /** When true, each record's object payload represents exactly one Action (DEC-63). */
   decisionBearing: boolean;
   versioning: "none" | "draft_versions" | "full_history";
   exportable: boolean;
@@ -675,6 +702,7 @@ export interface AdjudicationModelDefinitionV1 {
 }
 
 export interface RuntimeCoreDesignV1 {
+  methodologyContractId?: "methodology-concepts-v1";
   methodologyConcepts?: MethodologyConceptV1[];
   /** Release-wide objectives; role and Team guidance belongs in governed content. */
   objectives?: ObjectiveDefinitionV1[];
@@ -901,14 +929,16 @@ export interface RuntimeFormValidationIssueV1 {
 
 export function runtimeFormValue(payload: Record<string, unknown>, path: string): unknown {
   return path.split(".").reduce<unknown>((value, segment) => {
+    if (["__proto__", "constructor", "prototype"].includes(segment)) return undefined;
     if (Array.isArray(value)) return value[Number(segment)];
-    if (typeof value === "object" && value !== null) return (value as Record<string, unknown>)[segment];
+    if (typeof value === "object" && value !== null && Object.hasOwn(value, segment)) return (value as Record<string, unknown>)[segment];
     return undefined;
   }, payload);
 }
 
 export function setRuntimeFormValue(payload: Record<string, unknown>, path: string, value: unknown): void {
   const segments = path.split(".");
+  if (segments.some((segment) => ["__proto__", "constructor", "prototype"].includes(segment))) throw new Error("Unsafe Form field path");
   let target: Record<string, unknown> | unknown[] = payload;
   segments.forEach((segment, index) => {
     const last = index === segments.length - 1;
@@ -941,22 +971,29 @@ export function runtimeFieldConditionMatches(condition: RuntimeFieldConditionV1 
 
 export function validateRuntimeFormPayload(
   form: RuntimeFormDefinitionV1,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options: { draft?: boolean } = {}
 ): RuntimeFormValidationIssueV1[] {
-  const issues: RuntimeFormValidationIssueV1[] = [];
+  const issues: RuntimeFormValidationIssueV1[] = structuredPayloadIssues(form, payload);
+  if (issues.some(({ field }) => field === "")) return issues;
   const validateFields = (
     fields: RuntimeFormFieldDefinitionV1[],
     values: Record<string, unknown>,
     prefix = ""
   ): void => {
     for (const field of fields) {
-      if (!runtimeFieldConditionMatches(field.visibleWhen, values)) continue;
+      const visible = runtimeFieldConditionMatches(field.visibleWhen, values);
+      if (!visible && form.contractId === undefined) continue;
       const value = runtimeFormValue(values, field.key);
       const issueField = `${prefix}${field.key}`;
     const required = field.required === true || runtimeFieldConditionMatches(field.requiredWhen, values) && field.requiredWhen !== undefined;
     if (!hasValue(value)) {
-      if (required) issues.push({ field: issueField, message: `${field.label} is required` });
+      if (required && visible && !options.draft) issues.push({ field: issueField, message: `${field.label} is required` });
       continue;
+    }
+    if (form.contractId !== undefined) {
+      const message = basicFieldValueIssue(field, value);
+      if (message) { issues.push({ field: issueField, message }); continue; }
     }
     if ((field.type === "short_text" || field.type === "long_text") && typeof value !== "string") {
       issues.push({ field: issueField, message: `${field.label} must be text` });
@@ -1000,10 +1037,10 @@ export function validateRuntimeFormPayload(
     }
     const entries = payload[section.id];
     if (!Array.isArray(entries)) {
-      if ((section.minItems ?? 0) > 0) issues.push({ field: section.id, message: `${section.title ?? section.id} needs at least ${section.minItems} item(s)` });
+      if ((section.minItems ?? 0) > 0 && !options.draft) issues.push({ field: section.id, message: `${section.title ?? section.id} needs at least ${section.minItems} item(s)` });
       continue;
     }
-    if (section.minItems !== undefined && entries.length < section.minItems) issues.push({ field: section.id, message: `${section.title ?? section.id} needs at least ${section.minItems} item(s)` });
+    if (!options.draft && section.minItems !== undefined && entries.length < section.minItems) issues.push({ field: section.id, message: `${section.title ?? section.id} needs at least ${section.minItems} item(s)` });
     if (section.maxItems !== undefined && entries.length > section.maxItems) issues.push({ field: section.id, message: `${section.title ?? section.id} has too many items` });
     entries.forEach((entry, index) => {
       if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
@@ -1655,7 +1692,10 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
       reference(artifactTypes, requirement.artifactTypeId, `Stage ${stage.id} completion requirement`);
       reference(teams, requirement.scope.teamId, `Stage ${stage.id} completion requirement`);
       if (requirement.stageGroupId !== undefined) reference(stageGroups, requirement.stageGroupId, `Stage ${stage.id} completion requirement`);
-      if (requirement.minimumPerScope < 1) throw new Error(`Stage ${stage.id} completion requirement needs a positive minimum`);
+      if (requirement.kind !== "artifact_coverage" || requirement.scope.kind !== "team_cell" || requirement.qualifyingMilestone !== "submitted_to_control" ||
+          !Number.isSafeInteger(requirement.minimumPerScope) || requirement.minimumPerScope < 1) {
+        throw new Error(`Stage ${stage.id} completion requirement needs supported coverage semantics and a positive whole-number minimum`);
+      }
       if (!(runtime.teamCells ?? []).some((cell) => cell.teamId === requirement.scope.teamId && cell.kind === requirement.scope.cellKind)) {
         throw new Error(`Stage ${stage.id} completion requirement references missing Team Cells`);
       }
@@ -1688,6 +1728,13 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
   if (runtime.stages[0] !== undefined) visitStage(runtime.stages[0].id);
   const referencedForms = new Set(runtime.artifactTypes.map((type) => type.formId));
   for (const form of runtime.forms) {
+    assertStructuredFormContract(form);
+    if (form.attachments) for (const type of runtime.artifactTypes.filter((type) => type.formId === form.id)) {
+      if (!type.retentionPolicyId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(type.retentionPolicyId)) throw new Error(`Artifact Type ${type.id} needs a published Retention Policy for its Form attachments`);
+    }
+    const excludedInputs = runtime.artifactTypes.filter((type) => type.formId === form.id).flatMap((type) =>
+      runtime.informationPolicies.find((policy) => policy.id === type.informationPolicyId)?.grants.flatMap((grant) => grant.fieldsExcluded ?? []) ?? []);
+    assertFormExpressions(form, excludedInputs);
     if (!referencedForms.has(form.id)) throw new Error(`Form ${form.id} is not used by an Artifact Type`);
     const fields = form.sections.flatMap((section) => section.fields);
     uniqueIds(fields, `Form ${form.id} field`);
@@ -1704,6 +1751,11 @@ export function assertRuntimeCoreDesign(value: CoreDesignV1): asserts value is C
     }
     for (const field of fields) {
       field.editableBySessionRoleIds?.forEach((id) => reference(roles, id, `Form ${form.id} field ${field.key}`));
+      for (const state of field.editableInWorkflowStates ?? []) {
+        for (const type of runtime.artifactTypes.filter((type) => type.formId === form.id)) {
+          if (!runtime.workflows.find((workflow) => workflow.id === type.workflowId)?.states.some(({ key }) => key === state)) throw new Error(`Form ${form.id} field ${field.key} references missing Workflow state ${state}`);
+        }
+      }
       if ((field.type === "single_select" || field.type === "multi_select") && (field.options?.length ?? 0) === 0) {
         throw new Error(`Form ${form.id} field ${field.key} needs choices`);
       }
@@ -2010,6 +2062,7 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
     if (!policies.has(item.informationPolicyId)) throw new Error(`Scenario content ${item.id} references missing Information Policy ${item.informationPolicyId}`);
   }
   for (const inject of scenario.injects ?? []) {
+    assertInjectCompletion(inject);
     if (!content.has(inject.contentId)) throw new Error(`Inject ${inject.id} references missing content ${inject.contentId}`);
     if ((inject.releaseMode === "stage_entry" || inject.releaseMode === "stage_exit") &&
         (inject.stageId === undefined || !stages.has(inject.stageId))) {
@@ -2020,7 +2073,6 @@ export function assertRuntimeScenario(coreDesign: CoreDesignV1, scenario: Scenar
     }
     if (inject.releaseMode === "gate" && inject.releaseGate === undefined) throw new Error(`Inject ${inject.id} has no release Gate`);
     if (inject.releaseGate !== undefined) assertGateDefinition(inject.releaseGate, facts, `Inject ${inject.id} release Gate`);
-    if (inject.releaseMode === "scheduled") throw new Error(`Inject ${inject.id} uses scheduled release without approved Runtime semantics`);
     if (inject.requiredResponseArtifactTypeId !== undefined && !artifactTypes.has(inject.requiredResponseArtifactTypeId)) {
       throw new Error(`Inject ${inject.id} references missing response Artifact Type ${inject.requiredResponseArtifactTypeId}`);
     }

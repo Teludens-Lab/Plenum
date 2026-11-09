@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { compileRelease } from "../../packages/release-compiler/dist/index.js";
-import { validateRuntimeFormPayload } from "../../packages/simulation-schema/dist/index.js";
+import { assertRuntimeCoreDesign, validateRuntimeFormPayload, resolveTeamCellFieldOptions } from "../../packages/simulation-schema/dist/index.js";
 import { hydrateReleaseSourceAssets } from "../../scripts/release-source-assets.mjs";
 
 const sourceUrl = new URL("../../definitions/fractured-order/fractured-order-release-source.json", import.meta.url);
@@ -12,6 +12,40 @@ const source = await hydrateReleaseSourceAssets(authoringSource, sourceUrl);
 const compiledArtifact = await readFile(
   new URL("../../definitions/fractured-order/fractured-order-release.json", import.meta.url), "utf8"
 );
+
+test("PS-830-T08 added cells replace stale compiled choices only under their Governing Release", () => {
+  const original = JSON.parse(compiledArtifact).coreDesign;
+  const form = original.forms.find(({ id }) => id === "form-industry-orientation");
+  const field = form.sections[0].fields[0];
+  const snapshot = structuredClone(field);
+  const energy = { id: "synthetic-energy", teamId: "industry", kind: "industry_sector", name: "Energy", enabled: true };
+  const cells = [...original.teamCells, energy, { ...energy, id: "disabled", enabled: false },
+    { ...energy, id: "other-team", teamId: "blue" }, { ...energy, id: "other-kind", kind: "department" }];
+  const oldField = resolveTeamCellFieldOptions(field, original.teamCells);
+  const newField = resolveTeamCellFieldOptions(field, cells);
+  const definition = (resolved) => ({ ...form, sections: [{ ...form.sections[0], fields: [resolved] }] });
+  assert.equal(validateRuntimeFormPayload(definition(newField), { industryCellId: energy.id }).length, 0);
+  assert.ok(validateRuntimeFormPayload(definition(oldField), { industryCellId: energy.id }).length > 0);
+  assert.deepEqual(newField.options.map(({ value }) => value), [...oldField.options.map(({ value }) => value), energy.id]);
+  assert.deepEqual(field, snapshot);
+  const staticField = { ...field, optionSource: undefined };
+  assert.equal(resolveTeamCellFieldOptions(staticField, cells), staticField);
+});
+
+test("PS-830-T08 Stage coverage requirements reject fractional and unsupported completion rules", () => {
+  const { coreDesign, scenario } = source.materialization;
+  for (const minimumPerScope of [0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const core = structuredClone(coreDesign);
+    core.stages[0].completionRequirements[0].minimumPerScope = minimumPerScope;
+    assert.throws(() => assertRuntimeCoreDesign(core), /positive whole-number minimum/u);
+  }
+  for (const [key, value] of [["kind", "anything"], ["qualifyingMilestone", "draft_saved"]]) {
+    const core = structuredClone(coreDesign);
+    core.stages[0].completionRequirements[0][key] = value;
+    assert.throws(() => assertRuntimeCoreDesign(core), /supported coverage semantics/u);
+  }
+  assert.doesNotThrow(() => assertRuntimeCoreDesign(coreDesign));
+});
 
 test("PS-200-T01 compiles the complete Fractured Order Runtime configuration", () => {
   const compiled = compileRelease(source);
@@ -334,7 +368,11 @@ test("PS-210-T03 rejects broken Inject content, Stage and response references", 
 
   const scheduled = structuredClone(source);
   Object.assign(scheduled.materialization.scenario.injects[0], { releaseMode: "scheduled", scheduledOffsetSeconds: 30 });
-  assert.throws(() => compileRelease(scheduled), /without approved Runtime semantics/);
+  assert.doesNotThrow(() => compileRelease(scheduled));
+  for (const offset of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+    scheduled.materialization.scenario.injects[0].scheduledOffsetSeconds = offset;
+    assert.throws(() => compileRelease(scheduled), /invalid scheduled offset/);
+  }
 
   const malformedGate = structuredClone(source);
   Object.assign(malformedGate.materialization.scenario.injects[0], { releaseMode: "gate", releaseGate: { condition: "unspecified" } });

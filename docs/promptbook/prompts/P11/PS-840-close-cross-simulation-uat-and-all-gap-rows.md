@@ -1,10 +1,10 @@
-# PS-840 - Close cross-simulation UAT and every completeness-ledger row
+# PS-840 - Prove cross-simulation UAT and close product completeness gaps
 
 ## ID / title / goal / user outcome / risk
 
 - ID: `PS-840`
-- Title: Close cross-simulation UAT and every completeness-ledger row
-- Goal: Prove that platform completeness generalizes beyond Fractured Order and that no specified feature, function, UI state or operational obligation is missing.
+- Title: Prove cross-simulation UAT and close product completeness gaps
+- Goal: Independently demonstrate that the approved authoring behavior generalizes beyond Fractured Order and close every applicable product-owned completeness obligation.
 - User outcome: Real target users can build and run materially different simulations, and the release packet contains no unknown, fixture-only, inaccessible or untested product behavior.
 - Risk: **HIGH**
 - Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.
@@ -25,6 +25,11 @@ Authoritative sources and sections:
 - `references/teludens-design-system-catalog/docs/SPATIAL_GRAMMAR.md` — Teludens Spatial Grammar sections 1 through 14
 - `references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md` — Teludens Experience Physics sections 1 through 15
 - `references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md` — Teludens Reference Slice sections 1 through 20
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register sections 3, 5.7 and 7.1 through 7.5
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — OPEN-004
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — OPEN-010
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — DEC-63
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — DEC-64
 
 Observed source evidence:
 
@@ -56,6 +61,11 @@ Run every Node/npm command with Node 24 or newer. Record `node --version` at pre
 - Policy-negotiation and crisis-response fixtures
 - All user feedback and defect ledgers
 - Every supported screen/state/viewport/input combination
+- Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth
+- Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates
+- Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A
+- Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests
+- Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning
 
 Read callers, tests, fixtures, configuration, exports, migrations, and public contracts that touch the change. Verify real paths before creating any unobserved path.
 
@@ -65,7 +75,7 @@ Allowed behavior scope:
 
 - Task-based UAT with Designers, Operators, Participants, Reviewers and Research users
 - UI-only creation and execution of two contrasting simulations
-- Complete requirement/screen/API/state/accessibility/security/operations evidence audit
+- Product requirement/screen/API/state/accessibility/security evidence audit, with separately owned external/operational gates explicitly carried to PS-850
 - Defect correction and rerun until every blocking row passes
 
 Expected paths are discovery targets, not permission to invent absent structure:
@@ -82,8 +92,11 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 - Run observed task-based UAT and record hesitations, failures and recovery attempts
 - Author and run both validation simulations through public UI workflows
-- Make the gap audit fail on any incomplete status or missing evidence link
+- Run the structural completeness audit and review each product-owned obligation. Keep PS-815/820 external/human and PS-845 operational evidence explicitly pending; the unscoped release audit belongs to PS-850 and must not pass early
 - Fix every S0-S2 product defect and rerun affected journeys
+- Build policy negotiation with optional numeric/adjudication mechanics disabled and crisis response with resources, conditional Injects and richer Forms. Verify enabling/disabling, preserved draft content, dependency denials and per-recipient completion using ordinary Designer workflows
+- Use a second target-user reviewer for the PS-830 evidence; newly discovered capability defects return to the owning PS-830 checkpoint and invalidate affected golden/UAT evidence
+- Keep functional/rubric correctness evidence separate from scientific model fidelity: record method assumptions, test cases and limitations; do not claim domain accuracy from passing UI tests
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
 
@@ -115,7 +128,7 @@ Also prohibited: destructive production operations, production secret changes, p
 
 ## Acceptance
 
-- Given the documented preconditions, when the task behavior is exercised, then every ledger row is PASS with a direct evidence link and accountable reviewer
+- Given the documented preconditions, when the task behavior is exercised, then every applicable product-owned ledger row is PASS with direct evidence and an accountable reviewer, or has an already authorized N/A scope exclusion. External identity/institutional and PS-845 transfer rows retain their actual pending status and block PS-850, not a false product acceptance claim
 - Given the documented preconditions, when the task behavior is exercised, then two materially different simulations are visually authored, published and run without Runtime source changes
 - Given the documented preconditions, when the task behavior is exercised, then no S0-S2 defect or task-blocking usability/accessibility issue remains
 - Given the documented preconditions, when the task behavior is exercised, then every supported persona, state, viewport, input and deployment profile has representative evidence
@@ -123,7 +136,7 @@ Also prohibited: destructive production operations, production secret changes, p
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
-- Completed no-gap matrix
+- Product-complete ledger with external and operational gates truthfully pending
 - Cross-simulation UI evidence
 - UAT report
 - Closed defect ledger
@@ -149,13 +162,16 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant
 - Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity
 
-The approval gate is: Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.. A task may be implementation-complete without being release-approved.
+The approval gate is: PS-840 accepts product UAT only after all applicable product evidence and human review pass. It does not sign off identity-provider delivery, institution operations or authority transfer. PS-845 owns transfer; PS-850 requires the entire unscoped ledger to pass. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
 - Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md
 - Record exact user-test evidence and unresolved defects
 - Update authoritative contracts and compatibility/migration registers when changed
+- Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries
+- Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels
+- Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.
 

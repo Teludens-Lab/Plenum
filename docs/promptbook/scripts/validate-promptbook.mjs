@@ -134,7 +134,7 @@ for (const task of tasks) {
 
 const samples = [
   'PS-100', 'PS-001', 'PS-310', 'PS-410', 'PS-500', 'PS-230', 'PS-240', 'PS-250', 'PS-530',
-  'PS-700', 'PS-760', 'PS-780', 'PS-820', 'PS-830', 'PS-840'
+  'PS-700', 'PS-760', 'PS-780', 'PS-815', 'PS-820', 'PS-830', 'PS-840', 'PS-842', 'PS-845', 'PS-850'
 ];
 const sampleRows = [];
 for (const id of samples) {
@@ -153,9 +153,29 @@ for (const id of samples) {
 }
 
 const ready = tasks.filter((task) => task.ready_to_execute).map((task) => task.id);
-const expectedReady = ['PS-770'];
-if (ready.length !== expectedReady.length || ready.some((id, index) => id !== expectedReady[index])) {
-  warnings.push(`Expected the recorded runnable tasks ${expectedReady.join(', ')}; found ${ready.join(', ') || 'none'}`);
+for (const task of tasks.filter((task) => task.ready_to_execute)) {
+  if (!task.prerequisites_verified) failures.push(`${task.id} is ready without verified prerequisites`);
+}
+
+// The remaining sequence must not lose its external or operational acceptance gates.
+const remainingIds = ['PS-815', 'PS-820', 'PS-830', 'PS-840', 'PS-842', 'PS-845', 'PS-850'];
+for (const id of remainingIds) if (!taskIds.has(id)) failures.push(`Remaining sequence is missing ${id}`);
+const releaseTask = tasks.find((task) => task.id === 'PS-850');
+for (const id of remainingIds.slice(0, -1)) {
+  if (!releaseTask?.prerequisites.includes(id)) failures.push(`PS-850 must retain direct acceptance dependency ${id}`);
+}
+const resolvedApprovals = new Set(['OPEN-004', 'OPEN-010', 'OPEN-016', 'OPEN-023', 'DEC-51',
+  ...Array.from({length: 7}, (_, index) => `DEC-${21 + index}`),
+  ...Array.from({length: 11}, (_, index) => `DEC-${30 + index}`)]);
+for (const task of tasks) {
+  for (const id of task.depends_on_unratified) {
+    if (resolvedApprovals.has(id)) failures.push(`${task.id} still labels resolved ${id} unratified`);
+  }
+}
+for (const [id, command] of [['PS-830', 'CMD-GOLDEN-JOURNEY'], ['PS-842', 'CMD-INTERFACE-CONSISTENCY'], ['PS-845', 'CMD-AUTHORITY-TRANSFER']]) {
+  if (!tasks.find((task) => task.id === id)?.validation_command_refs.includes(command)) {
+    failures.push(`${id} must own its proposed command ${command}`);
+  }
 }
 
 const status = failures.length ? 'FAIL' : 'PASS';

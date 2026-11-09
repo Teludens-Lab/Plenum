@@ -24,9 +24,7 @@
       "docs/corpus/README.md",
       "docs/corpus/01_Product_and_PRD/08_SIMULATION_DESIGN_AND_RESEARCH_CANON_v1.0.md"
     ],
-    "depends_on_unratified": [
-      "DEC-22"
-    ],
+    "depends_on_unratified": [],
     "prerequisites": [],
     "prerequisites_verified": true,
     "ready_to_execute": false,
@@ -545,8 +543,7 @@
       "references/plenum-runtime-slice/migrations/002_runtime_sync_evidence.sql"
     ],
     "depends_on_unratified": [
-      "ADR-014",
-      "OPEN-016"
+      "ADR-014"
     ],
     "prerequisites": [
       "PS-100",
@@ -1099,16 +1096,7 @@
       "references/plenum-runtime-slice/definitions/fractured-order-reference.json",
       "references/plenum-runtime-slice/src/domain.mjs"
     ],
-    "depends_on_unratified": [
-      "DEC-30",
-      "DEC-31",
-      "DEC-33",
-      "DEC-34",
-      "DEC-35",
-      "DEC-37",
-      "DEC-38",
-      "DEC-40"
-    ],
+    "depends_on_unratified": [],
     "prerequisites": [
       "PS-000",
       "PS-130",
@@ -1240,10 +1228,7 @@
     "source_evidence": [
       "references/plenum-runtime-slice/src/server.mjs"
     ],
-    "depends_on_unratified": [
-      "DEC-34",
-      "DEC-40"
-    ],
+    "depends_on_unratified": [],
     "prerequisites": [
       "PS-110",
       "PS-120",
@@ -2101,11 +2086,6 @@
       "docs/corpus/02_Updated_Architecture/04_DESIGN_STUDIO_SPECIFICATION_v1.3.md"
     ],
     "depends_on_unratified": [
-      "DEC-31",
-      "DEC-32",
-      "DEC-33",
-      "OPEN-004",
-      "OPEN-010",
       "OPEN-018"
     ],
     "prerequisites": [
@@ -3199,9 +3179,7 @@
     "source_evidence": [
       "docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md"
     ],
-    "depends_on_unratified": [
-      "OPEN-004"
-    ],
+    "depends_on_unratified": [],
     "prerequisites": [
       "PS-400",
       "PS-410",
@@ -4933,9 +4911,7 @@
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
     ],
-    "depends_on_unratified": [
-      "OPEN-004"
-    ],
+    "depends_on_unratified": [],
     "prerequisites_verified": true,
     "ready_to_execute": false,
     "migration_ids": [],
@@ -5078,9 +5054,7 @@
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Dark.png",
       "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Light.png"
     ],
-    "depends_on_unratified": [
-      "OPEN-010"
-    ],
+    "depends_on_unratified": [],
     "prerequisites_verified": true,
     "ready_to_execute": false,
     "migration_ids": [
@@ -5550,7 +5524,7 @@
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": true,
-    "ready_to_execute": true,
+    "ready_to_execute": false,
     "migration_ids": [
       "031_participant_entry"
     ],
@@ -6279,7 +6253,8 @@
       "06 Data sections 5 through 9 and 16 through 19",
       "07 Roadmap sections 13 and 15",
       "ADR-012",
-      "ADR-015"
+      "ADR-015",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5"
     ],
     "source_evidence": [
       "apps/server/src/identity/organization-providers.ts",
@@ -6301,10 +6276,12 @@
       "platform-control-plane-v1",
       "organization-workforce-v1"
     ],
-    "evidence": [],
+    "evidence": [
+      "docs/release-evidence/PS-815-internal-acceptance-audit.md"
+    ],
     "risk": "high",
-    "approval_gate": "PS-815 passes only when the required Entra ID, Okta, invitation, recovery, device and assistive-technology evidence is PASS; any FAIL or NOT RUN blocks PS-820, while final platform production approval remains PS-850.",
-    "implementation_state": "planned",
+    "approval_gate": "Internal acceptance is historically PASS; full subsystem acceptance still requires the real-provider, mail, desktop/AT and named approval evidence. The recorded 2026-11-07 owner exception permits PS-820 work only; it does not waive any final gate. Missing evidence blocks PS-815 completion and PS-850 GO, not independent safe preparation",
+    "implementation_state": "in_progress",
     "authorization_privacy": [
       "Use isolated staging tenants, synthetic identities and controlled mailboxes; never copy provider secrets, assertions, access tokens or personal information into evidence",
       "Prove authentication alone never grants Organization access and IdP groups cannot grant Platform Administrator authority",
@@ -6318,7 +6295,10 @@
     "docs_continuity": [
       "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md with the exact subsystem acceptance result",
       "Index sanitized provider logs, request and operation identifiers, invitation receipts, recovery evidence and human test records by release-candidate digest",
-      "Record every defect, waiver and approval owner; leave FAIL and NOT RUN gates explicit for PS-820 and PS-850"
+      "Record every defect, waiver and approval owner; leave FAIL and NOT RUN gates explicit for PS-850 and retain the recorded PS-820 prerequisite exception",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
     ],
     "revisit_triggers": [
       "Entra ID, Okta, the mail provider or the supported authentication broker changes its contract",
@@ -6353,7 +6333,12 @@
       "Organization IdP revision, approval, rollback, emergency-access and signing-key rotation paths",
       "SCIM credentials, group mappings, provisioning telemetry, retry, reconciliation and session-revocation behavior",
       "Invitation delivery receipts, bounce handling, revocation, reissue and expiry",
-      "Supported staging tenants, mail provider, devices, browsers and assistive technologies"
+      "Supported staging tenants, mail provider, devices, browsers and assistive technologies",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
     ],
     "scope": [
       "Real Microsoft Entra ID and Okta OIDC, supported brokered SAML and SCIM 2.0 interoperability in staging",
@@ -6381,6 +6366,7 @@
       "Do not approve production, waive a blocking gate or repair staging by manual database mutation"
     ],
     "implementation": [
+      "Resume the recorded internal-PASS/external-NOT-RUN handoff; inspect PS-810 deferred environment gates and name the provider, mail, human and approval evidence still needed. Do not redo valid unaffected checks merely to recreate history",
       "Freeze one staging release candidate and record source, image, lockfile, migration and configuration digests before external testing",
       "Configure separately approved Entra ID and Okta provider revisions and execute OIDC, supported brokered SAML and SCIM preflight without displacing the known-good revision",
       "Run joiner, mover, leaver, reactivation, group, entitlement, denial and active-session termination journeys with synthetic identities",
@@ -6429,7 +6415,8 @@
       "Reconciliation cannot silently apply destructive removals and retries cannot duplicate side effects",
       "Emergency Platform Administrator access remains independent of customer identity systems",
       "Evidence contains correlation identifiers and outcomes without secrets, tokens, assertions or personal data",
-      "FAIL and NOT RUN are never translated into PASS or production approval"
+      "FAIL and NOT RUN are never translated into PASS or production approval",
+      "After PS-830 or PS-845 changes shared auth, routing, schemas, deployment or frontend paths, re-run affected identity/workforce gates on the final candidate; obtain final attributable human confirmation rather than transferring an old signature"
     ],
     "commit_subject": "test(identity): prove control-plane production acceptance",
     "commit_body": "Why:\n- Close the external provider, delivery, recovery and human acceptance gap before whole-platform release testing.\nWhat:\n- Prove governed Entra ID, Okta, SCIM, invitation, recovery and accessible workforce operations against one staging release candidate.\nVerification:\n- Run the listed automated gates, real-provider harnesses and authorized human acceptance matrix.\nCompatibility / migrations:\n- Rehearse migrations 037 and 038 against representative data; use restore or forward-fix rather than destructive schema rollback.\nRisks / follow-up:\n- Any missing provider, delivery, recovery, device or assistive-technology evidence blocks PS-820.\nRefs: PS-815, REQ-045, REQ-051, REQ-064",
@@ -6442,7 +6429,8 @@
       "06 Data sections 17 and 18",
       "07 Roadmap section 15",
       "Decision Register OPEN-014",
-      "Decision Register OPEN-017"
+      "Decision Register OPEN-017",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5"
     ],
     "source_evidence": [
       "apps/studio/src/App.tsx",
@@ -6465,7 +6453,7 @@
       "test-results/recovery/ps-530-restore.json"
     ],
     "risk": "high",
-    "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
+    "approval_gate": "Preserve historical AUTOMATED PASS and HUMAN NOT RUN separately. Re-verify automated installation prerequisites for a new working candidate before PS-830 execution; human/AT acceptance remains mandatory for task completion and PS-850. The recorded PS-815 exception is not a blanket release waiver",
     "implementation_state": "in_progress",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
@@ -6480,7 +6468,10 @@
     "docs_continuity": [
       "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
       "Record exact user-test evidence and unresolved defects",
-      "Update authoritative contracts and compatibility/migration registers when changed"
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
     ],
     "revisit_triggers": [
       "The governing product specification changes",
@@ -6515,7 +6506,12 @@
       "Migration and forward-fix runbooks",
       "Backup/restore and signer custody",
       "Manual accessibility report gaps",
-      "Managed-device offline policy"
+      "Managed-device offline policy",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
     ],
     "scope": [
       "Clean install for cloud-reference, institutional and air-gapped profiles",
@@ -6534,13 +6530,15 @@
     "non_goals": [
       "Do not run destructive production operations without explicit authorization",
       "Do not claim all assistive technologies from one review",
-      "Do not claim high availability while OPEN-016 remains unresolved"
+      "Do not claim live authority-transfer readiness from backup/restore tests; PS-845 owns resolved OPEN-016 implementation and timed transfer evidence"
     ],
     "implementation": [
+      "Resume the existing PS-820 evidence and owner-authorized PS-815 exception; identify applicable migration and image deltas before rerunning. Record qualified desktop/AT reviews and institutional approval as NOT RUN until actually completed",
       "Automate a disposable clean-install and versioned upgrade rehearsal",
       "Execute restore and Evidence verification with separated custody",
       "Record manual task-based accessibility results and fix blockers",
-      "Validate offline-device expiry, revocation and data clearing on an approved managed-device profile"
+      "Validate offline-device expiry, revocation and data clearing on an approved managed-device profile",
+      "After PS-830 form/schema changes and PS-845 transfer changes, repeat affected empty-install, prior-version upgrade, historical-record preservation, rollback compatibility and restore checks on the final candidate; reuse the harness rather than creating another installation path"
     ],
     "deliverables": [
       "Clean-install evidence",
@@ -6567,7 +6565,8 @@
       "A clean supported installation reaches the product shell without manual database editing",
       "A prior supported version upgrades without losing Releases, Sessions, evidence or objects",
       "Restore meets approved objectives and independently verifies evidence",
-      "Qualified manual accessibility review has no unresolved task-blocking defect"
+      "Qualified manual accessibility review has no unresolved task-blocking defect",
+      "Historical Releases, submitted forms and Sessions remain readable after the approved capability changes; incompatible contracts fail explicitly and are not silently upgraded"
     ],
     "regression_quality_gates": [
       "Production targets remain protected by refusal guards",
@@ -6588,7 +6587,16 @@
       "Teludens Design Language sections 0 through 13",
       "Teludens Spatial Grammar sections 1 through 14",
       "Teludens Experience Physics sections 1 through 15",
-      "Teludens Reference Slice sections 1 through 20"
+      "Teludens Reference Slice sections 1 through 20",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5",
+      "OPEN-004",
+      "OPEN-010",
+      "OPEN-013",
+      "OPEN-018",
+      "DEC-63",
+      "DEC-64",
+      "03 Schema sections 9 and 10",
+      "08 Canon sections 2 through 5"
     ],
     "source_evidence": [
       "apps/studio/src/App.tsx",
@@ -6600,7 +6608,12 @@
       "references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md",
       "references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md",
       "references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json",
-      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png"
+      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png",
+      "packages/validation-engine/src/index.ts",
+      "packages/simulation-schema/src/index.ts",
+      "apps/studio/src/core-design/Editor.tsx",
+      "apps/server/src/studio/content-library.ts",
+      "apps/server/src/runtime/information-flow.ts"
     ],
     "depends_on_unratified": [],
     "prerequisites_verified": false,
@@ -6611,7 +6624,7 @@
     ],
     "evidence": [],
     "risk": "high",
-    "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
+    "approval_gate": "All checkpoints and required automated/human product acceptance must pass for PS-830 completion. Prior PS-815/820 human or provider deferrals remain release blockers; safe independent preparation does not imply predecessor acceptance. Freeze a new candidate after the implementation checkpoints for downstream UAT",
     "implementation_state": "planned",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
@@ -6626,7 +6639,10 @@
     "docs_continuity": [
       "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
       "Record exact user-test evidence and unresolved defects",
-      "Update authoritative contracts and compatibility/migration registers when changed"
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
     ],
     "revisit_triggers": [
       "The governing product specification changes",
@@ -6636,10 +6652,10 @@
     "id": "PS-830",
     "slug": "prove-blank-install-fractured-order-golden-journey",
     "phase": "P11",
-    "title": "Prove the blank-install Fractured Order golden journey",
-    "category": "golden product acceptance",
-    "goal": "Demonstrate the complete platform promise from a blank installation through a finished Fractured Order-derived Session using only product interfaces.",
-    "user_outcome": "A target user can create, author, review, publish, staff, run, adjudicate, report, replay and archive a complete simulation without fixture seeding, raw JSON, SQL or source changes.",
+    "title": "Implement approved authoring rules and prove the Fractured Order golden journey",
+    "category": "implementation and golden product acceptance",
+    "goal": "Deliver the approved concept, form, Decision Record and Inject behavior through supported product workflows, then prove the original and customized Fractured Order design-to-archive journeys.",
+    "user_outcome": "A non-programming Designer customizes sectors, role arrangements, forms and adjudication in Studio, publishes under policy and runs a traceable Session without source edits, SQL or raw JSON authoring.",
     "product_requirements": [
       "REQ-009",
       "REQ-020",
@@ -6650,7 +6666,13 @@
       "REQ-063",
       "REQ-064",
       "REQ-069",
-      "INV-022"
+      "INV-022",
+      "REQ-012",
+      "REQ-014",
+      "REQ-028",
+      "REQ-030",
+      "REQ-070",
+      "INV-009"
     ],
     "prerequisites": [
       "PS-820"
@@ -6660,42 +6682,80 @@
       "All product user-test scripts",
       "Clean-install environment",
       "Release source and Scenario asset provenance",
-      "Operator and participant role coverage"
+      "Operator and participant role coverage",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
     ],
     "scope": [
       "Fresh installation and initial Organization setup",
       "UI-only Project and Release authoring or approved Template import plus visual verification of every element",
       "Session creation, staffing and full role execution",
       "Control, Inject, communication, Poll, Voice, adjudication, offline and recovery cases",
-      "Reports, evidence verification, replay, archive and restore"
+      "Reports, evidence verification, replay, archive and restore",
+      "Implement OPEN-004 and OPEN-010 across schema, publication, Studio, Runtime, server validation and export",
+      "Align single-Action and configurable per-recipient Inject behavior with DEC-63/64; verify all prior assumption confirmations without reopening their decisions"
     ],
     "expected_paths": [
       "tests/e2e/golden-journey/",
       "docs/acceptance/",
       "output/playwright/golden-journey/",
-      "test-results/golden-journey/"
+      "test-results/golden-journey/",
+      "apps/studio/src/",
+      "apps/runtime-web/src/",
+      "apps/server/src/",
+      "packages/simulation-schema/",
+      "packages/validation-engine/",
+      "packages/release-compiler/",
+      "packages/form-renderer/",
+      "tests/platform/",
+      "apps/server/test/",
+      "scripts/",
+      "package.json",
+      "docs/promptbook/CONTRACT_COMPATIBILITY_MATRIX.md",
+      "docs/promptbook/DATA_MIGRATION_REGISTER.md"
     ],
     "non_goals": [
       "Do not seed domain records directly into SQL",
       "Do not call private service functions instead of product APIs/UI",
-      "Do not waive unavailable or inconvenient features"
+      "Do not waive unavailable or inconvenient features",
+      "Do not enable deferred arbitrary scripts, deep form nesting, complex matrix/ranking editors, production recording/transcription or secret ballots",
+      "Do not count the Energy customization proof alone as full OPEN-010 coverage or claim model scientific accuracy from workflow correctness",
+      "Do not mutate historical form submissions or published Releases to fit new contracts; create explicit versioned compatibility paths",
+      "Do not implement authority transfer here; PS-845 owns it. Infrastructure/identity bootstrap may use documented setup, but simulation domain state must be created through supported UI workflows"
     ],
     "implementation": [
-      "Create a resumable human-readable golden-journey protocol with automated checkpoints",
-      "Use public product routes and ordinary authorized personas only",
-      "Capture evidence for every Fractured Order parity capability and every platform lifecycle step",
-      "Record duration, defects, recovery actions and final archive verification"
+      "Checkpoint A - Baseline: inspect dirty working changes, existing Energy proof and PS-820 installation evidence. Reproduce failures before editing. Retain the original Fractured Order baseline and record currently verified vs missing capabilities",
+      "Checkpoint B - Concepts: establish one stable-key concept registry consumed by Studio and server publication validation. Protect mandatory foundations, derive dependencies from actual enabled references, retain disabled authored content, exclude inactive behavior from compiled execution and report actionable errors. Verify a simple one-Stage design and Fractured Order",
+      "Checkpoint C - Forms: implement the approved basic field/reference types, units, conditional rules and bounded repeating groups end to end. Enforce OPEN-010 limits on the server and expose them in Studio. Define the exact byte convention and bounded structured-submission size with evidence; update authoritative versioned contracts and representative old/new fixtures",
+      "Checkpoint D - Expressions and text: implement restricted deterministic computed fields and safe formatted text; recompute authoritative values server-side, preserve formula versions and reject cycles, missing inputs, division errors and unsafe content. Do not execute Designer code or grant expression access to hidden data",
+      "Checkpoint E - Files and interchange: reuse existing object-storage and scan mechanisms for permission-scoped form attachments; enforce count/size/aggregate limits and unavailable-until-clean behavior. Implement versioned JSON import/export, CSV mapping previews and linked repeating-group tables, plus readable PDF where supported. Test access, retention and partial failures",
+      "Checkpoint F - Decision and Inject semantics: enforce one Action per Decision Record and prove multi-record adjudication. Make acknowledgement/response requirements configurable with independent recipient progress and completion from Release rules. Test informational, acknowledgement-only and response-required Injects, duplicate delivery and revoked access",
+      "Checkpoint G - Studio proof: from a blank supported install and documented identity bootstrap, import the official Template through the public UI, visually verify it, then add Energy sector, a second Facilitator sharing the intended team role, a required contingency field and rubric adjudication. Configure Orientation requirements through Studio; never bypass readiness with SQL or service calls",
+      "Checkpoint H - Golden acceptance: create and verify CMD-GOLDEN-JOURNEY, run the unchanged reference and customized design through distinct-author approval, publication, staffing, participant submission, adjudication, allowed effects, reports, evidence verification, replay and archive. Record every supported role and required capability; deferred production modes stay unavailable",
+      "Close and verify each checkpoint before the next. Use focused domain/integration/browser checks for the changed behavior; run broader required task gates on the converged candidate. A partial checkpoint is not PS-830 PASS"
     ],
     "deliverables": [
       "UI-only golden journey",
       "Role-by-role evidence bundle",
       "Completed Session archive and verified reports",
-      "Human acceptance script"
+      "Human acceptance script",
+      "Checkpoint A-H acceptance matrix with direct evidence for each approved capability",
+      "Versioned shared form/concept contracts, compatibility fixtures and declared limits",
+      "Energy variation plus unchanged-reference journey bundles; partial prior walkthrough remains historical only"
     ],
     "test_ids": [
       "PS-830-T01",
       "PS-830-T02",
-      "AC-09"
+      "AC-09",
+      "PS-830-T03",
+      "PS-830-T04",
+      "PS-830-T05",
+      "PS-830-T06",
+      "PS-830-T07",
+      "PS-830-T08"
     ],
     "validation_command_refs": [
       "CMD-GOLDEN-JOURNEY",
@@ -6704,14 +6764,23 @@
       "CMD-PLATFORM-A11Y",
       "CMD-EVIDENCE-VERIFY",
       "CMD-GAP-AUDIT",
-      "CMD-TELUDENS-AUDIT"
+      "CMD-TELUDENS-AUDIT",
+      "CMD-PLATFORM-TYPECHECK",
+      "CMD-PLATFORM-TEST",
+      "CMD-PLATFORM-INTEGRATION",
+      "CMD-REPORT-RECONCILE",
+      "CMD-CLEAN-INSTALL",
+      "CMD-SECURITY"
     ],
     "acceptance_criteria": [
-      "The journey begins from a clean install and creates all domain state through supported product workflows",
-      "Every principal Designer, Reviewer, Publisher, Operator, Control, Participant and Research role completes its work",
-      "The Session reaches terminal state with traceable reports, replay, archive and verified evidence",
-      "No step uses raw identifiers, direct SQL, raw JSON authoring or undocumented commands",
-      "Fractured Order uses the shared Teludens platform shell, components and official Plenum wordmarks without simulation-specific chrome"
+      "PS-830-T03: stable-key mandatory/optional concept rules work on server and UI; disabled draft content survives and enabled references to disabled concepts block publication with precise locations",
+      "PS-830-T04: every approved supported field type and repeating structure round-trips Studio, published Runtime, server validation and export; exact OPEN-010 boundaries and one-over cases are verified; old Releases/submissions remain valid under their own version",
+      "PS-830-T05: calculations are deterministic, server-authoritative and version-pinned; erroneous/cyclic expressions and unsafe formatted text fail safely without hidden-data leaks",
+      "PS-830-T06: attachment permission, scan-unavailability/quarantine, count/size totals and retention work; malformed imports fail with usable feedback and exports preserve authorized structure",
+      "PS-830-T07: one Action per record and multi-record adjudication are proven; configured Inject completion respects independent recipients and does not force optional acknowledgement/response steps",
+      "PS-830-T08: all four user-approved Energy variations are authored, published and executed through Studio/product interfaces, including the required contingency validation and rubric result with appropriate human approval",
+      "PS-830-T01/T02 and AC-09: unchanged reference and customized UI-only journeys reach completed/archive state with verified evidence, reports and historical-version readability; all required non-deferred parity capabilities are evidenced",
+      "No core workflow requires raw IDs, SQL, raw JSON authoring, private service calls or simulation-specific Runtime branches; platform branding and desktop accessibility remain conformant"
     ],
     "regression_quality_gates": [
       "All 17 Fractured Order parity targets remain PASS",
@@ -6720,9 +6789,9 @@
       "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",
       "Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity"
     ],
-    "commit_subject": "test(product): prove blank-install golden journey",
-    "commit_body": "Why:\n- Demonstrate the complete platform promise from a blank installation through a finished Fractured Order-derived Session using only product interfaces.\nWhat:\n- A target user can create, author, review, publish, staff, run, adjudicate, report, replay and archive a complete simulation without fixture seeding, raw JSON, SQL or source changes.\nVerification:\n- Run the listed automated gates and the task user-test script.\nCompatibility / migrations:\n- Preserve existing Releases and Sessions; use the named additive migration when required.\nRisks / follow-up:\n- Any unverified or inaccessible workflow remains a blocker.\nRefs: PS-830, REQ-009, REQ-020, REQ-024",
-    "pr_description": "Summary: A target user can create, author, review, publish, staff, run, adjudicate, report, replay and archive a complete simulation without fixture seeding, raw JSON, SQL or source changes. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change."
+    "commit_subject": "feat(studio): implement approved design and golden journey",
+    "commit_body": "Why:\n- Deliver owner-approved customization as a complete Studio-to-Runtime workflow.\nWhat:\n- Concept dependencies, bounded forms, single-Action and Inject semantics, and original/Energy golden journeys in focused checkpoint commits when authorized.\nVerification:\n- Execute checkpoint tests, registered commands and human acceptance; retain missing evidence explicitly.\nCompatibility / migrations:\n- Version contracts and preserve historical Releases and submissions; allocate migrations only after inspecting the schema.\nRisks / follow-up:\n- Full provider, operational transfer and production approval remain separate.\nRefs: PS-830, OPEN-004, OPEN-010, DEC-63, DEC-64",
+    "pr_description": "Implement the approved authoring capabilities across Studio, publication, Runtime and export, then prove original and Energy Fractured Order journeys. Report checkpoint evidence, historical compatibility, remaining acceptance gates and actual migrations; use focused changes rather than a single unreviewable patch."
   },
   {
     "primary_owner": "Epic N",
@@ -6734,7 +6803,12 @@
       "Teludens Design Language sections 0 through 13",
       "Teludens Spatial Grammar sections 1 through 14",
       "Teludens Experience Physics sections 1 through 15",
-      "Teludens Reference Slice sections 1 through 20"
+      "Teludens Reference Slice sections 1 through 20",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5",
+      "OPEN-004",
+      "OPEN-010",
+      "DEC-63",
+      "DEC-64"
     ],
     "source_evidence": [
       "apps/studio/src/App.tsx",
@@ -6758,7 +6832,7 @@
     ],
     "evidence": [],
     "risk": "high",
-    "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
+    "approval_gate": "PS-840 accepts product UAT only after all applicable product evidence and human review pass. It does not sign off identity-provider delivery, institution operations or authority transfer. PS-845 owns transfer; PS-850 requires the entire unscoped ledger to pass",
     "implementation_state": "planned",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
@@ -6773,7 +6847,10 @@
     "docs_continuity": [
       "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
       "Record exact user-test evidence and unresolved defects",
-      "Update authoritative contracts and compatibility/migration registers when changed"
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
     ],
     "revisit_triggers": [
       "The governing product specification changes",
@@ -6783,9 +6860,9 @@
     "id": "PS-840",
     "slug": "close-cross-simulation-uat-and-all-gap-rows",
     "phase": "P11",
-    "title": "Close cross-simulation UAT and every completeness-ledger row",
+    "title": "Prove cross-simulation UAT and close product completeness gaps",
     "category": "no-gap acceptance",
-    "goal": "Prove that platform completeness generalizes beyond Fractured Order and that no specified feature, function, UI state or operational obligation is missing.",
+    "goal": "Independently demonstrate that the approved authoring behavior generalizes beyond Fractured Order and close every applicable product-owned completeness obligation.",
     "user_outcome": "Real target users can build and run materially different simulations, and the release packet contains no unknown, fixture-only, inaccessible or untested product behavior.",
     "product_requirements": [
       "REQ-001",
@@ -6919,12 +6996,17 @@
       "Fractured Order golden-journey evidence",
       "Policy-negotiation and crisis-response fixtures",
       "All user feedback and defect ledgers",
-      "Every supported screen/state/viewport/input combination"
+      "Every supported screen/state/viewport/input combination",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
     ],
     "scope": [
       "Task-based UAT with Designers, Operators, Participants, Reviewers and Research users",
       "UI-only creation and execution of two contrasting simulations",
-      "Complete requirement/screen/API/state/accessibility/security/operations evidence audit",
+      "Product requirement/screen/API/state/accessibility/security evidence audit, with separately owned external/operational gates explicitly carried to PS-850",
       "Defect correction and rerun until every blocking row passes"
     ],
     "expected_paths": [
@@ -6942,11 +7024,14 @@
     "implementation": [
       "Run observed task-based UAT and record hesitations, failures and recovery attempts",
       "Author and run both validation simulations through public UI workflows",
-      "Make the gap audit fail on any incomplete status or missing evidence link",
-      "Fix every S0-S2 product defect and rerun affected journeys"
+      "Run the structural completeness audit and review each product-owned obligation. Keep PS-815/820 external/human and PS-845 operational evidence explicitly pending; the unscoped release audit belongs to PS-850 and must not pass early",
+      "Fix every S0-S2 product defect and rerun affected journeys",
+      "Build policy negotiation with optional numeric/adjudication mechanics disabled and crisis response with resources, conditional Injects and richer Forms. Verify enabling/disabling, preserved draft content, dependency denials and per-recipient completion using ordinary Designer workflows",
+      "Use a second target-user reviewer for the PS-830 evidence; newly discovered capability defects return to the owning PS-830 checkpoint and invalidate affected golden/UAT evidence",
+      "Keep functional/rubric correctness evidence separate from scientific model fidelity: record method assumptions, test cases and limitations; do not claim domain accuracy from passing UI tests"
     ],
     "deliverables": [
-      "Completed no-gap matrix",
+      "Product-complete ledger with external and operational gates truthfully pending",
       "Cross-simulation UI evidence",
       "UAT report",
       "Closed defect ledger",
@@ -6968,7 +7053,7 @@
       "CMD-TELUDENS-AUDIT"
     ],
     "acceptance_criteria": [
-      "Every ledger row is PASS with a direct evidence link and accountable reviewer",
+      "Every applicable product-owned ledger row is PASS with direct evidence and an accountable reviewer, or has an already authorized N/A scope exclusion. External identity/institutional and PS-845 transfer rows retain their actual pending status and block PS-850, not a false product acceptance claim",
       "Two materially different simulations are visually authored, published and run without Runtime source changes",
       "No S0-S2 defect or task-blocking usability/accessibility issue remains",
       "Every supported persona, state, viewport, input and deployment profile has representative evidence",
@@ -6986,20 +7071,236 @@
     "pr_description": "Summary: Real target users can build and run materially different simulations, and the release packet contains no unknown, fixture-only, inaccessible or untested product behavior. Risks: high workflow and authorization regressions. Migration: none. Evidence: automated checks, screenshots, and the task user-test script. Rollback: revert the bounded UI/API slice and forward-fix any additive schema change."
   },
   {
-    "primary_owner": "Epic N",
+    "id": "PS-842",
+    "slug": "reconcile-role-interface-consistency",
+    "phase": "P11",
+    "title": "Reconcile role-by-role interface navigation, labels and layout",
+    "category": "product UX consistency",
+    "primary_owner": "Epic C",
+    "goal": "Close every interface inconsistency and gap found by the 2026-11-09 role-by-role audit so each user role meets one navigation model, one vocabulary and one Teludens layout grammar.",
+    "user_outcome": "Every visitor, Organization role, Platform Administrator and Fractured Order participant role can find their work through visible navigation, reads the same name for the same thing everywhere, never sees internal identifiers, and meets consistent layouts at the supported desktop scope.",
+    "product_requirements": [
+      "REQ-009",
+      "REQ-010",
+      "REQ-063",
+      "REQ-064",
+      "REQ-071",
+      "INV-002",
+      "INV-019"
+    ],
     "source_refs": [
-      "07 Roadmap sections 13 and 15",
-      "06 Data sections 16 through 18",
-      "Decision Register OPEN-016"
+      "PRD section 6",
+      "04 Studio sections 3 through 27",
+      "05 Runtime sections 2 through 23",
+      "Teludens Design Language sections 0 through 13",
+      "Teludens Spatial Grammar sections 1 through 14",
+      "Teludens Experience Physics sections 1 through 15",
+      "Teludens Reference Slice sections 1 through 20",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5",
+      "DEC-25",
+      "DEC-34",
+      "DEC-51"
     ],
     "source_evidence": [
-      "apps/studio/src/App.tsx",
       "apps/runtime-web/src/App.tsx",
-      "apps/server/src/http/runtime-http.ts"
+      "apps/runtime-web/index.html",
+      "apps/runtime-web/src/product/LifecyclePortal.tsx",
+      "apps/runtime-web/src/product/AdministrationPortal.tsx",
+      "apps/runtime-web/src/product/PlatformOrganizationsPortal.tsx",
+      "apps/runtime-web/src/product/PlatformAdministratorsPortal.tsx",
+      "apps/runtime-web/src/product/ParticipantPortal.tsx",
+      "apps/runtime-web/src/product/ProjectPortal.tsx",
+      "apps/runtime-web/src/product/ProjectDemo.tsx",
+      "apps/runtime-web/src/product/ResearchReportingPortal.tsx",
+      "apps/runtime-web/src/runtime/RuntimeFrame.tsx",
+      "apps/runtime-web/src/runtime/SessionSettings.tsx",
+      "apps/runtime-web/src/runtime/StageControls.tsx",
+      "apps/runtime-web/src/runtime/ArtifactWorkspace.tsx",
+      "apps/runtime-web/src/runtime/RecordInterchange.tsx",
+      "apps/studio/src/App.tsx",
+      "apps/studio/src/core-design/Editor.tsx",
+      "apps/server/src/http/runtime-http.ts",
+      "definitions/fractured-order/fractured-order-release-source.json",
+      "definitions/validation/crisis-response/release-source.json",
+      "definitions/validation/policy-negotiation/release-source.json",
+      "docs/design/route-inventory.md",
+      "docs/design/participant-interfaces.md",
+      "docs/design/prohibited-patterns.md",
+      "docs/design/view-families/",
+      "tests/e2e/participant-interfaces.mjs",
+      "tests/e2e/product/product-shell.spec.mjs",
+      "references/teludens-design-system-catalog/README.md",
+      "references/teludens-design-system-catalog/docs/TELUDENS_DESIGN_LANGUAGE.md",
+      "references/teludens-design-system-catalog/docs/SPATIAL_GRAMMAR.md",
+      "references/teludens-design-system-catalog/docs/EXPERIENCE_PHYSICS.md",
+      "references/teludens-design-system-catalog/docs/PLENUM_REFERENCE_SLICE.md",
+      "references/teludens-design-system-catalog/docs/TELUDENS_TOKENS.json",
+      "references/teludens-design-system-catalog/assets/logos/Plenum. Wordmark Primary.png"
     ],
-    "depends_on_unratified": [
-      "OPEN-016"
+    "depends_on_unratified": [],
+    "prerequisites": [
+      "PS-840"
     ],
+    "prerequisites_verified": false,
+    "ready_to_execute": false,
+    "inspect": [
+      "The 2026-11-09 role-by-role baseline at output/playwright/ps-842/baseline-2026-11-09/ (local, synthetic, pre-implementation; not release evidence) and its README for capture method and known fixture artifacts",
+      "Rendered routes, navigation and headings for every persona: visitor, Designer, Reviewer, Publisher, Operator, Admin, Research Analyst, Platform Administrator and invited Participant",
+      "Every Fractured Order participant navigation item, dialog, header menu and Simulation Settings tab for Scribe (all four teams), Facilitator, Notetaker and White Cell",
+      "Release Interface Profiles, navigation items, module titles and Terminology Profile labels in the Fractured Order and validation Release sources; how Runtime projects them",
+      "docs/design/route-inventory.md, participant-interfaces.md, journeys.md, state-inventory.md, motion-inventory.md, forms-dialogs-messages.md, prohibited-patterns.md, impeccable/conflicts.md and every view-family brief",
+      "Glossary terms for Inject, Message Channel, Communication Route and Active Role Context, and existing Terminology Profile support",
+      "PS-830 golden-journey and PS-840 UAT evidence that depends on labels, routes or layouts this task changes",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
+    ],
+    "scope": [
+      "Product shell, Studio shell and runtime shell navigation, routing, headers, role context and not-found/unauthorized states for every persona",
+      "Canonical labels, ordering, icons, status/date/plural formatting and empty-state text across Studio, product portals, Operator console and all participant roles",
+      "Replacement of user-facing internal identifiers, enum keys and free-text ID entry with plain labels, authorized selections and progressive technical disclosure",
+      "Teludens layout conformance for the audited findings at the supported desktop scope, light and dark theme",
+      "New Release versions for Fractured Order and the two validation simulations where navigation, labels or order change; design documentation and a fail-closed interface-consistency regression command"
+    ],
+    "expected_paths": [
+      "apps/runtime-web/src/",
+      "apps/runtime-web/index.html",
+      "apps/studio/src/",
+      "apps/server/src/http/ only where navigation must reflect existing server-projected authority",
+      "definitions/fractured-order/",
+      "definitions/validation/",
+      "scripts/ and package.json for CMD-INTERFACE-CONSISTENCY",
+      "tests/e2e/",
+      "tests/visual/",
+      "docs/design/",
+      "docs/acceptance/",
+      "output/playwright/ps-842/"
+    ],
+    "non_goals": [
+      "No new authentication, authorization or tenancy model, Organization Role, persistence schema, service or dependency; navigation never grants access",
+      "Do not rewrite published Releases, Governing Release pins or running Sessions; changed interface configuration ships only as new Release versions through publication and activation",
+      "Do not add phone or touch layouts; mobile/touch remains approved N/A",
+      "Do not choose canonical vocabulary, theme default or administration information architecture by implementer preference; record and follow the owner decision",
+      "Do not delete technical provenance needed for audit; move it behind progressive disclosure",
+      "No visual redesign, refactor or dependency upgrade beyond the listed findings"
+    ],
+    "implementation": [
+      "Checkpoint A - Baseline and ledger: reproduce the 2026-11-09 baseline on the current candidate at 1440x900, 1024x768 and 200% zoom in light and explicit dark theme with keyboard. Create docs/acceptance/PS-842-interface-consistency.md with one row per finding IC-01 to IC-40 (roles affected, rule, owning path, evidence, PASS/FAIL/BLOCKED/NOT RUN/N/A). Reclassify phone-only observations as narrow-width/200%-zoom checks and mark them N/A only when they do not reproduce at the supported desktop scope",
+      "Checkpoint A - Decision intake (record the actual owner answer; never invent one): (a) canonical participant vocabulary for the inbox, Inject/notification and proposal concepts, expressed as Glossary terms or Release Terminology Profile labels; (b) the single Administration navigation model and admin landing destination; (c) multi-role chip content; (d) whether White Cell Simulation Settings embeds Operator controls or links to the Operator console; (e) whether the theme follows the operating-system preference by default; (f) the timer-extension unit; (g) the first-run visual direction for landing and Your Sessions. Unresolved items go to docs/design/impeccable/conflicts.md or candidate OPEN text in CONFLICT_REGISTER.md and their dependent rows stay BLOCKED",
+      "Checkpoint B - Navigation and routing. IC-01: one Administration navigation; remove the Releases and Sessions Administration panel (LifecyclePortal AdministrationNavigation: heading stuck on \"Members and Organization Roles\", wrong \"on this page\" copy, input-like link boxes); one Workspaces entry landing on the first authorized destination; one admin side menu with canonical labels (Workforce access, Identity provider, Plugin operations, Deployment posture, Data policy), current-page indication and the same Publisher coverage everywhere. IC-02: one secondary-navigation pattern for Administration and Platform control plane. IC-03: Your Sessions keeps the Workspaces menu for people with other authorized destinations. IC-04: a Research-Analyst-only principal lands on or can navigate to Research reports. IC-05: an explicit not-found state for unknown paths including /admin/*, distinct from unauthorized and offline, with no false \"Connection error\" badge. IC-06: the legacy /?sessionId= link redirects to the canonical Session route. IC-07: the role chip represents the person's authority (the Admin persona no longer shows only \"Operator\"; the Publisher persona no longer only \"Designer\"). IC-08: one page-header pattern with exactly one H1, an object-specific title on Release and Session detail, status/count lines below the title and one breadcrumb. IC-09: the Operator console Staffing item has a stable target and current state. IC-10: a Publisher without Session access sees an authority-appropriate workspace label instead of \"Releases and Sessions\" plus \"Sessions are not available\"",
+      "Checkpoint C - One owner per control (INV-019). IC-11: timer extension uses one unit, label and command presentation in the Operator console (\"Extension seconds\") and White Cell Game Controls (\"Additional minutes\"), with exact boundary conversion tests. IC-12: the read-only Operator adjudication queue and the participant adjudication review workflow have distinct names. IC-13: one status formatter for Session, Stage, Inject, adjudication and Plugin states (no \"paused\", \"approved\", \"pending · stage_entry\" or raw adjudication status). IC-14: White Cell Sessions, Participants and Export Data follow decision (d) with consistent chrome and unchanged server authorization. IC-15: one date/time formatter (no \"11/9/2026, 8:45:29 AM\" beside \"Jan 15, 2026, 7:00 AM\")",
+      "Checkpoint D - Labels and vocabulary (REQ-063, REQ-071). IC-16: Studio menu labels equal page titles (Research / Research & Decisions; Access & readiness / Access; Role walkthrough / Role & Stage preview; Forms & Artifacts / Forms & Artifact Types) with one casing convention across all 27 sections and six groups. IC-17: route-inventory.md and code use the same Studio section names. IC-18: each participant navigation label equals the page or module title it opens (Scribe Actions / Strategic Actions; Responses / Communications; Notetaker Inbox / Communications; White Cell Injects / Notifications; Facilitator Received Proposals / Proposal negotiations). IC-19: a shared concept has one name, icon and relative order across Scribe, Facilitator, Notetaker and White Cell (Communications, Responses and Inbox; Received Proposals and Proposals; Notifications and Injects; Session Timeline, Tribe Street Journal and Verba positions). IC-20: empty states and generated text use authored labels with correct case and plurals (\"No rfis yet.\", \"No verba ai population sentiments yet.\", \"1 installations · 1 bindings\"). IC-21: no stacked duplicate titles (page title and first section, dialog title and inner heading, tab and card heading, the five stacked Take Action titles, the triple record-card title). IC-22: copy consistency (\"Join a session\" versus \"Your Sessions\", the all-caps code placeholder, one primary action per seat instead of \"Join as\" plus \"Enter as\")",
+      "Checkpoint E - No technical detail as user labels (REQ-009, prohibited-patterns.md). IC-23 Studio: \"Add DEC-42 reference Workflow\", form identifiers, \"OPEN-010\" in intro copy, raw Stage kinds, white_cell, offline_capable and propose_effect, digests on the primary surface, MIME types and raw collaborator role keys. IC-24 Administration and Platform: replace free-text Plugin ID, comma-separated permissions, Scope reference and Target reference with server-validated selections of authorized named items; present PEM keys, SCIM and dead-letter states through labelled file selection and plain-language status with technical detail progressively disclosed; humanize plugin titles and the \"institutional-archive\" default. IC-25 Runtime and Operator: \"Record JSON or CSV file\", lifecycle and Stage version numbers, \"stage_entry\", \"dead-lettered\" and \"0 / unlimited occupied · minimum 1\"",
+      "Checkpoint F - Layout and Teludens structure at the supported desktop scope. IC-26: one semantic badge colour map (Active, Open, Immutable, approved, Completed, With Team Facilitator). IC-27: remove card mosaics and nested cards (boxed search forms, fields boxed inside record cards, cards inside dialogs, fused search and list cards) in favour of hairline structure. IC-28: Operator console replaces decision-free statistic tiles, normalizes section spacing and uses one disclosure control per assignment row. IC-29: bound long work (Studio Advanced logic about 10,370px, Access about 5,286px, Communications about 4,581px, Operator console about 4,518px, Workforce access) and reduce Studio Forms' 29 nested scroll containers to one scroll owner per region. IC-30: no horizontal overflow or clipped context at 1024x768 and 200% zoom (Plugin operations heading, QA demo actions, runtime header wrapping and the truncated Session title, which must expose its full value). IC-31: runtime header controls have visible or consistently disclosed labels; no essential control is icon-only. IC-32: runtime side-menu group headings are stable and grouped per role, including White Cell's 13 items. IC-33: one icon per concept (calendar, inbox and bell reuse; Facilitator RFIs pencil versus Scribe calendar; Deck and Present). IC-34: one pattern each for empty states, record-detail disclosure, choice tiles with aligned controls, file selection, dialog close and expand controls. IC-35: the same records use the same review pattern and one record-navigation method across Scribe, Facilitator and White Cell. IC-36: local defects (Releases and Sessions policy banner alignment, White Cell Apply control spacing, Workforce role checkbox wrapping, Data policy layout aligned with other admin pages, Studio Overview placeholder title flash and uneven form grid, Platform Organization duplicate title and Active-versus-readiness wording). IC-37: the runtime shell carries the approved primary wordmark under the theme-safe contract; first-run imagery follows decision (g); the theme default follows decision (e)",
+      "Checkpoint G - Release configuration and documentation. IC-38: the Crisis Response (Field Coordinator, Operations Lead) and Policy Negotiation (Delegate, Moderator) validation Releases define usable navigation through Studio or Release source. IC-39: Fractured Order label, order, icon and grouping changes ship as a new compiled Release version through publish and activation; existing pinned Releases keep their contracts. IC-40: update route-inventory.md (remove the Checkpoint A status; add /admin/identity, /platform/organizations, /platform/organizations/:id, /platform/administrators, the three invitation routes, /projects/:id/demo and the /studio/ no-Project state), participant-interfaces.md and the view-family briefs, and add briefs for the Platform control plane, invitation pages and landing page",
+      "Checkpoint H - Regression guard and acceptance: create CMD-INTERFACE-CONSISTENCY (proposed npm run test:interface-consistency) from synthetic personas and the participant fixture approach. It fails on a menu label that differs from its page title, shared-concept name, icon or order drift across roles, more than one H1, visible UUIDs, enum keys or internal codes outside approved technical disclosures, horizontal overflow at 1024x768 or 200% zoom, more than one scroll owner per region, nested cards, a missing not-found state, or an authorized workspace unreachable through visible navigation. Verify CMD-PARTICIPANT-INTERFACES, rerun affected PS-830 and PS-840 gates on the changed candidate and complete the human role-by-role walkthrough"
+    ],
+    "authorization_privacy": [
+      "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
+      "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
+      "Use synthetic test identities and never expose secrets or protected content in screenshots or logs",
+      "Navigation, role chips and menus derive from server-projected authority; hiding or showing a link never authorizes (INV-002). Prove that server denial is unchanged when a menu item is removed, that not-found does not reveal unauthorized objects, and that selections replacing ID fields list only authorized items and are revalidated server-side"
+    ],
+    "concurrency_idempotency_versions": [
+      "Preserve idempotent Commands, immutable Releases and Governing Release pins",
+      "Make persistent mutations transactional and version-aware",
+      "Test duplicate, stale, interrupted and concurrent user actions",
+      "Unified Stage controls keep version-checked Commands and expected aggregate versions; timer unit conversion is exact and tested at boundaries"
+    ],
+    "deliverables": [
+      "Interface consistency ledger docs/acceptance/PS-842-interface-consistency.md with every IC row closed, owner-approved N/A or BLOCKED on a recorded decision",
+      "One navigation model, vocabulary, formatter set and Teludens layout grammar across all roles",
+      "New Fractured Order and validation Release versions carrying corrected interface configuration",
+      "Updated route inventory, participant interface record and view-family briefs, plus new briefs for the Platform control plane, invitations and landing",
+      "CMD-INTERFACE-CONSISTENCY regression command and the human walkthrough script docs/design/user-test/PS-842-script.md with results"
+    ],
+    "migration_ids": [],
+    "api_contract_ids": [
+      "design-system-v1",
+      "visual-qa-matrix-v1"
+    ],
+    "test_ids": [
+      "PS-842-T01",
+      "PS-842-T02",
+      "PS-842-T03",
+      "PS-842-T04",
+      "PS-842-T05"
+    ],
+    "validation_command_refs": [
+      "CMD-PLATFORM-LINT",
+      "CMD-PLATFORM-TYPECHECK",
+      "CMD-PLATFORM-TEST",
+      "CMD-PLATFORM-BUILD",
+      "CMD-PRODUCT-E2E",
+      "CMD-PLATFORM-A11Y",
+      "CMD-VISUAL-QA",
+      "CMD-TELUDENS-AUDIT",
+      "CMD-PARTICIPANT-INTERFACES",
+      "CMD-INTERFACE-CONSISTENCY",
+      "CMD-GOLDEN-JOURNEY",
+      "CMD-GENERALIZATION",
+      "CMD-GAP-AUDIT"
+    ],
+    "acceptance_criteria": [
+      "PS-842-T01: every synthetic persona (visitor, Designer, Reviewer, Publisher, Operator, Admin, Research Analyst, Platform Administrator and Participant) reaches every authorized workspace through visible navigation; there is one Administration menu with consistent labels and current state; unknown routes show not-found distinct from unauthorized and offline; the legacy Session link redirects; server denial is unchanged",
+      "PS-842-T02: in Studio and every Fractured Order participant role, each menu label equals the title it opens; shared concepts have one name, icon and relative order; status, date, plural and empty-state text come from single formatters with no raw enum keys",
+      "PS-842-T03: no rendered route shows UUIDs, enum keys, internal reference codes, digests or MIME types as primary labels; free-text ID entry is replaced by server-validated authorized selections with negative tests",
+      "PS-842-T04: every view family passes at 1440x900, 1024x768 and 200% zoom, in light and dark theme, with keyboard, reduced motion and forced colors: one H1, no horizontal overflow, one scroll owner per region, no nested cards or decision-free statistic rows, a stable runtime header and side menu, consistent badge semantics and zero automated WCAG 2.2 AA violations",
+      "PS-842-T05: a named reviewer completes the role-by-role walkthrough for every persona and for Scribe, Facilitator, Notetaker and White Cell without hesitation attributable to an IC finding; every IC row is PASS, owner-approved N/A or BLOCKED on a recorded decision; affected PS-830 and PS-840 evidence is rerun on the changed candidate"
+    ],
+    "regression_quality_gates": [
+      "Navigation and label changes never alter server authorization or Information Policy",
+      "Published Releases and running Sessions keep their pinned interface contracts",
+      "Changes made after PS-840 invalidate affected PS-830 golden-journey and PS-840 UAT evidence; rerun CMD-GOLDEN-JOURNEY, CMD-GENERALIZATION and affected product checks on the changed candidate instead of copying PASS labels",
+      "Mobile/touch remains approved N/A; narrow-width findings are judged at the supported 1024 x 768 and 200% zoom desktop scope",
+      "Synthetic data is clearly labeled",
+      "Teludens semantic tokens, spatial grammar, experience physics and canonical Plenum reference slice remain conformant",
+      "Only the approved catalog Plenum primary wordmark with theme-safe presentation is used as platform branding; simulation content cannot replace platform identity"
+    ],
+    "docs_continuity": [
+      "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
+      "Record exact user-test evidence and unresolved defects",
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS",
+      "Update docs/design/route-inventory.md, participant-interfaces.md, the view-family briefs and prohibited-patterns.md where a rule is clarified; record owner decisions in their authoritative place",
+      "Record CMD-INTERFACE-CONSISTENCY and CMD-PARTICIPANT-INTERFACES verification in COMMAND_REGISTRY.md only from observed PASS evidence"
+    ],
+    "risk": "high",
+    "approval_gate": "Change-level acceptance requires every IC row PASS, owner-approved N/A or BLOCKED on a recorded owner decision, passing automated evidence, a completed human walkthrough and reruns of affected PS-830/PS-840 evidence. It does not approve production; PS-850 requires this task's rows to pass",
+    "implementation_state": "planned",
+    "evidence": [],
+    "commit_subject": "feat(ui): reconcile role interface navigation and labels",
+    "commit_body": "Why:\n- The 2026-11-09 role-by-role audit found duplicate navigation, mismatched labels, exposed internal identifiers and inconsistent layouts across roles.\nWhat:\n- One navigation model, vocabulary, formatter set and Teludens layout grammar for every persona and Fractured Order participant role.\nVerification:\n- PS-842-T01 through T05, CMD-INTERFACE-CONSISTENCY, registered UI gates and the task user-test script.\nCompatibility / migrations:\n- No schema change expected. Interface configuration changes ship as new Release versions; published Releases and running Sessions keep their pins.\nRisks / follow-up:\n- Rerun affected PS-830/PS-840 evidence; owner decisions not yet made keep their rows BLOCKED.\nRefs: PS-842, REQ-063, REQ-071, INV-019",
+    "pr_description": "Summary: Every role meets one navigation model, one vocabulary and one Teludens layout grammar, with no internal identifiers shown as labels. Risks: high workflow, labelling and authorization-presentation regressions across all roles. Migration: none expected; corrected interface configuration ships as new Release versions. Evidence: interface consistency ledger, CMD-INTERFACE-CONSISTENCY, registered UI gates, screenshots and the task user-test script. Rollback: revert the bounded UI slice and keep prior Release versions active.",
+    "revisit_triggers": [
+      "The governing product specification changes",
+      "User testing finds a missing or unusable workflow",
+      "A dependency or release gate changes",
+      "An owner decision on vocabulary, administration navigation, theme default or White Cell control placement changes"
+    ]
+  },
+  {
+    "primary_owner": "Epic J",
+    "source_refs": [
+      "Decision Register sections 7.3 and 7.5",
+      "ADR-001",
+      "OPEN-016",
+      "OPEN-017",
+      "Sync section 8",
+      "05 Runtime section 2",
+      "06 Data sections 16 through 18"
+    ],
+    "source_evidence": [
+      "apps/server/src/runtime/commands/processor.ts",
+      "apps/server/src/identity/context.ts",
+      "apps/server/src/runtime/access/onboarding.ts",
+      "scripts/recovery-evidence.mjs",
+      "docs/operations/PS-820-INSTALL-UPGRADE-RECOVERY.md"
+    ],
+    "depends_on_unratified": [],
     "prerequisites_verified": false,
     "ready_to_execute": false,
     "migration_ids": [],
@@ -7008,7 +7309,7 @@
     ],
     "evidence": [],
     "risk": "high",
-    "approval_gate": "Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.",
+    "approval_gate": "All transfer integrity, timing and refusal evidence plus named operational review must pass. A safe refusal is correct behavior for a negative case but cannot substitute for a successful timed positive rehearsal. PS-850 owns final production approval",
     "implementation_state": "planned",
     "authorization_privacy": [
       "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
@@ -7023,7 +7324,164 @@
     "docs_continuity": [
       "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
       "Record exact user-test evidence and unresolved defects",
-      "Update authoritative contracts and compatibility/migration registers when changed"
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
+    ],
+    "revisit_triggers": [
+      "The governing product specification changes",
+      "User testing finds a missing or unusable workflow",
+      "A dependency or release gate changes"
+    ],
+    "id": "PS-845",
+    "slug": "implement-and-rehearse-controlled-authority-transfer",
+    "phase": "P11",
+    "title": "Implement and rehearse controlled Session authority transfer",
+    "category": "operational implementation and recovery verification",
+    "goal": "Implement resolved OPEN-016 and prove safe operator-controlled Session authority transfer with measured recovery and preserved committed evidence.",
+    "user_outcome": "An authorized operator can transfer a Session to a prepared replacement without competing writers, duplicated accepted decisions or unexplained evidence gaps.",
+    "product_requirements": [
+      "REQ-005",
+      "REQ-006",
+      "REQ-008",
+      "REQ-051",
+      "REQ-064",
+      "REQ-067",
+      "REQ-069",
+      "REQ-070",
+      "INV-001",
+      "INV-002",
+      "INV-017",
+      "INV-019"
+    ],
+    "prerequisites": [
+      "PS-840"
+    ],
+    "inspect": [
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning",
+      "Inventory every consequential writer including timers, workers, effects and media-control paths; inspect database privileges and transaction authority checks",
+      "Review candidate deployment topology, operator permissions, backup/anchor custody, client replay and existing recovery harnesses"
+    ],
+    "scope": [
+      "Controlled prepare/fence/verify/transfer/resume operation with explicit permissions, reason and audit evidence",
+      "Shared-database application-host replacement and separately verified database/site recovery boundaries",
+      "Failure injection and measured operator rehearsals on disposable nonproduction infrastructure",
+      "Runbooks, observability, interrupted-transfer recovery and named Operations/Technical acceptance"
+    ],
+    "expected_paths": [
+      "apps/server/src/runtime/",
+      "apps/server/src/identity/",
+      "apps/server/src/operations/",
+      "apps/server/contracts/",
+      "packages/event-contracts/",
+      "deploy/",
+      "scripts/",
+      "package.json",
+      "apps/server/test/",
+      "tests/deployment/",
+      "docs/operations/",
+      "docs/release-evidence/",
+      "test-results/authority-transfer/"
+    ],
+    "non_goals": [
+      "No automatic failover, cloud-to-LAN takeover or new paid infrastructure",
+      "No production fault injection or disabling a live writer without explicit authorization",
+      "No owner/epoch changes through undocumented manual SQL or a timeout-only promotion",
+      "No rewriting historical evidence, repurposing recovery-account scripts or equating backup restore speed with live-transfer time"
+    ],
+    "implementation": [
+      "Checkpoint A - Contract and operator path: map all writers and reuse the existing authority record. Specify a bounded, authenticated operator operation and inspect schema before assigning any additive migration. Define preconditions, transfer ownership, resume/retry semantics, evidence records and refusal behavior",
+      "Checkpoint B - Safe execution: suspend intake, resolve in-flight receipts, fence old application and background writers, verify committed state/Evidence continuity, then atomically advance the epoch and successor. Isolate any old database primary through verified infrastructure controls before promotion; a row in one database cannot fence another writable database",
+      "Checkpoint C - Client and failure behavior: reject stale owners/epochs on every consequential write, reconnect and reconcile idempotently, handle concurrent/repeated transfer attempts and crash at each phase, and remain paused if proof of fencing or continuity is unavailable",
+      "Checkpoint D - Rehearsal: create and verify CMD-AUTHORITY-TRANSFER. Measure planned transfer and unexpected application-host failure under the conditions in resolved OPEN-016, including operator response. Separately retain OPEN-017 database/site recovery evidence and all safety preconditions; never weaken fencing to meet a timing target",
+      "Record source/image/schema/configuration/environment identity, old/new authority, operator, failure-detection/start/resume timestamps, committed-data comparison, Evidence verification and all negative cases. Obtain named Operations/Technical review; PS-850 determines release GO"
+    ],
+    "deliverables": [
+      "Supported operator transfer operation and versioned contract",
+      "Repeatable nonproduction transfer/failure harness",
+      "Audited timed-rehearsal and committed-data/Evidence-continuity bundle",
+      "Runbook with staffing, refusal, recovery and escalation procedures"
+    ],
+    "test_ids": [
+      "PS-845-T01",
+      "PS-845-T02",
+      "PS-845-T03",
+      "PS-845-T04"
+    ],
+    "validation_command_refs": [
+      "CMD-PLATFORM-TYPECHECK",
+      "CMD-PLATFORM-TEST",
+      "CMD-PLATFORM-INTEGRATION",
+      "CMD-AUTHORITY-TRANSFER",
+      "CMD-EVIDENCE-VERIFY",
+      "CMD-BACKUP-RESTORE",
+      "CMD-DEPLOYMENT-SMOKE",
+      "CMD-SECURITY"
+    ],
+    "acceptance_criteria": [
+      "PS-845-T01: planned shared-database transfer meets the approved conditional objective and preserves all committed records, receipts and independently verified Evidence",
+      "PS-845-T02: unexpected application-host failure meets the approved detection-to-resume objective including operator response on a prepared replacement",
+      "PS-845-T03: stale/concurrent/background writers, duplicate requests, interrupted phases, unavailable fencing and database split-writer scenarios are denied or safely remain paused without duplicate effects",
+      "PS-845-T04: reconnected clients reconcile safely, failback cannot resurrect old authority, and database/site recovery remains separately measured under OPEN-017",
+      "Named Operations and Technical reviewers accept the exact-candidate rehearsal and staffing/runbook; missing timing, isolation or review evidence remains NOT RUN/FAIL"
+    ],
+    "regression_quality_gates": [
+      "Every consequential writer enforces authority transactionally, including background paths",
+      "No duplicate accepted decisions/effects or lost committed data during application-only transfer",
+      "Failure to prove old-writer isolation or continuity prevents promotion",
+      "Disposable targets and explicit refusal guards protect current demos and production",
+      "Any fixes affecting product/auth/install behavior trigger affected PS-815/820/830/840 reruns before final approval"
+    ],
+    "commit_subject": "feat(runtime): add controlled authority transfer",
+    "commit_body": "Why:\n- Deliver the operator-controlled recovery contract approved in OPEN-016.\nWhat:\n- A fenced, audited transfer operation and timed nonproduction rehearsals.\nVerification:\n- PS-845-T01 through T04, registered regression gates and named operator review.\nCompatibility / migrations:\n- Inspect existing authority records; preserve epochs, Releases and evidence; allocate additive migrations only if required.\nRisks / follow-up:\n- No automatic failover or production deployment; PS-850 owns exact-artifact GO.\nRefs: PS-845, OPEN-016, OPEN-017, ADR-001",
+    "pr_description": "Implement safe operator-controlled Session authority transfer and demonstrate integrity, refusal behavior, client reconciliation and approved timing on an isolated candidate. Include real migration/compatibility implications and attributable operational review; do not claim automatic high availability."
+  },
+  {
+    "primary_owner": "Epic N",
+    "source_refs": [
+      "07 Roadmap sections 13 and 15",
+      "06 Data sections 16 through 18",
+      "Decision Register OPEN-016",
+      "Decision Register sections 3, 5.7 and 7.1 through 7.5"
+    ],
+    "source_evidence": [
+      "apps/studio/src/App.tsx",
+      "apps/runtime-web/src/App.tsx",
+      "apps/server/src/http/runtime-http.ts"
+    ],
+    "depends_on_unratified": [],
+    "prerequisites_verified": false,
+    "ready_to_execute": false,
+    "migration_ids": [],
+    "api_contract_ids": [
+      "release-evidence-v2"
+    ],
+    "evidence": [],
+    "risk": "high",
+    "approval_gate": "The exact converged candidate requires all PS-810 environment, PS-815 provider/mail/human, PS-820 institutional/AT, PS-830 golden, PS-840 product UAT, PS-842 interface consistency and PS-845 transfer gates to be PASS or explicitly owner-approved N/A where applicable. Only an attributable authorized owner decision records GO; otherwise record NO-GO. Approval to write this promptbook is not release approval",
+    "implementation_state": "planned",
+    "authorization_privacy": [
+      "Reuse the existing trusted OIDC, Organization Role, Session Role, Seat and RLS boundaries",
+      "Return only server-authorized data and test cross-Organization, cross-Session and revoked access",
+      "Use synthetic test identities and never expose secrets or protected content in screenshots or logs"
+    ],
+    "concurrency_idempotency_versions": [
+      "Preserve idempotent Commands, immutable Releases and Governing Release pins",
+      "Make persistent mutations transactional and version-aware",
+      "Test duplicate, stale, interrupted and concurrent user actions"
+    ],
+    "docs_continuity": [
+      "Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md",
+      "Record exact user-test evidence and unresolved defects",
+      "Update authoritative contracts and compatibility/migration registers when changed",
+      "Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries",
+      "Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels",
+      "Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS"
     ],
     "revisit_triggers": [
       "The governing product specification changes",
@@ -7050,14 +7508,24 @@
       "INV-028"
     ],
     "prerequisites": [
-      "PS-840"
+      "PS-815",
+      "PS-820",
+      "PS-830",
+      "PS-840",
+      "PS-842",
+      "PS-845"
     ],
     "inspect": [
       "All P07-P11 handoffs",
       "Completeness and defect ledgers",
       "Golden journey and UAT evidence",
       "Security, accessibility, performance, deployment and recovery approvals",
-      "Exact source/image/package digests"
+      "Exact source/image/package digests",
+      "Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth",
+      "Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates",
+      "Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A",
+      "Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests",
+      "Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning"
     ],
     "scope": [
       "Clean release-candidate build and signed manifests",
@@ -7078,10 +7546,12 @@
       "Do not claim high availability beyond approved authority-transfer behavior"
     ],
     "implementation": [
-      "Create a clean tagged candidate from reviewed committed source",
-      "Run every mandatory gate against the exact candidate",
-      "Assemble signed evidence and operating runbooks",
-      "Record explicit authorized approval or NO-GO with owners and remediation"
+      "Assemble the final candidate only after approved implementation checkpoints converge; committing/tagging/signing requires existing user authorization or the applicable authorized workflow",
+      "Build the final evidence matrix across PS-810 and PS-815 through PS-845; preserve historical results with their original digests and classify current evidence independently",
+      "Run the unscoped CMD-GAP-AUDIT with --release and every mandatory final-candidate gate. Track affected reruns after every correction; do not modify the candidate after its final acceptance without reevaluation",
+      "Reconcile each older provider/manual/institutional result against candidate changes, rerun affected scenarios and obtain attributable confirmation; missing external access or qualified reviewers is NOT RUN and blocks GO",
+      "Assemble operating, incident, rollback/forward-fix, restore and transfer runbooks and exact source/image/lockfile/schema/configuration/Release/evidence digests",
+      "Present the completed packet for explicit owner GO or record NO-GO with owners and remediation. Production deployment remains separately authorized"
     ],
     "deliverables": [
       "Signed release candidate",
@@ -7102,13 +7572,21 @@
       "CMD-GAP-AUDIT",
       "CMD-SECURITY",
       "CMD-CLEAN-INSTALL",
-      "CMD-BACKUP-RESTORE"
+      "CMD-BACKUP-RESTORE",
+      "CMD-AUTHORITY-TRANSFER",
+      "CMD-IDENTITY-PROVIDER-STAGING",
+      "CMD-WORKFORCE-MIGRATION",
+      "CMD-PRODUCT-E2E",
+      "CMD-PLATFORM-A11Y",
+      "CMD-EVIDENCE-VERIFY"
     ],
     "acceptance_criteria": [
       "The exact candidate passes every mandatory automated and human gate",
       "No completeness row, S0-S2 defect or production control is FAIL, BLOCKED or NOT RUN",
       "Rollback, forward-fix, incident and restore procedures are owned and rehearsed",
-      "An authorized owner signs GO for the exact source, image, schema, Package and evidence digests"
+      "An authorized owner signs GO for the exact source, image, schema, Package and evidence digests",
+      "Resolved policy IDs are not listed as missing decisions; each maps to demonstrated implementation evidence or an explicit unresolved implementation blocker",
+      "No frozen-candidate circularity: all implementation changes converge before final gate signing, and post-UAT fixes rerun affected upstream gates"
     ],
     "regression_quality_gates": [
       "Approval is bound to immutable artifact digests",

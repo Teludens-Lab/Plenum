@@ -4,7 +4,7 @@ import type { CoreDesignV1, RuntimeActorSelectorV1, RuntimeVoiceChannelDefinitio
 
 import { StudioCollaborationClient } from "../collaboration/client.js";
 import { AddButton, CheckField, ItemActions, MultiCheck, SelectField, TextField, Workspace } from "../core-design/Editor.js";
-import { basicVoiceChannel, coreArray } from "../core-design/model.js";
+import { basicVoiceChannel, coreArray, stageChoiceLabel } from "../core-design/model.js";
 
 const words = (value: string) => value.replaceAll("_", " ");
 const permission = (selector: RuntimeActorSelectorV1, sessionRoleId?: string, teamId?: string) =>
@@ -64,7 +64,7 @@ export function VoiceEditor({ core, client }: { core: CoreDesignV1; client: Stud
           <SelectField id={`voice-mode-${channel.id}`} label="Mode" value={channel.mode} options={["radio_ptt", "open_room", "private_call", "broadcast"].map((value) => ({ value, label: words(value) }))} path={[...base, "mode"]} client={client} />
           <TextField id={`voice-capacity-${channel.id}`} label="Capacity" type="number" value={channel.capacity} path={[...base, "capacity"]} client={client} />
           <TextField id={`voice-language-${channel.id}`} label="Language (optional)" value={channel.language ?? ""} path={[...base, "language"]} client={client} transform={(value) => value || undefined} />
-          <MultiCheck legend="Active Stages (none means all)" values={channel.activeStageIds ?? []} options={stages.map(({ id, name }) => ({ value: id, label: name }))} path={[...base, "activeStageIds"]} client={client} />
+          <MultiCheck legend="Active Stages (none means all)" values={channel.activeStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={[...base, "activeStageIds"]} client={client} />
           <SelectorEditor legend="Can listen" selector={channel.canListen} path={[...base, "canListen"]} core={core} client={client} allowPublic />
           <SelectorEditor legend="Can transmit" selector={channel.canTransmit} path={[...base, "canTransmit"]} core={core} client={client} />
           <SelectorEditor legend="Can moderate" selector={channel.canModerate} path={[...base, "canModerate"]} core={core} client={client} />

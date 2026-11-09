@@ -16,6 +16,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { processPrincipalSessionCommand, type PrincipalSessionCommandContext } from "./commands/processor.js";
+import { scheduleConfiguredInjects } from "./information-flow.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -264,7 +265,7 @@ export async function activateRelease(
     throw authorizationError("INVALID_COMMAND", "The Release activation Command is invalid.", correlationId);
   }
   return processPrincipalSessionCommand({ pool, context, command, correlationId, deploymentId,
-    lockSessionAndExecute: async ({ client, activeReleaseId }) => {
+    lockSessionAndExecute: async ({ client, activeReleaseId, sessionStatus }) => {
       if (!context.organizationRoles.includes("operator")) {
         return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "An Operator Organization Role is required." };
       }
@@ -297,6 +298,10 @@ export async function activateRelease(
       if (review.rowCount !== 1) {
         return { status: "rejected", errorCode: "REFERENCE_INVALID", message: "A current reviewed impact is required." };
       }
+      if (sessionStatus === "active" || sessionStatus === "paused") {
+        const failure = await scheduleConfiguredInjects({ client, context, command, activeReleaseId: candidateReleaseId, sessionStatus });
+        if (failure) return failure;
+      }
       const activationId = randomUUID();
       const sequence = impact.activationSequence + 1;
       const inserted = await client.query<{ activated_at: Date }>(
@@ -312,7 +317,9 @@ export async function activateRelease(
       );
       const activatedAt = inserted.rows[0]?.activated_at;
       if (activatedAt === undefined) {
-        return { status: "rejected", errorCode: "STALE_AGGREGATE_VERSION", message: "The active Release changed; review the current impact." };
+        // The Session lock excludes concurrent activation. Roll back all work,
+        // including new schedules, if its validated predecessor is missing.
+        throw new Error("The locked Release activation predecessor is missing");
       }
       const event: ReleaseActivationV1 = {
         contractId: RELEASE_ACTIVATION_CONTRACT_ID,

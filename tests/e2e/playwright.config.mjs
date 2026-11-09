@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const port = Number(process.env.PLENUM_E2E_PORT ?? 4173);
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
   testDir: ".",
   testMatch: "runtime.spec.mjs",
@@ -12,7 +15,7 @@ export default defineConfig({
   outputDir: "../../output/playwright/ps-150/results",
   reporter: [["line"]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     browserName: "chromium",
     permissions: ["microphone"],
     launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
@@ -21,7 +24,7 @@ export default defineConfig({
   },
   webServer: {
     command: "node runtime-server.mjs",
-    url: "http://127.0.0.1:4173",
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 30_000
   }

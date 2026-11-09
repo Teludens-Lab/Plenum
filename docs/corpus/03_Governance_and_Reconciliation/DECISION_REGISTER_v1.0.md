@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Document ID | DREG |
-| Version | 1.0.15 |
-| Date | 2026-11-01 |
+| Version | 1.0.16 |
+| Date | 2026-11-08 |
 | Status | Controlled. Single source of decisions for the Plenum corpus. |
 | Owner | Product Owner |
 | Approvers | Sethu Nguna, acting as Product Owner, Methodology Lead, Technical Lead, Security Owner and Operations Owner |
@@ -45,15 +45,17 @@ ADR-001 through ADR-005 keep the meanings they had in the earlier governing-deci
 
 ## 3. Owner approval and outstanding confirmation
 
-The Product Owner directed on 2026-10-20 that every current Proposed governing document and ADR is accepted as Approved. Under the status definition above, additional specialist sign-off named in an ADR remains required. The following items still need separate confirmation because they are Assumed, Open, or an editor-selected term rather than Proposed documents:
+The Product Owner directed on 2026-10-20 that every current Proposed governing document and ADR is accepted as Approved. Additional specialist sign-off named in an ADR remains required under the status definition above.
 
-- **Assumed decisions:** DEC-21 to DEC-27 and DEC-30 to DEC-40. Questions 1–22 of the 2026-10-17 questionnaire came back without visible selections, so the recommended options were applied as stated in that questionnaire.
-- **Approved ADRs:** ADR-002, ADR-004, ADR-005, ADR-008 to ADR-014 and ADR-017 were accepted by Product Owner direction on 2026-10-20. ADR-006 and ADR-007 were already Approved. ADR-001, ADR-003, ADR-015, ADR-016 and ADR-018 remain Confirmed by Product Owner direction on 2026-10-19.
-- **Completed specialist sign-off:** the Product Owner confirmed on 2026-10-21 that the Security Owner sign-off required by ADR-012 is complete.
-- **Replacement term:** the name **Message Channel** in DEC-51 was chosen by the editor; the Product Owner confirmed only that "Voice Channel" keeps its name.
-- **Approver identities:** OPEN-001 was resolved on 2026-10-26. Sethu Nguna holds the Product Owner, Methodology Lead, Technical Lead, Security Owner and Operations Owner roles. Independent legal, research-governance, accessibility or other specialist review remains required wherever a release gate explicitly calls for it.
+On **2026-11-08**, Sethu Nguna, acting in the owner roles established by OPEN-001, explicitly approved the recommendations for OPEN-004, OPEN-010, OPEN-016 and OPEN-023; all eighteen assumptions DEC-21–27 and DEC-30–40; and the replacement name in DEC-51, including the stated amendments and clarifications. Source: direct user approval, “Approve your recommendations for all four OPEN items, all 18 assumed decisions, and DEC-51, including the stated amendments and clarifications.”
 
-To confirm or change any of these, reply with the ID and the decision.
+- **Assumptions closed:** fifteen original entries are now Confirmed. The three materially amended entries DEC-23, DEC-35 and DEC-40 retain their historical wording and are Superseded by DEC-62, DEC-63 and DEC-64 respectively. Confirmation details are in §5.7.
+- **Open questions closed:** all twenty-nine OPEN entries in §7 now have resolutions, including baseline-limited resolutions. This does not enable deferred capabilities or prove implementation completeness.
+- **Terminology:** both Voice Channel and Message Channel in DEC-51 are Confirmed.
+- **Remaining approval gates:** named ADR specialist sign-offs, independent legal/research/accessibility review where required, implementation acceptance, institutional operations approval and release approval remain separate. This approval does not retroactively complete those gates. ADR-012 Security Owner sign-off was already recorded complete on 2026-10-21.
+- **Approver identities:** Sethu Nguna holds the Product Owner, Methodology Lead, Technical Lead, Security Owner and Operations Owner roles under resolved OPEN-001.
+
+The previously unanswered questionnaire remains historical provenance, not an outstanding confirmation request. See §7.5 for implementation and evidence obligations from this approval.
 
 ## 4. Product decisions DEC-01 to DEC-20
 
@@ -90,13 +92,13 @@ Source: owner questionnaire of 2026-10-17. "Q" numbers refer to that questionnai
 
 | ID | Decision | Status | Q |
 |---|---|---|---|
-| DEC-21 | The enterprise PRD v0.6 is treated as unavailable. It is rebuilt as 01 PRD v0.7 from Foundation v0.2, the v0.6a amendment and the architecture specifications. PRD v0.7 becomes the top authority. | Assumed | Q1 |
-| DEC-22 | The Simulation Design and Research Canon is rebuilt as document 08. | Assumed | Q2 |
-| DEC-23 | References to unavailable engineering governance files (PROJECT_BOOTSTRAP, AGENTS, QA_STANDARDS, UNIVERSAL_DESIGN_STANDARDS, Control Pack CTL-001–014, Prompt Book v1.4) are removed. | Assumed | Q3 |
-| DEC-24 | Document numbering runs 01 PRD, 02 Platform Architecture, 03 Canonical Simulation Schema, 04 Design Studio, 05 Runtime and Adjudication, 06 Data, Security and Reporting, 07 Implementation Roadmap, 08 Simulation Design and Research Canon, 09 API, Event and Workflow Contracts. | Assumed | Q4 |
-| DEC-25 | One decision register (this document) with the ID scheme in §2; every other document cites IDs only. | Assumed | Q6, Q7 |
-| DEC-26 | The rebuilt set is released as PRD v0.7, architecture documents v1.3, data model and synchronization protocol v1.1. Amendments are merged into document bodies rather than appended. | Assumed | Q10 |
-| DEC-27 | Detailed design and spike code may proceed in parallel with upstream approval, provided they are labeled non-authoritative until the governing documents are approved. | Assumed | Q11 |
+| DEC-21 | The enterprise PRD v0.6 is treated as unavailable. It is rebuilt as 01 PRD v0.7 from Foundation v0.2, the v0.6a amendment and the architecture specifications. PRD v0.7 becomes the top authority. | Confirmed | Q1; owner approval 2026-11-08, §5.7 |
+| DEC-22 | The Simulation Design and Research Canon is rebuilt as document 08. | Confirmed | Q2; owner approval 2026-11-08, §5.7 |
+| DEC-23 | References to unavailable engineering governance files (PROJECT_BOOTSTRAP, AGENTS, QA_STANDARDS, UNIVERSAL_DESIGN_STANDARDS, Control Pack CTL-001–014, Prompt Book v1.4) are removed. | Superseded by DEC-62 | Q3; owner approval 2026-11-08, §5.7 |
+| DEC-24 | Document numbering runs 01 PRD, 02 Platform Architecture, 03 Canonical Simulation Schema, 04 Design Studio, 05 Runtime and Adjudication, 06 Data, Security and Reporting, 07 Implementation Roadmap, 08 Simulation Design and Research Canon, 09 API, Event and Workflow Contracts. | Confirmed | Q4; owner approval 2026-11-08, §5.7 |
+| DEC-25 | One decision register (this document) with the ID scheme in §2; every other document cites IDs only. | Confirmed | Q6, Q7; owner approval 2026-11-08, §5.7 |
+| DEC-26 | The rebuilt set is released as PRD v0.7, architecture documents v1.3, data model and synchronization protocol v1.1. Amendments are merged into document bodies rather than appended. | Confirmed | Q10; owner approval 2026-11-08, §5.7 |
+| DEC-27 | Detailed design and spike code may proceed in parallel with upstream approval, provided they are labeled non-authoritative until the governing documents are approved. | Confirmed | Q11; owner approval 2026-11-08, §5.7 |
 | DEC-28 | Rebuilt documents are Markdown files written back into the Project in the existing folder structure; superseded files move to `archive/`. | Confirmed | Q31 |
 | DEC-29 | Build order: glossary and decision register, then PRD, then architecture documents, then data model and synchronization protocol, then code. | Confirmed | Q32 |
 
@@ -106,17 +108,17 @@ Full definitions live in `GLOSSARY_AND_CROSSWALK_v1.0.md`.
 
 | ID | Decision | Status | Q |
 |---|---|---|---|
-| DEC-30 | The execution instance of a simulation is called a **Session**. "Run" is retired. | Assumed | Q12 |
-| DEC-31 | Design hierarchy: Simulation Project contains a Core Design (reusable structure) and Scenarios (exercise content); validated drafts freeze into Definition Revisions; Definition Revisions compile into Simulation Releases. | Assumed | Q13 |
-| DEC-32 | A Simulation Template is a Core Design published to the organization library for reuse. Starting from a template copies the Core Design; Scenario content is copied only if the designer chooses. | Assumed | Q14 (no default was offered) |
-| DEC-33 | Time and structure use one concept, **Stage**, with a designer-chosen Stage Type label and optional grouping and nesting. | Assumed | Q15 |
-| DEC-34 | **Inject** is a designed release of information. **Domain Event** is a committed system state change. **Evidence Event** is the tamper-evident record. | Assumed | Q16 |
-| DEC-35 | **Artifact** is the generic structured record. A **Decision Record** is an Artifact whose type is marked decision-bearing. **Actions** are components inside a Decision Record. | Assumed | Q17 |
-| DEC-36 | "Workspace" is removed; there is no level between Organization and Simulation Project. | Assumed | Q18 (no default was offered) |
-| DEC-37 | Command outcomes: server statuses `received`, `accepted`, `rejected`, `needs_reconciliation`; client-only status `local_pending`; a replay returns the original receipt with a `replayed` flag. | Assumed | Q19 |
-| DEC-38 | Commands use imperative dot-case (`artifact.submit`); events use past-tense dot-case (`artifact.submitted`). | Assumed | Q20 |
-| DEC-39 | Publication lifecycle: Draft → Validated → In Review → Approved → Published → Superseded → Archived. A test session is not mandatory by default; an organization policy may require one before approval. | Assumed | Q21 |
-| DEC-40 | Inject lifecycle: Draft → Scheduled → Eligible → Released → Acknowledged → Responded → Closed, with Cancelled and Expired as exits. | Assumed | Q22 |
+| DEC-30 | The execution instance of a simulation is called a **Session**. "Run" is retired. | Confirmed | Q12; owner approval 2026-11-08, §5.7 |
+| DEC-31 | Design hierarchy: Simulation Project contains a Core Design (reusable structure) and Scenarios (exercise content); validated drafts freeze into Definition Revisions; Definition Revisions compile into Simulation Releases. | Confirmed | Q13; owner approval 2026-11-08, §5.7 |
+| DEC-32 | A Simulation Template is a Core Design published to the organization library for reuse. Starting from a template copies the Core Design; Scenario content is copied only if the designer chooses. | Confirmed | Q14 (no default was offered); owner approval 2026-11-08, §5.7 |
+| DEC-33 | Time and structure use one concept, **Stage**, with a designer-chosen Stage Type label and optional grouping and nesting. | Confirmed | Q15; owner approval 2026-11-08, §5.7 |
+| DEC-34 | **Inject** is a designed release of information. **Domain Event** is a committed system state change. **Evidence Event** is the tamper-evident record. | Confirmed | Q16; owner approval 2026-11-08, §5.7 |
+| DEC-35 | **Artifact** is the generic structured record. A **Decision Record** is an Artifact whose type is marked decision-bearing. **Actions** are components inside a Decision Record. | Superseded by DEC-63 | Q17; owner approval 2026-11-08, §5.7 |
+| DEC-36 | "Workspace" is removed; there is no level between Organization and Simulation Project. | Confirmed | Q18 (no default was offered); owner approval 2026-11-08, §5.7 |
+| DEC-37 | Command outcomes: server statuses `received`, `accepted`, `rejected`, `needs_reconciliation`; client-only status `local_pending`; a replay returns the original receipt with a `replayed` flag. | Confirmed | Q19; owner approval 2026-11-08, §5.7 |
+| DEC-38 | Commands use imperative dot-case (`artifact.submit`); events use past-tense dot-case (`artifact.submitted`). | Confirmed | Q20; owner approval 2026-11-08, §5.7 |
+| DEC-39 | Publication lifecycle: Draft → Validated → In Review → Approved → Published → Superseded → Archived. A test session is not mandatory by default; an organization policy may require one before approval. | Confirmed | Q21; owner approval 2026-11-08, §5.7 |
+| DEC-40 | Inject lifecycle: Draft → Scheduled → Eligible → Released → Acknowledged → Responded → Closed, with Cancelled and Expired as exits. | Superseded by DEC-64 | Q22; owner approval 2026-11-08, §5.7 |
 
 ### 5.3 Product and reference-slice decisions
 
@@ -157,7 +159,7 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 | DEC-48 | Poll and ballot changes are Commands sent through the standard command endpoint (09 §3). Push-to-talk floor control (request, renew, release) is the one exception: dedicated low-latency endpoints, never queued offline and never replayed after reconnection. | Confirmed | 09, 11, 12 |
 | DEC-49 | The voice media stack — a self-hosted WebRTC selective forwarding unit, TURN relays and any datastore the media server needs internally — is an approved exception to ADR-005 and ADR-013. It stays inside the media-provider boundary and never writes to the Plenum PostgreSQL database. | Confirmed | 12; ADR-017 |
 | DEC-50 | Transcription of voice is allowed only with the consent of every participant whose speech is transcribed. Recording and transcription are off by default. | Confirmed | 12; OPEN-027 |
-| DEC-51 | "Voice Channel" names an audio channel. The earlier "Communication Channel" (a message type) is renamed **Message Channel**. | Confirmed (term); replacement name Assumed | Glossary |
+| DEC-51 | "Voice Channel" names an audio channel. The earlier "Communication Channel" (a message type) is renamed **Message Channel**. | Confirmed 2026-11-08 (both names) | Glossary |
 | DEC-52 | Plugin developers are limited to SSG developers, approved research partners and institutional customers. There is no public marketplace or anonymous submission. | Confirmed | 10 |
 | DEC-53 | Designers do not write plugin code in Studio. They discover, configure, connect, test and bind approved plugins. | Confirmed | 10 |
 | DEC-54 | Every consequential effect that a plugin or model composition proposes on authoritative Session state requires explicit approval by an authorized person before it is committed. Computation, precomputation and staging of proposals need no approval. The rule covers plugin and composition effects only; designer-authored rules, scheduled Injects and automatic Stage transitions run as configured in the Release. | Confirmed | 05, 10 |
@@ -173,6 +175,37 @@ Source: Product Owner answers of 2026-10-17 on three owner-supplied specificatio
 | ID | Decision | Status | Source |
 |---|---|---|---|
 | DEC-61 | Organization Roles are **Admin**, **Designer**, **Publisher**, **Operator**, **Reviewer** and **Research Analyst**. They remain separate from Release-defined Session Roles and may be combined on one Organization Membership. Reviewer authority is limited to project-scoped methodology review, publication approval and approval of governed live changes; it does not grant design editing, Organization administration or Session operation. Research Analyst authority is limited to project- or protocol-scoped, policy-approved research evidence and exports subject to classification, consent, retention and data-access approval; it does not grant identity mapping, unrestricted raw or restricted data, Organization administration, publication or Session operation. Additional authority requires a separately assigned role or explicit data-access approval. | Confirmed | Product Owner direction; resolves OPEN-025 and supersedes DEC-44 |
+
+### 5.7 Owner confirmation and amendments recorded 2026-11-08
+
+The following replacement decisions preserve the original IDs and wording as historical records under §1.2.
+
+| ID | Decision | Status | Source |
+|---|---|---|---|
+| DEC-62 | Remove only references to genuinely unavailable or obsolete engineering-governance files. Available repository `AGENTS.md`, `rules/QA_STANDARDS.md` and `rules/UNIVERSAL_DESIGN_STANDARDS.md` remain applicable. | Confirmed | Owner approval 2026-11-08; supersedes DEC-23 |
+| DEC-63 | An Artifact is a structured record. A Decision Record is an Artifact of a decision-bearing type and contains exactly one Action. One adjudication may cover multiple Decision Records/Actions. | Confirmed | Owner approval 2026-11-08; supersedes DEC-35 and aligns with resolved OPEN-018 |
+| DEC-64 | Inject scheduling, acknowledgement and response requirements are configurable. The lifecycle vocabulary retains Draft, Scheduled, Eligible, Released, Acknowledged, Responded, Closed, Cancelled and Expired; not every Inject must traverse every state. Acknowledgements and responses are tracked per recipient. One recipient's acknowledgement does not establish completion for all recipients. Release configuration determines applicable requirements and completion. | Confirmed | Owner approval 2026-11-08; supersedes DEC-40 |
+
+The owner also confirmed the following interpretations of the existing decisions; these clarify their application without replacing their core meaning:
+
+| Decision | Confirmed application |
+|---|---|
+| DEC-21 | PRD v0.7 is the reconstructed product baseline, subject to this Decision Register and later approved decisions. Resolved OPEN-023 controls recovery of earlier source material. |
+| DEC-22 | Document 08 remains the source for simulation methodology, research traceability and design completeness. |
+| DEC-24 | Keep established document numbering; later documents may extend it, as documents 10–12 already do. |
+| DEC-25 | Other documents may explain consequences while citing IDs; they do not become competing approval records. |
+| DEC-26 | Listed versions are historical reconstruction baselines, not permanent version freezes. Subsequent substantive changes increment versions and preserve history. |
+| DEC-27 | Exploration before approval does not authorize production release or silently settle unresolved product choices. |
+| DEC-30 | Session names a simulation execution. Model run may describe one model execution and is not a synonym for Session. |
+| DEC-31 | Keep reusable mechanics, Scenario content, frozen Definition Revisions and runnable Simulation Releases distinct. |
+| DEC-32 | Template creation offers an explicit choice to include an example Scenario; scenario copying is not the default. |
+| DEC-33 | Designer labels such as round, phase and turn do not change the underlying Stage concept or approved execution limits. |
+| DEC-34 | Inject, Domain Event and Evidence Event retain their separate meanings. |
+| DEC-36 | Workspace may be an interface label but creates no additional ownership, tenancy or permission layer. |
+| DEC-37 | Local persistence is not server acceptance; retries preserve the original receipt and do not duplicate accepted work. |
+| DEC-38 | Technical command/event names follow the convention; user-facing labels use plain language. |
+| DEC-39 | Resolved OPEN-013 governs production distinct-author approval and sandbox-only self-approval. Test Sessions remain optional at platform level unless Organization policy requires them, and are recommended for materially changed mechanics. |
+| DEC-51 | Message Channel is the confirmed written-communication name; Voice Channel remains the audio name. |
 
 ## 6. Architecture decisions
 
@@ -220,32 +253,111 @@ In the Origin column, section numbers refer to the superseded source documents k
 | OPEN-001 | **Resolved 2026-10-26 by user direction.** Sethu Nguna is the named Product Owner, Methodology Lead, Technical Lead, Security Owner and Operations Owner. Consolidating these roles does not waive independent or specialist approval required by a specific release, legal, accessibility or research-governance gate. | — | Product Owner | Q9 |
 | OPEN-002 | Owner approval of ADR-002, ADR-004 and ADR-005. **Resolved 2026-10-20: the Product Owner directed that every Proposed governing document be accepted as Approved. Named specialist sign-offs remain required under the Approved status definition.** | — | Product Owner | Q8 |
 | OPEN-003 | Pin a Fractured Order commit SHA as the golden reference. **Resolved 2026-10-17: the Product Owner confirmed `ae5d5065bc04a53631815b1b1715a54e21e3ef5b`; the verified snapshot record is `references/fractured-order.snapshot.json`.** | — | Product Owner | Q5; Foundation §3 |
-| OPEN-004 | Which methodology concepts are always enabled versus optional, and their dependency matrix. | Publication dependency validation (DEC-01) | Methodology Lead | Foundation §13.1 |
+| OPEN-004 | **Resolved 2026-11-08 by owner direction.** Mandatory foundations and configurable simulation concepts with publication-time dependency validation; approved option B. See §7.1. | — (implementation/evidence obligations remain, §7.5) | Methodology Lead | Foundation §13.1 |
 | OPEN-005 | **Resolved 2026-10-22 by Methodology Lead direction.** Permit acyclic sequential and nested Stages, priority-ordered conditional transitions, and bounded parallel forks with an explicit join and `all` or `first` completion. Parallel branches must be automatic, finite, and side-effect bounded; nested parallel branches, participant activities, completion requirements, positive-duration timers, loops and continuously timed structures are prohibited. | — | Methodology Lead | Foundation §13.2 |
 | OPEN-006 | **Resolved for the PS-400 implementation baseline 2026-10-22 by Methodology Lead and Technical Lead direction.** Permit typed Gate conditions and uniquely prioritized transitions with at most one ungated lowest-priority fallback; assignment and approval quorum metadata; bounded automation; and a validator-proven path from every state to termination. Workflow loops, continuously running timers and authored code are prohibited. Human adjudication execution remains PS-410. | — | Methodology Lead, Technical Lead | Foundation §13.3 |
 | OPEN-007 | **Resolved 2026-10-21 by Product Owner direction.** Plenum is always an OIDC relying party. Cloud deployments use a customer identity provider or Keycloak over OIDC. Self-hosted deployments bundle Keycloak for local accounts, passwordless sign-in and MFA under Organization policy, with optional upstream OIDC, SAML or LDAP federation. Air-gapped deployments bundle local Keycloak/accounts and MFA; federation is limited to locally reachable institutional systems with zero public egress. Keycloak terminates SAML and LDAP. Each Deployment allowlists issuer and audience, explicitly maps claims to Persons and Organization Memberships, and defines local signing-key rollover. | — | Security Owner | Foundation §13.4; ADR-012 |
 | OPEN-008 | **Resolved 2026-10-22 by user direction.** Live activation never migrates pending Artifacts, open Polls, in-progress Workflow Instances or in-flight Model Compositions; each keeps its Governing Release, while new instances use the activated Release. No role may override this with an in-place live migration. A disruptive definition or topology change requires a new Session approved by the Methodology Lead; access, permission, Information Policy, Team, Seat or Session Role topology also requires Security Owner approval. Current authorization and revocations are always re-evaluated and take effect immediately regardless of a content pin. | — | Methodology Lead, Security Owner | Foundation §13.5; ADR-004; PS-420 |
 | OPEN-009 | **Resolved 2026-10-26 by Product Owner and Operations Owner direction.** Production data resides in institution-controlled PostgreSQL and S3-compatible storage in the institution-selected legal jurisdiction; encrypted backups use a separate failure domain in the same jurisdiction. Sethu Nguna is operational owner. The four OPEN-024 classifications apply. Evidence Events, Audit Records, signed Checkpoints, Sessions, Artifacts, Messages, non-secret Polls and reports are retained for seven years; Release packages and verification keys are retained at least as long as the evidence they verify. Research consent and withdrawal records are retained for seven years after the associated research ends. Generated exports and operational logs/metrics are retained for 90 days; rolling encrypted backups for 35 days; unsynchronized offline drafts for 30 days under OPEN-014. Production recordings, transcripts and secret-ballot records are not created under OPEN-027/028. Legal holds suspend disposal. Expiry uses an audited deletion or anonymization process; chained Evidence uses redaction or compensating records without breaking verification. Performance budgets remain governed by resolved OPEN-019. | — | Operations Owner | Foundation §13.6 |
-| OPEN-010 | Artifact schema and form constraints (field types, nesting, calculated fields, attachments) and import/export formats. | Form renderer contract | Methodology Lead | Foundation §13.7 |
+| OPEN-010 | **Resolved 2026-11-08 by owner direction.** Bounded extensible forms, including the approved initial limits; approved option B. See §7.2. | — (implementation/evidence obligations remain, §7.5) | Methodology Lead | Foundation §13.7 |
 | OPEN-011 | **Resolved for the first PS-600 candidate on 2026-10-26 by Product Owner and Security Owner direction.** Approve `org.ssg.analysis.session-indicators` version `1.0.0`, published by SSG under Sethu Nguna, as a proprietary internal-use Plugin with no redistribution. It runs locally in the Node.js/TypeScript Extension Host, is offline-capable and deterministic, accepts only approved `internal` inputs, declares only `compute` and `analyze`, and returns derived indicators with explanations. It receives no network, database, filesystem, secret-store or raw Evidence-journal access and cannot propose or commit authoritative state changes. Failure returns unavailable/failed and never invents a result. Distribution requires a signed digest-pinned bundle, SBOM, semantic version, revocation record and preserved historical provenance. No external tool or production PLI adapter is approved by this decision; each later Plugin, PLI adapter, wider classification or redistribution license requires its own owner and security approval. | — | Product Owner, Security Owner | Foundation §13.8; PS-600 |
 | OPEN-012 | **Resolved 2026-10-22 by user direction.** Live Release activation and Package import require exact schema and compiler versions unless a versioned compatibility adapter has deterministic fixtures, reconstruction evidence and Technical Lead approval. The same canonical input compiled by the same compiler version must produce byte-identical content and digests. Breaking contracts require a new version or explicit migration; historical Releases, Sessions, records and events keep their original references. Plugins remain pinned by Artifact digest and contract/host range, and in-flight runs remain pinned. Unsupported cross-version paths fail closed. | — | Technical Lead | Foundation §13.9; REQ-070; PS-420 |
 | OPEN-013 | **Resolved 2026-11-01 by user direction.** Plenum production publication uses a two-person integrity minimum. Designers may author and submit Drafts and Template versions. A Reviewer acting as Methodology Owner must approve the exact frozen revision and must not be an author of that revision. Any material content change invalidates approval. A Publisher may publish only a validated revision with current approval; the Reviewer and Publisher may be the same non-author. Published Release and Template versions are immutable and may only be superseded, deprecated, or archived with preserved history. Admin authority alone grants no methodology approval authority. Operators execute activation of published compatible Releases; consequential live activation requires a fresh distinct-author Reviewer approval, while disruptive changes require a new Session. Organizations may configure stricter separation and additional evidence. Self-approval is permitted only in explicitly non-production sandbox policy. All approvals, publications, and activations record the actor, roles, policy version, artifact digest, evidence, rationale, and timestamp. | Publication workflow controls | Product Owner, Methodology Lead | Foundation §13.10; REQ-022; PS-760 |
 | OPEN-014 | **Resolved 2026-10-23 by user direction.** Offline storage is permitted only on institution-managed, single-user devices with full-disk encryption, automatic locking, managed updates, a supported browser and restrictions on unapproved extensions; it is disabled on public, shared and unmanaged devices. Each browser data key is non-exportable, unique to its device/profile and not escrowed. Cached Session projections are deleted on credential expiry, role change or revocation. Encrypted unsynchronized drafts may be retained for at most 30 days and reopened only after the same Participant reauthenticates; accepted work is deleted locally. Lost devices are revoked immediately at the server, but local deletion occurs only on reconnect and no offline remote-wipe claim is permitted. High-security and air-gapped profiles disable browser offline storage unless an institution-managed TPM/OS-keystore protection path is available. Evidence-signing keys reside in an institution-controlled KMS, HSM or hardware token outside browsers, source control and the application database; they rotate at least annually and on compromise or custody change, while historical public verification keys are retained. | — | Security Owner | Upstream DEC-12; REQ-008; PS-500; PS-510; PS-530 |
 | OPEN-015 | **Resolved 2026-10-23 by user direction.** Offline authority has an absolute server-issued lifetime of eight hours and cannot be renewed offline. After expiry the client queues or submits nothing until online or institutional-LAN reauthentication; reconciliation rechecks device, Principal, Participant, role, Release and access revision. Server revocation is immediate, with client cache clearing on next contact; cached authorized views cannot remain usable beyond the eight-hour limit. The only offline-queueable Commands are `artifact.create`, `artifact.edit`, `artifact.submit` and `ballot.cast` for eligible non-control roles. Control, adjudication, Stage, timer, Session, Release Activation, voice, Floor, composition, effect-approval and other Approval operations remain live-only; new Command types default to live-only pending Product and Security review. Ballots are decided by authoritative server receipt time and Poll state. Offline participation is disabled on shared and unmanaged devices. | — | Product Owner, Security Owner | Upstream DEC-13; review finding; Sync §4.3; PS-500 |
-| OPEN-016 | Authority transfer procedure, failover time objective and durable fencing store. | High-availability implementation | Technical Lead, Operations Owner | Upstream DEC-14 |
+| OPEN-016 | **Resolved 2026-11-08 by owner direction.** Operator-controlled authority transfer with conditional 5-minute planned and 15-minute application-failure targets; approved option B. See §7.3. | — (implementation/evidence obligations remain, §7.5) | Technical Lead, Operations Owner | Upstream DEC-14 |
 | OPEN-017 | **Resolved 2026-10-23 by user direction.** Disaster recovery targets are RPO ≤15 minutes and RTO ≤4 hours; live authority failover remains governed separately by OPEN-016. Signed Evidence Checkpoints are created every five minutes or 1,000 Evidence Events, whichever occurs first, and at Session close. An independent anchor stores only digest, sequence range, timestamp and key identifier in a separate account/system; protected event bodies are excluded. Air-gapped profiles export signed checkpoints at Session close and daily to institution-controlled write-once or removable media. Backups and exports are encrypted and retained in a separate failure domain. Application writing, signing, anchor/export custody and restore authority are separated so no single operator can silently rewrite evidence. Full database, object and evidence-chain restoration is tested quarterly and before major production releases. Verification keys and signed manifests are retained for at least as long as the evidence they verify, and incompatible restoration uses a documented forward-fix rather than unsafe schema rollback. | — | Product Owner, Operations Owner | Upstream DEC-15; ADR-003; REQ-006; REQ-067; PS-510; PS-530 |
 | OPEN-018 | **Resolved 2026-10-22 by Product Owner direction.** A Decision Record contains exactly one Action; one adjudication may cover several Decision Records/Actions. Co-authorship uses stable Person and Organization identities with submission-time name and Organization snapshots. Submitted revisions are immutable and attributable: a Scribe submits to a Facilitator, the Facilitator may edit before forwarding, and an authorized adjudicator may approve or return; after return the Facilitator edits and resubmits. Information access is current server-evaluated authorization under the Release Information Policy; information delivery is immutable per-recipient evidence that one authorized version was made available at server time. Delivery neither grants access nor proves viewing; access is rechecked for release, delivery, query and projection; released/delivered/viewed/acknowledged remain distinct; revocation blocks future retrieval/redelivery but cannot erase device copies; restricted delivery history remains preserved. Objectives attach to the Simulation Release/package as a whole; Team/Session Role guidance belongs in governed content. Delayed effects are one-shot, Release-pinned, limited to seven days and cancellable only before due; published Release snapshots are immutable; counted Capability consumption and renewal are atomic and never negative. | — | Product Owner | Schema §26; PS-400; PS-410 |
 | OPEN-019 | Capacity acceptance targets (latency percentiles, reconnect-burst behavior, hardware baseline) for the DEC-16 workload, including ballot bursts, plugin execution and a separate media profile (rooms, active speakers, relay use, bitrate). **Resolved 2026-10-24: the Owner, acting as Product Owner, Technical Lead, and Operations Owner, approved the recommendation and named baseline. PS-545 passed the owner-approved lower-capacity equivalent on 2026-10-26 with the final-cache soak-timing caveat recorded in its performance report. Production-institution operations and release approval remain separate gates.** | — | Product Owner, Technical Lead, Operations Owner | Data model DB-10; Sync SYNC-15; VOTE-14; VOICE-12; EXT-19 |
 | OPEN-020 | **Resolved 2026-10-19 by Product Owner direction.** Releases and offline bundles use a canonical manifest covering the complete payload/dependency digest closure and detached Ed25519 signatures. Verification uses institution-provisioned trust roots kept outside the Package; a Package cannot establish its own trust. | — | Product Owner | Foundation §7 |
 | OPEN-021 | Plugin category taxonomy and per-category contracts. **Resolved 2026-10-17 by DEC-59 and DEC-60.** | — | Product Owner | Owner request, Q23 |
 | OPEN-022 | **Resolved for the current implementation baseline 2026-10-19 by Product Owner direction.** Use JSON Schema 2020-12 and the existing workflow and policy engines; report generation remains in PS-520; Python and native scientific-model sandboxes are deferred and are not enabled by PS-220. | — | Product Owner | Platform §18; ADR-018 |
-| OPEN-023 | If the original PRD v0.6 is recovered, reconcile it with PRD v0.7. | Nothing until recovered | Product Owner | DEC-21 |
+| OPEN-023 | **Resolved 2026-11-08 by owner direction.** Close with a standing reconciliation rule; recovered documents do not automatically supersede current decisions; approved option A. See §7.4. | — (implementation/evidence obligations remain, §7.5) | Product Owner | DEC-21 |
 | OPEN-024 | **Resolved 2026-10-26 by Product Owner and Security Owner direction.** Version 1 supports only `public`, `internal`, `confidential` and `restricted`. Deployments requiring additional classified markings or accreditation are deferred until a new Security Owner decision defines their mapping and controls. | — | Security Owner | Data §8 |
 | OPEN-025 | **Resolved 2026-10-21 by Product Owner direction.** Add the Reviewer and Research Analyst Organization Roles with the least-privilege boundaries in DEC-61. | — | Product Owner | DEC-61; Foundation §4 |
 | OPEN-026 | **Resolved 2026-10-19.** Plenum must make generic Orientation/coverage gates, bounded Control operations and decision-trace capabilities available as configurable options to every simulation. Each Release selects the capabilities and supplies its roles, forms, labels, timing, ordering, required combinations and gate rules. Fractured Order's observed Orientation content and exact Control semantics remain Release configuration, not platform hard-coding. | — | Methodology Lead | DEC-22; owner direction |
 | OPEN-027 | **Resolved for version 1 on 2026-10-26 by Product Owner and Security Owner direction.** Recording and transcription are disabled in production: the system must not capture, retain or export recordings or transcripts. Enabling either capability requires a new approved decision covering legal basis, consent, withdrawal, retention, access, export and approved local engines. | — | Security Owner, Product Owner | DEC-50; document 12 |
 | OPEN-028 | **Resolved for version 1 on 2026-10-26 by Product Owner and Security Owner direction.** Secret-ballot mode is disabled in production. Version 1 production Polls must be explicitly non-secret and must not claim ballot secrecy. Enabling secret ballots requires a new Security Owner and research-governance decision covering encryption, eligibility, custody, recoverability, suppression, export and incident response. | — | Security Owner, research governance | Document 11 |
 | OPEN-029 | **Resolved 2026-10-19 by Product Owner direction.** Use DEC-52 restricted publishers and registered signing keys; distribute signed revocation data and require freshness within 30 days for new installations or bindings (existing digest-pinned runs may continue); require an SBOM; block known critical vulnerabilities, with only time-limited, recorded exceptions for high severity; require Organization license acceptance; keep the catalog curated and installations Organization-scoped. | — | Product Owner | Document 10 |
+
+### 7.1 OPEN-004 — mandatory foundations and optional simulation concepts
+
+The approved classification is:
+
+| Category | Decision |
+|---|---|
+| Always enforced | Identity and permissions, information-access policies, versioned Releases, Evidence/audit recording and a single authoritative Session Runtime cannot be disabled by Designers. |
+| Minimum Session structure | At least one Stage, defined Session Roles and Seats for participant assignments. A simple exercise may have one Stage and one participant role. |
+| Structured submissions | When Participants create Artifacts, every Artifact Type has a Form, Workflow and Information Policy. A simple draft → submitted → completed workflow is permitted. |
+| Optional mechanics | Teams, Decision Records, Injects, messaging, voice, Polls, Resources, Capabilities, State Variables, adjudication and Effects. Platform availability does not require every simulation to enable a capability. |
+| Exercise controls | Orientation requirements and special Control Interventions are configured per simulation. Basic authorized Session administration remains available. |
+| Research | Research exports require Research Questions and linked Measurement Definitions. A learning exercise may use learning objectives without a full research protocol. |
+
+Dependencies are evaluated against enabled elements and their actual references:
+
+- Decision Record → Artifact Type → Form + Workflow + Information Policy.
+- Adjudication → Decision Records and a declared resolution/output contract.
+- Effect → an existing State Variable, Resource, Capability or Inject target.
+- Resource-consuming Capability → Resource; a non-consuming Capability does not require an artificial Resource.
+- Team-specific access or ownership → Teams and assigned Seats.
+- Research measurements → Research Questions.
+- Communication and Inject delivery → Information Policy and valid recipients.
+
+Disabling a concept preserves its draft content. Studio identifies affected elements and blocks Publication while enabled elements depend on a disabled concept. It never silently deletes content or changes the Designer's intent. Fractured Order's template enables and configures its appropriate concepts, roles and workflows; its exact structure is not mandatory for every simulation.
+
+### 7.2 OPEN-010 — bounded extensible forms
+
+| Area | Approved target |
+|---|---|
+| Core fields | Short/long text, number, yes/no, date/time, single/multiple choice and references to Artifacts, Teams, Roles, Resources and other approved simulation entities. |
+| Numeric presentation | Currency and percentage fields have explicit units, precision and validation. No implicit currency conversion. |
+| Formatted text | Limited safe paragraphs, lists, emphasis and links; no arbitrary HTML or embedded scripts. |
+| Repeating content | One level of repeating groups; no repeating groups inside repeating groups. |
+| Conditional behavior | Conditional visibility and requiredness, plus role- and workflow-state editability. Hiding a field does not replace server-enforced access controls. |
+| Calculations | Read-only deterministic expressions limited to approved arithmetic, comparisons, conditional values, counts and totals. No Designer JavaScript, network calls or arbitrary code. The server recomputes authoritative values, and formula versions remain associated with submissions. Cycles, missing inputs and division errors are explicit validation errors. |
+| Attachments | Permission-controlled uploads with approved file types, malware scanning, size limits, retention and export rules. Files remain unavailable until cleared when scanning is unavailable. |
+| Import | Versioned JSON for complete Form definitions and structured records; CSV for flat tabular data with an explicit mapping preview and validation. |
+| Export | Full-fidelity JSON; analytical CSV with repeating groups in linked tables; readable PDF where supported. Export permissions apply. |
+| Deferred | Arbitrary scripts, deep nesting, bespoke widgets, complex matrix/ranking editors and importing arbitrary Word/PDF layouts as editable Forms. |
+
+Initial limits are **100 field definitions and 20 sections per Form**, **50 entries per repeating group**, **20 MB per attachment**, **10 attachments per record** and **100 MB total attachments per record**. An overall structured-submission size limit is also required; this approval does not invent its numeric value. Deployments may impose lower limits; increasing the platform ceiling requires performance and security verification. These are approved target limits, not measurements of the existing build. Precise byte interpretation and the submission-size bound must be made explicit in the implementing contract and tested before release.
+
+### 7.3 OPEN-016 — operator-controlled authority transfer
+
+1. PostgreSQL stores the Session's owning Deployment, increasing Authority Epoch and transfer status.
+2. Every consequential write checks authority inside its transaction; stale owners and epochs are rejected.
+3. Before enabling a replacement, isolate the previous writer, including background jobs and any previous database primary if the database is being replaced. A PostgreSQL authority row fences writers only while they share the same authoritative database; independently writable copies require infrastructure fencing.
+4. Verify committed state and Evidence continuity, then atomically change the owner and increment the epoch.
+5. Reconnect clients and reconcile pending submissions without duplicating accepted work.
+6. Record actor, reason, previous/new owner and verification result.
+7. Remain paused if the previous writer cannot be reliably isolated. A timeout alone is not proof that it stopped.
+
+| Situation | Approved objective and conditions |
+|---|---|
+| Planned transfer | Resume within 5 minutes of starting transfer, with a healthy shared database and prepared replacement. |
+| Unexpected application-host failure | Resume within 15 minutes of failure detection, including operator response, with a healthy database and prepared replacement. |
+| Database or site loss | Existing OPEN-017 disaster-recovery objectives remain: RPO ≤15 minutes and RTO ≤4 hours. |
+| Internet loss | No automatic cloud-to-LAN takeover. An already-local authoritative Runtime continues locally. |
+
+The first two targets require staffing and rehearsals before being advertised. Application-only transfer preserves all committed data; backup restoration has the separate OPEN-017 recovery-point limit. This decision does not approve automatic high availability or provision additional infrastructure.
+
+### 7.4 OPEN-023 — standing reconciliation of recovered source material
+
+The current approved PRD and subsequent confirmed decisions remain authoritative. If the original PRD v0.6 is recovered, archive it with provenance and compare missing requirements, contradictions and historical context. Material differences require an explicit owner decision. Recovery does not automatically change deployed behavior, approved Releases or the governing baseline. No work is blocked awaiting recovery.
+
+### 7.5 Implementation and evidence obligations
+
+This approval resolves policy; it does not assert implementation, deployment, test completion or release readiness. The follow-up acceptance work is:
+
+| Decision | Required implementation/verification evidence | Current evidence status from this change |
+|---|---|---|
+| OPEN-004 | Complete concept/dependency mapping; simple and Fractured Order configurations; disabled-content preservation; actionable Publication denial for broken dependencies; non-disableable platform controls. | NOT RUN — documentation approval only. |
+| OPEN-010 | Renderer/schema/server/export agreement for each supported type; nesting and limit boundaries; calculation integrity and error handling; attachment quarantine/access/retention; import validation and lossless JSON export. Specify and verify the overall submission-size bound. | NOT RUN — broader target is not established by the current six-type Studio selector. |
+| OPEN-016 | Rehearsed planned and unplanned transfer; stale-owner/background-job denial; infrastructure fencing where databases diverge; committed-data/Evidence continuity; duplicate-safe reconciliation; measured timing with operator coverage. | NOT RUN — no new availability or recovery claim. |
+| OPEN-023 | Provenance and explicit decision review if source material is recovered. | Conditional future work; no current blocker. |
+| DEC-63, DEC-64 | Verify one Action per Decision Record, multi-record adjudication and configurable per-recipient Inject completion against current implementation before claiming conformance. | NOT RUN — approval is not a regression-test result. |
+
+Remaining specialist and institutional release gates in §3 are unchanged. No application code, persisted data, deployment configuration or live service is changed by this record.
 
 ## 8. Retired ID crosswalk
 
@@ -325,3 +437,4 @@ These collided with the Foundation's DEC-01 to DEC-20 and are retired.
 | 1.0.13 | 2026-10-26 | Resolved OPEN-001 by naming Sethu Nguna to the five governing owner roles; resolved OPEN-024 by limiting version 1 to the existing four classifications; and resolved OPEN-027/028 for version 1 by disabling production recording, transcription and secret ballots. Independent specialist gates remain in force. |
 | 1.0.14 | 2026-10-26 | Resolved OPEN-009 with institution-controlled residency, named operations ownership and version 1 retention periods; resolved OPEN-011 for the first PS-600 candidate by approving the local, deterministic, internal-only `org.ssg.analysis.session-indicators` Plugin. Implementation and release evidence remain separate gates. |
 | 1.0.15 | 2026-11-01 | Resolved OPEN-013 by user direction with a production two-person integrity minimum, distinct-author methodology approval, immutable Template and Release governance, governed activation, sandbox-only self-approval and complete provenance. |
+| 1.0.16 | 2026-11-08 | Owner approved OPEN-004/010/016/023, all eighteen assumptions and both DEC-51 names; added DEC-62–64 to preserve amended decision history; recorded explicit implementation/evidence obligations and retained separate release gates. |

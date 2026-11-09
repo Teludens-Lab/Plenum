@@ -21,3 +21,16 @@ The product owner directed a lighter Studio and a landing page aligned with it. 
 | Two-colour heavy petal loader | Make it more elegant | Thin single-ink petals, slower 1600ms sweep, soft arrival |
 | Loader overlay on every Studio section | Transitions are janky; petals are a full-page animation | Sections crossfade; the overlay is full-page white and reserved for a change of surface |
 | Object title `--text-md` semibold; header title `--text-md` (PS-800 type roles) | Interfaces are too bulky | Object title `--text-base` medium; header title `--text-sm` medium; section title stays `--text-lg` |
+
+## Participant interface reference deviations, 2026-11-08
+
+The saved boards in `references/participant interfaces/` define the Session frame, join screen and toasts. These parts of the boards were not adopted, because Plenum authority or available data differs. Each one needs an owner decision before it changes.
+
+| Reference element | Plenum behavior | Reason |
+|---|---|---|
+| Operator access by operator key, SME access by SME code (join board) | Not implemented; no staff links on the join screen | Shared-key entry would change the authentication model. Operators use their verified account, Organization role and Session assignment. SME access needs a defined Session role first. |
+| Editable display name on the join form | Read-only verified account name | The Session identity is the authenticated Plenum principal. |
+| Team-coloured dot on the role chip | One decision-signal dot for every role | The projection carries no team colour. Colouring by team name would hard-code one simulation's semantics. |
+| Session name with no Plenum wordmark in the header | Adopted for the Session frame only | The Session frame remains the single Runtime shell. The wordmark stays on the portal, Studio and landing. |
+| Title and developer mark drawn on the login artwork | Shown over the fallback panel; kept for assistive technology only when artwork exists | Release login artwork already carries its own title and mark. |
+| Undo, View, Review and Retry toast actions | Toasts support an action, but none is wired yet | Each action needs an existing command or destination. Undo has no command. Errors stay until dismissed, and the Offline Outbox keeps the retry path. |

@@ -37,6 +37,7 @@
     "setup:e2e": "playwright install --with-deps chromium",
     "test:e2e": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs",
     "test:e2e:product": "npm run build --silent && playwright test --config tests/e2e/product/playwright.config.mjs",
+    "test:golden-journey": "npm run build --silent && playwright test --config tests/e2e/golden-journey/playwright.config.mjs",
     "user-test:ps710": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps720": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",
     "user-test:ps730": "npm run build --silent && node tests/e2e/runtime-server.mjs --local-user-test --seed-user-test",

@@ -12,11 +12,12 @@ export function createDatabasePool(connectionString: string): Pool {
 export async function withOrganizationTransaction<T>(
   pool: Pool,
   organizationId: string,
-  operation: (client: PoolClient) => Promise<T>
+  operation: (client: PoolClient) => Promise<T>,
+  isolation: "read committed" | "repeatable read" = "read committed"
 ): Promise<T> {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await client.query(isolation === "repeatable read" ? "BEGIN ISOLATION LEVEL REPEATABLE READ" : "BEGIN");
     await client.query(
       "SELECT set_config('role', $1, true), set_config('app.organization_id', $2, true)",
       [databaseRole, organizationId]

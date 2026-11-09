@@ -126,7 +126,7 @@ Also prohibited: destructive production operations, production secret changes, p
 
 ## Acceptance
 
-${list(task.acceptance_criteria.map((criterion) => `Given the documented preconditions, when the task behavior is exercised, then ${criterion.charAt(0).toLowerCase()}${criterion.slice(1)}`))}
+${list(task.acceptance_criteria.map((criterion) => /^PS-\d{3}-T/.test(criterion) ? criterion : `Given the documented preconditions, when the task behavior is exercised, then ${criterion.charAt(0).toLowerCase()}${criterion.slice(1)}`))}
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -198,7 +198,7 @@ const mappings = [...reqIds, ...invIds].map((id) => {
 
 await writeFile(join(root, 'REQUIREMENTS_TRACEABILITY.md'), `# Requirements traceability
 
-Generated from \`tasks.json\`. Requirement text remains authoritative in PRD v0.7.3; this file maps IDs only.
+Generated from \`tasks.json\`. Requirement text remains authoritative in the current controlled PRD at \`docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md\`; this file maps IDs only.
 
 | ID | Implementation prompts | Executable evidence IDs | Command references |
 |---|---|---|---|

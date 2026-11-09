@@ -41,3 +41,7 @@ The combined release package must include unit, integration, API contract, event
 ## Roadmap section 15 operational readiness / REQ-069
 
 Before any live Session, the operator must verify and record: Release version, Seat Assignments, permissions, Inject triggers, adjudication guidance, time controls, export path, fallback procedures, technical operators, backup and recovery, connectivity contingency, pause/resume, state recovery, and incident-command ownership. PS-340 creates the checklist; PS-550 verifies its use. Any absent item is a no-go for that Session.
+
+## 2026-11-08 approval implementation alignment
+
+P11 product acceptance is PS-830 plus PS-840, followed by PS-842 role-by-role interface consistency (whose changes require affected PS-830/PS-840 reruns); operational transfer acceptance is PS-845. PS-850 depends directly on PS-815/820/830/840/842/845 and still requires PS-810 environment evidence. The recorded PS-815→PS-820 exception does not waive final provider, mail, institutional, AT or human gates. All newly approved policy dependencies are resolved; acceptance evidence remains outstanding.

@@ -2,7 +2,7 @@
 
 ## Result
 
-The promptbook has 32 vertical tasks across P00-P06. The current 2026-10-24 machine validation passed with 94/94 PRD requirements and 28/28 invariants mapped and no orphan.
+The current promptbook has 50 tasks across P00–P11, including new PS-845 and the approved implementation checkpoints in PS-830. See PROMPTBOOK_VALIDATION_REPORT.md for current generated results. The older detailed evidence below is historical, not application acceptance for these changes.
 
 | Check | Result | Evidence / qualification |
 |---|---|---|

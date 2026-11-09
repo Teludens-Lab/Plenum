@@ -1,6 +1,6 @@
 {
   "contractId": "product-completeness-ledger-v1",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "statusVocabulary": ["PLANNED", "IMPLEMENTED", "AUTOMATED_PASS", "HUMAN_PASS", "PASS", "FAIL", "BLOCKED", "NOT_RUN", "N/A"],
   "sources": {
     "requirements": "docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md",
@@ -90,6 +90,56 @@
       ],
       "owner": "Release assurance sequence PS-800 through PS-850",
       "evidenceTarget": "Timestamped command or approval artifact in the release evidence index",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "approved-concept-dependencies",
+        "approved-form-fields-and-limits",
+        "approved-form-computation",
+        "approved-form-attachments-interchange",
+        "single-action-and-inject-semantics",
+        "energy-studio-proof"
+      ],
+      "owner": "PS-830",
+      "evidenceTarget": "PS-830 acceptance evidence indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "cross-simulation-approved-behavior"
+      ],
+      "owner": "PS-840",
+      "evidenceTarget": "PS-840 acceptance evidence indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "role-interface-consistency"
+      ],
+      "owner": "PS-842",
+      "evidenceTarget": "PS-842 interface consistency ledger docs/acceptance/PS-842-interface-consistency.md indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "controlled-authority-transfer"
+      ],
+      "owner": "PS-845",
+      "evidenceTarget": "PS-845 acceptance evidence indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
+      "status": "PLANNED"
+    },
+    {
+      "dimension": "release-control",
+      "obligations": [
+        "final-candidate-revalidation"
+      ],
+      "owner": "PS-850",
+      "evidenceTarget": "PS-850 acceptance evidence indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
       "status": "PLANNED"
     }
   ],

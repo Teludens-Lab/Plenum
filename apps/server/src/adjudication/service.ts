@@ -5,6 +5,7 @@ import {
   ADJUDICATION_REQUEST_CONTRACT_ID,
   canonicalizeJson,
   type AdjudicationMechanismV1,
+  type AdjudicationOptionV1,
   type AdjudicationRequestV1,
   type AdjudicationTraceEntryV1,
   type JsonObject,
@@ -190,7 +191,8 @@ async function createRequest(input: CommandExecutionContext, definition: Release
   const { client, context, command } = input;
   const modelId = text(command.payload.modelId, 200), actionIds = stringArray(command.payload.actionIds);
   const model = modelId === undefined ? undefined : modelFor(definition, modelId);
-  if (model === undefined || actionIds === undefined || actionIds.length === 0 || actionIds.length > 100) {
+  if (model === undefined || actionIds === undefined || actionIds.length === 0 || actionIds.length > 100 ||
+      !Array.isArray(command.payload.actionIds) || command.payload.actionIds.length !== actionIds.length) {
     return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "An Adjudication Model and one or more Actions are required." };
   }
   if (!isReviewer(model, context.activeSessionRoleId)) {
@@ -220,6 +222,9 @@ async function createRequest(input: CommandExecutionContext, definition: Release
     [command.aggregateId, context.organizationId, context.sessionId, input.activeReleaseId, model.id, context.principalId,
       context.participantId, identity.displayName, identity.organizationName]
   );
+  // DEC-63: the whole decision-bearing Artifact payload is its single Action.
+  // Never expand Form arrays/repeating groups into executable Actions. The database
+  // also enforces one snapshot per (request_id, artifact_id).
   for (const action of actions.rows) {
     const digest = createHash("sha256").update(canonicalizeJson(action.payload)).digest("hex");
     await client.query(
@@ -318,6 +323,10 @@ async function draftRecord(input: CommandExecutionContext, request: RequestRow, 
   );
   const evaluation = evaluateAdjudicationModel(model, { facts, rubricScores, pluginSuggestions: plugins,
     reviewRecommendations: reviewRows.rows.map(({ recommendation }) => recommendation) });
+  if ((model.mechanism === "rubric" || model.mechanism === "hybrid") &&
+      evaluation.explanationTrace.some((entry) => entry.source === "rubric" && !entry.passed)) {
+    return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "Score every rubric criterion within its configured range before saving the synthesis." };
+  }
   if (evaluation.suggestion !== null && canonicalizeJson(evaluation.suggestion) !== canonicalizeJson(outcome) && overrideRationale === undefined) {
     return { status: "rejected", errorCode: "VALIDATION_FAILED", message: "An override rationale is required when the final outcome differs from the system suggestion." };
   }
@@ -426,6 +435,28 @@ export async function executeAdjudicationCommand(input: CommandExecutionContext)
   return { status: "rejected", errorCode: "INVALID_TRANSITION", message: "The adjudication operation is unsupported." };
 }
 
+export async function getAdjudicationOptions(pool: Pool, context: SessionAccessContextV1): Promise<AdjudicationOptionV1[]> {
+  return withOrganizationTransaction(pool, context.organizationId, async (client) => {
+    const definition = await releaseDefinition(client, context.organizationId, context.activeReleaseId);
+    const models = definition.models.filter((model) => isReviewer(model, context.activeSessionRoleId));
+    if (models.length === 0) return [];
+    const typeKeys = definition.artifactTypes.filter(({ decisionBearing }) => decisionBearing).map(({ key }) => key);
+    const actions = await client.query<{ id: string; artifact_type_key: string; title: string | null }>(
+      `SELECT id,artifact_type_key,LEFT(payload->>'title',200) AS title FROM runtime.artifact_instances
+        WHERE organization_id=$1 AND session_id=$2 AND governing_release_id=$3
+          AND (creator_participant_id=$4 OR $5=ANY(visible_role_ids)) AND artifact_type_key=ANY($6::text[])
+        ORDER BY created_at DESC,id LIMIT 100`,
+      [context.organizationId, context.sessionId, context.activeReleaseId, context.participantId, context.activeSessionRoleId, typeKeys]
+    );
+    return models.map((model) => {
+      const types = definition.artifactTypes.filter(({ id, decisionBearing }) => decisionBearing && model.appliesToArtifactTypeIds.includes(id));
+      return { modelId: model.id, modelName: model.name, actions: actions.rows.filter((action) =>
+        types.some(({ key }) => key === action.artifact_type_key)).map((action) => ({ id: action.id,
+        label: action.title || `${action.artifact_type_key.replaceAll("_", " ")} · ${action.id.slice(0, 8)}` })) };
+    });
+  });
+}
+
 export async function getAdjudications(pool: Pool, context: SessionAccessContextV1): Promise<AdjudicationRequestV1[]> {
   return withOrganizationTransaction(pool, context.organizationId, async (client) => {
     const definition = await releaseDefinition(client, context.organizationId, context.activeReleaseId);
@@ -487,6 +518,11 @@ export async function getAdjudications(pool: Pool, context: SessionAccessContext
       }
       result.push({ contractId: ADJUDICATION_REQUEST_CONTRACT_ID, id: request.id, modelId: model.id, modelName: model.name,
         mechanism: model.mechanism, status: request.status, version: Number(request.version),
+        ...(lead && (model.mechanism === "rubric" || model.mechanism === "hybrid") ? {
+          rubric: (model.rubric ?? []).map(({ id, label, weight, minimum, maximum, anchors }) => ({
+            id, label, weight, minimum, maximum, ...(anchors === undefined ? {} : { anchors })
+          }))
+        } : {}),
         actionSnapshots: actions.map((action) => ({ artifactId: action.artifact_id, artifactVersion: Number(action.artifact_version),
           artifactTypeKey: action.artifact_type_key, payload: action.payload_snapshot })),
         perspectives: model.perspectives.filter(({ reviewerSessionRoleIds }) => reviewerSessionRoleIds.includes(context.activeSessionRoleId)),

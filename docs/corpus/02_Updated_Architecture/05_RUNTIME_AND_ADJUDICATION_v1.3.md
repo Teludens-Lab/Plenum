@@ -6,8 +6,8 @@
 |---|---|
 | Document ID | RWA |
 | Number | 05 |
-| Version | 1.3.1 |
-| Date | 2026-10-17 |
+| Version | 1.3.2 |
+| Date | 2026-11-08 |
 | Status | Draft for review. v1.2 amendment merged (DEC-26). |
 | Owner | Technical Lead |
 | Approvers | Product Owner; Methodology Lead; Technical Lead (role placeholders — OPEN-001) |
@@ -44,7 +44,7 @@ Each lifecycle change is a Command and produces an Evidence Event (`session.star
 
 ### 3.1 Single writer
 
-Each Session has exactly one Session Authority, identified by Deployment ID and Authority Epoch (ADR-001, INV-017). Every consequential write checks both inside its transaction; writes from a stale epoch or a different Deployment are refused with `AUTHORITY_UNAVAILABLE`. Authority transfer is an explicit, fenced operator procedure (Synchronization Protocol §8; OPEN-016). A LAN-hosted Session Authority keeps running without Internet access, with its own PostgreSQL, identity and Release storage.
+Each Session has exactly one Session Authority, identified by Deployment ID and Authority Epoch (ADR-001, INV-017). Every consequential write checks both inside its transaction; writes from a stale epoch or a different Deployment are refused with `AUTHORITY_UNAVAILABLE`. Authority transfer is an explicit, fenced operator procedure (Synchronization Protocol §8; resolved OPEN-016, Decision Register §7.3). A LAN-hosted Session Authority keeps running without Internet access, with its own PostgreSQL, identity and Release storage.
 
 ### 3.2 Command pipeline
 
@@ -127,7 +127,7 @@ Specified in 12 (DEC-47). The Runtime opens and closes Voice Channels by Command
 
 ## 10. Injects
 
-Lifecycle (DEC-40): `draft` → `scheduled` → `eligible` → `released` → `acknowledged` → `responded` → `closed`, with exits `cancelled` and `expired`. The engine supports manual, scheduled, Stage-entry, Stage-exit and Gate-triggered release; cancellation; rescheduling; per-recipient acknowledgement; required-response tracking. Each trigger fires exactly once (REQ-030).
+Lifecycle and optional requirements follow DEC-64. The engine supports manual, scheduled, Stage-entry, Stage-exit and Gate-triggered release; cancellation; rescheduling; per-recipient acknowledgement and configured response tracking. Completion evaluation must use the Release requirements and recipient states rather than assume every Inject traverses all acknowledgement/response states. Each trigger fires exactly once (REQ-030).
 
 ## 11. World state
 
@@ -306,3 +306,4 @@ Specified in 11 (DEC-46). The Runtime freezes the Electorate, weights and option
 | 1.3.1 | 2026-10-17 | Split §9 into Messages and Voice Channels; rewrote §12.3 for mandatory approval of plugin effects (DEC-54) replacing "if the model says so"; added Poll, Effect Proposal, Floor Lease and Plugin Artifact state machines, offline feature rules, new mandatory tests and §23 Polls. |
 | 1.3.0 | 2026-10-17 | Merged v1.2 amendment; adopted Session, Stage, Session Role, Evidence Event terms; data-driven workflow execution (DEC-45) with DEC-42 reference; recorded rejections (DEC-43); Inject lifecycle (DEC-40); renamed White Cell intervention to Control Intervention; consolidated state machine list; renumbered sections. |
 | 1.2.0 | 2026-10-17 | Alignment amendment (archived). |
+| 1.3.2 | 2026-11-08 | Aligned Inject execution with DEC-64 and authority-transfer reference with resolved OPEN-016; implementation verification remains separate. |

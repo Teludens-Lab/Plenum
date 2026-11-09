@@ -32,3 +32,7 @@
 ## Decision rule
 
 PS-550 engineering verification is complete but does not establish product completeness or self-approve release. P07-P11 must close and evidence every user journey, Studio/Runtime workspace, UI state, Teludens/branding rule and operational control before PS-850 can request GO. OPEN-027/028 are resolved for version 1 by keeping production recording, transcription and secret ballots disabled. OPEN-029 is resolved for the implementation baseline, while production Plugin key custody, revocation, recovery and operating procedures still require evidence. See `docs/release-evidence/PS-550-index.md` for the existing NO-GO recommendation.
+
+## 2026-11-08 approval implementation alignment
+
+Resolved OPEN-004/010 require PS-830 implementation and PS-840 product proof. Resolved OPEN-016 requires PS-845 measured transfer/fencing evidence, distinct from PS-820 backup/restore. PS-850 runs the final unscoped ledger gate after those tasks and reconciles PS-810/815/820 external and human evidence to the exact converged candidate. Policy approval and historical PASS are not substitute evidence.

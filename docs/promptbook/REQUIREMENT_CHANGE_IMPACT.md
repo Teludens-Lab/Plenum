@@ -50,3 +50,7 @@ Update `CONTRACT_COMPATIBILITY_MATRIX.md` and `DATA_MIGRATION_REGISTER.md` for c
 ## Closure record
 
 Record owner approval, merged implementation/task references, migration state, compatibility window, evidence artifacts, release/deployment inclusion, rollback/forward-fix status, and obsolete-path removal trigger. Do not mark the change effective merely because its prompt was generated.
+
+## 2026-11-08 approval implementation alignment
+
+Register v1.0.16 assigns OPEN-004/010 and DEC-63/64 implementation to PS-830, independent generalization to PS-840, OPEN-016 to PS-845, and final acceptance to PS-850. OPEN-023 creates no runtime work. Concept/form/schema/renderer/export changes invalidate affected golden, UAT, installation and human evidence; authority-path changes invalidate affected identity, runtime, recovery and operational evidence. Preserve original evidence identities and rerun affected gates after changes.

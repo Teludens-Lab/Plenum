@@ -20,6 +20,7 @@ Authoritative sources and sections:
 - `docs/corpus/02_Updated_Architecture/07_IMPLEMENTATION_ROADMAP_v1.3.md` — 07 Roadmap sections 13 and 15
 - `docs/corpus/02_Updated_Architecture/06_DATA_SECURITY_REPORTING_v1.3.md` — 06 Data sections 16 through 18
 - `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register OPEN-016
+- `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md` — Decision Register sections 3, 5.7 and 7.1 through 7.5
 
 Observed source evidence:
 
@@ -27,11 +28,11 @@ Observed source evidence:
 - apps/runtime-web/src/App.tsx
 - apps/server/src/http/runtime-http.ts
 
-Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: `OPEN-016`.
+Authority order is Decision Register and Glossary, then PRD, Canon, Platform, Schema, Contracts, capability specifications, Approved Data Model/Sync, and finally the observed slice. Cite IDs; do not restate decision text. Decision-status authority is `docs/corpus/03_Governance_and_Reconciliation/DECISION_REGISTER_v1.0.md`. The following dependencies still require named specialist sign-off or resolution and must remain labeled: none.
 
 ## Prerequisites
 
-Task prerequisites: `PS-840`.
+Task prerequisites: `PS-815`, `PS-820`, `PS-830`, `PS-840`, `PS-842`, `PS-845`.
 
 Before editing, read Roadmap section 16, `PROJECT_STATE.md`, this prompt, the requirement rows, the smallest governing sections, Glossary terms, contracts, and tests. Check `git status --short`, current versions, and prerequisite evidence. Stop on a dirty overlap or failed prerequisite; preserve unrelated work. Required git state: no unreviewed overlapping changes and no unresolved failed gate. Do not create a commit unless the repository workflow or user explicitly authorizes it.
 
@@ -44,6 +45,11 @@ Run every Node/npm command with Node 24 or newer. Record `node --version` at pre
 - Golden journey and UAT evidence
 - Security, accessibility, performance, deployment and recovery approvals
 - Exact source/image/package digests
+- Read APPROVAL_IMPLEMENTATION_PROMPTBOOK.md for the remaining-sequence ownership, checkpoint and exact-candidate evidence rules; tasks.json remains the task source of truth
+- Decision Register v1.0.16 resolves OPEN-004/010/016/023 and the prior assumptions; approval is not implementation evidence and never waives PS-810, provider, mail, accessibility or named human gates
+- Use supported Windows/macOS desktop browsers at the declared minimum 1024 x 768 and equivalent 200% zoom, keyboard, pointer, forced colors, reduced motion and named desktop AT; mobile/touch acceptance remains approved N/A
+- Inventory existing uncommitted work and prior evidence before changes; preserve unrelated work and distinguish local source, committed candidate and deployed staging digests
+- Before provisioning disposable databases/containers, check disk capacity and record exact task-owned resource identifiers; reuse safely where possible, clean up only authorized task-owned resources, and never run broad volume/image pruning
 
 Read callers, tests, fixtures, configuration, exports, migrations, and public contracts that touch the change. Verify real paths before creating any unobserved path.
 
@@ -68,10 +74,12 @@ Do not refactor unrelated code, upgrade unrelated dependencies, or replace the r
 
 ## Implementation
 
-- Create a clean tagged candidate from reviewed committed source
-- Run every mandatory gate against the exact candidate
-- Assemble signed evidence and operating runbooks
-- Record explicit authorized approval or NO-GO with owners and remediation
+- Assemble the final candidate only after approved implementation checkpoints converge; committing/tagging/signing requires existing user authorization or the applicable authorized workflow
+- Build the final evidence matrix across PS-810 and PS-815 through PS-845; preserve historical results with their original digests and classify current evidence independently
+- Run the unscoped CMD-GAP-AUDIT with --release and every mandatory final-candidate gate. Track affected reruns after every correction; do not modify the candidate after its final acceptance without reevaluation
+- Reconcile each older provider/manual/institutional result against candidate changes, rerun affected scenarios and obtain attributable confirmation; missing external access or qualified reviewers is NOT RUN and blocks GO
+- Assemble operating, incident, rollback/forward-fix, restore and transfer runbooks and exact source/image/lockfile/schema/configuration/Release/evidence digests
+- Present the completed packet for explicit owner GO or record NO-GO with owners and remediation. Production deployment remains separately authorized
 
 Use canonical Glossary terms, lower dot-case imperative Commands, past-tense dot-case events, camelCase JSON, snake_case SQL, UUID identifiers, UTC `timestamptz`, and the error envelope from 09 section 8. Server time is authoritative; device time is observational. Keep state change, Command Receipt, Evidence Event, and transactional outbox atomic where the task mutates Session state.
 
@@ -107,6 +115,8 @@ Also prohibited: destructive production operations, production secret changes, p
 - Given the documented preconditions, when the task behavior is exercised, then no completeness row, S0-S2 defect or production control is FAIL, BLOCKED or NOT RUN
 - Given the documented preconditions, when the task behavior is exercised, then rollback, forward-fix, incident and restore procedures are owned and rehearsed
 - Given the documented preconditions, when the task behavior is exercised, then an authorized owner signs GO for the exact source, image, schema, Package and evidence digests
+- Given the documented preconditions, when the task behavior is exercised, then resolved policy IDs are not listed as missing decisions; each maps to demonstrated implementation evidence or an explicit unresolved implementation blocker
+- Given the documented preconditions, when the task behavior is exercised, then no frozen-candidate circularity: all implementation changes converge before final gate signing, and post-UAT fixes rerun affected upstream gates
 
 Exercise unauthorized, disconnected, stale, and partial-failure cases whenever the capability can encounter them. Deliverables:
 
@@ -123,7 +133,7 @@ Use the smallest effective levels from Roadmap section 8: domain tests for invar
 
 ## Validation commands
 
-Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-GOLDEN-JOURNEY`, `CMD-GAP-AUDIT`, `CMD-SECURITY`, `CMD-CLEAN-INSTALL`, `CMD-BACKUP-RESTORE`.
+Resolve these references in `COMMAND_REGISTRY.md`: `CMD-PLATFORM-LINT`, `CMD-PLATFORM-TYPECHECK`, `CMD-PLATFORM-TEST`, `CMD-PLATFORM-INTEGRATION`, `CMD-GOLDEN-JOURNEY`, `CMD-GAP-AUDIT`, `CMD-SECURITY`, `CMD-CLEAN-INSTALL`, `CMD-BACKUP-RESTORE`, `CMD-AUTHORITY-TRANSFER`, `CMD-IDENTITY-PROVIDER-STAGING`, `CMD-WORKFORCE-MIGRATION`, `CMD-PRODUCT-E2E`, `CMD-PLATFORM-A11Y`, `CMD-EVIDENCE-VERIFY`.
 
 Run only commands whose registry status is **Verified** or that this task explicitly creates. For a **Proposed** command created by the current task, implement its registered contract first and then verify it before claiming completion; for any other Proposed command, complete its named prerequisite task. Do not guess a script. Record command, cwd, environment, versions, duration, exit code, and artifact path. Classify each PASS / FAIL / NOT RUN.
 
@@ -133,13 +143,16 @@ Run only commands whose registry status is **Verified** or that this task explic
 - Production deployment remains a separately authorized action
 - Any changed artifact invalidates approval and reruns affected gates
 
-The approval gate is: Change-level acceptance requires passing automated evidence and a completed user-test script; production approval remains separate.. A task may be implementation-complete without being release-approved.
+The approval gate is: The exact converged candidate requires all PS-810 environment, PS-815 provider/mail/human, PS-820 institutional/AT, PS-830 golden, PS-840 product UAT, PS-842 interface consistency and PS-845 transfer gates to be PASS or explicitly owner-approved N/A where applicable. Only an attributable authorized owner decision records GO; otherwise record NO-GO. Approval to write this promptbook is not release approval. A task may be implementation-complete without being release-approved.
 
 ## Docs and continuity
 
 - Update PRODUCT_COMPLETENESS_MATRIX.md and PROJECT_STATE.md
 - Record exact user-test evidence and unresolved defects
 - Update authoritative contracts and compatibility/migration registers when changed
+- Update APPROVAL_IMPLEMENTATION_PROMPTBOOK.md only for execution/evidence links; preserve the task source and approval boundaries
+- Record source/image/lockfile/schema/configuration/Release and environment identity; a changed candidate requires impact assessment and affected gate reruns, not copied PASS labels
+- Return a checkpoint handoff with completed behavior, exact evidence, unresolved dependencies, candidate identity and the next safe step; do not collapse partial/internal/automated/human/final acceptance into one PASS
 
 Update contracts at their authoritative owner instead of duplicating them. Add conflicts only to `CONFLICT_REGISTER.md` as candidate OPEN items. Update maturity without turning future acceptance conditions into current evidence.
 

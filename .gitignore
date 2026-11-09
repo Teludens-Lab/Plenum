@@ -82,6 +82,10 @@ docs/promptbook/prompts/*
 !docs/promptbook/prompts/P10/
 docs/promptbook/prompts/P10/*
 !docs/promptbook/prompts/P10/PS-815-prove-platform-control-plane-identity-workforce-production-acceptance.md
+!docs/promptbook/prompts/P11/
+docs/promptbook/prompts/P11/*
+!docs/promptbook/prompts/P11/PS-842-reconcile-role-interface-consistency.md
+!docs/promptbook/prompts/P11/PS-845-implement-and-rehearse-controlled-authority-transfer.md
 references/*
 !references/teludens-design-system-catalog/
 !references/teludens-design-system-catalog/assets/

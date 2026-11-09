@@ -81,6 +81,24 @@ test("public edge emits one HSTS value while retaining direct-service transport 
   assert.equal((caddy.match(/header Strict-Transport-Security/gmu) ?? []).length, 4);
 });
 
+test("staging DAST offers only the approved target and refuses other origins", async () => {
+  const dast = await readFile(resolve(root, ".github/workflows/staging-dast.yml"), "utf8");
+  assert.match(dast, /default: https:\/\/plenum-stage-01\.duckdns\.org\s+type: choice\s+options:\s+- https:\/\/plenum-stage-01\.duckdns\.org\s+permissions:/u);
+  assert.match(dast, /TARGET_URL: \$\{\{ inputs\.target \}\}/u);
+  assert.match(dast, /target: \$\{\{ inputs\.target \}\}/u);
+  const guard = dast.match(/^\s+run: (test "\$TARGET_URL" = "[^"]+")$/mu);
+  assert.ok(guard, "staging target guard must exist");
+  for (const [target, expected] of [
+    ["https://plenum-stage-01.duckdns.org", 0],
+    ["https://example.com", 1],
+    ["", 1],
+    ["https://plenum-stage-01.duckdns.org.example.com", 1]
+  ]) {
+    const result = spawnSync("bash", ["-e", "-c", guard[1]], { env: { ...process.env, TARGET_URL: target } });
+    assert.equal(result.status, expected, `unexpected guard result for ${JSON.stringify(target)}`);
+  }
+});
+
 test("PS-810 CI and operational security controls fail closed without sensitive telemetry", async () => {
   const workflowDirectory = resolve(root, ".github/workflows");
   const workflowNames = (await readdir(workflowDirectory)).filter((name) => name.endsWith(".yml")).sort();

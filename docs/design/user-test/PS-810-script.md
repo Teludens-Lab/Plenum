@@ -170,7 +170,7 @@ Do not modify the real dependency policy merely to manufacture this result.
 1. In GitHub, open **Actions** > **Staging DAST**.
 2. Select **Run workflow**.
 3. Choose the candidate branch or commit.
-4. Leave the target exactly as:
+4. Select the only approved target:
 
    ```text
    https://plenum-stage-01.duckdns.org
@@ -179,12 +179,12 @@ Do not modify the real dependency policy merely to manufacture this result.
 5. Run the workflow and wait for completion.
 6. Download the `ps-810-staging-dast` artifact.
 7. Review every finding. The tracked rules file may classify only the reviewed modern-application and intentional public-cache notices as informational. Any new or unlisted alert fails the workflow and requires review; any unresolved high-severity finding is a blocker.
-8. Verify the allowlist separately by attempting a workflow run with a harmless unapproved non-production origin. The job must stop at **Refuse unapproved or production targets** before ZAP scans it.
+8. Verify the target guard separately with `node --test --test-name-pattern="staging DAST dispatch" tests/security/release-security.test.mjs`. It must accept the approved target and refuse unapproved or empty targets before the scanner.
 
 Pass conditions:
 
 - The approved target produces a retained DAST report.
-- An unapproved target is refused before scanning.
+- The target guard refuses unapproved origins before scanning.
 - There are no unresolved high-severity findings.
 
 Never enter a production hostname into this workflow.

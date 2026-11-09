@@ -51,7 +51,7 @@
     "test:e2e:media-recovery": "npm run build --silent && playwright test --config tests/e2e/playwright.media-recovery.config.mjs",
     "test:a11y": "npm run build --silent && playwright test --config tests/e2e/playwright.config.mjs --grep @a11y",
     "test:visual": "node scripts/test-visual.mjs",
-    "test:generalization": "npm run build --silent && node --test tests/e2e/generalization/generalization.test.mjs",
+    "test:generalization": "npm run build --silent && node --test tests/e2e/generalization/generalization.test.mjs && playwright test --config tests/e2e/generalization/playwright.config.mjs",
     "test:load:information": "npm run build --silent && node tests/load/information-flow-load.mjs",
     "load:app": "npm run build --silent && node scripts/run-load-profile.mjs app",
     "load:soak": "npm run build --silent && node scripts/run-load-profile.mjs soak",

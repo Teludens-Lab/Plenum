@@ -3118,6 +3118,16 @@ components:
                   personId: { type: string, format: uuid }
                   displayName: { type: string }
             peopleTruncated: { type: boolean }
+            sessionRoles:
+              type: array
+              description: Authored names for roles eligible for staffing in the current governing Release. Optional for older servers.
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
             seats:
               type: array
               items:

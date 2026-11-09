@@ -1,6 +1,6 @@
 {
   "contractId": "product-completeness-ledger-v1",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "statusVocabulary": ["PLANNED", "IMPLEMENTED", "AUTOMATED_PASS", "HUMAN_PASS", "PASS", "FAIL", "BLOCKED", "NOT_RUN", "N/A"],
   "sources": {
     "requirements": "docs/corpus/01_Product_and_PRD/01_PRD_v0.7.md",
@@ -9,6 +9,14 @@
     "productMatrix": "docs/promptbook/PRODUCT_COMPLETENESS_MATRIX.md"
   },
   "groups": [
+    {
+      "dimension": "release-control",
+      "obligations": ["original-golden-signed-checkpoint", "energy-golden-signed-checkpoint"],
+      "owner": "PS-830; final release gate PS-850",
+      "evidenceTarget": "docs/acceptance/PS-840-UAT.md; independent signed Evidence checkpoint verification for each live golden Session remains pending",
+      "status": "NOT_RUN",
+      "exception": "Product Owner authorized PS-840 continuation on 2026-11-09 only. Both checks remain pending and block PS-850. This is not PASS or N/A."
+    },
     {
       "dimension": "prd-requirement",
       "range": { "prefix": "REQ-", "start": 1, "end": 94, "width": 3 },
@@ -112,8 +120,8 @@
         "cross-simulation-approved-behavior"
       ],
       "owner": "PS-840",
-      "evidenceTarget": "PS-840 acceptance evidence indexed by final candidate; see APPROVAL_IMPLEMENTATION_PROMPTBOOK.md",
-      "status": "PLANNED"
+      "evidenceTarget": "test-results/uat/generalization-final.json; policy-negotiation.json; crisis-response.json; docs/acceptance/PS-840-UAT.md; observed human UAT and second target-user review remain pending",
+      "status": "AUTOMATED_PASS"
     },
     {
       "dimension": "release-control",
@@ -144,6 +152,13 @@
     }
   ],
   "overrides": [
+    { "dimension": "release-control", "obligation": "CMD-PRODUCT-E2E", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/product-e2e-final.json; 37/37; docs/acceptance/PS-840-UAT.md" },
+    { "dimension": "release-control", "obligation": "CMD-GAP-AUDIT", "status": "AUTOMATED_PASS", "owner": "PS-840; unscoped release audit PS-850", "evidenceTarget": "test-results/uat/gap-audit-final.json; structural completeness only, not product acceptance; test-results/uat/obligation-review.json" },
+    { "dimension": "release-control", "obligation": "CMD-PLATFORM-LINT", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/lint-final.json; docs/acceptance/PS-840-UAT.md" },
+    { "dimension": "release-control", "obligation": "CMD-PLATFORM-TYPECHECK", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/typecheck-final-r3.json; docs/acceptance/PS-840-UAT.md" },
+    { "dimension": "release-control", "obligation": "CMD-PLATFORM-TEST", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/platform-unit-final.json; 155/155; docs/acceptance/PS-840-UAT.md" },
+    { "dimension": "release-control", "obligation": "CMD-TELUDENS-AUDIT", "status": "AUTOMATED_PASS", "owner": "PS-840; interface review PS-842", "evidenceTarget": "test-results/uat/teludens-final.json; static scope only; docs/acceptance/PS-840-UAT.md" },
+    { "dimension": "release-control", "obligation": "human-acceptance", "status": "NOT_RUN", "owner": "PS-840 target users and second Reviewer; final decision PS-850", "evidenceTarget": "docs/acceptance/PS-840-UAT.md; prior owner-reported PS-830 product/AT acceptance retained, new observed cross-simulation UAT and second target-user review pending" },
     { "dimension": "api-boundary", "obligation": "product-shell-v1", "status": "IMPLEMENTED", "owner": "PS-700", "evidenceTarget": "tests/e2e/product/product-shell.spec.mjs" },
     { "dimension": "product-screen", "obligation": "root-entry", "status": "IMPLEMENTED", "owner": "PS-700", "evidenceTarget": "output/playwright/ps-700" },
     { "dimension": "prd-requirement", "obligation": "REQ-009", "status": "IMPLEMENTED", "owner": "PS-700 then PS-730 through PS-760", "evidenceTarget": "Teludens foundation evidence plus complete Studio authoring evidence" },

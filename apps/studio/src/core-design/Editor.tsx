@@ -8,6 +8,7 @@ import { STUDIO_FOUNDATION_EDITOR_CONTRACT_ID, type ContentLibraryItemV1, type C
   type RolePreviewV1, type StudioRehearsalV1, type UploadQuarantineV1 } from "@plenum/event-contracts";
 import type {
   CoreDesignV1,
+  GateV1,
   RuntimeStageDefinitionV1,
   ScenarioV1
 } from "@plenum/simulation-schema";
@@ -106,12 +107,14 @@ export function CheckField({ id, label, checked, path, client }: {
     onChange={(event) => client.setAtPath(path, event.target.checked)} />{label}</label>;
 }
 
-export function MultiCheck({ legend, values, options, path, client }: {
-  legend: string; values: string[]; options: readonly Option[]; path: Path; client: StudioCollaborationClient;
+export function MultiCheck({ legend, values, options, path, client, emptyDeletes = false }: {
+  legend: string; values: string[]; options: readonly Option[]; path: Path; client: StudioCollaborationClient; emptyDeletes?: boolean;
 }) {
   return <fieldset className="choice-group"><legend>{legend}</legend>{options.length === 0 ? <p className="hint">Add an option in its editor first.</p> : options.map((option) =>
     <label className="choice" key={option.value}><input type="checkbox" checked={values.includes(option.value)} onChange={(event) => {
-      client.setAtPath(path, event.target.checked ? [...values, option.value] : values.filter((value) => value !== option.value));
+      const selected = event.target.checked ? [...values, option.value] : values.filter((value) => value !== option.value);
+      if (emptyDeletes && selected.length === 0) client.deleteAtPath(path);
+      else client.setAtPath(path, selected);
     }} />{option.label}</label>)}</fieldset>;
 }
 
@@ -647,15 +650,48 @@ function CommunicationsEditor({ core, client }: { core: CoreDesignV1; client: St
         <MultiCheck legend="Recipient Session Roles" values={route.recipient.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "routes", index, "recipient", "sessionRoleIds"]} client={client} />
         <MultiCheck legend="Recipient Teams" values={route.recipient.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "communications", "routes", index, "recipient", "teamIds"]} client={client} />
         <CheckField id={`route-recipient-public-${route.id}`} label="Public recipient" checked={route.recipient.public === true} path={["coreDesign", "communications", "routes", index, "recipient", "public"]} client={client} />
-        <MultiCheck legend="Active Stages (none means all)" values={route.activeStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "communications", "routes", index, "activeStageIds"]} client={client} />
+        <MultiCheck legend="Active Stages (none selected means all)" values={route.activeStageIds ?? []} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["coreDesign", "communications", "routes", index, "activeStageIds"]} client={client} emptyDeletes />
+        {route.activeStageIds?.length === 0 && <div><p className="status-notice">This saved Route explicitly permits no Stages. Select a Stage or allow all Stages.</p>
+          <button className="btn-secondary" type="button" onClick={() => client.deleteAtPath(["coreDesign", "communications", "routes", index, "activeStageIds"])}>Allow all Stages</button></div>}
         <p className="rule-sentence">{routeLabel(route)}{policy === undefined ? ". Information Policy is missing." : ` under ${policy.name} (${policy.classification ?? "internal"}).`}</p>
         {leakage && <p className="status-error" role="alert">A non-public Information Policy cannot use a public recipient. Publication remains blocked.</p>}
         <ItemActions path={["coreDesign", "communications", "routes"]} index={index} count={routes.length} client={client} label="Communication Route" />
       </div></details>;
     })}</div>
-    <AddButton label="Add Communication Route" disabled={channels.length === 0 || policies.length === 0 || roles.length < 2} onClick={() => client.appendAtPath(["coreDesign", "communications", "routes"], { id: identifier(), channelId: channels[0]?.id ?? "", informationPolicyId: policies[0]?.id, sender: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, recipient: { sessionRoleIds: roles[1] === undefined ? [] : [roles[1].id] }, activeStageIds: [] })} />
+    <AddButton label="Add Communication Route" disabled={channels.length === 0 || policies.length === 0 || roles.length === 0} onClick={() => client.appendAtPath(["coreDesign", "communications", "routes"], { id: identifier(), channelId: channels[0]?.id ?? "", informationPolicyId: policies[0]?.id, sender: { sessionRoleIds: roles[0] === undefined ? [] : [roles[0].id] }, recipient: { sessionRoleIds: roles[0] === undefined ? [] : [(roles[1] ?? roles[0]).id] } })} />
     <div className="table-scroll"><table className="permission-matrix"><caption>Route matrix by Session Role</caption><thead><tr><th scope="col">Sender</th>{roles.map((role) => <th scope="col" key={role.id}>{role.name}</th>)}</tr></thead><tbody>{roles.map((sender) => <tr key={sender.id}><th scope="row">{sender.name}</th>{roles.map((recipient) => { const matching = routes.filter((route) => route.sender.sessionRoleIds?.includes(sender.id) && route.recipient.sessionRoleIds?.includes(recipient.id)); return <td key={recipient.id}>{matching.length === 0 ? "Denied" : matching.map((route) => channels.find(({ id }) => id === route.channelId)?.name ?? "Missing Channel").join(", ")}</td>; })}</tr>)}</tbody></table></div>
   </Workspace>;
+}
+
+function InjectGateEditor({ id, gate, variables, path, client }: {
+  id: string; gate: GateV1; variables: NonNullable<CoreDesignV1["stateVariables"]>; path: Path; client: StudioCollaborationClient;
+}) {
+  const condition = gate.conditions[0];
+  if (!condition || !("fact" in condition)) return <p className="hint">This compound Gate is preserved. Review its conditions before changing the release rule.</p>;
+  const variable = variables.find(({ id: variableId }) => `state.${variableId}` === condition.fact);
+  const numeric = variable?.type === "integer" || variable?.type === "decimal";
+  const conditionPath = [...path, "conditions", 0];
+  return <fieldset className="nested-editor"><legend>Release condition</legend>
+    <div className="field"><label htmlFor={`inject-gate-variable-${id}`}>State Value</label><select id={`inject-gate-variable-${id}`} value={variable?.id ?? ""} onChange={(event) => {
+      const selected = variables.find(({ id: variableId }) => variableId === event.target.value);
+      if (!selected) return;
+      client.transact(() => {
+        client.setAtPath([...conditionPath, "fact"], `state.${selected.id}`);
+        client.setAtPath([...conditionPath, "operator"], "equals");
+        client.setAtPath([...conditionPath, "value"], selected.type === "boolean" ? false : selected.type === "integer" || selected.type === "decimal" ? 0 : selected.options?.[0]?.value ?? "");
+      });
+    }}><option value="">Choose a State Value</option>{variables.map(({ id: variableId, name }) => <option key={variableId} value={variableId}>{name}</option>)}</select></div>
+    <SelectField id={`inject-gate-comparison-${id}`} label="Comparison" value={condition.operator}
+      options={(numeric ? ["equals", "not_equals", "greater_than", "greater_or_equal", "less_than", "less_or_equal"] : ["equals", "not_equals"]).map((value) => ({ value, label: value.replaceAll("_", " ") }))}
+      path={[...conditionPath, "operator"]} client={client} />
+    {variable?.type === "boolean" ? <div className="field"><label htmlFor={`inject-gate-value-${id}`}>Comparison value</label><select id={`inject-gate-value-${id}`} value={String(condition.value)}
+      onChange={(event) => client.setAtPath([...conditionPath, "value"], event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+      : variable?.type === "enum" ? <SelectField id={`inject-gate-value-${id}`} label="Comparison value" value={String(condition.value ?? "")} options={variable.options ?? []}
+        path={[...conditionPath, "value"]} client={client} />
+        : <TextField id={`inject-gate-value-${id}`} label="Comparison value" value={typeof condition.value === "string" || typeof condition.value === "number" ? condition.value : ""}
+          type={numeric ? "number" : "text"} path={[...conditionPath, "value"]} client={client} />}
+    {gate.conditions.length > 1 ? <p className="hint">Additional conditions are preserved; this control edits the first condition only.</p> : null}
+  </fieldset>;
 }
 
 function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario: ScenarioV1; client: StudioCollaborationClient }) {
@@ -681,15 +717,15 @@ function InjectEditor({ core, scenario, client }: { core: CoreDesignV1; scenario
           if (mode !== "gate") client.deleteAtPath(["scenario", "injects", index, "releaseGate"]);
           if (["stage_entry", "stage_exit"].includes(mode) && stages[0] !== undefined) client.setAtPath(["scenario", "injects", index, "stageId"], stages[0].id);
           if (mode === "scheduled") client.setAtPath(["scenario", "injects", index, "scheduledOffsetSeconds"], 0);
-          if (mode === "gate" && variables[0] !== undefined) client.setAtPath(["scenario", "injects", index, "releaseGate"], { operator: "all", conditions: [{ fact: `state.${variables[0].id}`, operator: "equals", value: "" }] });
+          if (mode === "gate" && variables[0] !== undefined) client.setAtPath(["scenario", "injects", index, "releaseGate"], { operator: "all", conditions: [{ fact: `state.${variables[0].id}`, operator: "equals", value: variables[0].type === "boolean" ? false : ["integer", "decimal"].includes(variables[0].type) ? 0 : variables[0].options?.[0]?.value ?? "" }] });
         });
       }}><option value="manual">Manual</option><option value="scheduled">Scheduled</option><option value="stage_entry">Stage entry</option><option value="stage_exit">Stage exit</option><option value="gate">Conditional Gate</option></select></div>
       {(inject.releaseMode === "stage_entry" || inject.releaseMode === "stage_exit") && <SelectField id={`inject-stage-${inject.id}`} label="Stage" value={inject.stageId ?? ""} options={stages.map(({ id }) => ({ value: id, label: stageChoiceLabel(core, id) }))} path={["scenario", "injects", index, "stageId"]} client={client} />}
       {inject.releaseMode === "scheduled" && <div><TextField id={`inject-offset-${inject.id}`} label="Scheduled offset in seconds" value={inject.scheduledOffsetSeconds ?? 0} type="number" path={["scenario", "injects", index, "scheduledOffsetSeconds"]} client={client} />
         <p className="hint">Seconds after the Session starts, measured by server UTC time. Pausing holds delivery until the Session resumes. An Operator can reschedule an unreleased Inject.</p></div>}
       {inject.releaseMode === "gate" && variables.length === 0 && <p className="status-error">Add a State Variable before configuring this conditional Inject.</p>}
-      {inject.releaseMode === "gate" && variables[0] !== undefined && <><div className="field"><label htmlFor={`inject-gate-variable-${inject.id}`}>State Value</label><select id={`inject-gate-variable-${inject.id}`} value={(inject.releaseGate?.conditions[0] as { fact?: string } | undefined)?.fact?.replace(/^state\./u, "") ?? variables[0].id} onChange={(event) => client.setAtPath(["scenario", "injects", index, "releaseGate", "conditions", 0, "fact"], `state.${event.target.value}`)}>{variables.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}</select></div>
-        <p className="hint">State Value references are stored as <code>state.&lt;id&gt;</code>; validation will focus any incomplete Gate.</p></>}
+      {inject.releaseMode === "gate" && inject.releaseGate && variables.length > 0 && <InjectGateEditor id={inject.id} gate={inject.releaseGate} variables={variables}
+        path={["scenario", "injects", index, "releaseGate"]} client={client} />}
       <MultiCheck legend="Recipient Session Roles" values={inject.recipients.sessionRoleIds ?? []} options={roles.map(({ id, name }) => ({ value: id, label: name }))} path={["scenario", "injects", index, "recipients", "sessionRoleIds"]} client={client} />
       <MultiCheck legend="Recipient Teams" values={inject.recipients.teamIds ?? []} options={teams.map(({ id, name }) => ({ value: id, label: name }))} path={["scenario", "injects", index, "recipients", "teamIds"]} client={client} />
       <CheckField id={`inject-public-${inject.id}`} label="Public recipients" checked={inject.recipients.public === true} path={["scenario", "injects", index, "recipients", "public"]} client={client} />
@@ -897,6 +933,8 @@ function InterfaceEditor({ projectId, core, client }: { projectId: string; core:
   const policies = coreArray(core, "informationPolicies");
   const roleResources = (core.resources ?? []).filter(isRoleResource);
   const slideDecks = roleResources.filter((resource) => resource.type === "slide_deck");
+  const channels = core.communications?.messageChannels ?? [];
+  const routes = core.communications?.routes ?? [];
   return <Workspace id="interfaces" title="Interfaces" intro="Choose what each role can see and use. Resources are governed by the published Release and the selected role interface.">
     <RoleResourceEditor projectId={projectId} core={core} client={client} />
     <div className="editor-list">{profiles.map((profile, index) => <details className="editor-item" id={`interfaces-${profile.id}`} key={profile.id}><summary><span>{profile.name}</span><span className="badge badge-muted">{profile.layout.template.replaceAll("_", " ")}</span></summary><div className="item-body">
@@ -909,9 +947,21 @@ function InterfaceEditor({ projectId, core, client }: { projectId: string; core:
         {region.modules.map((module, moduleIndex) => <div className="field-row" key={module.id}>
           <TextField id={`module-title-${module.id}`} label="Module title" value={module.title ?? ""} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "title"]} client={client} />
           <SelectField id={`module-type-${module.id}`} label="Module" value={module.moduleType} options={MODULE_TYPES.map((value) => ({ value, label: value.replaceAll("_", " ") }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "moduleType"]} client={client} />
+          <SelectField id={`module-mode-${module.id}`} label="Interaction" value={typeof module.configuration.mode === "string" ? module.configuration.mode : "read"}
+            options={[{ value: "read", label: "Read only" }, { value: "write", label: "Allow authorized actions" }]}
+            path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "mode"]} client={client} />
           <SelectField id={`module-policy-${module.id}`} label="Information Policy" value={typeof module.configuration.informationPolicyId === "string" ? module.configuration.informationPolicyId : ""} options={[{ value: "", label: "No additional policy" }, ...policies.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "informationPolicyId"]} client={client} emptyDeletes />
           {module.moduleType === "slide_deck" && <SelectField id={`module-deck-${module.id}`} label="Slide deck resource" value={typeof module.configuration.releaseResourceId === "string" ? module.configuration.releaseResourceId : ""} options={[{ value: "", label: slideDecks.length === 0 ? "Add a slide deck above" : "Select a slide deck" }, ...slideDecks.map(({ id, name }) => ({ value: id, label: name }))]} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "releaseResourceId"]} client={client} emptyDeletes />}
           {module.moduleType === "resource_library" && <MultiCheck legend="Resources available in this role workspace" values={Array.isArray(module.configuration.resourceIds) ? module.configuration.resourceIds.filter((id): id is string => typeof id === "string") : []} options={roleResources.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "resourceIds"]} client={client} />}
+          {module.moduleType === "message_inbox" && <>
+            <MultiCheck legend="Message Channels" values={Array.isArray(module.configuration.channelIds) ? module.configuration.channelIds.filter((id): id is string => typeof id === "string") : []}
+              options={channels.map(({ id, name }) => ({ value: id, label: name }))} path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "channelIds"]} client={client} />
+            {Array.isArray(module.configuration.sendRoutes) ? <p className="hint">The existing multiple-recipient routes are preserved.</p> : <SelectField id={`module-route-${module.id}`} label="Send Route"
+              value={typeof module.configuration.sendRouteId === "string" ? module.configuration.sendRouteId : ""}
+              options={[{ value: "", label: "Receive only" }, ...routes.map((route) => ({ value: route.id,
+                label: `${channels.find(({ id }) => id === route.channelId)?.name ?? "Missing Channel"} to ${route.recipient.public ? "public" : route.recipient.sessionRoleIds?.map((id) => roles.find((role) => role.id === id)?.name ?? "Missing role").join(", ") || "configured audience"}` }))]}
+              path={["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules", moduleIndex, "configuration", "sendRouteId"]} client={client} emptyDeletes />}
+          </>}
           <button className="btn-danger compact" type="button" onClick={() => client.removeAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], moduleIndex)}>Remove module</button>
         </div>)}
         <AddButton label="Add module" onClick={() => client.appendAtPath(["coreDesign", "interfaces", index, "layout", "regions", regionIndex, "modules"], { id: identifier(), moduleType: "session_status", title: "Session status", configuration: { mode: "read", emptyStateText: "Nothing is available." } })} />
@@ -1176,7 +1226,9 @@ function ScenarioEditor({ projectId, core, scenario, client }: { projectId: stri
     <h3>Scenario content</h3><div className="editor-list compact-list">{content.map((item, index) => <details className="editor-item" id={`scenario-content-${item.id}`} key={item.id}><summary>{item.title}</summary><div className="item-body">
       <TextField id={`content-title-${item.id}`} label="Title" value={item.title} path={["scenario", "content", index, "title"]} client={client} />
       <TextField id={`content-body-${item.id}`} label="Content" value={item.body ?? ""} path={["scenario", "content", index, "body"]} client={client} multiline />
-      <TextField id={`content-policy-${item.id}`} label="Information Policy ID" value={item.informationPolicyId} path={["scenario", "content", index, "informationPolicyId"]} client={client} />
+      <SelectField id={`content-policy-${item.id}`} label="Information Policy" value={item.informationPolicyId}
+        options={[{ value: "", label: "Choose an Information Policy" }, ...coreArray(core, "informationPolicies").map(({ id, name }) => ({ value: id, label: name }))]}
+        path={["scenario", "content", index, "informationPolicyId"]} client={client} />
       <ItemActions path={["scenario", "content"]} index={index} count={content.length} client={client} label={item.title} />
     </div></details>)}</div>
     <AddButton label="Add Scenario content" onClick={() => client.appendAtPath(["scenario", "content"], { id: identifier(), title: "New content", type: "rich_text", body: "", informationPolicyId: "", version: "1" })} />

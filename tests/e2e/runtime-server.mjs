@@ -20,7 +20,8 @@ import { fixture } from "./fixture.mjs";
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl === undefined) throw new Error("DATABASE_URL is required");
 const localUserTest = process.argv.includes("--local-user-test");
-const goldenJourney = process.argv.includes("--golden-journey");
+const generalizationJourney = process.argv.includes("--generalization-journey");
+const goldenJourney = process.argv.includes("--golden-journey") || generalizationJourney;
 const seedUserTest = process.argv.includes("--seed-user-test");
 const runtimePort = Number(process.env.PLENUM_E2E_PORT ?? 4173);
 if (seedUserTest && !localUserTest) throw new Error("--seed-user-test requires --local-user-test");
@@ -108,8 +109,8 @@ const principals = Object.fromEntries(Object.entries(fixture.tokens).map(([key, 
 }]));
 
 const goldenDatabase = new URL(databaseUrl).pathname.slice(1);
-if (goldenJourney && !/^plenum_ps830_g_browser[0-9]+$/u.test(goldenDatabase)) throw new Error("Golden server requires its dedicated database");
-const objectRoot = goldenJourney ? join(process.cwd(), "output", "playwright", "golden-journey", "objects", goldenDatabase)
+if (goldenJourney && !(generalizationJourney ? /^plenum_ps840_browser[0-9]+$/u : /^plenum_ps830_g_browser[0-9]+$/u).test(goldenDatabase)) throw new Error("Journey server requires its dedicated database");
+const objectRoot = goldenJourney ? join(process.cwd(), "output", "playwright", generalizationJourney ? "ps-840" : "golden-journey", "objects", goldenDatabase)
   : await mkdtemp(join(tmpdir(), "plenum-ps300-e2e-"));
 const objectStore = new LocalObjectStore(objectRoot);
 const contentScanner = {

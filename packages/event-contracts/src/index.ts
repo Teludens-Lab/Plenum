@@ -1324,6 +1324,7 @@ export interface ReadinessProjectionV1 {
   staffing: {
     people?: Array<{ personId: string; displayName: string }>;
     peopleTruncated?: boolean;
+    sessionRoles?: Array<{ id: string; name: string }>;
     seats: Array<{ seatId: string; label?: string; sessionRoleIds: string[]; teamId: string | null; minimum: number; maximum: number | null; occupied: number }>;
     joinRequests: Array<{ personId: string; requestedSeatId: string | null; status: string; submittedAt: string }>;
     rosterReview: Array<{ rowId: string; rowNumber: number; personId: string | null; seatId: string | null; reasons: string[] }>;

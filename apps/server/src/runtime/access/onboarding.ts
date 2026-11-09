@@ -916,8 +916,9 @@ export async function requireActiveGuest(pool: Pool, organizationId: string, gue
 async function readiness(client: PoolClient, context: PrincipalSessionCommandContext, activeReleaseId: string): Promise<ReadinessProjectionV1> {
   const access = await config(client, context);
   if (access === undefined) throw new Error("Session access configuration is missing");
-  const release = await client.query<{ seats: Array<{ id: string; name?: string }> }>(
-    `SELECT revision.snapshot->'coreDesign'->'seats' AS seats
+  const release = await client.query<{ seats: Array<{ id: string; name?: string }>; session_roles: Array<{ id: string; name: string }> }>(
+    `SELECT revision.snapshot->'coreDesign'->'seats' AS seats,
+            revision.snapshot->'coreDesign'->'sessionRoles' AS session_roles
        FROM registry.releases release JOIN studio.definition_revisions revision
          ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
       WHERE release.organization_id=$1 AND release.id=$2`, [context.organizationId, activeReleaseId]
@@ -989,6 +990,8 @@ async function readiness(client: PoolClient, context: PrincipalSessionCommandCon
   return { contractId: "readiness-v1", sessionId: context.sessionId, governingReleaseId: activeReleaseId,
     assignmentVersion: Number(access.assignment_version), ready: items.every((item) => !item.blocking || item.complete), checks: items,
     staffing: {
+      sessionRoles: (release.rows[0]?.session_roles ?? []).filter((role) => staffingSeats.rows.some((seat) => seat.session_role_ids.includes(role.id)))
+        .map(({ id, name }) => ({ id, name })),
       seats: staffingSeats.rows.map((item) => ({ seatId: item.seat_id, label: seatLabels.get(item.seat_id) ?? item.seat_id, sessionRoleIds: item.session_role_ids,
         teamId: item.team_id, minimum: item.min_occupancy, maximum: item.max_occupancy, occupied: Number(item.occupied) })),
       joinRequests: joinRequests.rows.map((item) => ({ personId: item.person_id, requestedSeatId: item.requested_seat_id,

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { runtimeSourceHash } from "./source-evidence.mjs";
 import { fileURLToPath } from "node:url";
 
 import Ajv2020 from "ajv/dist/2020.js";
@@ -14,44 +15,8 @@ import { evaluateGate, rehearseStages, resolveWorkflowTransition } from "@plenum
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const evidencePath = path.join(repoRoot, "test-results/generalization/ps-430-evidence.json");
-const runtimeSourceRoots = [
-  "apps/runtime-web/src",
-  "apps/server/src",
-  "packages/event-contracts/src",
-  "packages/extension-host/src",
-  "packages/media-adapter/src",
-  "packages/plugin-sdk/src",
-  "packages/policy-engine/src",
-  "packages/release-compiler/src",
-  "packages/simulation-schema/src",
-  "packages/sync-client/src",
-  "packages/validation-engine/src",
-  "packages/workflow-engine/src"
-];
-
 async function readJson(relativePath) {
   return JSON.parse(await readFile(path.join(repoRoot, relativePath), "utf8"));
-}
-
-async function filesUnder(directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  return (await Promise.all(entries.map((entry) => {
-    const target = path.join(directory, entry.name);
-    return entry.isDirectory() ? filesUnder(target) : [target];
-  }))).flat();
-}
-
-async function runtimeSourceHash() {
-  const files = (await Promise.all(runtimeSourceRoots.map((root) => filesUnder(path.join(repoRoot, root)))))
-    .flat().sort((left, right) => left.localeCompare(right));
-  const hash = createHash("sha256");
-  for (const file of files) {
-    hash.update(path.relative(repoRoot, file).replaceAll("\\", "/"));
-    hash.update("\0");
-    hash.update(await readFile(file));
-    hash.update("\0");
-  }
-  return { digest: hash.digest("hex"), fileCount: files.length };
 }
 
 function initialFacts(scenario) {
@@ -204,7 +169,7 @@ test("PS-430-T01/T02 two-simulation generalization gate", async () => {
     configurationOnly: true,
     simulations: [policy.evidence, crisis.evidence],
     nondeterministicAdapterExclusions: ["external-network", "media", "model", "plugin"],
-    semanticGaps: ["OPEN-004 remains unresolved; the fixtures do not infer concept activation dependencies."],
+    semanticGaps: ["OPEN-004 was resolved by Decision Register v1.0.16; this fixture-level test does not prove UI concept activation or target-user acceptance."],
     clientMutationState: "not_applicable_no_client_mutation",
     testIds: ["PS-430-T01", "PS-430-T02"]
   };

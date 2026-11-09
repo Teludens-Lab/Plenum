@@ -249,7 +249,7 @@ async function recipientsFor(
   return [...recipients.values()];
 }
 
-async function currentStageId(client: PoolClient, context: SessionAccessContextV1): Promise<string | undefined> {
+async function currentStageId(client: PoolClient, context: SessionScope): Promise<string | undefined> {
   const result = await client.query<{ stage_id: string }>(
     "SELECT stage_id FROM runtime.session_stage_state WHERE organization_id=$1 AND session_id=$2",
     [context.organizationId, context.sessionId]
@@ -851,17 +851,19 @@ export async function releaseStageInjects(
   return released;
 }
 
-export async function releaseGateInjects(input: CommandExecutionContext): Promise<string[]> {
+export async function releaseGateInjects(input: CommandExecutionContext | PrincipalCommandExecutionContext): Promise<string[]> {
   const release = await readInformationRelease(input.client, input.context, input.activeReleaseId, input.command.commandId);
-  const actor = actorFor(release, input.context);
-  if (actor === undefined) return [];
+  const participantContext = "activeSessionRoleId" in input.context ? input.context : undefined;
+  const actor = participantContext === undefined ? undefined : actorFor(release, participantContext);
+  if (participantContext !== undefined && actor === undefined) return [];
   await initializeWorldState(input.client, {
     organizationId: input.context.organizationId, sessionId: input.context.sessionId, governingReleaseId: input.activeReleaseId
   }, release.coreDesign, release.scenario);
   await applyDueStateValueChanges(input.client, input.context, release.coreDesign.stateVariables ?? []);
-  const policyVisible = (policyId: string): boolean => release.coreDesign.informationPolicies
+  // Principal Stage Commands already require an active Session Operator; match Stage fact visibility.
+  const policyVisible = (policyId: string): boolean => participantContext === undefined || (actor !== undefined && release.coreDesign.informationPolicies
     .find(({ id }) => id === policyId)?.grants.some(({ audience }) =>
-      selectorAllows(audience, input.context.activeSessionRoleId, actor)) === true;
+      selectorAllows(audience, participantContext.activeSessionRoleId, actor)) === true);
   const released: string[] = [];
   for (const definition of release.scenario.injects.filter((inject) => inject.releaseMode === "gate")) {
     if (definition.releaseGate === undefined) continue;
@@ -872,9 +874,9 @@ export async function releaseGateInjects(input: CommandExecutionContext): Promis
     });
     const stage = await currentStageId(input.client, input.context);
     if (stage !== undefined) facts["session.stage.id"] = stage;
-    facts["session.status"] = input.context.sessionStatus;
-    facts["actor.sessionRoleId"] = input.context.activeSessionRoleId;
-    if (actor.teamId !== undefined) facts["actor.teamId"] = actor.teamId;
+    facts["session.status"] = "sessionStatus" in input ? input.sessionStatus : input.context.sessionStatus;
+    if (participantContext !== undefined) facts["actor.sessionRoleId"] = participantContext.activeSessionRoleId;
+    if (actor?.teamId !== undefined) facts["actor.teamId"] = actor.teamId;
     const clock = await input.client.query<{ now: Date }>("SELECT transaction_timestamp() AS now");
     facts["time.wallClock"] = clock.rows[0]?.now.toISOString() ?? new Date(0).toISOString();
     const evaluation = evaluateGate(definition.releaseGate, facts);

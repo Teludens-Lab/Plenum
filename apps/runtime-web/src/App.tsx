@@ -1597,6 +1597,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
     {...(connection === "loading" ? {} : { retry: () => void load() })} />;
   const states = Object.entries(projection.artifactsByState);
   const staffingRoleIds = readiness === null ? [] : [...new Set(readiness.staffing.seats.flatMap((seat) => seat.sessionRoleIds))];
+  const staffingRoleLabel = (id: string, fallback: string) => readiness?.staffing.sessionRoles?.find((role) => role.id === id)?.name ?? friendlyReference(id, fallback);
   const send = async (path: string, operationType: string, payload: JsonObject = {}, aggregateId = id,
     expectedAggregateVersion = readiness?.assignmentVersion ?? 0) => {
     if (id === null || deviceId === null || pending || aggregateId === null) return null;
@@ -1704,7 +1705,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
               <div className="field"><label htmlFor="assign-seat">Seat</label><select id="assign-seat" name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
                 {readiness.staffing.seats.map((item, index) => <option key={item.seatId} value={item.seatId}>{item.label ?? friendlyReference(item.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor="assign-role">Session Role</label><select id="assign-role" name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
-                  {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
+                  {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{staffingRoleLabel(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <button className="btn-primary" type="submit" disabled={pending}>Assign Seat</button>
             </form></details>
           </article>
@@ -1725,7 +1726,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
             <span>{item.reasons.join(", ")}</span></li>)}</ul>}
         <h3>Active assignments</h3>
         {readiness.staffing.assignments.length === 0 ? <p className="empty-state">No active Seat Assignments.</p> : <ul className="readiness-list">
-          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{readiness.staffing.seats.find((seat) => seat.seatId === item.seatId)?.label ?? friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {friendlyReference(item.sessionRoleId, "Assigned role")}</span>
+          {readiness.staffing.assignments.map((item, assignmentIndex) => <li key={item.seatAssignmentId}><span><strong>{readiness.staffing.seats.find((seat) => seat.seatId === item.seatId)?.label ?? friendlyReference(item.seatId, `Seat ${assignmentIndex + 1}`)}</strong> · {staffingRoleLabel(item.sessionRoleId, "Assigned role")}</span>
             <details className="provenance-disclosure"><summary>Assignment references</summary><code>{item.personId} · {item.seatAssignmentId}</code></details>
             <details><summary>Reassign</summary><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
               void send(`/v1/sessions/${id}/seat-assignments/${item.seatAssignmentId}/reassign`, "participant.reassign", {
@@ -1736,7 +1737,7 @@ function OperatorView({ embedded }: { embedded?: "session" | "participants" | "r
               <div className="field"><label htmlFor={`reassign-seat-${item.seatAssignmentId}`}>Destination Seat</label><select id={`reassign-seat-${item.seatAssignmentId}`} name="seatId" required defaultValue=""><option value="" disabled>Select a Seat</option>
                 {readiness.staffing.seats.map((seat, index) => <option key={seat.seatId} value={seat.seatId}>{seat.label ?? friendlyReference(seat.seatId, `Seat ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor={`reassign-role-${item.seatAssignmentId}`}>Session Role</label><select id={`reassign-role-${item.seatAssignmentId}`} name="sessionRoleId" required defaultValue=""><option value="" disabled>Select a Session Role</option>
-                {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{friendlyReference(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
+                {staffingRoleIds.map((sessionRoleReference, index) => <option key={sessionRoleReference} value={sessionRoleReference}>{staffingRoleLabel(sessionRoleReference, `Role ${index + 1}`)}</option>)}</select></div>
               <div className="field"><label htmlFor={`reassign-reason-${item.seatAssignmentId}`}>Reason</label><input id={`reassign-reason-${item.seatAssignmentId}`} name="reason" required minLength={3} maxLength={500} /></div>
               <label className="choice"><input name="exposureAcknowledged" type="checkbox" /> I acknowledge that previously viewed information cannot be withdrawn.</label>
               <button className="btn-primary" type="submit" disabled={pending}>Reassign</button>

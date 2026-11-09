@@ -22,6 +22,7 @@ import {
   exportRuntimeArtifact,
   uploadFormAttachment, listFormAttachments, downloadFormAttachment, rescanFormAttachment, enforceFormAttachmentRetention,
   executeOperatorSessionCommand,
+  executeOperatorStageControl,
   executeOperatorInjectControl,
   runScheduledInjects,
   beginOidcLogin,
@@ -1502,7 +1503,9 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
       { key: "recovery", label: "Recovery rehearsed", blocking: true }
     ]
   };
-  const snapshot = { coreDesign: { accessPolicy, seats: [
+  const snapshot = { coreDesign: { accessPolicy, sessionRoles: [
+    { id: "lead", name: "Exercise lead" }, { id: "unused", name: "Unstaffed role" }
+  ], seats: [
     { id: "blue-lead", name: "Blue lead", sessionRoleIds: ["lead"], teamId: "blue", minOccupancy: 1, maxOccupancy: 1, required: true, joinMode: "open_seat_selection" },
     { id: "red-lead", name: "Red lead", sessionRoleIds: ["lead"], teamId: "red", minOccupancy: 0, maxOccupancy: 1, required: false, joinMode: "operator_assignment" }
   ] } };
@@ -1641,6 +1644,7 @@ test("AC-03 PS-340-T01/T02 gates verified onboarding, exclusive Seats, reassignm
   await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'Synthetic workforce participant without Organization Role')", [participantOnlyPerson]);
   await owner.query("INSERT INTO identity.organization_workforce_members(organization_id,person_id,source,status) VALUES ($1,$2,'legacy','active')", [ids.orgA, participantOnlyPerson]);
   const staffed = await getReadiness(app, principal, accessIds.session, randomUUID());
+  assert.deepEqual(staffed.staffing.sessionRoles, [{ id: "lead", name: "Exercise lead" }]);
   assert.ok(staffed.staffing.people.some((person) => person.personId === participantOnlyPerson));
   await owner.query("UPDATE identity.organization_workforce_members SET status='suspended',suspended_at=transaction_timestamp() WHERE organization_id=$1 AND person_id=$2", [ids.orgA, participantOnlyPerson]);
   assert.equal((await getReadiness(app, principal, accessIds.session, randomUUID())).staffing.people.some((person) => person.personId === participantOnlyPerson), false);
@@ -3246,7 +3250,8 @@ test("PS-830-T07 REQ-030 published records, independent Inject recipients and au
       interfaceProfileIds: [id(4)], isControlRole: i === 1, enabled: true })),
     seats: roles.map((role, i) => ({ id: id(5 + i), name: `Seat ${i + 1}`, sessionRoleIds: [role], teamId: id(1), minOccupancy: 1,
       maxOccupancy: 1, required: true, joinMode: "operator_assignment" })),
-    stageGroups: [], stages: [{ id: id(7), name: "Exercise", stageType: "exercise", allowedActivityIds: [], transitions: [] }],
+    stageGroups: [], stages: [{ id: id(7), name: "Exercise", stageType: "exercise", allowedActivityIds: [], transitions: [],
+      operatorControls: { allowStart: true, allowEnd: true, allowReopen: true, allowExtend: false, allowSkip: false, allowReturnToPrevious: false, requireReason: true } }],
     forms: [{ id: id(10), contractId: "structured-form-v2", formVersion: "2", name: "Action", sections: [
       { id: id(11), title: "Action", fields: [{ id: id(12), key: "title", label: "Action title", type: "short_text", required: true }] },
       { id: id(13), title: "Supporting steps", repeatable: true, maxEntries: 50, fields: [{ id: id(14), key: "description", label: "Step", type: "short_text" }] }
@@ -3279,7 +3284,12 @@ test("PS-830-T07 REQ-030 published records, independent Inject recipients and au
     ...(index === 0 ? { effects: [{ stateVariableId: id(90), operation: "increment", value: 1 }] } : {}) }));
   const scenario = { id: id(29), name: "Decision and Inject proof", description: "Synthetic contract proof", deliveryModes: ["in_person"], tags: [],
     content: [{ id: id(30), title: "Brief", type: "document", body: "Synthetic recipient brief", version: "1", informationPolicyId: id(17) }],
-    initialState: [{ stateVariableId: id(90), value: 0 }], injects: [...injects, ...schedules] };
+    initialState: [{ stateVariableId: id(90), value: 0 }], injects: [...injects, ...schedules,
+      ...[{ fact: `state.${id(90)}`, operator: "equals", value: 0 }, { fact: `state.${id(90)}`, operator: "greater_than", value: 9 },
+        { fact: "actor.sessionRoleId", operator: "equals", value: roles[0] }].map((condition, index) => ({
+          id: id(70 + index), title: `Conditional ${index + 1}`, contentId: id(30), recipients: { sessionRoleIds: roles }, releaseMode: "gate",
+          releaseGate: { operator: "all", conditions: [condition] }, completionRequirements: { contractId: "inject-completion-v1", acknowledgementRequired: false }
+        }))] };
   const project = await createProject(app, principalD, { requestId: randomUUID(), title: "PS-830 Decision and Inject integration" }, randomUUID());
   const draft = await getCollaborativeDraft(app, principalD, project.projectId, randomUUID());
   const document = collaborativeDocument(draft.update);
@@ -3307,6 +3317,16 @@ test("PS-830-T07 REQ-030 published records, independent Inject recipients and au
   const startCommand = command("session.start", created.sessionId, { reason: "Exercise configured requirements", confirmed: true }, opened.aggregateVersion);
   accepted(await executeOperatorSessionCommand(app, operator, startCommand, randomUUID(), ids.deploymentA));
   assert.equal((await executeOperatorSessionCommand(app, operator, startCommand, randomUUID(), ids.deploymentA)).replayed, true);
+  const stageCommand = command("stage.start", created.sessionId, { reason: "PS-840 conditional Injects without a Participant Seat", confirmed: true });
+  assert.equal((await executeOperatorStageControl(app, { ...operator, organizationRoles: [] },
+    { ...stageCommand, commandId: randomUUID() }, randomUUID(), ids.deploymentA)).errorCode, "PERMISSION_DENIED");
+  accepted(await executeOperatorStageControl(app, operator, stageCommand, randomUUID(), ids.deploymentA));
+  assert.equal((await executeOperatorStageControl(app, operator, stageCommand, randomUUID(), ids.deploymentA)).replayed, true);
+  for (const [index, operation] of ["stage.pause", "stage.resume"].entries()) accepted(await executeOperatorStageControl(app, operator,
+    command(operation, created.sessionId, { reason: "Re-evaluate without duplicate release", confirmed: true }, index + 1), randomUUID(), ids.deploymentA));
+  const conditionalInstances = (await owner.query("SELECT inject_definition_id FROM runtime.inject_instances WHERE session_id=$1 AND inject_definition_id=ANY($2::text[])",
+    [created.sessionId, [id(70), id(71), id(72)]])).rows;
+  assert.deepEqual(conditionalInstances.map(({ inject_definition_id }) => inject_definition_id), [id(70)], "Only the true Gate fires once; an Operator does not acquire a participant role Fact");
   const contexts = await Promise.all([principalE, principalD].map((principal, index) => withOrganizationTransaction(app, ids.orgA, (client) => resolveSessionAccessContext(client, principal,
     { sessionId: created.sessionId, deviceId: index ? accessIds.deviceD : accessIds.deviceE, requestedActiveSessionRoleId: roles[index], correlationId: randomUUID() }))));
   const submit = (index, cmd) => submitRuntimeCommand(app, contexts[index], { ...cmd, deviceId: index ? accessIds.deviceD : accessIds.deviceE }, randomUUID(), ids.deploymentA);

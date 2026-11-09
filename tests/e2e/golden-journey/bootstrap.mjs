@@ -5,11 +5,11 @@ import { fixture } from "../fixture.mjs";
 
 // Infrastructure and synthetic identity bootstrap only. Projects, Templates,
 // Releases, Sessions, participants and all simulation content are created in UI.
-export default async function bootstrap() {
+export async function bootstrapBlank({ databasePattern, evidenceDirectory, organizationName, identityPrefix }) {
   if (Number(process.versions.node.split(".")[0]) < 24) throw new Error("Node 24+ is required");
   const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl || !/^\/plenum_ps830_g_browser[0-9]+$/u.test(new URL(databaseUrl).pathname)) {
-    throw new Error("Golden bootstrap requires a dedicated plenum_ps830_g_browserN database");
+  if (!databaseUrl || !databasePattern.test(new URL(databaseUrl).pathname)) {
+    throw new Error("Blank bootstrap requires the task's dedicated database");
   }
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const migrations = [];
@@ -31,13 +31,13 @@ export default async function bootstrap() {
       designerA: "Synthetic Designer A", designerB: "Synthetic Designer B", publisher: "Synthetic Publisher", blueNotetaker: "Synthetic Blue notetaker",
       portalOperator: "Synthetic portal operator", invitedParticipant: "Synthetic invited participant", codeParticipant: "Synthetic code participant" };
     await pool.query("BEGIN");
-    await pool.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'PS-830 blank-install synthetic Organization')", [fixture.organizationId]);
+    await pool.query("INSERT INTO identity.organizations(id,name) VALUES ($1,$2)", [fixture.organizationId, organizationName]);
     for (const [key, personId] of Object.entries(fixture.people)) {
       await pool.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,$2)", [personId, names[key]]);
       await pool.query("INSERT INTO identity.organization_workforce_members(organization_id,person_id,source,status) VALUES ($1,$2,'legacy','active')", [fixture.organizationId, personId]);
       for (const role of roles[key] ?? []) await pool.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,$3)", [fixture.organizationId, personId, role]);
       await pool.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
-        VALUES ($1,$2,$3,'https://fixture.invalid',$4,'mfa','2099-01-01T00:00:00Z')`, [fixture.authenticationSessions[key], fixture.organizationId, personId, `ps830-${key}`]);
+        VALUES ($1,$2,$3,'https://fixture.invalid',$4,'mfa','2099-01-01T00:00:00Z')`, [fixture.authenticationSessions[key], fixture.organizationId, personId, `${identityPrefix}-${key}`]);
     }
     await pool.query("SELECT identity.bootstrap_platform_administrator($1,gen_random_uuid())", [fixture.people.operator]);
     await pool.query("COMMIT");
@@ -46,10 +46,15 @@ export default async function bootstrap() {
       domainCounts[table] = Number((await pool.query(`SELECT count(*) FROM ${table}`)).rows[0].count);
     }
     if (Object.values(domainCounts).some((value) => value !== 0)) throw new Error("Bootstrap unexpectedly contains simulation domain records");
-    await mkdir("test-results/golden-journey", { recursive: true });
-    await writeFile("test-results/golden-journey/blank-install.json", JSON.stringify({ node: process.version,
+    await mkdir(evidenceDirectory, { recursive: true });
+    await writeFile(`${evidenceDirectory}/blank-install.json`, JSON.stringify({ node: process.version,
       database: new URL(databaseUrl).pathname.slice(1), bootstrappedAt: new Date().toISOString(), migrations,
       identityCount: Object.keys(fixture.people).length, domainCounts,
       identityBoundary: "Synthetic loopback authentication sessions; external OIDC interoperability is not claimed." }, null, 2));
   } finally { await pool.end(); }
+}
+
+export default async function bootstrap() {
+  await bootstrapBlank({ databasePattern: /^\/plenum_ps830_g_browser[0-9]+$/u,
+    evidenceDirectory: "test-results/golden-journey", organizationName: "PS-830 blank-install synthetic Organization", identityPrefix: "ps830" });
 }

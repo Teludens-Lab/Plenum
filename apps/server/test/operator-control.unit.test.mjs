@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { nextOperatorSessionStatus } from "../dist/runtime/operator-control.js";
+import { mayMutateArtifact } from "../dist/runtime/artifact-workflow.js";
+
+test("PS-840 teamless records remain writable by their creator without granting peer or cross-Team writes", () => {
+  const record = { owner_team_id: null, creator_participant_id: "creator" };
+  assert.equal(mayMutateArtifact({ isControlRole: false }, record, "creator"), true);
+  assert.equal(mayMutateArtifact({ isControlRole: false }, record, "peer"), false);
+  assert.equal(mayMutateArtifact({ isControlRole: false, teamId: "other" }, record, "creator"), false);
+  assert.equal(mayMutateArtifact({ isControlRole: true }, record, "control"), true);
+  const teamRecord = { ...record, owner_team_id: "owner" };
+  assert.equal(mayMutateArtifact({ isControlRole: false, teamId: "owner" }, teamRecord, "peer"), true);
+  assert.equal(mayMutateArtifact({ isControlRole: false, teamId: "other" }, teamRecord, "creator"), false);
+  assert.equal(mayMutateArtifact({ isControlRole: false }, teamRecord, "creator"), false);
+});
 
 test("PS-780-T01 Session lifecycle allows only the canonical forward and pause/resume transitions", () => {
   assert.equal(nextOperatorSessionStatus("session.start", "open"), "active");

@@ -4,7 +4,7 @@
 
 - ID: `PS-842`
 - Title: Reconcile role-by-role interface navigation, labels and layout
-- Goal: Close every interface inconsistency and gap found by the 2026-11-09 role-by-role audit so each user role meets one navigation model, one vocabulary and one Teludens layout grammar.
+- Goal: Close every interface inconsistency and gap found by the 2026-11-09 role-by-role audit so each user role meets one navigation model, one vocabulary and one Teludens layout grammar, inclusive of global dark mode.
 - User outcome: Every visitor, Organization role, Platform Administrator and Fractured Order participant role can find their work through visible navigation, reads the same name for the same thing everywhere, never sees internal identifiers, and meets consistent layouts at the supported desktop scope.
 - Risk: **HIGH**
 - Metadata: `source_evidence` is populated; `prerequisites_verified: false`; `ready_to_execute: false`.

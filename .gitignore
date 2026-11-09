@@ -58,6 +58,10 @@ Desktop.ini
 
 # Documentation
 docs/*
+!docs/acceptance/
+docs/acceptance/*
+!docs/acceptance/PS-840-preflight.md
+!docs/acceptance/PS-840-UAT.md
 !docs/design/
 docs/design/*
 !docs/design/participant-interfaces.md

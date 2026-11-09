@@ -135,7 +135,7 @@ function blankScenario(id: string): ScenarioV1 {
 function blankCoreDesign(): CoreDesignV1 {
   return {
     methodologyConcepts: [], teams: [], sessionRoles: [], seats: [], stageGroups: [], stages: [],
-    forms: [], artifactTypes: [], workflows: [], informationPolicies: [], interfaces: [],
+    forms: [], artifactTypes: [], workflows: [], informationPolicies: [], interfaces: [], reports: [],
     researchQuestions: [], decisionTraceability: [], pluginBindings: [], compositions: [],
     stateVariables: [], capabilities: [], resourceDefinitions: [],
     communications: { messageChannels: [], routes: [], voiceChannels: [] }

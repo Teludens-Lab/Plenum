@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "uat-evidence-v1",
+  "title": "PS-840 automated cross-simulation evidence; human acceptance is separate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractId", "generatedAt", "testId", "title", "studioPath", "recordName", "roleName", "kind", "publication", "sessionPath", "runtimeSourceHash", "nodeVersion", "status", "humanUat", "domainFidelity"],
+  "properties": {
+    "contractId": { "const": "uat-evidence-v1" },
+    "generatedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*Z$" },
+    "testId": { "enum": ["PS-840-T01", "PS-840-T02"] },
+    "title": { "type": "string", "minLength": 1 },
+    "studioPath": { "type": "string", "pattern": "^/studio/projects/[0-9a-f-]{36}$" },
+    "recordName": { "type": "string", "minLength": 1 },
+    "roleName": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["policy-negotiation", "crisis-response"] },
+    "publication": { "type": "object", "minProperties": 1 },
+    "sessionPath": { "type": "string", "pattern": "^/sessions/[0-9a-f-]{36}$" },
+    "runtimeSourceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nodeVersion": { "type": "string", "pattern": "^v[0-9]+\\." },
+    "status": { "const": "AUTOMATED_PASS" },
+    "humanUat": { "const": "NOT RUN" },
+    "domainFidelity": { "const": "NOT CLAIMED" }
+  }
+}

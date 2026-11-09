@@ -898,8 +898,8 @@ export async function executeArtifactCommand(input: CommandExecutionContext): Pr
     return { status: "needs_reconciliation", errorCode: "STALE_AGGREGATE_VERSION", message: `The Artifact is at version ${currentVersion}.` };
   }
   const workflow = workflowFor(definition, artifactType);
-  if (!actor.isControlRole && actor.teamId !== artifact.owner_team_id) {
-    return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the owning Team or Control may change this Artifact." };
+  if (!mayMutateArtifact(actor, artifact, context.participantId)) {
+    return { status: "rejected", errorCode: "PERMISSION_DENIED", message: "Only the record owner or Control may change this Artifact." };
   }
   const transition = transitionFor(workflow, artifact.state, command.operationType, context.activeSessionRoleId,
     await runtimeGateFacts(client, definition, initial, context,
@@ -1205,7 +1205,7 @@ export async function executeStageCommand(
     const ids: string[] = [];
     for (const stageId of parallelExitStageIds) ids.push(...await releaseStageInjects(input as CommandExecutionContext, "stage_exit", stageId));
     for (const stageId of parallelEntryStageIds) ids.push(...await releaseStageInjects(input as CommandExecutionContext, "stage_entry", stageId));
-    ids.push(...await releaseGateInjects(input as CommandExecutionContext));
+    ids.push(...await releaseGateInjects(input));
     return ids;
   };
   const releasedInjectIds = parallelExecution
@@ -1214,11 +1214,11 @@ export async function executeStageCommand(
     ? [
         ...await releaseStageInjects(input as CommandExecutionContext, "stage_exit", current.stage_id),
         ...await releaseStageInjects(input as CommandExecutionContext, "stage_entry", targetStageId),
-        ...await releaseGateInjects(input as CommandExecutionContext)
+        ...await releaseGateInjects(input)
       ]
     : command.operationType === "stage.start"
-      ? [...await releaseStageInjects(input as CommandExecutionContext, "stage_entry", targetStageId), ...await releaseGateInjects(input as CommandExecutionContext)]
-      : await releaseGateInjects(input as CommandExecutionContext);
+      ? [...await releaseStageInjects(input as CommandExecutionContext, "stage_entry", targetStageId), ...await releaseGateInjects(input)]
+      : await releaseGateInjects(input);
   const after = { stageId: targetStageId, status, version };
   await client.query(
     `INSERT INTO runtime.control_interventions
@@ -1243,6 +1243,16 @@ export async function executeStageCommand(
       activeSessionRoleId: "activeSessionRoleId" in context ? context.activeSessionRoleId : null, version, releasedInjectIds, stateTransactionIds,
       scheduledEffectIds,
       gateExplanations: gateExplanations as unknown as JsonValue } };
+}
+
+export function mayMutateArtifact(
+  actor: { isControlRole: boolean; teamId?: string },
+  artifact: { owner_team_id: string | null; creator_participant_id: string },
+  participantId: string
+): boolean {
+  return actor.isControlRole || (artifact.owner_team_id === null
+    ? actor.teamId === undefined && artifact.creator_participant_id === participantId
+    : actor.teamId === artifact.owner_team_id);
 }
 
 function actionsFor(
@@ -1333,7 +1343,7 @@ export async function authorizeArtifactFile(client: PoolClient, context: Session
   const form = formFor(definition, type);
   if (!form.attachments || !type.retentionPolicyId) throw authorizationError("CAPABILITY_UNAVAILABLE", "Attachments are not enabled for this Form version.", correlationId);
   if (write) {
-    if (context.sessionStatus !== "active" || (!actor.isControlRole && actor.teamId !== artifact.owner_team_id)) throw authorizationError("PERMISSION_DENIED", "This record cannot be changed in the current context.", correlationId);
+    if (context.sessionStatus !== "active" || !mayMutateArtifact(actor, artifact, context.participantId)) throw authorizationError("PERMISSION_DENIED", "This record cannot be changed in the current context.", correlationId);
     const transition = transitionFor(workflowFor(definition, type), artifact.state, "artifact.edit", context.activeSessionRoleId,
       await runtimeGateFacts(client, definition, initial, context, { state: artifact.state, typeKey: artifact.artifact_type_key, payload: artifact.payload,
         ...(artifact.owner_team_id ? { ownerTeamId: artifact.owner_team_id } : {}) }));
@@ -1550,7 +1560,7 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
         exportable: artifactType.exportable === true,
         createdByMe,
         actions: actionsFor(workflow, artifact.state, context.activeSessionRoleId, createdByMe,
-          actor.isControlRole || actor.teamId === artifact.owner_team_id)
+          mayMutateArtifact(actor, artifact, context.participantId))
       });
     }
     const createTasks: RuntimeCreateTaskV1[] = [];

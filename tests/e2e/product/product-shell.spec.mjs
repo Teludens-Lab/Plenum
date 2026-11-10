@@ -130,6 +130,16 @@ test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation
   await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/Indiana/Indianapolis");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  await page.goto("/platform/organizations");
+  await page.getByRole("link", { name: "Edit Synthetic Control Plane Organization", exact: true }).click();
+  await expect(page).toHaveURL(/\/platform\/organizations\/[0-9a-f-]{36}#edit-organization-profile$/iu);
+  await expect(page.getByLabel("Organization name")).toBeFocused();
+  await page.getByLabel("Organization name").fill("Synthetic Control Plane Organization Renamed");
+  await page.getByRole("button", { name: "Save organization profile" }).click();
+  await expect(page.getByRole("main").getByRole("status")).toContainText("Organization profile saved.");
+  await expect(page.getByRole("heading", { level: 1, name: "Synthetic Control Plane Organization Renamed" })).toBeVisible();
+  await expect(page.getByText("Organization Renamed", { exact: true })).toBeVisible();
+
   await page.getByLabel("Add domain").fill("synthetic-control.example");
   await page.getByRole("button", { name: "Add domain" }).click();
   await expect(page.getByText("_plenum-verification.synthetic-control.example")).toBeVisible();

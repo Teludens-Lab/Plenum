@@ -122,6 +122,8 @@ function ProvisionOrganizationForm({ onCreated, setNotice }: {
   </details>;
 }
 
+const editProfileAnchor = "edit-organization-profile";
+
 function OrganizationCatalog({ model }: { model: PlatformOrganizationsV1 }) {
   if (model.organizations.length === 0) {
     return <p className="empty-state">No Organizations are provisioned yet. Create the first pending Organization to begin.</p>;
@@ -136,7 +138,10 @@ function OrganizationCatalog({ model }: { model: PlatformOrganizationsV1 }) {
             <div><dt>Residency</dt><dd>{organization.dataResidencyRegion}</dd></div>
             <div><dt>Activation readiness</dt><dd>{complete} of {organization.gates.length} complete</dd></div>
             <div><dt>First Admin</dt><dd>{humanize(organization.firstAdminStatus)}</dd></div></dl></div>
-        <div className="catalog-row-actions"><a className="btn-secondary link-button" href={`/platform/organizations/${organization.id}`}>Open provisioning</a></div>
+        <div className="project-actions catalog-row-actions">
+          {organization.lifecycleStatus === "offboarded" ? null : <a className="btn-secondary link-button"
+            href={`/platform/organizations/${organization.id}#${editProfileAnchor}`} aria-label={`Edit ${organization.name}`}>Edit</a>}
+          <a className="btn-secondary link-button" href={`/platform/organizations/${organization.id}`}>Open provisioning</a></div>
       </li>;
     })}
   </ul>;
@@ -151,6 +156,12 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
   const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
   const [providerProtocol, setProviderProtocol] = useState<"oidc" | "saml">("oidc");
   const profileEditor = useRef<HTMLDetailsElement>(null);
+  const [editRequested] = useState(() => window.location.hash === `#${editProfileAnchor}`);
+  useEffect(() => {
+    if (!editRequested || profileEditor.current === null) return;
+    profileEditor.current.scrollIntoView({ block: "start" });
+    profileEditor.current.querySelector<HTMLInputElement>("input[name='name']")?.focus({ preventScroll: true });
+  }, [editRequested]);
   const organization = detail.organization;
   const closeProfileEditor = () => {
     if (profileEditor.current) {
@@ -202,7 +213,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
       const next = await platformRequest<PlatformOrganizationDetailV1>(`/v1/platform/organizations/${organization.id}/provisioning`, {
         method: "PUT",
         body: JSON.stringify({
-          legalName: String(data.get("legalName")), countryCode: String(data.get("countryCode")),
+          name: String(data.get("name")), legalName: String(data.get("legalName")), countryCode: String(data.get("countryCode")),
           timeZone: String(data.get("timeZone")), deploymentProfile: String(data.get("deploymentProfile")),
           dataResidencyRegion: String(data.get("dataResidencyRegion")),
           entitlements: selectedCapabilities(data),
@@ -243,14 +254,17 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
         <span className="platform-gate-marker" aria-hidden="true">{gate.complete ? <svg viewBox="0 0 16 16" focusable="false"><path d="m3 8 3 3 7-7" /></svg> : null}</span><span><strong>{gate.label}</strong>
           <span>{gate.complete ? "Complete" : gate.prerequisite}</span></span></li>)}</ul>
     </section>
-    {organization.lifecycleStatus !== "offboarded" ? <details className="platform-reconciliation" ref={profileEditor}
-      open={organization.configurationStatus === "needs_reconciliation"}>
+    {organization.lifecycleStatus !== "offboarded" ? <details id={editProfileAnchor} className="platform-reconciliation" ref={profileEditor}
+      open={organization.configurationStatus === "needs_reconciliation" || editRequested}>
       <summary>Edit organization profile</summary>
       <div className="section-heading"><h2>Organization profile</h2>
         <p>{organization.configurationStatus === "needs_reconciliation"
           ? "This Organization predates the control plane. Confirm its deployment facts before its next lifecycle change."
-          : "Update the legal name, location, contacts, and contracted capabilities."}</p></div>
+          : "Update the name, legal name, location, contacts, and contracted capabilities."}</p></div>
       <form key={JSON.stringify(organization)} className="platform-provision-form" onSubmit={(event) => void updateProvisioning(event)}>
+        <div className="field"><label htmlFor="reconcile-name">Organization name</label>
+          <input id="reconcile-name" name="name" required minLength={2} maxLength={200} defaultValue={organization.name} aria-describedby="reconcile-name-hint" />
+          <p className="field-hint" id="reconcile-name-hint">Shown across Plenum. The workspace address stays the same because Organization sign-in uses it.</p></div>
         <div className="field"><label htmlFor="reconcile-legal-name">Legal name</label><input id="reconcile-legal-name" name="legalName" required minLength={2} maxLength={300} defaultValue={organization.legalName} /></div>
         <div className="platform-form-grid">
           <div className="field"><label htmlFor="reconcile-country">Country code</label>

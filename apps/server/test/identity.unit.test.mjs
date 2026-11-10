@@ -62,6 +62,18 @@ test("Organization provisioning accepts normalized examples and existing field b
   }
 });
 
+test("Organization update validates an optional rename before database access", async () => {
+  const update = provisioningOperations[1];
+  const { name: _name, slug: _slug, ...updateInput } = provisioningInput;
+  for (const name of ["x", " y ", "n".repeat(201)]) {
+    await assert.rejects(update({ ...updateInput, name }),
+      (error) => error instanceof AuthorizationError && /^Organization name must contain 2 to 200/u.test(error.message), name);
+  }
+  for (const input of [updateInput, { ...updateInput, name: "  Renamed Organization  " }, { ...updateInput, name: "n".repeat(200) }]) {
+    await assert.rejects(update(input), (error) => error === databaseReached);
+  }
+});
+
 test("Organization creation identifies invalid names and workspace addresses", async () => {
   for (const [field, value, message] of [["name", "x", /^Organization name/u], ["slug", "two words", /^Workspace address/u]]) {
     await assert.rejects(provisioningOperations[0]({ ...provisioningInput, [field]: value }),

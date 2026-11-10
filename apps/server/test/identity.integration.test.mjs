@@ -145,6 +145,7 @@ import {
   listSessionReportArtifacts,
   replaceOrganizationMemberRoles,
   createPlatformOrganization,
+  updatePlatformOrganizationProvisioning,
   addOrganizationDomain,
   verifyOrganizationDomain,
   issueFirstAdminInvitation,
@@ -646,6 +647,32 @@ test("CONTROL-PLANE-T01 provisions, activates, suspends, and offboards an Organi
   detail = await transitionOrganizationLifecycle(app, principalD, organizationId, "activate",
     invitation.organization.organization.lifecycleVersion, "Provisioning controls complete", randomUUID());
   assert.equal(detail.organization.lifecycleStatus, "active");
+
+  const renameInput = {
+    name: "  Control Plane Renamed Organization  ",
+    legalName: "Control Plane Test Organization (Pty) Ltd",
+    countryCode: "ZA",
+    timeZone: "Africa/Johannesburg",
+    deploymentProfile: "cloud",
+    dataResidencyRegion: "af-south",
+    entitlements: ["studio_authoring", "session_delivery"],
+    supportContact: "support@control-plane.example"
+  };
+  await assert.rejects(updatePlatformOrganizationProvisioning(app, principalE, organizationId, renameInput, randomUUID()),
+    (error) => error?.envelope?.error?.code === "PERMISSION_DENIED");
+  detail = await updatePlatformOrganizationProvisioning(app, principalD, organizationId, renameInput, randomUUID());
+  assert.equal(detail.organization.name, "Control Plane Renamed Organization");
+  assert.equal(detail.organization.slug, "control-plane-test");
+  assert.equal(detail.organization.lifecycleStatus, "active");
+  const renameAudit = await owner.query(
+    `SELECT before_state, after_state FROM evidence.platform_audit_records
+      WHERE action='platform.organization_renamed' AND resource_organization_id=$1`, [organizationId]);
+  assert.deepEqual(renameAudit.rows.map(({ before_state, after_state }) => [before_state, after_state]),
+    [[{ name: "Control Plane Test Organization" }, { name: "Control Plane Renamed Organization" }]]);
+  detail = await updatePlatformOrganizationProvisioning(app, principalD, organizationId, renameInput, randomUUID());
+  assert.equal((await owner.query(
+    "SELECT count(*)::int AS renamed FROM evidence.platform_audit_records WHERE action='platform.organization_renamed' AND resource_organization_id=$1",
+    [organizationId])).rows[0].renamed, 1, "Saving an unchanged name does not record another rename");
 
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const jwk = await exportJWK(publicKey); jwk.kid = "first-admin-key";

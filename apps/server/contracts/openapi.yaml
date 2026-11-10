@@ -82,7 +82,7 @@ paths:
       security: [{ SessionCookie: [] }]
       parameters: [{ in: path, name: organizationId, required: true, schema: { type: string, format: uuid } }]
       responses:
-        "200": { description: Provisioning facts confirmed and any legacy reconciliation gate cleared. }
+        "200": { description: Provisioning facts confirmed and any legacy reconciliation gate cleared. An optional name (2 to 200 characters) renames the Organization and records a platform.organization_renamed audit entry; the workspace address cannot be changed. }
         "409": { description: The Organization is offboarded and cannot be reconfigured. }
   /v1/platform/organizations/{organizationId}/domains/{domainId}/verify:
     post:

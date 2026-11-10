@@ -518,14 +518,15 @@ function platformOrganizationInput(body: JsonObject, correlationId: string): Cre
 }
 
 function platformOrganizationUpdateInput(body: JsonObject, correlationId: string): UpdatePlatformOrganizationInput {
-  const allowed = new Set(["legalName", "countryCode", "timeZone", "deploymentProfile",
+  const allowed = new Set(["name", "legalName", "countryCode", "timeZone", "deploymentProfile",
     "dataResidencyRegion", "entitlements", "supportContact", "securityContact"]);
   const entitlements = body.entitlements;
   if (Object.keys(body).some((field) => !allowed.has(field)) ||
       ![body.legalName, body.countryCode, body.timeZone, body.deploymentProfile,
         body.dataResidencyRegion, body.supportContact].every((value) => typeof value === "string") ||
       !Array.isArray(entitlements) || !entitlements.every((value) => typeof value === "string") ||
-      (body.securityContact !== undefined && typeof body.securityContact !== "string")) {
+      (body.securityContact !== undefined && typeof body.securityContact !== "string") ||
+      (body.name !== undefined && typeof body.name !== "string")) {
     throw authorizationError("VALIDATION_FAILED", "Organization provisioning fields are invalid.", correlationId);
   }
   return body as unknown as UpdatePlatformOrganizationInput;

@@ -35,7 +35,8 @@ export interface CreatePlatformOrganizationInput {
   securityContact?: string;
 }
 
-export type UpdatePlatformOrganizationInput = Omit<CreatePlatformOrganizationInput, "name" | "slug">;
+/** The workspace address (slug) stays fixed after creation because Organization sign-in routing uses it. */
+export type UpdatePlatformOrganizationInput = Omit<CreatePlatformOrganizationInput, "name" | "slug"> & { name?: string };
 
 export interface DomainVerificationResolver {
   resolveTxt(name: string): Promise<string[]>;
@@ -341,14 +342,18 @@ function validateProvisioningDetails(input: UpdatePlatformOrganizationInput, cor
   if (invalid) throw authorizationError("VALIDATION_FAILED", invalid[1], correlationId);
 }
 
+function validateOrganizationName(name: string, correlationId: string): void {
+  if (name.length < 2 || name.length > 200) {
+    throw authorizationError("VALIDATION_FAILED", "Organization name must contain 2 to 200 characters.", correlationId);
+  }
+}
+
 function validateCreateInput(input: CreatePlatformOrganizationInput, correlationId: string): CreatePlatformOrganizationInput {
   const normalized = { ...input, name: clean(input.name), slug: clean(input.slug).toLowerCase(), legalName: clean(input.legalName),
     countryCode: clean(input.countryCode).toUpperCase(), timeZone: clean(input.timeZone),
     dataResidencyRegion: clean(input.dataResidencyRegion), entitlements: [...new Set(input.entitlements.map((item) => clean(item).toLowerCase()))],
     supportContact: clean(input.supportContact), ...(input.securityContact === undefined ? {} : { securityContact: clean(input.securityContact) }) };
-  if (normalized.name.length < 2 || normalized.name.length > 200) {
-    throw authorizationError("VALIDATION_FAILED", "Organization name must contain 2 to 200 characters.", correlationId);
-  }
+  validateOrganizationName(normalized.name, correlationId);
   if (!slugPattern.test(normalized.slug) || normalized.slug.length > 80) {
     throw authorizationError("VALIDATION_FAILED", "Workspace address must contain 1 to 80 lowercase letters or numbers, with single hyphens between words.", correlationId);
   }
@@ -398,8 +403,10 @@ function validateUpdateInput(input: UpdatePlatformOrganizationInput, correlation
     dataResidencyRegion: clean(input.dataResidencyRegion),
     entitlements: [...new Set(input.entitlements.map((item) => clean(item).toLowerCase()))],
     supportContact: clean(input.supportContact),
-    ...(input.securityContact === undefined ? {} : { securityContact: clean(input.securityContact) })
+    ...(input.securityContact === undefined ? {} : { securityContact: clean(input.securityContact) }),
+    ...(input.name === undefined ? {} : { name: clean(input.name) })
   };
+  if (normalized.name !== undefined) validateOrganizationName(normalized.name, correlationId);
   validateProvisioningDetails(normalized, correlationId);
   return normalized;
 }
@@ -430,6 +437,11 @@ export async function updatePlatformOrganizationProvisioning(
         validated.dataResidencyRegion, validated.entitlements, validated.supportContact,
         validated.securityContact ?? null, principal.principalId]
     );
+    if (validated.name !== undefined && validated.name !== before.organization.name) {
+      await client.query("UPDATE identity.organizations SET name=$2 WHERE id=$1", [organizationId, validated.name]);
+      await audit(client, principal, "platform.organization_renamed", organizationId,
+        `organization:${organizationId}`, correlationId, { name: before.organization.name }, { name: validated.name });
+    }
     await audit(client, principal, "platform.organization_provisioning_reconciled", organizationId,
       `organization:${organizationId}`, correlationId,
       { configurationStatus: before.organization.configurationStatus },

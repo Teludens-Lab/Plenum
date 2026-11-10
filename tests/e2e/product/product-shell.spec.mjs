@@ -98,11 +98,37 @@ test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation
   await page.getByLabel("Organization name").fill("Synthetic Control Plane Organization");
   await page.getByLabel("Legal name").fill("Synthetic Control Plane Organization Ltd");
   await page.getByLabel("Workspace address").fill("synthetic-control-plane");
+  await page.getByLabel("Country code").fill("US");
+  await page.getByLabel("Time zone", { exact: true }).fill("Eastern time");
+  await page.getByLabel("Data residency region").fill("us-east-2");
   await page.getByLabel("Support contact").fill("support@synthetic-control.example");
+  await expect(page.getByText("This records the location; it does not move data.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Create pending Organization" }).click();
+  await expect(page.getByRole("alert")).toContainText("Time zone is not recognized");
+  await expect(page.getByLabel("Organization name")).toHaveValue("Synthetic Control Plane Organization");
+  await page.getByLabel("Time zone", { exact: true }).fill("America/New_York");
   await page.getByRole("button", { name: "Create pending Organization" }).click();
   await expect(page).toHaveURL(/\/platform\/organizations\/[0-9a-f-]{36}$/iu);
   await expect(page.getByRole("heading", { name: "Synthetic Control Plane Organization" })).toBeVisible();
   await expect(page.getByText("2 of 4 prerequisites complete")).toBeVisible();
+
+  const editProfile = page.locator("summary", { hasText: "Edit organization profile" });
+  await editProfile.click();
+  await expect(page.getByLabel("Country code")).toHaveValue("US");
+  await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/New_York");
+  await expect(page.getByLabel("Data residency region")).toHaveValue("us-east-2");
+  await page.getByLabel("Time zone", { exact: true }).fill("UTC");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editProfile).toBeFocused();
+  await editProfile.click();
+  await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/New_York");
+  await page.getByLabel("Time zone", { exact: true }).fill("America/Indiana/Indianapolis");
+  await page.getByRole("button", { name: "Save organization profile" }).click();
+  await expect(page.getByRole("status")).toContainText("Organization profile saved.");
+  await page.reload();
+  await editProfile.click();
+  await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/Indiana/Indianapolis");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await page.getByLabel("Add domain").fill("synthetic-control.example");
   await page.getByRole("button", { name: "Add domain" }).click();
@@ -1849,10 +1875,15 @@ test("PS-770-T03 Release-authored profiles govern roles, teams, regions, navigat
   await expect(facilitatorBrowser.page.getByRole("button", { name: /^Session: PS-150 S1 proof Session/u })).toBeVisible();
   await expect(facilitatorBrowser.page.locator("#runtime-navigation").getByRole("link").locator(".runtime-sidebar-label")).toHaveText(
     facilitator.projection.navigation.items.map(({ label }) => label));
-  await expect(facilitatorBrowser.page.getByRole("link", { name: "Team Action Review" })).toHaveAttribute("aria-current", "page");
+  // The page band repeats Review/Deck as a Record views switch; both it and the sidebar must mark the same destination.
+  const facilitatorSidebar = facilitatorBrowser.page.locator("#runtime-navigation");
+  const recordViews = facilitatorBrowser.page.getByRole("navigation", { name: "Record views", exact: true });
+  await expect(facilitatorSidebar.getByRole("link", { name: "Team Action Review" })).toHaveAttribute("aria-current", "page");
+  await expect(recordViews.getByRole("link", { name: "Team Action Review" })).toHaveAttribute("aria-current", "page");
   await expect(facilitatorBrowser.page.getByTitle("Session slide deck")).toBeHidden();
-  await facilitatorBrowser.page.getByRole("link", { name: "Deck", exact: true }).click();
-  await expect(facilitatorBrowser.page.getByRole("link", { name: "Deck", exact: true })).toHaveAttribute("aria-current", "page");
+  await facilitatorSidebar.getByRole("link", { name: "Deck", exact: true }).click();
+  await expect(facilitatorSidebar.getByRole("link", { name: "Deck", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(recordViews.getByRole("link", { name: "Deck", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(facilitatorBrowser.page.getByTitle("Session slide deck")).toBeVisible();
   await expect(facilitatorBrowser.page.getByTitle("Session slide deck").contentFrame().getByText("Fractured Order", { exact: false }).first()).toBeVisible();
   await facilitatorBrowser.page.screenshot({ path: `${participantEvidenceRoot}/participant-facilitator-runtime.png`, fullPage: true });

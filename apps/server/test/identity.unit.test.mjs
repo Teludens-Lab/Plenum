@@ -14,6 +14,60 @@ import {
 } from "../dist/index.js";
 import { resolveRuntimeInterfaceProfile } from "../dist/runtime/artifact-workflow.js";
 import { artifactFieldAccess, visibleArtifactForm, visibleArtifactPayload, preserveProtectedArtifactValues } from "../dist/runtime/artifact-visibility.js";
+import { createPlatformOrganization, updatePlatformOrganizationProvisioning } from "../dist/platform/provisioning.js";
+
+const provisioningInput = {
+  name: "Synthetic Organization", slug: "synthetic-organization", legalName: "Synthetic Organization Ltd",
+  countryCode: "US", timeZone: "America/New_York", deploymentProfile: "cloud", dataResidencyRegion: "us-east-2",
+  entitlements: ["studio_authoring", "session_delivery"], supportContact: "support@example.test"
+};
+const databaseReached = new Error("validation passed; database access intentionally unavailable");
+const validationPool = { async connect() { throw databaseReached; } };
+const validationPrincipal = { principalId: "synthetic-person", organizationId: "synthetic-organization" };
+const provisioningOperations = [
+  (input) => createPlatformOrganization(validationPool, validationPrincipal, input, "validation-test"),
+  (input) => updatePlatformOrganizationProvisioning(validationPool, validationPrincipal, "synthetic-organization", input, "validation-test")
+];
+
+test("Organization create and update identify the invalid provisioning field before database access", async () => {
+  for (const operation of provisioningOperations) {
+    for (const [field, value, message] of [
+      ["legalName", "x", /^Legal name/u],
+      ["countryCode", "USA", /^Country code.*two letters/u],
+      ["timeZone", "Eastern time", /^Time zone.*America\/New_York/u],
+      ["deploymentProfile", "unknown", /^Select a deployment profile/u],
+      ["dataResidencyRegion", "", /^Data residency region.*us-east-2/u],
+      ["dataResidencyRegion", "r".repeat(121), /^Data residency region/u],
+      ["entitlements", [], /^Select at least one enabled capability/u],
+      ["entitlements", ["Studio authoring"], /^Capability keys.*Leave additional keys blank/u],
+      ["entitlements", ["a"], /^Capability keys/u],
+      ["entitlements", ["a".repeat(81)], /^Capability keys/u],
+      ["supportContact", "", /^Support contact/u],
+      ["securityContact", "x".repeat(321), /^Security contact/u]
+    ]) {
+      await assert.rejects(operation({ ...provisioningInput, [field]: value }), (error) =>
+        error instanceof AuthorizationError && error.envelope.error.code === "VALIDATION_FAILED" && message.test(error.message), field);
+    }
+  }
+});
+
+test("Organization provisioning accepts normalized examples and existing field boundaries", async () => {
+  for (const operation of provisioningOperations) {
+    for (const input of [provisioningInput, { ...provisioningInput, countryCode: " us ", timeZone: " America/Indiana/Indianapolis ",
+      entitlements: [" STUDIO_AUTHORING ", "session_delivery"], securityContact: "" },
+    { ...provisioningInput, timeZone: "UTC", legalName: "a".repeat(300), dataResidencyRegion: "r".repeat(120),
+      entitlements: ["ab", "a".repeat(80)], supportContact: "s".repeat(320), securityContact: "s".repeat(320) }]) {
+      await assert.rejects(operation(input), (error) => error === databaseReached);
+    }
+  }
+});
+
+test("Organization creation identifies invalid names and workspace addresses", async () => {
+  for (const [field, value, message] of [["name", "x", /^Organization name/u], ["slug", "two words", /^Workspace address/u]]) {
+    await assert.rejects(provisioningOperations[0]({ ...provisioningInput, [field]: value }),
+      (error) => error instanceof AuthorizationError && message.test(error.message));
+  }
+});
 
 test("PS-830-T06 protected record fields are omitted and survive authorized edits without a value oracle", () => {
   const allows = artifactFieldAccess([{ fieldsExcluded: ["secret", "nested.private", "items.private"] }]);

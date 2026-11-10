@@ -323,19 +323,36 @@ export async function getPlatformOrganization(
   });
 }
 
+function validateProvisioningDetails(input: UpdatePlatformOrganizationInput, correlationId: string): void {
+  const checks: [boolean, string][] = [
+    [input.legalName.length < 2 || input.legalName.length > 300, "Legal name must contain 2 to 300 characters."],
+    [!/^[A-Z]{2}$/u.test(input.countryCode), "Country code must contain two letters, for example US, GB, or ZA."],
+    [!isTimeZone(input.timeZone), "Time zone is not recognized. Use a named zone such as America/New_York, Africa/Johannesburg, or UTC."],
+    [!["cloud", "self_hosted", "air_gapped"].includes(input.deploymentProfile), "Select a deployment profile: Plenum cloud, Self-hosted, or Air-gapped."],
+    [input.dataResidencyRegion.length < 2 || input.dataResidencyRegion.length > 120,
+      "Data residency region must contain 2 to 120 characters. Enter the actual deployment region, for example us-east-2."],
+    [input.entitlements.length === 0, "Select at least one enabled capability."],
+    [input.entitlements.some((item) => !entitlementPattern.test(item)),
+      "Capability keys must contain 2 to 80 characters, start with a letter, and use only letters, numbers, underscores, hyphens, or periods. Leave additional keys blank unless supplied for your contract."],
+    [input.supportContact.length < 3 || input.supportContact.length > 320, "Support contact must contain 3 to 320 characters."],
+    [input.securityContact !== undefined && input.securityContact.length > 320, "Security contact must contain no more than 320 characters."]
+  ];
+  const invalid = checks.find(([failed]) => failed);
+  if (invalid) throw authorizationError("VALIDATION_FAILED", invalid[1], correlationId);
+}
+
 function validateCreateInput(input: CreatePlatformOrganizationInput, correlationId: string): CreatePlatformOrganizationInput {
   const normalized = { ...input, name: clean(input.name), slug: clean(input.slug).toLowerCase(), legalName: clean(input.legalName),
     countryCode: clean(input.countryCode).toUpperCase(), timeZone: clean(input.timeZone),
     dataResidencyRegion: clean(input.dataResidencyRegion), entitlements: [...new Set(input.entitlements.map((item) => clean(item).toLowerCase()))],
     supportContact: clean(input.supportContact), ...(input.securityContact === undefined ? {} : { securityContact: clean(input.securityContact) }) };
-  if (normalized.name.length < 2 || normalized.name.length > 200 || normalized.legalName.length < 2 || normalized.legalName.length > 300 ||
-      !slugPattern.test(normalized.slug) || normalized.slug.length > 80 || !/^[A-Z]{2}$/u.test(normalized.countryCode) ||
-      !isTimeZone(normalized.timeZone) || !["cloud", "self_hosted", "air_gapped"].includes(normalized.deploymentProfile) ||
-      normalized.dataResidencyRegion.length < 2 || normalized.dataResidencyRegion.length > 120 || normalized.entitlements.length === 0 ||
-      normalized.entitlements.some((item) => !entitlementPattern.test(item)) || normalized.supportContact.length < 3 || normalized.supportContact.length > 320 ||
-      (normalized.securityContact !== undefined && normalized.securityContact.length > 320)) {
-    throw authorizationError("VALIDATION_FAILED", "Organization provisioning details are incomplete or invalid.", correlationId);
+  if (normalized.name.length < 2 || normalized.name.length > 200) {
+    throw authorizationError("VALIDATION_FAILED", "Organization name must contain 2 to 200 characters.", correlationId);
   }
+  if (!slugPattern.test(normalized.slug) || normalized.slug.length > 80) {
+    throw authorizationError("VALIDATION_FAILED", "Workspace address must contain 1 to 80 lowercase letters or numbers, with single hyphens between words.", correlationId);
+  }
+  validateProvisioningDetails(normalized, correlationId);
   return normalized;
 }
 
@@ -383,13 +400,7 @@ function validateUpdateInput(input: UpdatePlatformOrganizationInput, correlation
     supportContact: clean(input.supportContact),
     ...(input.securityContact === undefined ? {} : { securityContact: clean(input.securityContact) })
   };
-  if (normalized.legalName.length < 2 || normalized.legalName.length > 300 || !/^[A-Z]{2}$/u.test(normalized.countryCode) ||
-      !isTimeZone(normalized.timeZone) || !["cloud", "self_hosted", "air_gapped"].includes(normalized.deploymentProfile) ||
-      normalized.dataResidencyRegion.length < 2 || normalized.dataResidencyRegion.length > 120 || normalized.entitlements.length === 0 ||
-      normalized.entitlements.some((item) => !entitlementPattern.test(item)) || normalized.supportContact.length < 3 ||
-      normalized.supportContact.length > 320 || (normalized.securityContact !== undefined && normalized.securityContact.length > 320)) {
-    throw authorizationError("VALIDATION_FAILED", "Organization provisioning details are incomplete or invalid.", correlationId);
-  }
+  validateProvisioningDetails(normalized, correlationId);
   return normalized;
 }
 

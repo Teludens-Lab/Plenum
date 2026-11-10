@@ -1,5 +1,5 @@
 import { formatDate, displayStatus, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import type {
   ErrorEnvelopeV1,
@@ -29,6 +29,7 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 const defaultCapabilities = ["studio_authoring", "session_delivery"];
+const timeZones = ["UTC", ...Intl.supportedValuesOf("timeZone")];
 
 function selectedCapabilities(data: FormData): string[] {
   const selected = [...data.getAll("entitlements").map(String),
@@ -38,13 +39,15 @@ function selectedCapabilities(data: FormData): string[] {
 }
 
 function CapabilityChoices({ selected = defaultCapabilities }: { selected?: string[] }) {
+  const additionalHintId = useId();
   return <fieldset className="field"><legend>Enabled capabilities</legend>
     <div className="role-checkboxes">{[...new Set([...defaultCapabilities, ...selected])].map((key) =>
       <label className="choice" key={key}><input type="checkbox" name="entitlements" value={key} defaultChecked={selected.includes(key)} />{humanize(key)}</label>)}</div>
-    <p className="field-hint">Select at least one contracted capability.</p>
+    <p className="field-hint">Studio authoring enables simulation design; Session delivery enables running simulations. Select at least one.</p>
     <details className="technical-details"><summary>Advanced capability configuration</summary>
-      <label>Additional contracted capability keys<input name="additionalEntitlements" /></label>
-      <p className="field-hint">Custom contracted keys remain supported. Separate multiple keys with commas.</p>
+      <label>Additional contracted capability keys <span className="optional">Optional</span>
+        <input name="additionalEntitlements" aria-describedby={additionalHintId} autoCapitalize="none" spellCheck={false} /></label>
+      <p className="field-hint" id={additionalHintId}>Leave blank unless additional keys were supplied for your contract. The checked capabilities above do not need to be entered again. Separate keys with commas; each key must be 2 to 80 characters, start with a letter, and use only letters, numbers, underscores, hyphens, or periods.</p>
     </details>
   </fieldset>;
 }
@@ -91,15 +94,19 @@ function ProvisionOrganizationForm({ onCreated, setNotice }: {
         <p className="field-hint">Lowercase letters, numbers, and hyphens.</p></div>
       <div className="platform-form-grid">
         <div className="field"><label htmlFor="platform-country">Country code</label>
-          <input id="platform-country" name="countryCode" required pattern="[A-Za-z]{2}" maxLength={2} defaultValue="ZA" /></div>
+          <input id="platform-country" name="countryCode" required pattern="[A-Za-z]{2}" maxLength={2} placeholder="US" aria-describedby="platform-country-hint" />
+          <p className="field-hint" id="platform-country-hint">Two-letter country code: US (United States), GB (United Kingdom), or ZA (South Africa), for example.</p></div>
         <div className="field"><label htmlFor="platform-time-zone">Time zone</label>
-          <input id="platform-time-zone" name="timeZone" required defaultValue="Africa/Johannesburg" /></div>
+          <input id="platform-time-zone" name="timeZone" required list="platform-time-zones" placeholder="America/New_York" aria-describedby="platform-time-zone-hint" />
+          <datalist id="platform-time-zones">{timeZones.map((zone) => <option key={zone} value={zone} />)}</datalist>
+          <p className="field-hint" id="platform-time-zone-hint">Choose a named time zone, such as America/New_York, America/Indiana/Indianapolis, Africa/Johannesburg, or UTC.</p></div>
         <div className="field"><label htmlFor="platform-profile">Deployment profile</label>
           <select id="platform-profile" name="deploymentProfile" defaultValue="cloud">
             <option value="cloud">Plenum cloud</option><option value="self_hosted">Self-hosted</option><option value="air_gapped">Air-gapped</option>
           </select></div>
         <div className="field"><label htmlFor="platform-region">Data residency region</label>
-          <input id="platform-region" name="dataResidencyRegion" required defaultValue="af-south" /></div>
+          <input id="platform-region" name="dataResidencyRegion" required minLength={2} maxLength={120} placeholder="us-east-2" aria-describedby="platform-region-hint" />
+          <p className="field-hint" id="platform-region-hint">Record the actual hosting region, for example us-east-2 for AWS Ohio. Ask the deployment administrator if unsure. This records the location; it does not move data.</p></div>
       </div>
       <CapabilityChoices />
       <div className="platform-form-grid">
@@ -143,7 +150,14 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
   const [pending, setPending] = useState(false);
   const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
   const [providerProtocol, setProviderProtocol] = useState<"oidc" | "saml">("oidc");
+  const profileEditor = useRef<HTMLDetailsElement>(null);
   const organization = detail.organization;
+  const closeProfileEditor = () => {
+    if (profileEditor.current) {
+      profileEditor.current.open = false;
+      profileEditor.current.querySelector("summary")?.focus();
+    }
+  };
   const mutate = async (path: string, body: object, success: string) => {
     setPending(true);
     try {
@@ -195,7 +209,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
           supportContact: String(data.get("supportContact")), securityContact: String(data.get("securityContact"))
         })
       });
-      onChange(next); setNotice("Provisioning profile reconciled. Continue with domain verification.");
+      onChange(next); setNotice("Organization profile saved."); closeProfileEditor();
     } catch (cause) { setNotice(cause instanceof Error ? cause.message : "The provisioning profile was not updated.", true); }
     finally { setPending(false); }
   };
@@ -229,23 +243,39 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
         <span className="platform-gate-marker" aria-hidden="true">{gate.complete ? <svg viewBox="0 0 16 16" focusable="false"><path d="m3 8 3 3 7-7" /></svg> : null}</span><span><strong>{gate.label}</strong>
           <span>{gate.complete ? "Complete" : gate.prerequisite}</span></span></li>)}</ul>
     </section>
-    {organization.configurationStatus === "needs_reconciliation" ? <section className="platform-reconciliation" aria-labelledby="platform-reconciliation-title">
-      <div className="section-heading"><h2 id="platform-reconciliation-title">Complete the inherited Organization profile</h2>
-        <p>This Organization predates the control plane. Confirm its deployment facts before its next lifecycle change.</p></div>
-      <form className="platform-provision-form" onSubmit={(event) => void updateProvisioning(event)}>
-        <div className="field"><label htmlFor="reconcile-legal-name">Legal name</label><input id="reconcile-legal-name" name="legalName" required defaultValue={organization.legalName} /></div>
+    {organization.lifecycleStatus !== "offboarded" ? <details className="platform-reconciliation" ref={profileEditor}
+      open={organization.configurationStatus === "needs_reconciliation"}>
+      <summary>Edit organization profile</summary>
+      <div className="section-heading"><h2>Organization profile</h2>
+        <p>{organization.configurationStatus === "needs_reconciliation"
+          ? "This Organization predates the control plane. Confirm its deployment facts before its next lifecycle change."
+          : "Update the legal name, location, contacts, and contracted capabilities."}</p></div>
+      <form key={JSON.stringify(organization)} className="platform-provision-form" onSubmit={(event) => void updateProvisioning(event)}>
+        <div className="field"><label htmlFor="reconcile-legal-name">Legal name</label><input id="reconcile-legal-name" name="legalName" required minLength={2} maxLength={300} defaultValue={organization.legalName} /></div>
         <div className="platform-form-grid">
-          <div className="field"><label htmlFor="reconcile-country">Country code</label><input id="reconcile-country" name="countryCode" required pattern="[A-Za-z]{2}" maxLength={2} /></div>
-          <div className="field"><label htmlFor="reconcile-time-zone">Time zone</label><input id="reconcile-time-zone" name="timeZone" required /></div>
-          <div className="field"><label htmlFor="reconcile-profile">Deployment profile</label><select id="reconcile-profile" name="deploymentProfile" defaultValue="cloud"><option value="cloud">Plenum cloud</option><option value="self_hosted">Self-hosted</option><option value="air_gapped">Air-gapped</option></select></div>
-          <div className="field"><label htmlFor="reconcile-region">Data residency region</label><input id="reconcile-region" name="dataResidencyRegion" required /></div>
+          <div className="field"><label htmlFor="reconcile-country">Country code</label>
+            <input id="reconcile-country" name="countryCode" required pattern="[A-Za-z]{2}" maxLength={2} defaultValue={organization.countryCode ?? ""} placeholder="US" aria-describedby="reconcile-country-hint" />
+            <p className="field-hint" id="reconcile-country-hint">Two-letter country code: US (United States), GB (United Kingdom), or ZA (South Africa), for example.</p></div>
+          <div className="field"><label htmlFor="reconcile-time-zone">Time zone</label>
+            <input id="reconcile-time-zone" name="timeZone" required list="reconcile-time-zones" defaultValue={organization.timeZone ?? ""} placeholder="America/New_York" aria-describedby="reconcile-time-zone-hint" />
+            <datalist id="reconcile-time-zones">{timeZones.map((zone) => <option key={zone} value={zone} />)}</datalist>
+            <p className="field-hint" id="reconcile-time-zone-hint">Choose a named time zone, such as America/New_York, America/Indiana/Indianapolis, Africa/Johannesburg, or UTC.</p></div>
+          <div className="field"><label htmlFor="reconcile-profile">Deployment profile</label><select id="reconcile-profile" name="deploymentProfile" defaultValue={organization.deploymentProfile === "unconfigured" ? "cloud" : organization.deploymentProfile}><option value="cloud">Plenum cloud</option><option value="self_hosted">Self-hosted</option><option value="air_gapped">Air-gapped</option></select></div>
+          <div className="field"><label htmlFor="reconcile-region">Data residency region</label>
+            <input id="reconcile-region" name="dataResidencyRegion" required minLength={2} maxLength={120} defaultValue={organization.dataResidencyRegion ?? ""} placeholder="us-east-2" aria-describedby="reconcile-region-hint" />
+            <p className="field-hint" id="reconcile-region-hint">Record the actual hosting region, for example us-east-2 for AWS Ohio. Ask the deployment administrator if unsure. This records the location; it does not move data.</p></div>
         </div>
         <CapabilityChoices selected={organization.entitlements.length > 0 ? organization.entitlements : defaultCapabilities} />
-        <div className="platform-form-grid"><div className="field"><label htmlFor="reconcile-support">Support contact</label><input id="reconcile-support" name="supportContact" type="email" required /></div>
-          <div className="field"><label htmlFor="reconcile-security">Security contact <span className="optional">Optional</span></label><input id="reconcile-security" name="securityContact" type="email" /></div></div>
-        <button className="btn-primary" type="submit" disabled={pending}>{pending ? "Savingâ€¦" : "Confirm provisioning profile"}</button>
+        <div className="platform-form-grid"><div className="field"><label htmlFor="reconcile-support">Support contact</label><input id="reconcile-support" name="supportContact" type="email" required defaultValue={organization.supportContact ?? ""} /></div>
+          <div className="field"><label htmlFor="reconcile-security">Security contact <span className="optional">Optional</span></label><input id="reconcile-security" name="securityContact" type="email" defaultValue={organization.securityContact ?? ""} /></div></div>
+        <div className="actions">
+          <button className="btn-primary" type="submit" disabled={pending}>{pending ? "Saving…" : "Save organization profile"}</button>
+          <button className="btn-secondary" type="button" disabled={pending} onClick={(event) => {
+            event.currentTarget.form?.reset(); closeProfileEditor();
+          }}>Cancel</button>
+        </div>
       </form>
-    </section> : null}
+    </details> : null}
     <div className="platform-detail-grid">
       <section aria-labelledby="platform-domain-title"><div className="section-heading"><h2 id="platform-domain-title">Organization domains</h2>
         <p>Only verified domains can receive the first Admin invitation.</p></div>

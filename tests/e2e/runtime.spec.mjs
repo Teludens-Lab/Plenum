@@ -1530,11 +1530,14 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await expect(first.page.getByText("Synchronized", { exact: true })).toBeVisible();
     expect((await new AxeBuilder({ page: first.page }).analyze()).violations).toEqual([]);
     await first.page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    await expect.poll(() => first.page.evaluate(() => [...document.querySelectorAll("body *")].filter((element) => {
-      const bounds = element.getBoundingClientRect();
-      return bounds.right > document.documentElement.clientWidth + 1 || bounds.left < -1;
-    }).slice(0, 12).map((element) => ({ element: `${element.tagName.toLowerCase()}.${element.className}`, right: Math.round(element.getBoundingClientRect().right),
-      width: Math.round(element.getBoundingClientRect().width), text: element.textContent?.trim().slice(0, 80) })))).toEqual([]);
+    for (const width of [1280, 1024]) {
+      await first.page.setViewportSize({ width, height: 720 });
+      await expect.poll(() => first.page.evaluate(() => [...document.querySelectorAll("body *")].filter((element) => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.right > document.documentElement.clientWidth + 1 || bounds.left < -1;
+      }).slice(0, 12).map((element) => ({ element: `${element.tagName.toLowerCase()}.${element.className}`, right: Math.round(element.getBoundingClientRect().right),
+        width: Math.round(element.getBoundingClientRect().width), text: element.textContent?.trim().slice(0, 80) })))).toEqual([]);
+    }
     await Promise.all([first.context.close(), second.context.close()]);
   });
 

@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { fixture } from "../fixture.mjs";
 import { plan } from "./cases.mjs";
 import { interfaceFindings } from "./assertions.mjs";
+import { buildSecurityHeaders } from "../../../deploy/compose/security-headers.mjs";
 
 for (const mode of ["create", "reconcile"]) test(`PS-842-T03 Platform ${mode} submits named capabilities and preserves custom contracts`, async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, reducedMotion: "reduce", extraHTTPHeaders: { Authorization: `Bearer ${fixture.tokens.operator}` } });
@@ -175,9 +176,20 @@ test("PS-842-T03 UUID effect targets remain in explicit provenance", async ({ br
 for (const path of ["/", "/studio/"]) test(`PS-842-T04 OS theme remains live until an explicit preference is persisted: ${path}`, async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, colorScheme: "dark" });
   try {
+    await context.route("**/*", async (route) => {
+      if (route.request().resourceType() !== "document") return route.continue();
+      const response = await route.fetch();
+      await route.fulfill({ response, headers: { ...response.headers(),
+        "content-security-policy": buildSecurityHeaders({ publicBaseUrl: baseURL, mediaUrl: baseURL })["content-security-policy"] } });
+    });
+    await context.addInitScript(() => {
+      globalThis.__cspViolations = [];
+      document.addEventListener("securitypolicyviolation", (event) => globalThis.__cspViolations.push(event.effectiveDirective));
+    });
     const page = await context.newPage();
     await page.goto(path);
     await expect(page.getByRole("button", { name: /^Theme:/ })).toBeVisible();
+    expect(await page.evaluate(() => globalThis.__cspViolations)).toEqual([]);
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     expect(await page.evaluate(() => localStorage.getItem("plenum.theme"))).toBeNull();
     await page.emulateMedia({ colorScheme: "light" });
@@ -186,5 +198,6 @@ for (const path of ["/", "/studio/"]) test(`PS-842-T04 OS theme remains live unt
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await page.evaluate(() => globalThis.__cspViolations)).toEqual([]);
   } finally { await context.close(); }
 });

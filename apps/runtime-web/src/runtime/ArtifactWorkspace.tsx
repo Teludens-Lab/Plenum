@@ -8,8 +8,12 @@ export function moduleArtifacts<T extends { artifactTypeKey: string }>(module: R
   return Array.isArray(keys) ? records.filter((record) => keys.includes(record.artifactTypeKey)) : records;
 }
 
+/**
+ * `renderArtifact` receives the record pager in review mode so the card can carry it in its identity row;
+ * list mode passes no navigation.
+ */
 export function ArtifactWorkspace({ module, artifacts, renderArtifact }: {
-  module: RuntimeModuleV1; artifacts: RuntimeArtifactV1[]; renderArtifact(artifact: RuntimeArtifactV1): ReactNode;
+  module: RuntimeModuleV1; artifacts: RuntimeArtifactV1[]; renderArtifact(artifact: RuntimeArtifactV1, navigation?: ReactNode): ReactNode;
 }) {
   const [type, setType] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -64,16 +68,16 @@ export function ArtifactWorkspace({ module, artifacts, renderArtifact }: {
       <h3>{recent ? "No captures yet" : "No records yet"}</h3><p>{module.emptyStateText}</p></div>
       : review && selected !== undefined ? <div className="artifact-review-layout">
         <div className="artifact-review-detail">
-          <div className="artifact-pager" role="group" aria-label="Record navigation">
-            {presenting ? <button className="btn-secondary" type="button" disabled={index <= 0} onClick={() => setSelectedId(filtered[0]!.id)}>First</button> : null}
-            <button className="btn-secondary" type="button" aria-label="Previous record" disabled={index <= 0}
-              onClick={() => setSelectedId(filtered[index - 1]!.id)}><RuntimeIcon name="chevronLeft" /></button>
-            <span role="status">{index + 1} of {filtered.length}</span>
-            <button className="btn-secondary" type="button" aria-label="Next record" disabled={index >= filtered.length - 1}
-              onClick={() => setSelectedId(filtered[index + 1]!.id)}><RuntimeIcon name="chevronRight" /></button>
-            {presenting ? <button className="btn-secondary" type="button" disabled={index >= filtered.length - 1} onClick={() => setSelectedId(filtered.at(-1)!.id)}>Last</button> : null}
-          </div>
-          {filtered.map((record) => <div key={record.id} hidden={record.id !== selected.id}>{renderArtifact(record)}</div>)}
+          {filtered.map((record) => <div key={record.id} hidden={record.id !== selected.id}>{renderArtifact(record, record.id !== selected.id ? undefined
+            : <div className="artifact-pager" role="group" aria-label="Record navigation">
+              {presenting ? <button className="btn-secondary" type="button" disabled={index <= 0} onClick={() => setSelectedId(filtered[0]!.id)}>First</button> : null}
+              <button className="btn-secondary" type="button" aria-label="Previous record" disabled={index <= 0}
+                onClick={() => setSelectedId(filtered[index - 1]!.id)}><RuntimeIcon name="chevronLeft" /></button>
+              <span role="status">{index + 1} of {filtered.length}</span>
+              <button className="btn-secondary" type="button" aria-label="Next record" disabled={index >= filtered.length - 1}
+                onClick={() => setSelectedId(filtered[index + 1]!.id)}><RuntimeIcon name="chevronRight" /></button>
+              {presenting ? <button className="btn-secondary" type="button" disabled={index >= filtered.length - 1} onClick={() => setSelectedId(filtered.at(-1)!.id)}>Last</button> : null}
+            </div>)}</div>)}
         </div>
       </div> : <div className="artifact-records">{filtered.map((record) => <div key={record.id}>{renderArtifact(record)}</div>)}</div>}
   </section>;

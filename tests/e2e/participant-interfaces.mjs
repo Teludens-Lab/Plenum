@@ -70,6 +70,8 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
   });
   await page.goto(`https://plenum.test/sessions/${sessionId}/runtime?role=${roleId}`);
   await page.getByRole('heading',{level:1}).waitFor();
+  // Capture the settled workspace: the entry loader has faded and local drafts have been restored.
+  await page.waitForFunction(()=>document.querySelector('.plenum-loader-overlay.is-visible')===null&&!document.body.innerText.includes('Restoring local draft'));
   await page.screenshot({path:`${out}/${scenario}-desktop.png`});
   assert.equal(await page.locator('html').evaluate(el=>el.scrollWidth>el.clientWidth),false);
   await page.getByRole('button',{name:'Control Broadcast',exact:true}).click();
@@ -230,9 +232,10 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
     assert.equal(commands[2].payload.artifactTypeKey,'alliance_tracking');
   }
   if(roleId==='white_cell'){
-    await page.getByLabel('Action',{exact:true}).selectOption('stage.resume:');
+    await page.getByRole('button',{name:'Resume timer',exact:true}).click();
     await page.getByLabel('Reason for this change').fill('Synthetic test resumes the current stage.');
-    await page.getByRole('button',{name:'Apply Stage control',exact:true}).click();
+    await page.screenshot({path:`${out}/white_cell-stage-confirm.png`});
+    await page.getByRole('button',{name:'Confirm resume timer',exact:true}).click();
     await page.getByText('The server accepted the Command.',{exact:false}).last().waitFor();
     assert.equal(commands[0].operationType,'stage.resume');
     assert.equal(commands[0].expectedAggregateVersion,4);
@@ -276,7 +279,11 @@ for(const [roleId,teamId] of [['scribe','blue'],['facilitator','blue'],['notetak
     await page.getByText('The server accepted the Command.',{exact:false}).last().waitFor();
     assert.equal(commands[0].aggregateId,'record-1');
     assert.equal(commands[0].expectedAggregateVersion,1);
-    await page.getByRole('link',{name:'Present',exact:true}).click();
+    const recordViews=page.getByRole('navigation',{name:'Record views',exact:true});
+    assert.equal(await recordViews.getByRole('link',{name:'Team Action Review',exact:true}).getAttribute('aria-current'),'page');
+    await page.screenshot({path:`${out}/facilitator-record-views.png`});
+    await page.getByRole('main').getByRole('link',{name:'Present',exact:true}).click();
+    assert.equal(await page.getByRole('main').getByRole('link',{name:'Present',exact:true}).getAttribute('aria-current'),'page');
     assert.ok(await page.getByRole('region',{name:'Present',exact:true}).getByRole('article').getByText('Synthetic team forecast for interface verification.',{exact:true}).isVisible());
     await page.getByRole('button',{name:'Enter full screen',exact:true}).click();
     await page.waitForFunction(()=>document.fullscreenElement!==null);

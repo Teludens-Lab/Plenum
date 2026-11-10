@@ -2,14 +2,15 @@ import { useRef, useState, type ReactNode } from "react";
 import { RuntimeIcon, type RuntimeIconName } from "./RuntimeFrame.js";
 
 /** Keep live media and unfinished messages mounted when the tool is closed. */
-export function SessionTool({ label, icon, count = 0, children, text = false }: {
-  label: string; icon: RuntimeIconName; count?: number; children: ReactNode; text?: boolean;
+/** `text` shows a labeled button; `secondary` lowers it from the single primary emphasis of its decision region. */
+export function SessionTool({ label, icon, count = 0, children, text = false, secondary = false }: {
+  label: string; icon: RuntimeIconName; count?: number; children: ReactNode; text?: boolean; secondary?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   return <>
-    <button ref={trigger} className={text ? "btn-primary" : "runtime-header-icon"} type="button" aria-label={label} title={label}
+    <button ref={trigger} className={text ? (secondary ? "btn-secondary runtime-page-tool" : "btn-primary runtime-page-tool") : "runtime-header-icon"} type="button" aria-label={label} title={label}
       aria-haspopup="dialog" aria-expanded={open} onClick={() => { dialog.current?.showModal(); setOpen(true); }}>
       <RuntimeIcon name={icon} />
       {text ? label : null}

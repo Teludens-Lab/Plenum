@@ -1,6 +1,6 @@
 import { LandingPage } from "./landing/LandingPage.js";
 import { reportFileLabel, formatDate, displayStatus, statusClass, authorityLabel, plural } from "../../../packages/design-system/src/presentation.mjs";
-import { ArtifactCard, ArtifactContent, CreateTask, CreateWorkspace, FieldEditor, createTaskKey } from "./runtime/ArtifactForms.js";
+import { ArtifactCard, ArtifactContent, ArtifactHeading, CreateTask, CreateWorkspace, FieldEditor, createTaskKey } from "./runtime/ArtifactForms.js";
 import { FormAttachments } from "./runtime/FormAttachments.js";
 import { StaffingPersonPicker } from "./runtime/StaffingPersonPicker.js";
 import { OperatorInjectSchedule } from "./runtime/OperatorInjectSchedule.js";
@@ -59,6 +59,7 @@ import { PlatformOrganizationsPortal } from "./product/PlatformOrganizationsPort
 import { PlatformAdministratorsPortal } from "./product/PlatformAdministratorsPortal.js";
 import { navigateWithLoader, PlenumLoader } from "./PlenumLoader.js";
 import {
+  formatStageClock,
   RuntimeHeader,
   RuntimeIcon,
   runtimeIconName,
@@ -1327,6 +1328,20 @@ function RuntimeView() {
   const inboxModules = projection.modules.filter((module) => module.configuration.placement !== "header" && (module.type === "message_inbox" || module.type === "inject_inbox"));
   const unreadCount = inboxModules.reduce((total, module) => total + (moduleCount(module)?.value ?? 0), 0);
   const firstUnread = inboxModules.find((module) => (moduleCount(module)?.value ?? 0) > 0) ?? inboxModules[0];
+  /*
+   * Review, Deck and Present are views of the same records. When the role has a presentation view, the page band
+   * repeats those destinations as one switch so moving between them never needs the sidebar. Labels stay authored.
+   */
+  const navigationEntries = projection.navigation.items.map((item) => ({ item, module: moduleById.get(item.moduleId) }));
+  const presentEntry = navigationEntries.find(({ module }) => module?.type === "artifact_presentation");
+  const reviewEntries = navigationEntries.filter(({ module }) => module?.type === "task_list" && module.configuration.presentation === "review");
+  const deckEntry = navigationEntries.find(({ module }) => module?.type === "slide_deck");
+  const activeReview = reviewEntries.find(({ item }) => item.id === activeNavigationItem?.id) ?? reviewEntries[0];
+  const recordViewEntries = [activeReview, deckEntry].filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+  const recordViews = presentEntry === undefined || activeReview === undefined
+    || ![...recordViewEntries, presentEntry].some(({ item }) => item.id === activeNavigationItem?.id) ? null : {
+      views: recordViewEntries.map(({ item }) => item), present: presentEntry.item
+    };
   const sidebarSections: RuntimeSidebarSection[] = [];
   for (const item of projection.navigation.items) {
     const module = moduleById.get(item.moduleId);
@@ -1382,7 +1397,7 @@ function RuntimeView() {
         `/v1/sessions/${id}/runtime-artifacts/${artifactId}/history?activeSessionRoleId=${encodeURIComponent(projection.activeSessionRoleId)}${before === undefined ? "" : `&beforeVersion=${before}`}`,
         { headers: { "x-device-id": deviceId! } })} />;
     if (module.type === "task_list") return <ArtifactWorkspace module={module} artifacts={projection.artifacts}
-      renderArtifact={(artifact) => <div key={`${artifact.id}:${projection.activeSessionRoleId}`}><ArtifactCard key={`${artifact.id}-${artifact.version}`} artifact={module.mode === "read" ? { ...artifact, actions: [] } : artifact} disabled={submitting} send={send} download={(format) => downloadArtifact(artifact.id, format)} />
+      renderArtifact={(artifact, navigation) => <div key={`${artifact.id}:${projection.activeSessionRoleId}`}><ArtifactCard key={`${artifact.id}-${artifact.version}`} artifact={module.mode === "read" ? { ...artifact, actions: [] } : artifact} disabled={submitting} send={send} download={(format) => downloadArtifact(artifact.id, format)} navigation={navigation} />
         {artifact.form.attachments && id && deviceId ? <FormAttachments artifact={artifact} sessionId={id} deviceId={deviceId} activeSessionRoleId={projection.activeSessionRoleId}
           disabled={submitting || connection !== "online"} readOnly={module.mode !== "write"} onChanged={load} /> : null}</div>} />;
     if (module.type === "message_inbox") return <div id={`runtime-module-${module.id}`}><MessageInbox module={module} projection={projection}
@@ -1392,7 +1407,7 @@ function RuntimeView() {
     if (module.type === "inject_inbox") return <div id={`runtime-module-${module.id}`}><InjectInbox module={module} projection={projection}
       disabled={submitting} send={sendInformation} /></div>;
     if (module.type === "session_status" && module.mode === "write") return <SessionSettings module={module} projection={projection} openModule={showModule}
-      controls={<StageControls module={module} disabled={submitting || connection !== "online"}
+      controls={<StageControls module={module} stage={{ label: projection.currentStageLabel, status: projection.currentStageId === null ? null : projection.currentStageStatus, clock: stageClock }} disabled={submitting || connection !== "online"}
         send={(operation, version, payload) => { if (id !== null) sendInformation(operation, id, version, payload); }} />} />;
     if (module.type === "session_status") return <section className="workspace-section curated-runtime-module" id={`runtime-module-${module.id}`}
       aria-labelledby={`runtime-module-${module.id}-title`}>
@@ -1402,12 +1417,13 @@ function RuntimeView() {
         <div><dt>Stage</dt><dd>{projection.currentStageLabel ?? "Not started"} ({friendlyReference(projection.currentStageStatus, "Not started")})</dd></div>
         <div><dt>Role</dt><dd>{projection.activeSessionRoleLabel}</dd></div>
       </dl>
-      <StageControls module={module} disabled={submitting || connection !== "online"}
+      <StageControls module={module} stage={{ label: projection.currentStageLabel, status: projection.currentStageId === null ? null : projection.currentStageStatus, clock: stageClock }} disabled={submitting || connection !== "online"}
         send={(operation, version, payload) => { if (id !== null) sendInformation(operation, id, version, payload); }} />
     </section>;
     if (module.type === "artifact_presentation") return <ArtifactWorkspace module={module}
       artifacts={projection.artifacts.filter((artifact) => !Array.isArray(module.configuration.artifactStatuses) || module.configuration.artifactStatuses.includes(artifact.state))}
-      renderArtifact={(artifact) => <article className="card artifact"><h2>{artifact.title}</h2><span className="badge badge-state">{artifact.stateLabel}</span>
+      renderArtifact={(artifact, navigation) => <article className="card artifact" aria-labelledby={`artifact-${artifact.id}`}>
+        <ArtifactHeading artifact={artifact} headingLevel={2} navigation={navigation} />
         <ArtifactContent form={artifact.form} payload={artifact.payload} /></article>} />;
     if (module.type === "resource_library") {
       const configuredIds = Array.isArray(module.configuration.resourceIds)
@@ -1517,7 +1533,16 @@ function RuntimeView() {
           title={primaryModule?.title ?? activeNavigationItem?.label ?? sessionTitle}
           description={<p>{typeof primaryModule?.configuration.description === "string" ? primaryModule.configuration.description
             : `${sessionTitle} · ${projection.currentStageLabel ?? "No Stage running"}`}</p>}
-          actions={<>{composers.map((module) => <SessionTool key={module.id} label={module.title} icon="edit" text>
+          actions={<>{recordViews === null ? null : <>
+            <nav className="runtime-view-switch" aria-label="Record views"><ul>{recordViews.views.map((view) => <li key={view.id}>
+              <a href={`#runtime-module-${view.moduleId}`} aria-current={view.id === activeNavigationItem?.id ? "page" : undefined}
+                onClick={(event) => { event.preventDefault(); selectNavigationItem(view.id, view.moduleId); }}>{view.label}</a></li>)}</ul></nav>
+            <a className="btn-primary runtime-page-tool" href={`#runtime-module-${recordViews.present.moduleId}`}
+              aria-current={recordViews.present.id === activeNavigationItem?.id ? "page" : undefined}
+              onClick={(event) => { event.preventDefault(); selectNavigationItem(recordViews.present.id, recordViews.present.moduleId); }}>
+              <RuntimeIcon name="presentation" />{recordViews.present.label}</a></>}
+            {composers.map((module, index) => <SessionTool key={module.id} label={module.title} icon="edit" text
+              secondary={recordViews !== null || index < composers.length - 1}>
             <CreateWorkspace tasks={moduleArtifacts(module, projection.createTasks)} disabled={submitting} send={send} />
             {toasts.length === 0 ? null : <p className="runtime-form-feedback" role="status">{toasts.at(-1)?.message}</p>}
           </SessionTool>)}</>}
@@ -1846,10 +1871,14 @@ function OperatorView() {
         </form>
       </section>
       {projection.stage === null ? null : <section className="workspace-section operation-panel" aria-labelledby="stage-control-title">
-        <h2 id="stage-control-title">{projection.stage.label}</h2><p className="hint">Server-authoritative timer</p>
+        <h2 id="stage-control-title">{projection.stage.label}</h2>
+        <p className="operator-stage-status">Status: <strong>{displayStatus(projection.stage.status)}</strong></p>
+        <dl className="operator-stage-facts">
+          <div><dt>Time remaining</dt><dd className="operator-stage-clock">{projection.stage.remainingSeconds === null ? "Untimed" : operatorStageClock ?? formatStageClock(projection.stage.remainingSeconds)}</dd></div>
+          <div><dt>Elapsed</dt><dd>{formatStageClock(projection.stage.elapsedSeconds)}</dd></div>
+          <div><dt>Time added</dt><dd>{projection.stage.extensionSeconds === 0 ? "None" : formatStageClock(projection.stage.extensionSeconds)}</dd></div>
+        </dl>
         <details className="provenance-disclosure"><summary>Technical provenance</summary><p>Stage version {projection.stage.version}</p></details>
-        <p>Status: <strong>{displayStatus(projection.stage.status)}</strong> · elapsed {projection.stage.elapsedSeconds}s
-          {projection.stage.remainingSeconds === null ? " · untimed" : ` · ${projection.stage.remainingSeconds}s remaining`} · extension {projection.stage.extensionSeconds}s</p>
         <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); const operation = String(data.get("operation"));
           const payload: JsonObject = { reason: String(data.get("reason")), confirmed: data.get("confirmed") === "on" };
           const target = String(data.get("targetStageId") ?? ""); if (target !== "") payload.targetStageId = target;
@@ -1931,7 +1960,7 @@ function OperatorView() {
       </section>}
       <section aria-labelledby="artifact-status-title"><h2 id="artifact-status-title">Artifact status</h2>
         {states.length === 0 ? <p className="empty-state">No Artifacts have been created.</p> : <ul className="status-list">
-          {states.map(([state, count]) => <li key={state}><span>{state.replaceAll("_", " ")}</span><strong>{count}</strong></li>)}</ul>}
+          {states.map(([state, count]) => <li key={state}><span>{displayStatus(state)}</span><strong>{count}</strong></li>)}</ul>}
       </section>
       <section aria-labelledby="event-title"><h2 id="event-title">Recent authoritative events</h2>
         {projection.recentEvents.length === 0 ? <p className="empty-state">No Session events recorded.</p> : <ol className="event-list">

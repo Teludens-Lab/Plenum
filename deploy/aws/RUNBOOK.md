@@ -47,10 +47,47 @@ The command prompts for the verified Postmark sender, server token and alert rec
 
 For the existing staging environment, preserve the current SSM parameter version, then remove only `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` from `/plenum/staging/application` after the corrected image is present. Rollback restores the previous parameter version and previous image/configuration while the OCI bucket remains intact.
 
+## Postmark invitation setup and sender changes
+
+The invitation sender belongs to `/plenum/staging/application` in `us-east-2`: set `POSTMARK_FROM` to `Plenum <notifications@plenum-sim.app>` only after verifying the domain in Postmark. Preserve every other field and record the preceding parameter version for rollback. The deployment user may operate the host through Systems Manager but does not necessarily have permission to read or edit this SecureString; use an authorized Parameter Store session rather than copying credentials into command output or chat. The operations alert sender is configured separately in `/plenum/staging/operations`.
+
+In Postmark, verify DKIM and the custom return-path for `plenum-sim.app`. Public DNS must contain the exact DKIM selector/value supplied by Postmark and the return-path CNAME `pm-bounces.plenum-sim.app` pointing to `pm.mtasv.net` (DNS only in Cloudflare). Check `_dmarc.plenum-sim.app` as well; a monitoring policy can begin with `v=DMARC1; p=none;`, then be tightened after legitimate senders are verified. Account approval alone does not prove DNS authentication. See [Postmark domain verification](https://postmarkapp.com/support/article/how-do-i-verify-a-domain).
+
+The `outbound` message stream needs these template aliases, each with HTML and plain-text content using `organizationName`, `invitationUrl`, and `expiresAt`:
+
+- `platform-first-admin-v1`
+- `platform-administrator-v1`
+- `organization-workforce-v1`
+
+Configure delivery and bounce events to `https://plenum-notifications-01.duckdns.org/v1/events/postmark`, with HTTP Basic username `plenum-postmark` and the existing `POSTMARK_WEBHOOK_PASSWORD`. Keep bounce content, open tracking, and link tracking disabled. Inspect existing webhooks before creating another. Validate templates with Postmark's template validation endpoint and verify the saved callback settings without logging authentication values.
+
+After changing the saved sender, refresh the mounted secrets and restart only the application during a suitable test window; active application connections may reconnect:
+
+```sh
+sudo /usr/local/sbin/plenum-fetch-secrets
+sudo docker compose --file /etc/plenum/compose.yaml restart application
+sudo docker compose --file /etc/plenum/compose.yaml ps application
+curl --fail https://plenum-stage-01.duckdns.org/healthz
+```
+
+Require a healthy application, one explicitly authorized test recipient, confirmed delivery with SPF/DKIM results, and a recorded delivery callback before declaring invitations ready. Verify a controlled bounce separately. Use an actual governed invitation to test acceptance; a template preview does not prove onboarding. Roll back a sender change by restoring its previous value in Parameter Store and repeating the refresh/restart. The canonical platform URL is `https://plenum-stage-01.duckdns.org`; the Postmark sender remains `notifications@plenum-sim.app`.
+
+## Application domains and DuckDNS fallback
+
+Both `plenum-sim.app` and `plenum-stage-01.duckdns.org` serve the same application directly over HTTPS on the existing Elastic IP, `18.227.27.151`. The custom domain uses a DNS-only Cloudflare A record. Caddy manages both certificates. Identity, media, and notification services retain their existing DuckDNS hostnames and credentials.
+
+DuckDNS is currently the canonical hostname for `PLENUM_PUBLIC_BASE_URL` and `OIDC_REDIRECT_URI`, so generated invitations and sign-in flows work without redirecting users to the custom domain. The custom domain remains available, but its sign-in completes on DuckDNS. This fallback was requested after an organization-managed Microsoft Defender block was observed for `plenum-sim.app`; it does not change or override endpoint security policy.
+
+The live Keycloak `plenum` client and realm import file allow the exact `/auth/callback` URI and web origin for both application domains. The live Caddy application block and ingress network aliases include both hostnames, with no cross-domain redirect. Local/example Terraform variables use DuckDNS as `application_hostname`; preserve the additional custom-domain Caddy hostname and network alias when regenerating the runtime configuration. Editing the realm import file alone does not update the live Keycloak client. Cloud-init is bootstrap-only and ignored by Terraform on the existing host, so editing Terraform variables alone does not update the running configuration.
+
+Root-only rollback copies on the host are in `/etc/plenum/duckdns-fallback/` (state before enabling fallback) and `/etc/plenum/domain-migration-plenum-sim-app/` (state before the initial custom-domain migration). To undo fallback, restore `compose.yaml`, `Caddyfile`, and `realm-plenum.json` from the fallback backup and recreate only `application` and `ingress` with `docker compose --file /etc/plenum/compose.yaml up --detach --no-deps --force-recreate --pull never --no-build application ingress`. Also restore the local Terraform hostname to `plenum-sim.app`. That rollback reintroduces the DuckDNS-to-custom-domain redirect, so use it only after the custom-domain access issue is resolved. Both callbacks are already allowed; no Keycloak restart, database restore, bootstrap jobs, or database migrations are required.
+
+Verification covers direct HTTPS responses without cross-domain redirects, `/healthz`, `/`, `/studio/`, and their script/style assets; OIDC sign-in with the existing staging test account; a secure session cookie on DuckDNS; authenticated `/v1/product-context`, `/v1/projects`, and `/v1/sessions`; unauthenticated projects access rejected; and successful logout. These are HTTP integration checks, not a visual audit or a new invitation-acceptance test. A user's managed-device access still requires confirmation on that device.
+
 ## Authorized deployment sequence
 
 1. Apply only the exact reviewed plan after explicit approval. The plan must add the S3 resources and must not replace `aws_instance.plenum`.
-2. Point all four DuckDNS records at the `public_ipv4` output.
+2. Point both application DNS records and the three supporting DuckDNS records at the `public_ipv4` output.
 3. Wait for the EC2 instance to appear as an online Systems Manager managed node; do not open SSH.
 4. Populate the seven SecureString parameters.
 5. Start `plenum.service` through an authorized Session Manager session. The service fetches secrets, pulls the pinned image, removes temporary registry credentials, and starts Compose.
@@ -68,5 +105,5 @@ For the existing staging environment, preserve the current SSM parameter version
 
 - Application rollback changes only the pinned digest through a new reviewed plan. Do not reverse database migrations.
 - Before instance replacement, export and verify a PostgreSQL backup; root-volume deletion is enabled because the volume is Terraform-owned.
-- If the host is compromised, remove DuckDNS records, stop the instance, preserve evidence, rotate all seven parameter values, and revoke the GHCR credential.
+- If the host is compromised, remove the application and supporting-service DNS records, stop the instance, preserve evidence, rotate all seven parameter values, and revoke the GHCR credential.
 - Before credits expire, export database/object evidence, destroy the reviewed AWS resources, release the Elastic IP, delete the seven parameters, deactivate the deployer access key, and verify the Billing dashboard shows no retained resources.

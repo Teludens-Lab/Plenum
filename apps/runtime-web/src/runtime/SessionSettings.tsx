@@ -27,11 +27,16 @@ export function SessionSettings({ module, projection, controls, openModule }: {
     {tabs.map((tab, index) => <div key={tab} role="tabpanel" id={`${id}-panel-${index}`} aria-labelledby={`${id}-tab-${index}`} hidden={selected !== tab} tabIndex={0}>
       {tab === "Game Controls" ? <>
         <h2 className="visually-hidden">Game Controls</h2>
-        <p>{projection.currentStageLabel ?? "Not started"} · {displayStatus(projection.currentStageStatus)}</p>{controls}
-        <h3>Time allocations</h3><p className="hint">The Release defines each stage’s base time. Extend the active timer above when needed.</p>
-        <dl className="runtime-status-list">{schedule.map((item) => typeof item !== "object" || item === null || Array.isArray(item) ? null : <div key={String(item.id)}>
-          <dt>{String(item.label)}{item.id === projection.currentStageId ? " · current" : ""}</dt><dd>{typeof item.durationSeconds === "number" ? `${item.durationSeconds / 60} minutes` : "Untimed"}</dd>
-        </div>)}</dl>
+        {controls}
+        <section className="stage-allocations" aria-labelledby={`${id}-allocations`}>
+          <div className="stage-control-heading"><h3 id={`${id}-allocations`}>Time allocations</h3>
+            <p>The Release sets each Stage’s base time. Use Extend timer above to add time to the running Stage.</p></div>
+          <dl className="stage-allocation-list">{schedule.map((item) => typeof item !== "object" || item === null || Array.isArray(item) ? null
+            : <div key={String(item.id)} aria-current={item.id === projection.currentStageId ? "step" : undefined}>
+              <dt>{String(item.label)}{item.id === projection.currentStageId ? <span className="badge badge-muted">Current</span> : null}</dt>
+              <dd>{typeof item.durationSeconds === "number" ? `${item.durationSeconds / 60} minutes` : "Untimed"}</dd>
+            </div>)}</dl>
+        </section>
       </> : tab === "Sessions" ? <><h2>Current Session</h2><dl className="runtime-status-list">
         <div><dt>Session</dt><dd>{projection.sessionTitle ?? projection.releaseLabel}</dd></div><div><dt>Status</dt><dd>{displayStatus(projection.sessionStatus)}</dd></div>
         <div><dt>Release</dt><dd>{projection.releaseLabel}</dd></div></dl>

@@ -90,7 +90,11 @@ export async function getOperatorProjection(pool: Pool, principal: Authenticated
       stage: stageDefinition === undefined ? null : { id: stageDefinition.id, label: stageDefinition.label ?? stageDefinition.name ?? stageDefinition.id,
         status: stageRow?.status ?? "not_started", version: Number(stageRow?.version ?? 0), durationSeconds: duration, elapsedSeconds: elapsed,
         remainingSeconds: duration === null ? null : Math.max(0, duration + extension - elapsed), extensionSeconds: extension,
-        transitions: (stageDefinition.transitions ?? []).map((item) => ({ targetStageId: item.targetStageId, label: item.label ?? item.targetStageId })),
+        transitions: (stageDefinition.transitions ?? []).map((item) => {
+          // Prefer the authored transition label, then the target Stage's own label; the identifier is the last resort.
+          const target = stageDefinitions.find(({ id }) => id === item.targetStageId);
+          return { targetStageId: item.targetStageId, label: item.label ?? target?.label ?? target?.name ?? item.targetStageId };
+        }),
         controls: { allowStart: stageDefinition.operatorControls?.allowStart === true, allowEnd: stageDefinition.operatorControls?.allowEnd === true,
           allowReopen: stageDefinition.operatorControls?.allowReopen === true, allowExtend: stageDefinition.operatorControls?.allowExtend === true,
           allowSkip: stageDefinition.operatorControls?.allowSkip === true, allowReturnToPrevious: stageDefinition.operatorControls?.allowReturnToPrevious === true } },

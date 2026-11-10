@@ -16,6 +16,10 @@ The saved boards in `references/participant interfaces/Plenum Header Options (3)
 
 Plenum uses the reference header, stage clock, role menu, navigation rail, page band and focused work area. Control Broadcast and Voice channels open from labeled header icons. Voice stays mounted when its panel closes; leaving a channel remains an explicit action. Forms and messages remain mounted during local navigation. Broadcast text is cleared only after an accepted receipt.
 
+## Reference alignment — 2026-11-09
+
+Record cards carry one identity row (title, form, state and the record pager) above divided sections, without nested boxes or a coloured side bar. When a role has a presentation view, the page band repeats Review/Deck as one switch with Present as its primary action; composer actions use one primary. White Cell Game Controls show Current Stage and Timer readouts with the server-projected commands as buttons; choosing one opens a confirmation row that collects the reason (and additional minutes for an extension). Time allocations are a divided read-only list. Operator Stage facts show remaining, elapsed and added time as clock values, and transition labels fall back to the target Stage name before its identifier. Owner decisions and the frame-scoped token overrides are recorded in `impeccable/conflicts.md`.
+
 ## Implemented surfaces
 
 | Role | Workspace |

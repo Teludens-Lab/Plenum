@@ -7,7 +7,7 @@ This is a **plan-only** Terraform package for the AWS project currently locked t
 - One `m7i-flex.large` EC2 host: 2 vCPU, 8 GiB, x86-64.
 - One encrypted 50 GB gp3 root volume.
 - One VPC, public subnet, internet gateway, route table, and security group.
-- One stable Elastic IP for the four existing DuckDNS names.
+- One stable Elastic IP for both application names (`plenum-sim.app` and `plenum-stage-01.duckdns.org`) and the existing identity, media, and notification DuckDNS names.
 - Caddy, Plenum, PostgreSQL, Keycloak, LiveKit, the pinned ClamAV scanner and the bounded operations agent run through the digest-pinned Compose contract.
 - One private, versioned, AES-256-encrypted S3 bucket in `us-east-2`, with all public access blocked.
 - The application reaches S3 only as the `plenum-staging-runtime` EC2 role; no object-storage access key is stored in the application secret bundle.

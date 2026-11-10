@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import type { CommandReceiptV1, JsonObject, RuntimeFormV1, RuntimeActionV1, RuntimeArtifactV1, RuntimeCreateTaskV1 } from "@plenum/event-contracts";
 import { StructuredForm, FormField, type FieldEditorProps } from "./StructuredForm.js";
@@ -161,10 +161,28 @@ export function ArtifactContent({ form, payload }: { form: RuntimeFormV1; payloa
   })}</div>;
 }
 
-export function ArtifactCard({ artifact, disabled, send, download }: {
+/** Record identity row shared by review and presentation cards: title and form, then state and optional record navigation. */
+export function ArtifactHeading({ artifact, headingLevel = 3, navigation }: {
+  artifact: RuntimeArtifactV1; headingLevel?: 2 | 3; navigation?: ReactNode;
+}) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
+  return <div className="card-heading artifact-heading">
+    <div className="artifact-identity">
+      <Heading id={`artifact-${artifact.id}`}>{artifact.title}</Heading>
+      {artifact.form.name === artifact.title ? null : <p className="artifact-kind">{artifact.form.name}</p>}
+    </div>
+    <div className="artifact-heading-meta">
+      <span className={statusClass(artifact.state)}>{artifact.stateLabel}</span>
+      {navigation}
+    </div>
+  </div>;
+}
+
+export function ArtifactCard({ artifact, disabled, send, download, navigation }: {
   artifact: RuntimeArtifactV1; disabled: boolean;
   send(action: RuntimeActionV1, artifact: RuntimeArtifactV1, content?: JsonObject): void;
   download?(format: "json" | "csv" | "pdf"): Promise<void>;
+  navigation?: ReactNode;
 }) {
   const [imported, setImported] = useState<{ payload: JsonObject; revision: number } | null>(null);
   const edit = artifact.actions.find((action) => action.requiresForm);
@@ -178,12 +196,7 @@ export function ArtifactCard({ artifact, disabled, send, download }: {
     })).filter((section) => section.fields.length > 0)
   };
   return <article className="card artifact" aria-labelledby={`artifact-${artifact.id}`}>
-    <div className="card-heading">
-      <div>
-        <h3 id={`artifact-${artifact.id}`}>{artifact.title}</h3>
-      </div>
-      <span className={statusClass(artifact.state)}>{artifact.stateLabel}</span>
-    </div>
+    <ArtifactHeading artifact={artifact} navigation={navigation} />
     <ArtifactContent form={artifact.form} payload={artifact.payload} />
     {edit === undefined ? null : <details className="artifact-edit"><summary>{edit.label}</summary>
       <RecordImport form={editForm} releaseId={artifact.governingReleaseId} disabled={disabled}

@@ -34,3 +34,17 @@ The saved boards in `references/participant interfaces/` define the Session fram
 | Session name with no Plenum wordmark in the header | Adopted for the Session frame only | The Session frame remains the single Runtime shell. The wordmark stays on the portal, Studio and landing. |
 | Title and developer mark drawn on the login artwork | Shown over the fallback panel; kept for assistive technology only when artwork exists | Release login artwork already carries its own title and mark. |
 | Undo, View, Review and Retry toast actions | Toasts support an action, but none is wired yet | Each action needs an existing command or destination. Undo has no command. Errors stay until dismissed, and the Offline Outbox keeps the retry path. |
+
+## Owner-directed Session frame alignment, 2026-11-09
+
+The owner asked for the participant and Operator workspaces to follow `references/participant interfaces/Plenum Header Options (3).html` more closely, leaving the landing unchanged and keeping the wordmark.
+
+| Earlier record | Owner direction | Resolution |
+|---|---|---|
+| `--weight-semibold` 650; `--radius-md` 5px, `--radius-lg` 8px | Headings too heavy and corners too tight next to the boards | Overridden inside `.runtime-frame` only: 600, 8px and 12px, the Teludens catalog's own radii. Studio, portals and landing keep the platform values. |
+| Session frame without the wordmark (2026-11-08 row above) | Keep the wordmark, smaller | Wordmark reduced to 3.75rem and separated from the Session title by a hairline. |
+| Visible Refresh, Injects and Theme labels stacked under icons | Make the header sit better | Icon and label share one row in a quiet secondary tone; narrow layouts wrap whole controls. |
+| Operator reference KPI tiles | Follow the project rule | Not adopted. Counts stay contextual text; Stage facts are readable durations, not raw seconds. |
+| Info-blue text links (2026-11-07 Studio row) | Blue reads as stray colour in the light-theme platform control plane | `.platform-control-plane` uses Graphite links and disclosure toggles, with underlines for affordance. Studio and other surfaces are unchanged. |
+
+Not adopted because the record projection lacks the data: move tabs (records carry no Stage), team-coloured field labels, and a highlighted summary field (forms do not mark one). Form-type filter tabs use the reference tab treatment instead.

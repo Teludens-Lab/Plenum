@@ -1,5 +1,7 @@
 # PS-815 internal identity and workforce acceptance audit
 
+2026-11-10 follow-up: [BA-01](../acceptance/BA-01-login.md) addresses current-build audit findings 1/9 with browser-bound login and same-origin redirect validation. The internal decision below is historical. Migration 043 and the new cookie contract require exact-candidate provider-test, recovery, step-up, login/logout and failure reruns under PS-815; synthetic local evidence does not close external/provider/human acceptance.
+
 Recorded: 2026-11-07  
 Revision: `d8e43f54c7732f7e540101d4a195a298f5d6b454`  
 Environment: Windows, Node `v24.22.1`, npm `11.19.1`, PostgreSQL `18.6-alpine`, Playwright `1.64.1` Chromium  

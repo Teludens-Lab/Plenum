@@ -6,7 +6,7 @@ const useExistingFixture = process.env.PLENUM_E2E_USE_EXISTING_FIXTURE === "true
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "product-shell.spec.mjs",
+  testMatch: ["product-shell.spec.mjs", "oidc-login.spec.mjs"],
   fullyParallel: false,
   workers: 1,
   timeout: 240_000,

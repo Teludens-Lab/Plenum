@@ -3,6 +3,8 @@ import { createHash, generateKeyPairSync, randomUUID, sign as signBytes } from "
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import test, { after, before } from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
@@ -41,6 +43,8 @@ import {
   bindPluginInstallation,
   completeOidcLogin,
   createDatabasePool,
+  createRuntimeHttpHandler,
+  readOidcLoginCookie,
   exportReleasePackage,
   getOperatorProjection,
   getReadiness,
@@ -157,7 +161,6 @@ import {
   decidePlatformAdministratorChange,
   stageOrganizationIdentityProvider,
   preflightOrganizationIdentityProvider,
-  beginOrganizationIdentityProviderTest,
   approveOrganizationIdentityProvider,
   activateOrganizationIdentityProvider,
   suspendOrganizationIdentityProvider,
@@ -340,7 +343,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/039_operational_security_events.sql",
     "apps/server/migrations/040_operational_security_reader.sql",
     "apps/server/migrations/041_form_attachments.sql",
-    "apps/server/migrations/042_inject_schedule_provenance.sql"
+    "apps/server/migrations/042_inject_schedule_provenance.sql",
+    "apps/server/migrations/043_oidc_browser_binding.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -498,12 +502,68 @@ test("PS-110-T01 maps a verified OIDC subject through server configuration", asy
   principal = await completeOidcLogin(
     app,
     configuration,
-    { code: "code", state: login.state, correlationId: "e0000000-0000-4000-8000-000000000001" },
+    { code: "code", state: login.state, browserCredential: login.browserCredential, correlationId: "e0000000-0000-4000-8000-000000000001" },
     async () => new Response(JSON.stringify({ id_token: idToken }), { status: 200 })
   );
   assert.equal(principal.principalId, ids.personA);
   assert.equal(principal.organizationId, ids.orgA);
   assert.deepEqual(principal.organizationRoles, ["operator"]);
+});
+
+test("BA-01-T01/T02 browser binding precedes consumption and exchange; expiry and races fail closed", async () => {
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = { ...await exportJWK(publicKey), kid: "ba01" };
+  const configuration = { providerKey: "test", organizationId: ids.orgA, issuer: "https://issuer.example",
+    audience: "plenum", clientId: "plenum", redirectUri: "https://plenum.example/auth/callback",
+    authorizationEndpoint: "https://issuer.example/authorize", tokenEndpoint: "https://issuer.example/token", jwks: { keys: [jwk] } };
+  const now = new Date();
+  const countSessions = async () => Number((await owner.query("SELECT count(*) FROM identity.authentication_sessions")).rows[0].count);
+  const beforeCount = await countSessions();
+  const login = await beginOidcLogin(app, configuration, { returnTo: "/admin?tab=members#active" }, now);
+  const stateDigest = createHash("sha256").update(login.state).digest("hex");
+  const pending = async () => (await owner.query("SELECT * FROM identity.oidc_login_attempts WHERE state_sha256=$1", [stateDigest])).rows[0];
+  assert.equal((await pending()).browser_credential_sha256, createHash("sha256").update(login.browserCredential).digest("hex"));
+  const token = await new SignJWT({ nonce: (await pending()).nonce, acr: "mfa" })
+    .setProtectedHeader({ alg: "RS256", kid: "ba01" }).setIssuer(configuration.issuer).setAudience(configuration.audience)
+    .setSubject("operator-a").setIssuedAt().setExpirationTime("10m").sign(privateKey);
+  let exchanges = 0;
+  const fetcher = async () => { exchanges++; return new Response(JSON.stringify({ id_token: token })); };
+  const input = { code: "synthetic-code", state: login.state, correlationId: randomUUID() };
+  for (const browserCredential of [undefined, "wrong", "b".repeat(43)]) {
+    await assert.rejects(completeOidcLogin(app, configuration, { ...input, browserCredential }, fetcher, now),
+      (error) => error.envelope?.error.code === "UNAUTHENTICATED");
+    assert.equal((await pending()).consumed_at, null);
+  }
+  assert.equal(exchanges, 0);
+  assert.equal(await countSessions(), beforeCount);
+  const results = await Promise.allSettled(Array.from({ length: 4 }, () => completeOidcLogin(app, configuration,
+    { ...input, browserCredential: login.browserCredential }, fetcher, now)));
+  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
+  assert.equal(results.find(({ status }) => status === "fulfilled").value.returnTo, "/admin?tab=members#active");
+  assert.equal(exchanges, 1);
+  assert.equal(await countSessions(), beforeCount + 1);
+  assert.equal((await pending()).code_verifier, "");
+  assert.equal((await pending()).nonce, "");
+  assert.equal((await pending()).browser_credential_sha256, null);
+  await assert.rejects(completeOidcLogin(app, configuration, { ...input, browserCredential: login.browserCredential }, fetcher, now));
+
+  const expired = await beginOidcLogin(app, configuration, {}, new Date(now.getTime() - 300_000));
+  await assert.rejects(completeOidcLogin(app, configuration, { ...input, state: expired.state,
+    browserCredential: expired.browserCredential }, fetcher, now));
+  const expiredRow = (await owner.query("SELECT nonce,code_verifier,browser_credential_sha256 FROM identity.oidc_login_attempts WHERE state_sha256=$1",
+    [createHash("sha256").update(expired.state).digest("hex")])).rows[0];
+  assert.deepEqual(expiredRow, { nonce: "", code_verifier: "", browser_credential_sha256: null });
+  const legacy = await beginOidcLogin(app, configuration);
+  await owner.query("UPDATE identity.oidc_login_attempts SET browser_credential_sha256=NULL WHERE state_sha256=$1",
+    [createHash("sha256").update(legacy.state).digest("hex")]);
+  await assert.rejects(completeOidcLogin(app, configuration, { ...input, state: legacy.state,
+    browserCredential: legacy.browserCredential }, fetcher, now));
+  const failed = await beginOidcLogin(app, configuration);
+  const failedInput = { ...input, state: failed.state, browserCredential: failed.browserCredential };
+  await assert.rejects(completeOidcLogin(app, configuration, failedInput, async () => new Response("unavailable", { status: 503 }), now));
+  await assert.rejects(completeOidcLogin(app, configuration, failedInput, fetcher, now));
+  assert.equal(exchanges, 1);
+  assert.equal(await countSessions(), beforeCount + 1);
 });
 
 test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async () => {
@@ -688,7 +748,7 @@ test("CONTROL-PLANE-T01 provisions, activates, suspends, and offboards an Organi
     .setProtectedHeader({ alg: "RS256", kid: "first-admin-key" }).setIssuer(customerConfiguration.issuer)
     .setAudience(customerConfiguration.audience).setSubject("first-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
   await assert.rejects(completeOidcLogin(app, customerConfiguration,
-    { code: "code", state: unverifiedLogin.state, correlationId: randomUUID() },
+    { code: "code", state: unverifiedLogin.state, browserCredential: unverifiedLogin.browserCredential, correlationId: randomUUID() },
     async () => new Response(JSON.stringify({ id_token: unverifiedToken }), { status: 200 })),
   (error) => error?.envelope?.error?.code === "UNAUTHENTICATED");
 
@@ -700,7 +760,7 @@ test("CONTROL-PLANE-T01 provisions, activates, suspends, and offboards an Organi
     .setProtectedHeader({ alg: "RS256", kid: "first-admin-key" }).setIssuer(customerConfiguration.issuer)
     .setAudience(customerConfiguration.audience).setSubject("first-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
   const firstAdminPrincipal = await completeOidcLogin(app, customerConfiguration,
-    { code: "code", state: login.state, correlationId: randomUUID() },
+    { code: "code", state: login.state, browserCredential: login.browserCredential, correlationId: randomUUID() },
     async () => new Response(JSON.stringify({ id_token: idToken }), { status: 200 }));
   assert.equal(firstAdminPrincipal.principalId, accepted.personId);
   assert.deepEqual(firstAdminPrincipal.organizationRoles, ["admin"]);
@@ -769,8 +829,26 @@ test("CONTROL-PLANE-T02 governs Organization identity-provider preflight, test, 
   providers = await preflightOrganizationIdentityProvider(app, principalD, ids.orgA, providerId, randomUUID(), fetcher);
   assert.equal(providers.find(({ id }) => id === providerId)?.status, "preflight_passed");
 
-  const testLogin = await beginOrganizationIdentityProviderTest(app, reviewerAdmin, providerId,
-    "https://plenum.example/auth/callback", "/admin/identity", randomUUID());
+  const handler = createRuntimeHttpHandler({ pool: app, deploymentId: randomUUID(),
+    authenticate: async () => reviewerAdmin, publicBaseUrl: "https://plenum.example" });
+  const http = createServer((request, response) => void handler(request, response));
+  let testLogin;
+  try {
+    http.listen(0, "127.0.0.1");
+    await once(http, "listening");
+    const response = await fetch(`http://127.0.0.1:${http.address().port}/v1/admin/identity-providers/${providerId}/test`, { method: "POST" });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.deepEqual(Object.keys(result), ["authorizationUrl"]);
+    const state = new URL(result.authorizationUrl).searchParams.get("state");
+    const cookie = response.headers.get("set-cookie");
+    assert.match(cookie, /; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=300$/u);
+    testLogin = { ...result, state, browserCredential: readOidcLoginCookie(state, cookie) };
+    assert.equal(typeof testLogin.browserCredential, "string");
+  } finally {
+    http.closeAllConnections();
+    await new Promise((resolve) => http.close(resolve));
+  }
   const pending = await owner.query("SELECT nonce FROM identity.oidc_login_attempts WHERE organization_id=$1 AND identity_provider_id=$2 AND consumed_at IS NULL",
     [ids.orgA, providerId]);
   const now = Math.floor(Date.now() / 1000);
@@ -782,7 +860,7 @@ test("CONTROL-PLANE-T02 governs Organization identity-provider preflight, test, 
     clientId: "plenum-example", redirectUri: "https://plenum.example/auth/callback", authorizationEndpoint: "https://identity.example.test/authorize",
     tokenEndpoint: "https://identity.example.test/token", jwks: { keys: [jwk] } };
   const testedPrincipal = await completeOidcLogin(app, configuration,
-    { code: "code", state: testLogin.state, correlationId: randomUUID() },
+    { code: "code", state: testLogin.state, browserCredential: testLogin.browserCredential, correlationId: randomUUID() },
     async () => new Response(JSON.stringify({ id_token: testToken }), { status: 200 }));
   assert.equal(testedPrincipal.preserveSession, true);
   providers = await approveOrganizationIdentityProvider(app, reviewerAdmin, providerId, "Verified exact Admin identity", randomUUID());
@@ -875,7 +953,7 @@ test("CONTROL-PLANE-T03 governs Platform Administrator invitation, dual approval
     .setProtectedHeader({ alg: "RS256", kid: "workforce-admin-key" }).setIssuer(configuration.issuer)
     .setAudience(configuration.audience).setSubject("workforce-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
   await assert.rejects(completeOidcLogin(app, configuration,
-    { code: "code", state: invitedLogin.state, correlationId: randomUUID() },
+    { code: "code", state: invitedLogin.state, browserCredential: invitedLogin.browserCredential, correlationId: randomUUID() },
     async () => new Response(JSON.stringify({ id_token: unverifiedToken }), { status: 200 })),
   (error) => error?.envelope?.error?.code === "UNAUTHENTICATED");
 
@@ -891,7 +969,7 @@ test("CONTROL-PLANE-T03 governs Platform Administrator invitation, dual approval
     .setProtectedHeader({ alg: "RS256", kid: "workforce-admin-key" }).setIssuer(configuration.issuer)
     .setAudience(configuration.audience).setSubject("workforce-admin").setIssuedAt(now).setExpirationTime(now + 600).sign(privateKey);
   const invitedPrincipal = await completeOidcLogin(app, configuration,
-    { code: "code", state: verifiedLogin.state, correlationId: randomUUID() },
+    { code: "code", state: verifiedLogin.state, browserCredential: verifiedLogin.browserCredential, correlationId: randomUUID() },
     async () => new Response(JSON.stringify({ id_token: verifiedToken }), { status: 200 }));
   assert.deepEqual(invitedPrincipal.organizationRoles, []);
   assert.equal(invitedPrincipal.returnTo, "/platform/administrators");

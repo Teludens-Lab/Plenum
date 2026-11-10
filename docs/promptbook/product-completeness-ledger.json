@@ -152,6 +152,7 @@
     }
   ],
   "overrides": [
+    { "dimension": "api-boundary", "obligation": "identity", "status": "IMPLEMENTED", "owner": "PS-110 / PS-815 / PS-810; BA-01", "evidenceTarget": "docs/acceptance/BA-01-login.md; audit findings 1/9; browser-binding and redirect evidence only; real-provider and final candidate acceptance remain separate" },
     { "dimension": "release-control", "obligation": "CMD-PRODUCT-E2E", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/product-e2e-final.json; 37/37; docs/acceptance/PS-840-UAT.md" },
     { "dimension": "release-control", "obligation": "CMD-GAP-AUDIT", "status": "AUTOMATED_PASS", "owner": "PS-840; unscoped release audit PS-850", "evidenceTarget": "test-results/uat/gap-audit-final.json; structural completeness only, not product acceptance; test-results/uat/obligation-review.json" },
     { "dimension": "release-control", "obligation": "CMD-PLATFORM-LINT", "status": "AUTOMATED_PASS", "owner": "PS-840; final candidate review PS-850", "evidenceTarget": "test-results/uat/lint-final.json; docs/acceptance/PS-840-UAT.md" },

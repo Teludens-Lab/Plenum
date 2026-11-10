@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import type { OrganizationRole } from "@plenum/policy-engine";
 
@@ -42,16 +42,42 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function validateOidcReturnTo(value: string, publicUrl: string): string {
+  const invalid = () => new Error("OIDC returnTo must be a same-origin path");
+  if (value.length > 2_000 || !value.startsWith("/") || value.startsWith("//") ||
+      /[\\\u0000-\u001f\u007f]/u.test(value) || /%(?:5c|0[0-9a-f]|1[0-9a-f]|7f)/iu.test(value)) throw invalid();
+  const origin = new URL(publicUrl).origin;
+  const destination = new URL(value, origin);
+  const path = `${destination.pathname}${destination.search}${destination.hash}`;
+  if (destination.origin !== origin || path.startsWith("//")) throw invalid();
+  return path;
+}
+
+const browserCredentialPattern = /^[A-Za-z0-9_-]{43}$/u;
+
+export function oidcLoginCookie(state: string, credential?: string): string {
+  if (!browserCredentialPattern.test(state) ||
+      (credential !== undefined && !browserCredentialPattern.test(credential))) throw new Error("Invalid OIDC transaction cookie");
+  // __Host- prevents sibling domains from planting a transaction cookie.
+  return `__Host-plenum_login_${state}=${credential ?? ""}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${credential === undefined ? 0 : 300}`;
+}
+
+export function readOidcLoginCookie(state: string, header?: string): string | undefined {
+  if (!browserCredentialPattern.test(state)) return undefined;
+  const name = `__Host-plenum_login_${state}=`;
+  const matches = header?.split(";").map((part) => part.trim()).filter((part) => part.startsWith(name)) ?? [];
+  const value = matches.length === 1 ? matches[0]?.slice(name.length) : undefined;
+  return value !== undefined && browserCredentialPattern.test(value) ? value : undefined;
+}
+
 export async function beginOidcLogin(
   pool: Pool,
   configuration: OidcProviderConfiguration,
   options: BeginOidcLoginOptions = {},
   now = new Date()
-): Promise<{ authorizationUrl: string; state: string }> {
-  const returnTo = options.returnTo === undefined ? null : options.returnTo;
-  if (returnTo !== null && (returnTo.length > 2_000 || !returnTo.startsWith("/") || returnTo.startsWith("//"))) {
-    throw new Error("OIDC returnTo must be a same-origin path");
-  }
+): Promise<{ authorizationUrl: string; state: string; browserCredential: string }> {
+  const returnTo = options.returnTo === undefined ? null : validateOidcReturnTo(options.returnTo, configuration.redirectUri);
+  const browserCredential = randomBytes(32).toString("base64url");
   if (options.platformAdministratorInvitationToken !== undefined &&
       !/^[A-Za-z0-9_-]{43}$/u.test(options.platformAdministratorInvitationToken)) {
     throw authorizationError("INVALID_TRANSITION", "The Platform Administrator invitation is invalid or expired.", randomUUID());
@@ -74,8 +100,8 @@ export async function beginOidcLogin(
       `INSERT INTO identity.oidc_login_attempts
          (id, organization_id, provider_key, state_sha256, nonce, code_verifier, expires_at,
           platform_administrator_invitation_id,return_to,identity_provider_id,purpose,
-          initiated_by_person_id,initiating_session_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          initiated_by_person_id,initiating_session_id,browser_credential_sha256)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         randomUUID(),
         configuration.organizationId,
@@ -89,23 +115,25 @@ export async function beginOidcLogin(
         options.identityProviderId ?? configuration.identityProviderId ?? null,
         options.purpose ?? "sign_in",
         options.initiatedByPersonId ?? null,
-        options.initiatingSessionId ?? null
+        options.initiatingSessionId ?? null,
+        sha256(browserCredential)
       ]
     );
   });
-  return { authorizationUrl: request.authorizationUrl, state: request.pending.state };
+  return { authorizationUrl: request.authorizationUrl, state: request.pending.state, browserCredential };
 }
 
 async function consumeLoginAttempt(
   pool: Pool,
   configuration: OidcProviderConfiguration,
   state: string,
+  browserCredential: string,
   correlationId: string,
   now: Date
 ): Promise<PendingOidcLogin & { platformAdministratorInvitationId: string | null; returnTo: string | null;
   identityProviderId: string | null; purpose: "sign_in" | "provider_test" | "platform_recovery";
   initiatedByPersonId: string | null; initiatingSessionId: string | null }> {
-  return withOrganizationTransaction(pool, configuration.organizationId, async (client) => {
+  const pending = await withOrganizationTransaction(pool, configuration.organizationId, async (client) => {
     const result = await client.query<{
       nonce: string;
       code_verifier: string;
@@ -125,11 +153,11 @@ async function consumeLoginAttempt(
             AND provider_key = $2
             AND state_sha256 = $3
             AND consumed_at IS NULL
-            AND expires_at > $4
+            AND browser_credential_sha256 = $4
           FOR UPDATE
        ), consumed AS (
          UPDATE identity.oidc_login_attempts attempt
-            SET consumed_at = transaction_timestamp(), nonce = '', code_verifier = ''
+            SET consumed_at = transaction_timestamp(), nonce = '', code_verifier = '', browser_credential_sha256 = NULL
            FROM pending
           WHERE attempt.id = pending.id
       RETURNING pending.nonce, pending.code_verifier, pending.expires_at,
@@ -138,7 +166,7 @@ async function consumeLoginAttempt(
        )
        SELECT nonce,code_verifier,expires_at,platform_administrator_invitation_id,return_to,identity_provider_id,
               purpose,initiated_by_person_id,initiating_session_id FROM consumed`,
-      [configuration.organizationId, configuration.providerKey, sha256(state), now]
+      [configuration.organizationId, configuration.providerKey, sha256(state), sha256(browserCredential)]
     );
     const row = result.rows[0];
     if (row === undefined) {
@@ -149,6 +177,9 @@ async function consumeLoginAttempt(
       identityProviderId: row.identity_provider_id, purpose: row.purpose,
       initiatedByPersonId: row.initiated_by_person_id, initiatingSessionId: row.initiating_session_id };
   });
+  // Commit credential erasure even when the matching transaction has expired.
+  if (pending.expiresAt <= now) throw authorizationError("UNAUTHENTICATED", "The OIDC login state is invalid or expired.", correlationId);
+  return pending;
 }
 
 async function recordAuthenticatedPrincipal(
@@ -348,14 +379,19 @@ async function recordProviderTest(
 export async function completeOidcLogin(
   pool: Pool,
   configuration: OidcProviderConfiguration,
-  input: { code: string; state: string; correlationId: string },
+  input: { code: string; state: string; browserCredential?: string; correlationId: string },
   fetcher: FetchLike = fetch,
   now = new Date()
 ): Promise<AuthenticatedPrincipal> {
+  if (!browserCredentialPattern.test(input.state) || input.browserCredential === undefined ||
+      !browserCredentialPattern.test(input.browserCredential)) {
+    throw authorizationError("UNAUTHENTICATED", "The OIDC login state is invalid or expired.", input.correlationId);
+  }
   const pending = await consumeLoginAttempt(
     pool,
     configuration,
     input.state,
+    input.browserCredential,
     input.correlationId,
     now
   );

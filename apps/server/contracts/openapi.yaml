@@ -2279,7 +2279,7 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         "200":
-          description: Server-created OIDC authorization request using state, nonce and PKCE.
+          description: Server-created OIDC authorization request using state, nonce and PKCE. The HTTP entry point sets a separate five-minute __Host-plenum_login_<state> cookie (Secure, HttpOnly, SameSite=Lax, Path=/, no Domain). The credential is never returned in JSON or the authorization URL.
   /v1/auth/oidc/{providerKey}/callback:
     get:
       operationId: completeOidcLogin
@@ -2299,8 +2299,8 @@ paths:
           required: true
           schema: { type: string, minLength: 1 }
       responses:
-        "204": { description: Authentication Session established in a Secure, HttpOnly cookie. }
-        "401": { description: Invalid or expired identity response. }
+        "204": { description: "Authentication Session established in a Secure, HttpOnly cookie after matching the initiating browser credential and atomically consuming state. The transaction cookie is cleared." }
+        "401": { description: "Missing, mismatched, duplicate or expired browser-bound transaction or invalid identity response. No Authentication Session cookie is issued or replaced; a mismatch leaves valid state available to its initiating browser." }
   /v1/sessions/{sessionId}/access-context:
     get:
       operationId: getSessionAccessContext

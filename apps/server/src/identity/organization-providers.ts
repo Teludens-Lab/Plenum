@@ -404,7 +404,7 @@ function runtimeConfiguration(row: ProviderRow, redirectUri: string): OidcProvid
 }
 
 export async function beginOrganizationIdentityProviderTest(pool: Pool, principal: AuthenticatedPrincipal,
-  providerId: string, redirectUri: string, returnTo: string, correlationId: string): Promise<{ authorizationUrl: string }> {
+  providerId: string, redirectUri: string, returnTo: string, correlationId: string): ReturnType<typeof beginOidcLogin> {
   const provider = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireOrganizationAdmin(client, principal, correlationId);
     await requireStepUp(client, principal, correlationId);

@@ -20,6 +20,20 @@ After the first internal Organization Admin exists, perform the one-time audited
 
 `GET /healthz` reports ready only when PostgreSQL, object storage, and media are reachable. OIDC login starts at `/auth/login`; the callback creates a Secure, HttpOnly, SameSite=Lax Authentication Session cookie. Never expose the Compose ports without TLS termination and network access controls.
 
+### Browser-bound OIDC transactions (BA-01)
+
+Apply additive migration `043_oidc_browser_binding.sql` after the existing migrations and before deploying the updated service. It adds only a nullable SHA-256 browser-credential digest to login attempts; Authentication Sessions, memberships, Releases and evidence are unchanged. Pre-upgrade pending attempts have no binding and must restart sign-in. Drain old application instances during the switch: old callbacks do not enforce this binding. Retain the column on rollback; rolling back the code reopens audit findings 1/9, so prefer a reviewed forward-fix or temporarily disable login at ingress.
+
+All three profiles share `profile-service.mjs`. `PLENUM_PUBLIC_BASE_URL` must use HTTPS and `OIDC_REDIRECT_URI` must equal its `/auth/callback` URL, including origin. TLS can terminate at the approved proxy; forwarded headers never determine the cookie domain or return origin. `PLENUM_TRUST_PROXY=1` retains its existing trusted-ingress-only meaning. Start login on the canonical host; alternate-host entries need an ingress redirect to that host before login starts.
+
+Normal, recovery/invitation, step-up and provider-test flows set `__Host-plenum_login_<state>` with a separate random 256-bit value, `Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=300` and no Domain. The host prefix protects against sibling-domain cookie injection; Path=/ is required by that prefix. Only a digest is persisted. The existing authorization-code callback is a top-level GET, so Lax permits the provider return; `form_post` is not supported. Each tab has its own transaction cookie. Never expose these credentials, codes, verifiers or Cookie/Set-Cookie headers in application or ingress logs.
+
+The matching credential is required before state consumption and provider exchange. Consumption commits once and clears the nonce, verifier and binding digest before the provider request. A matching expired callback erases its transaction secrets but cannot issue a session. Missing/mismatched callbacks leave valid state untouched. The HTTP callback deletes only its transaction cookie on success or failure; abandoned cookies expire after five minutes, and expired stored attempts cannot authenticate. A provider failure consumes that attempt; restart login. Existing Authentication Session cookies are not replaced on denial. Provider-test JSON exposes only the authorization URL and preserves the initiating Authentication Session on success.
+
+Return destinations must be local paths, at most 2,000 characters, without backslashes or control characters (including encoded forms). Normalize against the configured callback/public origin, compare origins, and retain only path, query and fragment; reject normalized protocol-relative paths. The production callback validates again before emitting Location. Invalid destinations retain the established error behavior; an omitted destination returns to `/`.
+
+BA-03 must preserve this GET-callback exception and host-only cookie contract while adding Origin/CSRF checks to other browser mutation boundaries. PS-815 reruns must cover real Entra/Okta and brokered SAML login, provider test, recovery, step-up, logout and callback failures on the exact new candidate; synthetic-provider tests do not establish interoperability.
+
 ## Identity and workforce production acceptance
 
 Use distinct secret-store values for outbound `INVITATION_DELIVERY_BEARER_TOKEN` and inbound `INVITATION_DELIVERY_WEBHOOK_TOKEN`. The delivery provider posts authenticated, idempotent delivered/bounced/failed receipts to `POST /v1/invitation-deliveries/events`; rotate either value independently and never log request authorization.

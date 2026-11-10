@@ -5,6 +5,9 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 import {
   AuthorizationError,
+  validateOidcReturnTo,
+  oidcLoginCookie,
+  readOidcLoginCookie,
   classifyDeploymentRequest,
   createOidcAuthorizationRequest,
   exchangeOidcAuthorizationCode,
@@ -24,6 +27,37 @@ const provisioningInput = {
 const databaseReached = new Error("validation passed; database access intentionally unavailable");
 const validationPool = { async connect() { throw databaseReached; } };
 const validationPrincipal = { principalId: "synthetic-person", organizationId: "synthetic-organization" };
+
+test("BA-01-T03 return destinations stay on the configured origin after normalization", () => {
+  const origin = "https://plenum.example";
+  for (const [input, expected] of [["/", "/"], ["/studio/project?q=one%20two#section", "/studio/project?q=one%20two#section"],
+    ["/a/../admin?x=1#members", "/admin?x=1#members"], ["/%2e%2e/admin", "/admin"],
+    ["/search?url=https://outside.example", "/search?url=https://outside.example"], ["/" + "a".repeat(1999), "/" + "a".repeat(1999)]]) {
+    const result = validateOidcReturnTo(input, origin);
+    assert.equal(result, expected);
+    assert.equal(new URL(result, origin).origin, origin);
+  }
+  for (const input of ["", "relative", "https://outside.example", "//outside.example", "/\\outside.example/audit",
+    "/\\\\outside.example", "/a\\b", "/\r\noutside", "/\t/outside", "/\0", "/\x7f", "/%5coutside", "/%0d%0aLocation:evil",
+    "/a/..//outside.example", "/%2e//outside.example", "/" + "a".repeat(2000)]) {
+    assert.throws(() => validateOidcReturnTo(input, origin), /same-origin path/u, JSON.stringify(input));
+  }
+  for (const input of ["/%2f%2foutside.example", "/%255coutside.example"]) {
+    assert.equal(new URL(validateOidcReturnTo(input, origin), origin).origin, origin);
+  }
+});
+
+test("BA-01-T01 transaction cookies are host-only, short-lived and reject ambiguous input", () => {
+  const state = "s".repeat(43), credential = "c".repeat(43);
+  const cookie = oidcLoginCookie(state, credential);
+  assert.equal(cookie, `__Host-plenum_login_${state}=${credential}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=300`);
+  assert.equal(readOidcLoginCookie(state, `plenum_session=other; ${cookie.split(";")[0]}`), credential);
+  assert.equal(readOidcLoginCookie(state, `${cookie}; ${cookie}`), undefined);
+  assert.equal(readOidcLoginCookie("wrong", cookie), undefined);
+  assert.equal(readOidcLoginCookie(state), undefined);
+  assert.equal(readOidcLoginCookie(state, `__Host-plenum_login_${state}=malformed`), undefined);
+  assert.match(oidcLoginCookie(state), /=; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=0$/u);
+});
 const provisioningOperations = [
   (input) => createPlatformOrganization(validationPool, validationPrincipal, input, "validation-test"),
   (input) => updatePlatformOrganizationProvisioning(validationPool, validationPrincipal, "synthetic-organization", input, "validation-test")

@@ -8,6 +8,8 @@ The reference outcome is the complete Fractured Order lifecycle at a meta level:
 
 ## Zero-gap decision rule
 
+2026-11-10 BA-01: audit findings 1/9 are addressed by browser-bound OIDC transactions and normalized same-origin return paths. See [BA-01 identity evidence](../acceptance/BA-01-login.md) for local T01–T03 checks, migration 043, candidate identity and remaining real-provider/human gates. Historical PS-815 internal acceptance is preserved; it does not accept this new candidate or grant PS-850 approval.
+
 2026-11-09 authorized continuation: the Product Owner approved a PS-830 prerequisite exception for PS-840 execution only, deferring the two live golden signed-checkpoint checks. They remain pending and block PS-850. Earlier blocked-entry notes below are historical; all other PS-840 implementation and validation proceeds with actual evidence.
 
 2026-11-09 subsequent owner review: PS-830 product and desktop AT acceptance are **OWNER-REPORTED PASS**, as recorded in [human acceptance](../acceptance/PS-830-human-acceptance.md). Earlier human/AT pending labels for PS-830 below are historical. Independently signed live-golden checkpoints and candidate continuity remain open; PS-840 cross-simulation UAT and PS-850 release acceptance are not established by this confirmation.

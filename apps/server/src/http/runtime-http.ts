@@ -21,7 +21,7 @@ import { COMPOSITION_DEFINITION_CONTRACT_ID } from "@plenum/simulation-schema";
 import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
-import { revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
+import { oidcLoginCookie, revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
 import {
   acceptOrganizationWorkforceInvitation,
   authenticateScimCredential,
@@ -810,7 +810,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           "The public authentication callback is not configured for this deployment.", correlationId);
         const result = await beginOrganizationIdentityProviderTest(options.pool, principal, pathId(match[1], correlationId),
           new URL("/auth/callback", options.publicBaseUrl).toString(), "/admin/identity", correlationId);
-        send(response, 200, result); return true;
+        response.setHeader("set-cookie", oidcLoginCookie(result.state, result.browserCredential));
+        send(response, 200, { authorizationUrl: result.authorizationUrl }); return true;
       }
       if (request.method === "POST" &&
           (match = url.pathname.match(/^\/v1\/admin\/identity-providers\/([^/]+)\/approve$/u))) {

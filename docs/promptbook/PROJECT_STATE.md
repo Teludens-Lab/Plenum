@@ -1,5 +1,9 @@
 # Project state
 
+## BA-01 login audit remediation — 2026-11-10
+
+Audit findings 1/9 reproduced against `4eff8d513aaa87be6d7748149093ab7362c33a4e` with a disposable database and synthetic OIDC provider. Browser-bound login and same-origin return validation are implemented, including the provider-test HTTP entry point and additive migration 043. Current evidence, exact candidate manifest, T01–T03 results and remaining gates are recorded in [BA-01 handoff](../acceptance/BA-01-login.md). This is pre-production remediation, not PS-815 external acceptance or PS-850 release approval. PS-830 owner-reported product/desktop AT acceptance, the PS-840 signed-checkpoint execution exception and PS-842 decisions retain their existing scope. No commit or deployment.
+
 ## Landing v12 owner-directed update - 2026-11-09
 
 The public landing now follows `references/plenum-landing-v12.html`: centered wordmark, bundled illustration and serif, scroll-driven chamber story, closing entry and footer. Existing sign-in and `plenum.theme` behavior are retained. A short-height adjustment prevents the reference's scroll cue from overlapping Enter Plenum at desktop zoom. Paired reference captures and focused verification are in `output/playwright/landing-v12/`; the [landing brief](../design/view-families/landing.md) records scope. This supersedes the public landing portion of the PS-842 candidate below; its earlier full-suite results remain historical, and human Chrome/screen reader acceptance remains pending. No commit or deployment.

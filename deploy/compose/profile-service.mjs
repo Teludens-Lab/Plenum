@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
-  authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
+  AuthorizationError, authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
+  oidcLoginCookie, readOidcLoginCookie, validateOidcReturnTo,
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
@@ -56,6 +57,9 @@ const oidc = {
   authorizationEndpoint: `${oidcIssuer}/protocol/openid-connect/auth`, tokenEndpoint: `${oidcIssuer}/protocol/openid-connect/token`,
   jwksUri: `${oidcIssuer}/protocol/openid-connect/certs`
 };
+if (oidc.redirectUri !== new URL("/auth/callback", publicBaseUrl).toString()) {
+  throw new Error("OIDC_REDIRECT_URI must be /auth/callback on PLENUM_PUBLIC_BASE_URL");
+}
 const media = new LiveKitLocalMediaProviderAdapter({
   apiUrl: process.env.MEDIA_API_URL ?? mediaUrl.replace(/^ws/u, "http"), websocketUrl: mediaUrl,
   apiKey: required("MEDIA_API_KEY"), apiSecret: required("MEDIA_API_SECRET"),
@@ -188,17 +192,23 @@ const server = createServer(async (request, response) => {
         stepUp: url.searchParams.get("stepUp") === "1",
         purpose: recovery ? "platform_recovery" : "sign_in"
       });
-      response.writeHead(302, { location: login.authorizationUrl, "cache-control": "no-store" }); response.end(); return;
+      response.writeHead(302, { location: login.authorizationUrl,
+        "set-cookie": oidcLoginCookie(login.state, login.browserCredential), "cache-control": "no-store" }); response.end(); return;
     }
     if (request.method === "GET" && url.pathname === "/auth/callback") {
       const state = url.searchParams.get("state") ?? "";
+      const browserCredential = readOidcLoginCookie(state, request.headers.cookie);
+      if (/^[A-Za-z0-9_-]{43}$/u.test(state)) response.setHeader("set-cookie", oidcLoginCookie(state));
+      if (browserCredential === undefined) throw authorizationError("UNAUTHENTICATED",
+        "The OIDC login state is invalid or expired.", telemetryContext.correlationId);
       const resolved = await resolveIdentityProviderForLoginState(pool, state,
         new URL("/auth/callback", publicBaseUrl).toString(), randomUUID());
       const principal = await completeOidcLogin(pool, resolved?.configuration ?? oidc, { code: url.searchParams.get("code") ?? "",
-        state, correlationId: randomUUID() });
+        state, browserCredential, correlationId: telemetryContext.correlationId });
       const maxAge = Math.max(0, Math.floor((principal.expiresAt.getTime() - Date.now()) / 1000));
-      response.writeHead(302, { location: principal.returnTo ?? "/",
-        ...(principal.preserveSession === true ? {} : { "set-cookie": `${cookieName}=${principal.authenticationSessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}` }),
+      response.writeHead(302, { location: validateOidcReturnTo(principal.returnTo ?? "/", publicBaseUrl),
+        "set-cookie": [oidcLoginCookie(state), ...(principal.preserveSession === true ? [] :
+          [`${cookieName}=${principal.authenticationSessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`])],
         "cache-control": "no-store" }); response.end(); return;
     }
     if (await api(request, response, telemetryContext.correlationId)) return;
@@ -210,6 +220,11 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { "content-type": contentTypes[extname(relative)] ?? "application/octet-stream" });
     response.end(file);
   } catch (error) {
+    if (error instanceof AuthorizationError && error.envelope.error.code === "UNAUTHENTICATED" && !response.headersSent) {
+      response.writeHead(401,
+        { "content-type": "application/json", "cache-control": "no-store" });
+      response.end(`${JSON.stringify(error.envelope)}\n`); return;
+    }
     if (error?.code === "ENOENT" && !response.headersSent) {
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
       response.end("Not found\n"); return;

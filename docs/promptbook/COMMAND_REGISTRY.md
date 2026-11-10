@@ -2,6 +2,8 @@
 
 Commands are executable only when status is **Verified**. A Proposed entry is a contract for the task that creates it, not permission to guess a script.
 
+BA-01 extends the existing Verified identity unit/integration and product-browser harnesses; no new command is introduced. `CMD-PRODUCT-E2E` now also launches the actual production profile service behind a disposable HTTPS proxy with a synthetic OIDC issuer. It requires OpenSSL (`PLENUM_TEST_OPENSSL`, Git for Windows' OpenSSL, or `openssl` on PATH), a writable temporary directory and loopback ports. The service trusts only the generated test certificate and explicitly enables Node TLS verification. Browser contexts accept that disposable certificate. Traces are disabled for the OIDC case to avoid retaining credentials. `-- --grep 'BA-01|PS-720-T01' --output output/playwright/ba-01-final` is the targeted rerun in the same harness. Windows security validation requires Git Bash on PATH. Exact commands, failed attempts, successful reruns and evidence limits: [BA-01 handoff](../acceptance/BA-01-login.md).
+
 | ID | Command / source | CWD | Prerequisites and environment | Expected timeout | Evidence | Status |
 |---|---|---|---|---:|---|---|
 | `CMD-PROMPTBOOK-RENDER` | `node scripts/render-promptbook.mjs` from this promptbook | `docs/promptbook` | Node; no network | <10s | Prompt count and generated files | Verified after generation |

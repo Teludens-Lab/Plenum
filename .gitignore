@@ -60,6 +60,7 @@ Desktop.ini
 docs/*
 !docs/acceptance/
 docs/acceptance/*
+!docs/acceptance/BA-01-login.md
 !docs/acceptance/PS-840-preflight.md
 !docs/acceptance/PS-840-UAT.md
 !docs/acceptance/PS-842-interface-consistency.md
@@ -88,6 +89,7 @@ docs/release-evidence/*
 !docs/promptbook/
 docs/promptbook/*
 !docs/promptbook/APPROVAL_IMPLEMENTATION_PROMPTBOOK.md
+!docs/promptbook/BUILD_AUDIT_REMEDIATION_PROMPTBOOK.md
 !docs/promptbook/COMMAND_REGISTRY.md
 !docs/promptbook/prompts/
 docs/promptbook/prompts/*

@@ -124,7 +124,7 @@ test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation
   await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/New_York");
   await page.getByLabel("Time zone", { exact: true }).fill("America/Indiana/Indianapolis");
   await page.getByRole("button", { name: "Save organization profile" }).click();
-  await expect(page.getByRole("status")).toContainText("Organization profile saved.");
+  await expect(page.getByRole("main").getByRole("status")).toContainText("Organization profile saved.");
   await page.reload();
   await editProfile.click();
   await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("America/Indiana/Indianapolis");

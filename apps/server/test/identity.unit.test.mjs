@@ -173,7 +173,7 @@ test("PS-550-T01 applies the approved route-specific request limits without trus
   assert.deepEqual(classifyDeploymentRequest(request("/auth/login", { "x-forwarded-for": "198.51.100.7" }), true),
     { category: "authentication", limit: 10, scope: "ip:198.51.100.7" });
   assert.deepEqual(classifyDeploymentRequest(request("/v1/sessions/session-a/commands", { authorization: "Bearer token-a" })),
-    { category: "session_command", limit: 120, scope: "session:session-a" });
+    { category: "session_command", limit: 12_000, scope: "command-ingress:ip:192.0.2.10" });
   assert.deepEqual(classifyDeploymentRequest(request("/v1/uploads", { cookie: "plenum_session=token-a" })),
     { category: "upload", limit: 5, scope: "session-token:token-a" });
   assert.deepEqual(classifyDeploymentRequest(request("/v1/projects/project-a/draft", { cookie: "plenum_session=token-a" })),

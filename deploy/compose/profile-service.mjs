@@ -117,7 +117,7 @@ const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
       await recordOperationalSecurityEvent(pool, { deploymentId, ...event });
     } catch {
       telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
-        correlationId: event.correlationId, category: "upload_scan" });
+        correlationId: event.correlationId, category: event.category });
     }
   } });
 const collaboration = createStudioCollaborationGateway({ pool, authenticate });
@@ -143,6 +143,7 @@ const server = createServer(async (request, response) => {
       response.writeHead(200, { "content-type": "text/plain; version=0.0.4; charset=utf-8", "cache-control": "no-store" });
       response.end(telemetry.metrics()); return;
     }
+    // Command ingress is address-only here; principal/Session quotas follow authenticated Session access in api.
     const rateLimitRule = classifyDeploymentRequest(request, trustedProxy);
     if (rateLimitRule !== null) {
       const decision = await consumeDeploymentRateLimit(pool, deploymentId, rateLimitRule);

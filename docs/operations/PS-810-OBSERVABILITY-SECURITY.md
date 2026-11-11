@@ -38,6 +38,24 @@ Owner: `platform-operations`. Open a ticket when p95 exceeds one second for fift
 
 Owner: `platform-operations`. Page on any `security.evidence_failed`. The user-facing rate-limit decision remains denied, but the durable evidence insert failed. Preserve structured logs, stop privileged changes if evidence cannot be restored, and verify migrations `039` and `040` plus the operations reader bootstrap before resuming.
 
+## Command rate limits — BA-02
+
+Audit finding 2 is addressed by three separate database buckets, scoped to the deployment. All use the existing atomic `operations.consume_request_rate_limit` function and fixed UTC minute windows; no schema migration or distributed cache is required.
+
+| Bucket | Requests/minute | Ownership and ordering |
+|---|---:|---|
+| Command ingress | 12,000 | Canonical network address, before authentication; all requests to `/v1/sessions/:id/commands` and its receipt paths, including missing/invalid credentials. Neither the URL Session nor credentials nor identity headers select its key. |
+| Command principal | 120 | Trusted Organization + Person, across Authentication Sessions, devices, roles and simulation Sessions. POST only, after envelope validation and Session/participant/device access resolution. |
+| Session aggregate | 1,200 | Trusted Organization + resolved Session, after the principal allowance. A principal denial never spends this allowance. |
+
+Capacity basis: DEC-16/OPEN-019 and `deploy/load-fixtures/reference-profile.json` support 500 participants per Session and 10 concurrent Sessions. The application profile sends 100 Commands from distinct actors over 10 seconds. Repeating that six times plus a 500-ballot burst requires 1,100 requests per Session/minute; 1,200 leaves 100 for control/retry traffic. An actor in the repeated application set plus the ballot burst uses seven requests, within 120. Ten such Sessions consume 11,000 ingress requests, within 12,000. These are arithmetic policy bounds, **not measured throughput or an SLO**. BA-12 must recheck `CMD-LOAD-APP` and `CMD-LOAD-VOTING` on the converged candidate. Those existing load harnesses call the Command kernel directly; BA-02's real production HTTP test separately proves limiter/authentication ordering. New workload shapes or retry volume require revisiting both bounds and measurements.
+
+The database stores only category, SHA-256 of deployment/category/scope, minute, count and expiry. Denied attempts count in the bucket reached. Keys expire at minute end; every consumption deletes entries whose expiry is more than five minutes old. This is lazy retention (normally about six minute windows under traffic); idle deployments may retain stale hashes until the next request. Attacker-controlled token/Session/identity values cannot multiply Command keys. Distinct observed addresses still create distinct bounded-lifetime buckets; this is application abuse protection, not network-level DDoS protection.
+
+`PLENUM_TRUST_PROXY=0` uses the socket address and ignores forwarded headers. Set it to `1` only where network policy makes the immediate ingress exclusive and that ingress replaces `X-Forwarded-For` or appends its observed peer. The application takes only the last, syntactically valid IP, normalizes IPv6, and falls back to the socket for invalid/ambiguous headers. Client prefixes cannot choose a bucket. Multi-hop ingress must normalize the final hop to the intended client address; verify this on each deployed profile. Shared NAT/proxy clients share ingress allowance and can affect one another there, but cannot debit one another's principal or Session allowance through rejected anonymous requests.
+
+Throttles retain the generic `RATE_LIMITED` envelope, HTTP 429, `Retry-After`, no-store and quota headers. Rate-limit events/metrics contain category and correlation, never bucket keys, addresses, Session existence or participant identity. Receipt GETs do not spend Command principal/aggregate quota. Authorized POST retries do spend request quota; a 429 creates no receipt/event/outbox/domain write, and retrying the same Command after recovery retains the existing idempotent receipt. Aggregate denial can spend that caller's principal attempt but does not enter the Command kernel. The change preserves Organization isolation, Session authorization and authoritative receipt transactions. Evidence: [BA-02 handoff](../acceptance/BA-02-command-limits.md).
+
 ## Malware scanner unavailable
 
 Owner: `platform-operations`. Page on `security.upload_scan_failed`. The upload remains quarantined and unavailable. Check the pinned `malware-scanner` container, signature update state, TCP 3310 on the private Compose network, memory pressure, and application timeout. Never mark the version clean manually; restore the scanner and create a new governed version.

@@ -1,5 +1,9 @@
 # Project state
 
+## BA-02 Command allowance isolation — 2026-11-10
+
+Audit finding 2 was reproduced against clean `9d32a9e14a2cd731098901cc580675a769549ddc` using a disposable PostgreSQL database. Command ingress now has a bounded address allowance before authentication; trusted principal and separate Session allowances follow Session access checks. The reference 500-participant × 10-Session profile supplies the sizing rationale. [BA-02 handoff](../acceptance/BA-02-command-limits.md) records T01–T03, exact candidate identity, command evidence, proxy/NAT assumptions and BA-12 load gates. This is pre-production security remediation, not PS-850 approval. No migration, dependency, commit or deployment. Existing PS-830 owner-reported acceptance, PS-840 checkpoint exception and PS-842 decisions retain their scope. Next: BA-03.
+
 ## BA-01 login audit remediation — 2026-11-10
 
 Audit findings 1/9 reproduced against `4eff8d513aaa87be6d7748149093ab7362c33a4e` with a disposable database and synthetic OIDC provider. Browser-bound login and same-origin return validation are implemented, including the provider-test HTTP entry point and additive migration 043. Current evidence, exact candidate manifest, T01–T03 results and remaining gates are recorded in [BA-01 handoff](../acceptance/BA-01-login.md). This is pre-production remediation, not PS-815 external acceptance or PS-850 release approval. PS-830 owner-reported product/desktop AT acceptance, the PS-840 signed-checkpoint execution exception and PS-842 decisions retain their existing scope. No commit or deployment.

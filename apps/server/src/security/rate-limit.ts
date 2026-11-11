@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
+import { isIP } from "node:net";
 
 import type { Pool } from "pg";
+import type { SessionAccessContextV1 } from "../identity/context.js";
 
 export type DeploymentRateLimitCategory = "authentication" | "agent" | "upload" | "session_command" | "general";
 
@@ -26,12 +28,25 @@ const limits: Record<DeploymentRateLimitCategory, number> = {
 };
 
 function clientAddress(request: IncomingMessage, trustedProxy: boolean): string {
+  let address = request.socket.remoteAddress ?? "unknown";
   if (trustedProxy) {
     const forwarded = request.headers["x-forwarded-for"];
-    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",", 1)[0]?.trim();
-    if (first) return first.slice(0, 200);
+    // The exclusive, immediate ingress must append its observed peer or replace this header.
+    const peer = typeof forwarded === "string" ? forwarded.split(",").at(-1)?.trim() : undefined;
+    if (peer !== undefined && isIP(peer) && !peer.includes("%")) address = peer;
   }
-  return request.socket.remoteAddress ?? "unknown";
+  if (isIP(address) === 6 && !address.includes("%")) return new URL(`http://[${address}]`).hostname;
+  return isIP(address) === 4 ? address : "unknown";
+}
+
+/** Only call after resolving trusted authentication and Session access. */
+export function sessionCommandRateLimits(context: SessionAccessContextV1): DeploymentRateLimitRule[] {
+  const organization = context.organizationId.toLowerCase();
+  return [
+    { category: "session_command", limit: limits.session_command, scope: `command-principal:${organization}:${context.principalId.toLowerCase()}` },
+    // Reference profile: 600 application Commands + 500 ballots/minute, with 100 requests of headroom.
+    { category: "session_command", limit: 1_200, scope: `command-session:${organization}:${context.sessionId.toLowerCase()}` }
+  ];
 }
 
 function authenticationToken(request: IncomingMessage): string | undefined {
@@ -54,7 +69,8 @@ export function classifyDeploymentRequest(
 
   const sessionCommand = path.match(/^\/v1\/sessions\/([^/]+)\/commands(?:\/|$)/u);
   if (sessionCommand !== null) {
-    return { category: "session_command", limit: limits.session_command, scope: `session:${sessionCommand[1]}` };
+    // Ten reference Sessions can share ingress; unverified tokens and Session IDs never select its key.
+    return { category: "session_command", limit: 12_000, scope: `command-ingress:ip:${clientAddress(request, trustedProxy)}` };
   }
 
   const category: DeploymentRateLimitCategory = /(?:^|\/)agents?(?:\/|$)/u.test(path) ? "agent" :

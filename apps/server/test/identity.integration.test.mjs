@@ -10,6 +10,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { Pool } from "pg";
 import * as Y from "yjs";
 import { canonicalizeJson } from "@plenum/event-contracts";
+import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
 import { compileRelease } from "@plenum/release-compiler";
 
 import {
@@ -508,6 +509,14 @@ test("PS-110-T01 maps a verified OIDC subject through server configuration", asy
   assert.equal(principal.principalId, ids.personA);
   assert.equal(principal.organizationId, ids.orgA);
   assert.deepEqual(principal.organizationRoles, ["operator"]);
+});
+
+test("BA-02-T01/T02 production HTTP isolates rejected traffic and principal quotas; ballot retries commit once", async () => {
+  await verifyCommandLimitHttp(owner, ids, principal, principalC, principalD);
+});
+
+test("BA-02-T03 atomic boundaries, controlled rollover, retention and the 500 x 10 workload policy", async () => {
+  await verifyCommandLimitWindows(app, owner);
 });
 
 test("BA-01-T01/T02 browser binding precedes consumption and exchange; expiry and races fail closed", async () => {

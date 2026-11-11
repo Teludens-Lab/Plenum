@@ -21,6 +21,7 @@ import { COMPOSITION_DEFINITION_CONTRACT_ID } from "@plenum/simulation-schema";
 import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
+import { consumeDeploymentRateLimit, sessionCommandRateLimits } from "../security/rate-limit.js";
 import { oidcLoginCookie, revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
 import {
   acceptOrganizationWorkforceInvitation,
@@ -1974,6 +1975,17 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
             ...(command.activeSessionRoleId === undefined ? {} : { requestedActiveSessionRoleId: command.activeSessionRoleId }),
             correlationId
           }));
+        for (const rule of sessionCommandRateLimits(context)) {
+          const decision = await consumeDeploymentRateLimit(options.pool, options.deploymentId, rule);
+          response.setHeader("x-ratelimit-limit", String(rule.limit));
+          response.setHeader("x-ratelimit-remaining", String(decision.remaining));
+          if (!decision.allowed) {
+            response.setHeader("retry-after", String(decision.retryAfterSeconds));
+            await options.onSecurityEvent?.({ eventType: "security.rate_limited", severity: "warning", outcome: "denied",
+              correlationId, category: "session_command" });
+            throw authorizationError("RATE_LIMITED", "Request rate limit exceeded.", correlationId);
+          }
+        }
         const receipt = await submitRuntimeCommand(
           options.pool, context, command, correlationId, options.deploymentId, options.extensionRuntime?.plans, options.mediaAdapter
         );

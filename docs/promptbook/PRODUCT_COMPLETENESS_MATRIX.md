@@ -8,6 +8,8 @@ The reference outcome is the complete Fractured Order lifecycle at a meta level:
 
 ## Zero-gap decision rule
 
+2026-11-10 BA-02: audit finding 2 is addressed by address-only Command ingress, authenticated principal quotas after Session access checks, and a distinct workload-sized Session aggregate. [BA-02 evidence](../acceptance/BA-02-command-limits.md) separates local policy/concurrency/HTTP proof from unrun BA-12 capacity gates and deployed-proxy acceptance. Historical acceptance and final PS-850 obligations are unchanged.
+
 2026-11-10 BA-01: audit findings 1/9 are addressed by browser-bound OIDC transactions and normalized same-origin return paths. See [BA-01 identity evidence](../acceptance/BA-01-login.md) for local T01–T03 checks, migration 043, candidate identity and remaining real-provider/human gates. Historical PS-815 internal acceptance is preserved; it does not accept this new candidate or grant PS-850 approval.
 
 2026-11-09 authorized continuation: the Product Owner approved a PS-830 prerequisite exception for PS-840 execution only, deferring the two live golden signed-checkpoint checks. They remain pending and block PS-850. Earlier blocked-entry notes below are historical; all other PS-840 implementation and validation proceeds with actual evidence.

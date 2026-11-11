@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import test from "node:test";
 
-import { ClamAvContentScanner, OperationalTelemetry } from "../dist/index.js";
+import { ClamAvContentScanner, OperationalTelemetry, classifyDeploymentRequest, sessionCommandRateLimits } from "../dist/index.js";
 import {
   deliverOperationalAlert, evaluateSustainedCondition, metricWindow, parsePrometheusSnapshot,
   rehydrateSecurityEventCursor, securityEventCursor
@@ -10,6 +10,39 @@ import {
 import { parseOperationsSecretBundle } from "../../../deploy/compose/operations-secrets.mjs";
 
 const deploymentId = "10000000-0000-4000-8000-000000000001";
+
+test("BA-02-T03 Command ingress ignores spoofed identities, tokens and untrusted forwarded addresses", () => {
+  const request = { method: "POST", url: "/v1/sessions/known/commands", headers: {}, socket: { remoteAddress: "192.0.2.1" } };
+  const baseline = classifyDeploymentRequest(request);
+  assert.equal(baseline.limit, 12_000);
+  for (const url of ["/v1/sessions/unknown/commands", "/v1/sessions/known/commands/receipt"]) {
+    assert.deepEqual(classifyDeploymentRequest({ ...request, url, headers: {
+      authorization: "Bearer attacker-token", cookie: "plenum_session=attacker", "x-principal-id": "victim",
+      "x-organization-id": "victim", "x-forwarded-for": "198.51.100.1", "x-real-ip": "198.51.100.2"
+    } }), baseline);
+  }
+  const proxy = (forwarded) => classifyDeploymentRequest({ ...request, headers: { "x-forwarded-for": forwarded } }, true);
+  assert.equal(proxy("attacker, 198.51.100.7").scope, "command-ingress:ip:198.51.100.7");
+  for (const forwarded of ["not-an-ip", "198.51.100.1, garbage", ["198.51.100.1", "198.51.100.2"], "fe80::1%eth0"]) {
+    assert.deepEqual(proxy(forwarded), baseline);
+  }
+  assert.deepEqual(proxy("2001:db8:0:0:0:0:0:1"), proxy("2001:db8::1"));
+  assert.deepEqual(proxy("::ffff:192.0.2.1"), proxy("::ffff:c000:201"));
+});
+
+test("BA-02-T02/T03 Command ownership is Organization/principal and separately Organization/Session", () => {
+  const context = { organizationId: "ORG-A", principalId: "PERSON-A", sessionId: "SESSION-A" };
+  const [principal, session] = sessionCommandRateLimits(context);
+  assert.equal(principal.limit, 120);
+  assert.equal(session.limit, 1_200);
+  assert.deepEqual(sessionCommandRateLimits({ ...context, authenticationSessionId: "new-login", deviceId: "new-device",
+    activeSessionRoleId: "new-role" }), [principal, session]);
+  assert.deepEqual(sessionCommandRateLimits({ organizationId: "org-a", principalId: "person-a", sessionId: "session-a" }), [principal, session]);
+  assert.notEqual(sessionCommandRateLimits({ ...context, principalId: "PERSON-B" })[0].scope, principal.scope);
+  assert.equal(sessionCommandRateLimits({ ...context, principalId: "PERSON-B" })[1].scope, session.scope);
+  assert.equal(sessionCommandRateLimits({ ...context, sessionId: "SESSION-B" })[0].scope, principal.scope);
+  assert.notEqual(sessionCommandRateLimits({ ...context, organizationId: "ORG-B" })[0].scope, principal.scope);
+});
 
 function request(overrides = {}) {
   return {

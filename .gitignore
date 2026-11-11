@@ -61,6 +61,7 @@ docs/*
 !docs/acceptance/
 docs/acceptance/*
 !docs/acceptance/BA-01-login.md
+!docs/acceptance/BA-02-command-limits.md
 !docs/acceptance/PS-840-preflight.md
 !docs/acceptance/PS-840-UAT.md
 !docs/acceptance/PS-842-interface-consistency.md

@@ -1,5 +1,9 @@
 # Project state
 
+## BA-04 radio Floor provider revocation — 2026-11-11
+
+Audit finding 3 was reproduced on clean `45b25c36f40fb9dd945abd2b95a074b314abd46a` (BA-01/02/03 included). Floor Lease rows now retain durable provider obligations; serialized effects prevent successor grants before confirmed revocation. Additive migration 044 and the production expiry/retry worker require draining old writers. [BA-04 handoff](../acceptance/BA-04-floor-revocation.md) records T01–T03, exact provider/browser evidence, failed attempts and current gates. BA-05/BA-11 must prove worker coverage for additional Organizations. The isolated 5,000-request voice load had no request errors but p95 1,085.43 ms exceeds 500 ms; capacity acceptance remains BLOCKED for BA-12. Historical PS-830 acceptance, PS-840 checkpoint exception, PS-842 decisions and PS-850 release obligations retain their scope. No commit or deployment. Next: BA-05.
+
 ## BA-03 browser trust boundary — 2026-11-10
 
 Audit finding 10 is addressed at the shared HTTP mutation and Studio WebSocket boundaries, using the configured public origin before reads/edits and retaining per-operation authorization. JSON media types and the existing machine/protocol exceptions are explicit. Starting clean HEAD: `45960d872281dd07de7c91e904a6b0c826562ffa`, including BA-01/02. [BA-03 handoff](../acceptance/BA-03-browser-origins.md) records the route inventory, T01–T03, browser-versus-header evidence, failed attempts and final validation. No schema migration, commit or deployment. PS-830 owner-reported acceptance, PS-840's checkpoint exception, PS-842 decisions and PS-850 release obligations retain their scope. Next: BA-04.

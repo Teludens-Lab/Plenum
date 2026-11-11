@@ -29,6 +29,8 @@ The evidence artifact is `test-results/clean-install/ps-820-clean-install.json`.
 
 ## Rollback and forward-fix
 
+BA-04 migration 044 is additive, but the old application's Floor grant path does not honor pending provider revocations. Drain old instances before applying it and keep radio traffic closed until the new worker reconciles legacy leases. Schema compatibility is not permission for mixed-version radio operation or rollback to the vulnerable grant path; see the [Floor reconciliation runbook](PS-810-OBSERVABILITY-SECURITY.md#radio-floor-provider-reconciliation--ba-04).
+
 Schema rollback is prohibited. Before a production upgrade, take and verify an encrypted backup. If the prior application remains compatible with the additive schema, redeploy its exact pinned image while preparing a forward-fix. If compatibility is not proven, keep the candidate stopped and forward-fix from the documented backup state. Never down-migrate persistent production data merely to match older code.
 
 ## Backup and recovery rehearsal

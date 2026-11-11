@@ -152,6 +152,7 @@
     }
   ],
   "overrides": [
+    { "dimension": "prd-requirement", "obligation": "REQ-081", "status": "IMPLEMENTED", "owner": "PS-250 / PS-780; BA-04", "evidenceTarget": "docs/acceptance/BA-04-floor-revocation.md; audit finding 3; durable provider revocation and successor fencing; BA-05/BA-11 additional-Organization coverage and BA-12 voice latency gate remain open; no final candidate acceptance" },
     { "dimension": "api-boundary", "obligation": "studio-authoring", "status": "IMPLEMENTED", "owner": "PS-300 / PS-810 / PS-815; BA-03", "evidenceTarget": "docs/acceptance/BA-03-browser-origins.md; audit finding 10; shared browser Origin and media-type boundaries; historical publication and final candidate acceptance remain separate" },
     { "dimension": "api-boundary", "obligation": "runtime-command", "status": "IMPLEMENTED", "owner": "PS-120 / PS-810; BA-02", "evidenceTarget": "docs/acceptance/BA-02-command-limits.md; audit finding 2; isolated Command quotas and local HTTP/database evidence; BA-12 measured load and final candidate acceptance remain separate" },
     { "dimension": "api-boundary", "obligation": "identity", "status": "IMPLEMENTED", "owner": "PS-110 / PS-815 / PS-810; BA-01", "evidenceTarget": "docs/acceptance/BA-01-login.md; audit findings 1/9; browser-binding and redirect evidence only; real-provider and final candidate acceptance remain separate" },

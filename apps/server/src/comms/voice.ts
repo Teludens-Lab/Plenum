@@ -271,6 +271,9 @@ async function manageChannel(input: CommandExecutionContext, channel: ChannelRow
       WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3 AND revoked_at IS NULL RETURNING seat_assignment_id`,
     [context.organizationId, channel.id, targetParticipantId, action]);
     if (result.rowCount !== 1) return fail("TARGET_NOT_FOUND", "The Voice Channel Participant was not found.");
+    await client.query(`UPDATE comms.floor_leases SET active=false,released_at=transaction_timestamp(),version=version+1
+      WHERE organization_id=$1 AND channel_id=$2 AND holder_seat_assignment_id=$3 AND active`,
+    [context.organizationId, channel.id, result.rows[0]?.seat_assignment_id]);
     return { status: "accepted", aggregateVersion: version,
       eventType: action === "remove" ? "voice_channel.left" : "intervention.recorded",
       eventPayload: { channelId: channel.id, targetParticipantId, action, reason } };
@@ -360,7 +363,7 @@ export async function getVoiceProjection(client: PoolClient, context: SessionAcc
     const grant = await client.query<{ can_transmit: boolean }>(`SELECT can_transmit FROM comms.voice_grants WHERE organization_id=$1 AND channel_id=$2
       AND seat_assignment_id=$3 AND revoked_at IS NULL AND valid_until>transaction_timestamp()`, [context.organizationId, channel.id, active.id]);
     const floor = await client.query<{ expires_at: Date }>(`SELECT expires_at FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2
-      AND holder_seat_assignment_id=$3 AND active AND expires_at>transaction_timestamp()`, [context.organizationId, channel.id, active.id]);
+      AND holder_seat_assignment_id=$3 AND active AND provider_state='enabled' AND expires_at>transaction_timestamp()`, [context.organizationId, channel.id, active.id]);
     const joined = grant.rowCount === 1;
     const held = floor.rowCount === 1;
     const canTransmit = selectorAllows(release, definition.canTransmit, context, active);
@@ -412,13 +415,19 @@ export async function reconcileRevokedVoiceParticipants(pool: Pool, context: Ses
           AND grant_row.provider_revoked_at IS NULL AND channel.status<>'closed' ORDER BY grant_row.id LIMIT 100`,
       [context.organizationId,context.sessionId])).rows);
     if (participants.length === 0) return;
-    await Promise.all(participants.map(({channel_id,participant_id}) => adapter.removeParticipant({organizationId:context.organizationId,
-      sessionId:context.sessionId,channelId:channel_id,participantId:participant_id})));
-    await withOrganizationTransaction(pool,context.organizationId,async(client)=>{
-      await client.query(`UPDATE comms.voice_grants SET provider_revoked_at=transaction_timestamp(),updated_at=transaction_timestamp()
-        WHERE organization_id=$1 AND id=ANY($2::uuid[]) AND revoked_at IS NOT NULL`,
-      [context.organizationId,participants.map(({id})=>id)]);
-    });
+    const effects = await Promise.allSettled(participants.map(({id,channel_id,participant_id}) =>
+      withFloorChannelLock(pool,context.organizationId,channel_id,async(connection)=>{
+        const revokedAt = await withOrganizationTransaction(connection,context.organizationId,async(client)=>
+          (await client.query<{revoked_at:Date}>("SELECT revoked_at FROM comms.voice_grants WHERE organization_id=$1 AND id=$2 AND revoked_at IS NOT NULL",
+            [context.organizationId,id])).rows[0]?.revoked_at);
+        if(!revokedAt) return;
+        await adapter.removeParticipant({organizationId:context.organizationId,sessionId:context.sessionId,channelId:channel_id,participantId:participant_id});
+        await withOrganizationTransaction(connection,context.organizationId,async(client)=>{
+          await client.query(`UPDATE comms.voice_grants SET provider_revoked_at=transaction_timestamp(),updated_at=transaction_timestamp()
+            WHERE organization_id=$1 AND id=$2 AND revoked_at=$3`,[context.organizationId,id,revokedAt]);
+        });
+      })));
+    if(effects.some((result)=>result.status==="rejected")) throw new Error("Voice revocation remains pending");
   }
 }
 
@@ -430,7 +439,11 @@ function floorToken(secret: string, input: { organizationId: string; sessionId: 
 
 const tokenDigest = (token: string) => createHash("sha256").update(token).digest("hex");
 
-async function appendFloorEvent(client: PoolClient, context: SessionAccessContextV1, channelId: string,
+type FloorEventContext = Pick<SessionAccessContextV1, "organizationId" | "sessionId" | "activeReleaseId" | "authorityEpoch"> & {
+  principalId: string | null; participantId: string | null;
+};
+
+async function appendFloorEvent(client: PoolClient, context: FloorEventContext, channelId: string,
   requestId: string, eventType: string, payload: JsonObject, correlationId: string): Promise<void> {
   const eventId = randomUUID();
   const recorded = await client.query(`WITH allocated AS (
@@ -497,8 +510,155 @@ async function assertFloorAuthority(client: PoolClient, input: FloorOperationInp
   }
 }
 
+interface FloorScope { organizationId: string; sessionId: string; channelId: string; deploymentId: string }
+
+// A session advisory lock orders provider calls across processes without an open SQL transaction.
+async function withFloorChannelLock<T>(pool: Pool, organizationId: string, channelId: string,
+  operation: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  let reusable = false;
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext($1),hashtext($2))", [organizationId, `floor:${channelId}`]);
+    try { return await operation(client); }
+    finally {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1),hashtext($2))", [organizationId, `floor:${channelId}`]);
+      reusable = true;
+    }
+  } finally { client.release(!reusable); }
+}
+
+async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adapter: MediaProviderAdapter,
+  preserveRequestId?: string): Promise<boolean> {
+  const { organizationId, sessionId, channelId, deploymentId } = scope;
+  const context = await withOrganizationTransaction(client, organizationId, async (tx) => {
+    const channel = (await tx.query<{ governing_release_id: string; provider_adapter_digest: string; authority_epoch: string }>(
+      `SELECT channel.governing_release_id,channel.provider_adapter_digest,authority.authority_epoch
+       FROM comms.voice_channels channel JOIN runtime.session_authorities authority
+         ON authority.organization_id=channel.organization_id AND authority.session_id=channel.session_id
+       WHERE channel.organization_id=$1 AND channel.session_id=$2 AND channel.id=$3
+         AND authority.deployment_id=$4 AND authority.status='active' FOR SHARE OF authority`,
+      [organizationId, sessionId, channelId, deploymentId])).rows[0];
+    if (!channel) return undefined;
+    if (channel.provider_adapter_digest !== adapter.digest) throw new Error("Pinned media adapter is unavailable");
+    const eventContext: FloorEventContext = { organizationId, sessionId, activeReleaseId: channel.governing_release_id,
+      authorityEpoch: Number(channel.authority_epoch), principalId: null, participantId: null };
+    const expired = await tx.query<{ request_id: string }>(`UPDATE comms.floor_leases lease SET active=false,
+        released_at=transaction_timestamp(),version=lease.version+1
+      FROM comms.voice_channels channel WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active
+        AND channel.organization_id=lease.organization_id AND channel.id=lease.channel_id
+        AND (lease.expires_at<=transaction_timestamp() OR lease.authority_epoch<>$3 OR channel.status<>'open'
+          OR lease.provider_state='pending_disable'
+          OR (lease.provider_state='pending_enable' AND lease.request_id IS DISTINCT FROM $4::uuid)
+          OR NOT EXISTS (SELECT 1 FROM comms.voice_grants grant_row
+            JOIN runtime.seat_assignments assignment ON assignment.organization_id=grant_row.organization_id AND assignment.id=grant_row.seat_assignment_id
+            WHERE grant_row.organization_id=lease.organization_id AND grant_row.channel_id=lease.channel_id
+              AND grant_row.seat_assignment_id=lease.holder_seat_assignment_id AND grant_row.can_transmit
+              AND grant_row.revoked_at IS NULL AND grant_row.valid_until>transaction_timestamp()
+              AND grant_row.authority_epoch=$3 AND assignment.valid_to IS NULL)) RETURNING lease.request_id`,
+    [organizationId, channelId, eventContext.authorityEpoch, preserveRequestId ?? null]);
+    for (const { request_id: requestId } of expired.rows) {
+      await tx.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3",
+        [organizationId, channelId, requestId]);
+      await appendFloorEvent(tx, eventContext, channelId, requestId, "floor_lease.expired", { channelId, requestId }, randomUUID());
+    }
+    return eventContext;
+  });
+  if (!context) return false;
+  const pending = await withOrganizationTransaction(client, organizationId, async (tx) =>
+    (await tx.query<{ id: string; request_id: string; participant_id: string; version: string; provider_attempts: number }>(
+      `SELECT lease.id,lease.request_id,assignment.participant_id,lease.version,lease.provider_attempts
+       FROM comms.floor_leases lease JOIN runtime.seat_assignments assignment
+         ON assignment.organization_id=lease.organization_id AND assignment.id=lease.holder_seat_assignment_id
+       WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.provider_state='pending_disable'
+         AND lease.provider_retry_at<=transaction_timestamp() ORDER BY lease.provider_retry_at,lease.id LIMIT 20`,
+      [organizationId, channelId])).rows);
+  for (const lease of pending) {
+    try {
+      await adapter.setTransmit({ organizationId, sessionId, channelId, participantId: lease.participant_id }, false);
+    } catch {
+      await withOrganizationTransaction(client, organizationId, async (tx) => {
+        await tx.query(`UPDATE comms.floor_leases SET provider_attempts=LEAST(provider_attempts+1,30),
+          provider_retry_at=transaction_timestamp()+make_interval(secs=>LEAST(30,power(2,LEAST(provider_attempts,5)))::int)
+          WHERE organization_id=$1 AND id=$2 AND provider_state='pending_disable'`, [organizationId, lease.id]);
+        if (lease.provider_attempts === 0) await appendFloorEvent(tx, context, channelId, lease.request_id,
+          "media_provider.unavailable", { channelId, requestId: lease.request_id }, randomUUID());
+      });
+      return false;
+    }
+    await withOrganizationTransaction(client, organizationId, async (tx) => {
+      await tx.query(`UPDATE comms.floor_leases SET provider_state='disabled',provider_disabled_at=transaction_timestamp()
+        WHERE organization_id=$1 AND id=$2 AND version=$3 AND provider_state='pending_disable'`,
+      [organizationId, lease.id, lease.version]);
+    });
+  }
+  return withOrganizationTransaction(client, organizationId, async (tx) =>
+    (await tx.query("SELECT 1 FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2 AND provider_state='pending_disable' LIMIT 1",
+      [organizationId, channelId])).rowCount === 0);
+}
+
+/** One bounded batch for the configured Organization. Never grants provider rights. */
+export async function reconcileFloorPermissions(pool: Pool, organizationId: string, deploymentId: string,
+  adapter: MediaProviderAdapter): Promise<{ checked: number; unresolved: number }> {
+  const channels = await withOrganizationTransaction(pool, organizationId, async (client) =>
+    (await client.query<{ channel_id: string; session_id: string }>(`SELECT lease.channel_id,lease.session_id
+      FROM comms.floor_leases lease JOIN runtime.session_authorities authority
+        ON authority.organization_id=lease.organization_id AND authority.session_id=lease.session_id
+      WHERE lease.organization_id=$1 AND lease.provider_state<>'disabled'
+        AND lease.provider_retry_at<=transaction_timestamp() AND authority.deployment_id=$2 AND authority.status='active'
+        AND (lease.provider_state<>'enabled' OR NOT lease.active OR lease.expires_at<=transaction_timestamp()
+          OR lease.authority_epoch<>authority.authority_epoch OR NOT EXISTS (SELECT 1 FROM comms.voice_grants grant_row
+            WHERE grant_row.organization_id=lease.organization_id AND grant_row.channel_id=lease.channel_id
+              AND grant_row.seat_assignment_id=lease.holder_seat_assignment_id AND grant_row.can_transmit
+              AND grant_row.revoked_at IS NULL AND grant_row.valid_until>transaction_timestamp()))
+      GROUP BY lease.channel_id,lease.session_id ORDER BY min(lease.provider_retry_at),lease.channel_id LIMIT 20`,
+    [organizationId, deploymentId])).rows);
+  const results = await Promise.allSettled(channels.map(({ channel_id: channelId, session_id: sessionId }) =>
+    withFloorChannelLock(pool, organizationId, channelId, (client) =>
+      reconcileFloorChannel(client, { organizationId, sessionId, channelId, deploymentId }, adapter))));
+  return { checked: channels.length, unresolved: results.filter((result) => result.status === "rejected" || !result.value).length };
+}
+
+export function startFloorReconciliationWorker(pool: Pool, organizationId: string, deploymentId: string,
+  adapter: MediaProviderAdapter, onFailure: () => void): () => Promise<void> {
+  let stopped = false;
+  let running: Promise<void> | undefined;
+  const tick = () => {
+    if (stopped || running) return;
+    running = reconcileFloorPermissions(pool, organizationId, deploymentId, adapter)
+      .then(({ unresolved }) => { if (unresolved > 0) onFailure(); }).catch(onFailure)
+      .finally(() => { running = undefined; });
+  };
+  const timer = setInterval(tick, 250);
+  timer.unref();
+  tick();
+  return async () => { stopped = true; clearInterval(timer); await running; };
+}
+
+export async function enforceVoiceChannelChange(pool: Pool, context: SessionAccessContextV1, channelId: string,
+  deploymentId: string, adapter: MediaProviderAdapter, participantId?: string): Promise<void> {
+  await withFloorChannelLock(pool, context.organizationId, channelId, async (connection) => {
+    const state = await withOrganizationTransaction(connection, context.organizationId, async (client) => ({
+      channel: await readChannel(client, context, channelId),
+      grant: participantId === undefined ? undefined : (await client.query<{ can_transmit: boolean; revoked_at: Date | null }>(
+        `SELECT can_transmit,revoked_at FROM comms.voice_grants WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3
+         ORDER BY updated_at DESC LIMIT 1`, [context.organizationId, channelId, participantId])).rows[0]
+    }));
+    if (!state.channel) return;
+    if (state.channel.definition.mode === "radio_ptt" && !await reconcileFloorChannel(connection,
+      { ...context, channelId, deploymentId }, adapter)) throw new Error("Floor revocation remains pending");
+    if (state.channel.status === "closed") await adapter.closeChannel({ organizationId: context.organizationId, sessionId: context.sessionId, channelId });
+    else if (participantId !== undefined && state.grant) {
+      const target = { organizationId: context.organizationId, sessionId: context.sessionId, channelId, participantId };
+      if (state.grant.revoked_at !== null) await adapter.removeParticipant(target);
+      else if (!state.grant.can_transmit && state.channel.definition.mode !== "radio_ptt") await adapter.setTransmit(target, false);
+    }
+  });
+}
+
 export async function requestFloor(input: FloorOperationInput): Promise<FloorLeaseV1> {
-  const effect = await withOrganizationTransaction(input.pool, input.context.organizationId, async (client) => {
+  return withFloorChannelLock(input.pool, input.context.organizationId, input.channelId, async (connection) => {
+  const scope = { ...input.context, channelId: input.channelId, deploymentId: input.deploymentId };
+  const prepare = () => withOrganizationTransaction(connection, input.context.organizationId, async (client) => {
     await assertFloorAuthority(client, input);
     let channel = await readChannel(client, input.context, input.channelId);
     const active = await assignment(client, input.context);
@@ -517,10 +677,20 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
       throw authorizationError("TARGET_NOT_FOUND", "The push-to-talk Voice Channel was not found.", input.correlationId);
     }
     channel = lockedChannel;
+    if (channel.provider_adapter_digest !== input.mediaAdapter.digest) {
+      throw authorizationError("CAPABILITY_UNAVAILABLE", "The pinned media adapter is unavailable.", input.correlationId);
+    }
+    const pending = await client.query(`SELECT 1 FROM comms.floor_leases lease WHERE organization_id=$1 AND channel_id=$2
+      AND (provider_state IN ('pending_enable','pending_disable') OR (active AND (expires_at<=clock_timestamp() OR authority_epoch<>$3
+        OR NOT EXISTS (SELECT 1 FROM comms.voice_grants grant_row WHERE grant_row.organization_id=lease.organization_id
+          AND grant_row.channel_id=lease.channel_id AND grant_row.seat_assignment_id=lease.holder_seat_assignment_id
+          AND grant_row.can_transmit AND grant_row.revoked_at IS NULL AND grant_row.valid_until>clock_timestamp())))) LIMIT 1`,
+    [input.context.organizationId,input.channelId,input.context.authorityEpoch]);
+    if (pending.rowCount !== 0) return null;
     let queuedRetry = false;
     const previous = (await client.query<{ status: FloorLeaseV1["status"]; connection_id: string; seat_assignment_id: string;
       expires_at: Date | null; max_expires_at: Date | null; active: boolean }>(`SELECT request.status,request.connection_id,request.seat_assignment_id,
-      lease.expires_at,lease.max_expires_at,COALESCE(lease.active,false) AS active FROM comms.floor_requests request
+      lease.expires_at,lease.max_expires_at,COALESCE(lease.active AND lease.provider_state='enabled' AND lease.expires_at>clock_timestamp(),false) AS active FROM comms.floor_requests request
       LEFT JOIN comms.floor_leases lease ON lease.organization_id=request.organization_id AND lease.channel_id=request.channel_id AND lease.request_id=request.request_id
       WHERE request.organization_id=$1 AND request.channel_id=$2 AND request.request_id=$3`,
     [input.context.organizationId,input.channelId,input.input.requestId])).rows[0];
@@ -528,7 +698,7 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
       if (previous.status === "queued" && previous.connection_id === input.input.connectionId && previous.seat_assignment_id === active.id) {
         queuedRetry = true;
       } else if (previous.connection_id !== input.input.connectionId || previous.seat_assignment_id !== active.id || !previous.active ||
-          previous.expires_at === null || previous.expires_at <= new Date() || previous.max_expires_at === null) {
+          previous.expires_at === null || previous.max_expires_at === null) {
         throw authorizationError("FLOOR_TOKEN_EXPIRED", "This Floor request is no longer live.", input.correlationId);
       } else {
         const token = floorToken(input.tokenSecret,{organizationId:input.context.organizationId,sessionId:input.context.sessionId,
@@ -538,16 +708,18 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
       }
     }
     const priority = channel.definition.priorityPolicy?.find(({sessionRoleId}) => sessionRoleId===active.session_role_id)?.priority ?? 0;
+    let expiredHolder = false;
     const current = (await client.query<{ request_id: string; holder_seat_assignment_id: string; priority: number; participant_id: string }>(`SELECT lease.request_id,
       lease.holder_seat_assignment_id,request.priority,assignment.participant_id FROM comms.floor_leases lease
       JOIN comms.floor_requests request ON request.organization_id=lease.organization_id AND request.channel_id=lease.channel_id AND request.request_id=lease.request_id
       JOIN runtime.seat_assignments assignment ON assignment.organization_id=lease.organization_id AND assignment.id=lease.holder_seat_assignment_id
-      WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active AND lease.expires_at>transaction_timestamp() FOR UPDATE`,
+      WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active AND lease.expires_at>clock_timestamp() FOR UPDATE`,
     [input.context.organizationId,input.channelId])).rows[0];
     if (current === undefined) {
       const expired = await client.query<{ request_id: string }>(`UPDATE comms.floor_leases SET active=false,released_at=transaction_timestamp(),version=version+1
-        WHERE organization_id=$1 AND channel_id=$2 AND active AND expires_at<=transaction_timestamp() RETURNING request_id`,
+        WHERE organization_id=$1 AND channel_id=$2 AND active AND expires_at<=clock_timestamp() RETURNING request_id`,
       [input.context.organizationId,input.channelId]);
+      expiredHolder = expired.rows.length > 0;
       for (const row of expired.rows) {
         await client.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE channel_id=$1 AND request_id=$2",
           [input.channelId,row.request_id]);
@@ -587,36 +759,71 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
     }
     const leaseMs=channel.definition.radio?.floorLeaseMs ?? 1000;
     const maxMs=channel.definition.radio?.maxTransmissionMs ?? leaseMs;
-    const clock=(await client.query<{now:Date}>("SELECT transaction_timestamp() AS now")).rows[0]?.now;
+    const clock=(await client.query<{now:Date}>("SELECT clock_timestamp() AS now")).rows[0]?.now;
     if(clock===undefined) throw new Error("Database clock is unavailable");
     const expiresAt=new Date(clock.getTime()+leaseMs),maxExpiresAt=new Date(clock.getTime()+maxMs);
     const token=floorToken(input.tokenSecret,{organizationId:input.context.organizationId,sessionId:input.context.sessionId,
       channelId:input.channelId,requestId:input.input.requestId,seatAssignmentId:active.id,authorityEpoch:input.context.authorityEpoch,
       maxExpiresAt:maxExpiresAt.toISOString()});
     await client.query(`INSERT INTO comms.floor_leases
-      (id,organization_id,session_id,channel_id,request_id,holder_seat_assignment_id,token_digest,authority_epoch,expires_at,max_expires_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[randomUUID(),input.context.organizationId,input.context.sessionId,input.channelId,
+      (id,organization_id,session_id,channel_id,request_id,holder_seat_assignment_id,token_digest,authority_epoch,expires_at,max_expires_at,provider_state)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending_enable')`,[randomUUID(),input.context.organizationId,input.context.sessionId,input.channelId,
       input.input.requestId,active.id,tokenDigest(token),input.context.authorityEpoch,expiresAt,maxExpiresAt]);
     await appendFloorEvent(client,input.context,input.channelId,input.input.requestId,"floor_lease.granted",
       {channelId:input.channelId,requestId:input.input.requestId,seatAssignmentId:active.id,expiresAt:expiresAt.toISOString()},input.correlationId);
     return { response: asLease(input.input.requestId,input.channelId,"granted",token,expiresAt,null),
+      revokePrevious: preempt || expiredHolder,
       enable:{organizationId:input.context.organizationId,sessionId:input.context.sessionId,channelId:input.channelId,
-        participantId:input.context.participantId} satisfies MediaParticipantInput,
-      disable: current===undefined?undefined:{organizationId:input.context.organizationId,sessionId:input.context.sessionId,
-        channelId:input.channelId,participantId:current.participant_id} satisfies MediaParticipantInput };
+        participantId:input.context.participantId} satisfies MediaParticipantInput };
   });
+  let effect = await prepare();
+  if (effect === null) {
+    if (!await reconcileFloorChannel(connection, scope, input.mediaAdapter)) {
+      throw authorizationError("MEDIA_UNAVAILABLE", "Previous Floor revocation is not confirmed.", input.correlationId);
+    }
+    effect = await prepare();
+  }
+  if (effect === null) throw authorizationError("MEDIA_UNAVAILABLE", "Floor reconciliation remains pending.", input.correlationId);
   try {
-    if (effect.disable !== undefined) await input.mediaAdapter.setTransmit(effect.disable,false);
-    if (effect.enable !== undefined) await input.mediaAdapter.setTransmit(effect.enable,true);
+    if (effect.enable !== undefined) {
+      if (effect.revokePrevious && !await reconcileFloorChannel(connection, scope, input.mediaAdapter, input.input.requestId)) throw new Error("Revocation pending");
+      await withOrganizationTransaction(connection, input.context.organizationId, async (client) => {
+        await assertFloorAuthority(client, input);
+        const live = await client.query(`SELECT 1 FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2
+          AND request_id=$3 AND active AND provider_state='pending_enable' AND expires_at>clock_timestamp()`,
+        [input.context.organizationId, input.channelId, input.input.requestId]);
+        if (live.rowCount !== 1) throw new Error("Floor expired before provider enable");
+      });
+      await input.mediaAdapter.setTransmit(effect.enable,true);
+      await withOrganizationTransaction(connection, input.context.organizationId, async (client) => {
+        await assertFloorAuthority(client, input);
+        const confirmed = await client.query(`UPDATE comms.floor_leases lease SET provider_state='enabled'
+          FROM comms.voice_channels channel WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.request_id=$3
+            AND lease.active AND lease.provider_state='pending_enable' AND lease.expires_at>clock_timestamp()
+            AND channel.organization_id=lease.organization_id AND channel.id=lease.channel_id AND channel.status='open'
+            AND EXISTS (SELECT 1 FROM comms.voice_grants grant_row JOIN runtime.seat_assignments assignment
+              ON assignment.organization_id=grant_row.organization_id AND assignment.id=grant_row.seat_assignment_id
+              WHERE grant_row.organization_id=lease.organization_id AND grant_row.channel_id=lease.channel_id
+                AND grant_row.seat_assignment_id=lease.holder_seat_assignment_id AND grant_row.can_transmit
+                AND grant_row.revoked_at IS NULL AND grant_row.valid_until>clock_timestamp() AND grant_row.authority_epoch=$4
+                AND grant_row.access_revision=$5 AND assignment.valid_to IS NULL)`,
+        [input.context.organizationId, input.channelId, input.input.requestId,input.context.authorityEpoch,input.context.accessRevision]);
+        if (confirmed.rowCount !== 1) throw new Error("Floor changed during provider enable");
+      });
+    }
     return effect.response;
   } catch {
-    if (effect.enable !== undefined) await expireFloorAfterProviderFailure(input);
+    if (effect.enable !== undefined) {
+      await expireFloorAfterProviderFailure(input, connection);
+      await reconcileFloorChannel(connection, scope, input.mediaAdapter);
+    }
     throw authorizationError("MEDIA_UNAVAILABLE","The media provider could not grant transmit permission.",input.correlationId);
   }
+  });
 }
 
-async function expireFloorAfterProviderFailure(input: FloorOperationInput): Promise<void> {
-  await withOrganizationTransaction(input.pool,input.context.organizationId,async(client)=>{
+async function expireFloorAfterProviderFailure(input: FloorOperationInput, connection: PoolClient): Promise<void> {
+  await withOrganizationTransaction(connection,input.context.organizationId,async(client)=>{
     await client.query(`UPDATE comms.floor_leases SET active=false,released_at=transaction_timestamp(),version=version+1
       WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3 AND active`,[input.context.organizationId,input.channelId,input.input.requestId]);
     await client.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE channel_id=$1 AND request_id=$2",
@@ -627,16 +834,18 @@ async function expireFloorAfterProviderFailure(input: FloorOperationInput): Prom
 }
 
 async function changeFloor(input: FloorOperationInput, release: boolean): Promise<FloorLeaseV1> {
-  const result=await withOrganizationTransaction(input.pool,input.context.organizationId,async(client)=>{
+  return withFloorChannelLock(input.pool,input.context.organizationId,input.channelId,async(connection)=>{
+  const result=await withOrganizationTransaction(connection,input.context.organizationId,async(client)=>{
     await assertFloorAuthority(client,input);
     const active=await assignment(client,input.context);
     const channel=await readChannel(client,input.context,input.channelId,"update");
     if(active===undefined||channel===undefined) throw authorizationError("TARGET_NOT_FOUND","The Floor Lease was not found.",input.correlationId);
-    const row=(await client.query<{ token_digest:string;expires_at:Date;max_expires_at:Date;active:boolean }>(`SELECT token_digest,expires_at,max_expires_at,active
+    const row=(await client.query<{ token_digest:string;expires_at:Date;max_expires_at:Date;active:boolean;live:boolean }>(`SELECT token_digest,expires_at,max_expires_at,active,
+      (expires_at>clock_timestamp() AND provider_state='enabled' AND authority_epoch=$5) AS live
       FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3 AND holder_seat_assignment_id=$4 FOR UPDATE`,
-    [input.context.organizationId,input.channelId,input.input.requestId,active.id])).rows[0];
+    [input.context.organizationId,input.channelId,input.input.requestId,active.id,input.context.authorityEpoch])).rows[0];
     const supplied=input.input.floorToken??"",actual=Buffer.from(tokenDigest(supplied)),expected=Buffer.from(row?.token_digest??"");
-    if(row===undefined||!row.active||actual.length!==expected.length||!timingSafeEqual(actual,expected)||row.expires_at<=new Date()){
+    if(row===undefined||!row.active||actual.length!==expected.length||!timingSafeEqual(actual,expected)||!row.live){
       throw authorizationError("FLOOR_TOKEN_EXPIRED","The Floor Lease is expired or invalid.",input.correlationId);
     }
     if(release){
@@ -648,19 +857,26 @@ async function changeFloor(input: FloorOperationInput, release: boolean): Promis
         {channelId:input.channelId,requestId:input.input.requestId},input.correlationId);
       return {response:asLease(input.input.requestId,input.channelId,"released",null,null,null),participantId:input.context.participantId};
     }
-    const clock=(await client.query<{now:Date}>("SELECT transaction_timestamp() AS now")).rows[0]?.now;
+    const grant = await client.query(`SELECT 1 FROM comms.voice_grants WHERE organization_id=$1 AND channel_id=$2
+      AND seat_assignment_id=$3 AND can_transmit AND revoked_at IS NULL AND valid_until>transaction_timestamp()
+      AND authority_epoch=$4 AND access_revision=$5`,
+    [input.context.organizationId,input.channelId,active.id,input.context.authorityEpoch,input.context.accessRevision]);
+    if(channel.status!=="open" || grant.rowCount!==1) throw authorizationError("ACCESS_REVOKED","The Voice grant is expired or revoked.",input.correlationId);
+    const clock=(await client.query<{now:Date}>("SELECT clock_timestamp() AS now")).rows[0]?.now;
     if(clock===undefined) throw new Error("Database clock is unavailable");
     const next=new Date(Math.min(clock.getTime()+(channel.definition.radio?.floorLeaseMs??1000),row.max_expires_at.getTime()));
-    if(next<=clock) throw authorizationError("FLOOR_TOKEN_EXPIRED","The maximum transmission time has elapsed.",input.correlationId);
+    if(row.expires_at<=clock||next<=clock) throw authorizationError("FLOOR_TOKEN_EXPIRED","The Floor Lease or maximum transmission time has elapsed.",input.correlationId);
     await client.query(`UPDATE comms.floor_leases SET expires_at=$4,version=version+1 WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3`,
       [input.context.organizationId,input.channelId,input.input.requestId,next]);
     return {response:asLease(input.input.requestId,input.channelId,"granted",supplied,next,null),participantId:undefined};
   });
   if(result.participantId!==undefined){
-    try{await input.mediaAdapter.setTransmit({organizationId:input.context.organizationId,sessionId:input.context.sessionId,
-      channelId:input.channelId,participantId:result.participantId},false);}catch{/* Lease is authoritative and already fails closed at expiry. */}
+    if(!await reconcileFloorChannel(connection,{...input.context,channelId:input.channelId,deploymentId:input.deploymentId},input.mediaAdapter)) {
+      throw authorizationError("MEDIA_UNAVAILABLE","Floor release was recorded, but provider revocation is pending retry.",input.correlationId);
+    }
   }
   return result.response;
+  });
 }
 
 export const renewFloor=(input:FloorOperationInput)=>changeFloor(input,false);

@@ -404,22 +404,26 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     test.setTimeout(240_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce",
       permissions: ["microphone"] });
+    await context.grantPermissions(["local-network-access"], { origin: "http://127.0.0.1:4173" });
     await installRtcProbe(context);
     await context.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
       ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.author}`
     } }));
     const page = await context.newPage();
     await page.goto(runtimeUrl());
-    await expect(page.getByRole("heading", { name: "Voice Channels" })).toBeVisible();
+    await page.getByRole("button", { name: "Voice channels", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Voice Channels", exact: true })).toBeVisible();
     await expect(page.getByText(/Push-to-talk: hold Space, Enter, or the Floor button/u)).toBeVisible();
     const openRoom = page.getByRole("article", { name: "Team open room" });
     const listenerContext = await browser.newContext({ permissions: ["microphone"] });
+    await listenerContext.grantPermissions(["local-network-access"], { origin: "http://127.0.0.1:4173" });
     await installRtcProbe(listenerContext);
     await listenerContext.route("http://127.0.0.1:4173/v1/**", async (route) => route.continue({ headers: {
       ...route.request().headers(), Authorization: `Bearer ${fixture.tokens.reviewer}`
     } }));
     const listener = await listenerContext.newPage();
     await listener.goto(runtimeUrl());
+    await listener.getByRole("button", { name: "Voice channels", exact: true }).click();
     const listenerRoom = listener.getByRole("article", { name: "Team open room" });
     const joinLatency = [], speechStartLatency = [];
     let network;
@@ -505,9 +509,11 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
     const packetLossPercent = network.packetsReceived + network.packetsLost === 0 ? null :
       round(network.packetsLost * 100 / (network.packetsReceived + network.packetsLost));
+    const loopbackMedia = ["127.0.0.1", "localhost", "::1"].includes(new URL(process.env.MEDIA_TEST_URL).hostname);
     const report = {
       contractId: "ps-545-institutional-media-v1", generatedAt: new Date().toISOString(),
-      topology: "Windows Chromium client to Linux Mint LiveKit over the representative segmented LAN",
+      topology: loopbackMedia ? "Chromium to disposable loopback LiveKit; no TURN/TLS or representative LAN claim" :
+        "Windows Chromium client to Linux Mint LiveKit over the representative segmented LAN",
       warmup: { join: 2, speechStart: 1 },
       samples: { join: joinLatency.length, speechStart: speechStartLatency.length, floor: floorLatency.length },
       observationsMs: { join: joinLatency.map(round), speechStart: speechStartLatency.map(round), floor: floorLatency.map(round) },
@@ -519,8 +525,9 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
       thresholds: { joinP95Ms: 3000, speechStartMedianMs: 300, floorP95Ms: 500, packetLossPercent: 1 }
     };
     await mkdir(evidenceRoot, { recursive: true });
-    await writeFile(`${evidenceRoot}/ps-545-institutional-media.json`, `${JSON.stringify(report, null, 2)}\n`);
-    expect(report.network.selectedProtocols).toContain("tls");
+    await writeFile(`${evidenceRoot}/${loopbackMedia ? "ps-250-local-media" : "ps-545-institutional-media"}.json`, `${JSON.stringify(report, null, 2)}\n`);
+    if (loopbackMedia) expect(report.network.selectedProtocols.some((protocol) => ["udp", "tcp"].includes(protocol))).toBe(true);
+    else expect(report.network.selectedProtocols).toContain("tls");
     expect(report.latencyMs.joinP95).toBeLessThanOrEqual(report.thresholds.joinP95Ms);
     expect(report.latencyMs.speechStartMedian).toBeLessThanOrEqual(report.thresholds.speechStartMedianMs);
     expect(report.latencyMs.floorP95).toBeLessThanOrEqual(report.thresholds.floorP95Ms);
@@ -529,7 +536,7 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
 
     await context.setOffline(true);
     await expect(radio.getByRole("button", { name: "Join voice" })).toBeDisabled();
-    await expect(page.getByText("Offline", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: "Plenum status: Offline", exact: true })).toBeVisible();
     await context.close();
   });
 

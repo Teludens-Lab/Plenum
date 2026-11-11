@@ -8,6 +8,8 @@ The reference outcome is the complete Fractured Order lifecycle at a meta level:
 
 ## Zero-gap decision rule
 
+2026-11-11 BA-04: Floor expiry/release now retain provider-disable work, retry durably and fence successor grants until revocation is confirmed. [BA-04 evidence](../acceptance/BA-04-floor-revocation.md) separates database/provider-injection tests from actual synthetic LiveKit browser enforcement and records migration 044. Additional Organization worker coverage remains BA-05/BA-11. Voice load correctness passed, but request p95 exceeded 500 ms; BA-12 capacity acceptance remains BLOCKED. Historical acceptance and PS-850 approval are unchanged.
+
 2026-11-10 BA-03: exact configured Origin checks now protect Studio upgrades/disclosure/updates and all common HTTP mutation families, with strict JSON media types and explicit cookie-free protocol clients. [BA-03 evidence](../acceptance/BA-03-browser-origins.md) distinguishes real Chromium cookie delivery from header-harness checks and records the conditional nature of audit finding 10. Historical acceptance and PS-850 approval are not expanded.
 
 2026-11-10 BA-02: audit finding 2 is addressed by address-only Command ingress, authenticated principal quotas after Session access checks, and a distinct workload-sized Session aggregate. [BA-02 evidence](../acceptance/BA-02-command-limits.md) separates local policy/concurrency/HTTP proof from unrun BA-12 capacity gates and deployed-proxy acceptance. Historical acceptance and final PS-850 obligations are unchanged.

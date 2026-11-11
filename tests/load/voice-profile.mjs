@@ -24,8 +24,8 @@ function run(command, args) {
 }
 
 function startMedia(name) {
-  run("docker", ["run", "--detach", "--rm", "--name", name, "-p", "17880:7880", "-p", "17881:7881", "-p", "17882:7882/udp",
-    mediaImage, "--dev", "--bind", "0.0.0.0", "--node-ip", "127.0.0.1", "--udp-port", "7882"]);
+  run("docker", ["run", "--detach", "--rm", "--name", name, "-p", "127.0.0.1:17880:7880", "-p", "127.0.0.1:17881:17881", "-p", "127.0.0.1:17882:17882/udp",
+    mediaImage, "--dev", "--bind", "0.0.0.0", "--node-ip", "127.0.0.1", "--udp-port", "17882", "--config-body", "rtc: {tcp_port: 17881}"]);
 }
 
 async function waitForMedia() {

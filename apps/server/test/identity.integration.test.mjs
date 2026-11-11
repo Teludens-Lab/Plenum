@@ -12,6 +12,7 @@ import * as Y from "yjs";
 import { canonicalizeJson } from "@plenum/event-contracts";
 import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
 import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
+import { verifyFloorRevocation } from "./floor-revocation.integration.mjs";
 import { compileRelease } from "@plenum/release-compiler";
 
 import {
@@ -346,7 +347,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/040_operational_security_reader.sql",
     "apps/server/migrations/041_form_attachments.sql",
     "apps/server/migrations/042_inject_schedule_provenance.sql",
-    "apps/server/migrations/043_oidc_browser_binding.sql"
+    "apps/server/migrations/043_oidc_browser_binding.sql",
+    "apps/server/migrations/044_floor_provider_reconciliation.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -2953,6 +2955,7 @@ test("PS-545-T02 VOICE-01..05/09/11/13/14 enforce grants, consent, immediate wit
     deploymentId:ids.deploymentA,tokenSecret:"fixture-floor-secret",mediaAdapter:media,
     input:{requestId,connectionId,expectedAuthorityEpoch:1,...(reason===undefined?{}:{reason})}});
   const lowRequest="25000000-0000-4000-8000-000000000020",lowConnection="25000000-0000-4000-8000-000000000021";
+  await verifyFloorRevocation(owner, floor, context, high);
   const low=await requestFloor(floor(context,lowRequest,lowConnection));
   assert.equal(low.status,"granted");
   assert.deepEqual(await requestFloor(floor(context,lowRequest,lowConnection)),low);

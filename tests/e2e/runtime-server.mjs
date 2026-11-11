@@ -11,6 +11,7 @@ import {
   createRuntimeHttpHandler,
   LocalObjectStore,
   startScheduledInjectWorker,
+  startFloorReconciliationWorker,
   withOrganizationTransaction
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
@@ -328,6 +329,8 @@ const stopInjectWorker = startScheduledInjectWorker(pool, fixture.organizationId
   const code = typeof error?.code === "string" && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : "unexpected";
   console.error(JSON.stringify({ event: "inject.schedule_failed", code, sessionId }));
 });
+const stopFloorWorker = startFloorReconciliationWorker(pool, fixture.organizationId, fixture.deploymentId, mediaAdapter,
+  () => console.error(JSON.stringify({ event: "media_provider.unavailable", category: "floor_reconciliation" })));
 let closing = false;
 async function close() {
   if (closing) return;
@@ -335,6 +338,7 @@ async function close() {
   const forcedExit = setTimeout(() => process.exit(0), 2_000);
   try {
     await stopInjectWorker();
+    await stopFloorWorker();
     await collaboration.close();
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

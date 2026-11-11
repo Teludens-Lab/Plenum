@@ -10,7 +10,7 @@ import {
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
-  startScheduledInjectWorker
+  startScheduledInjectWorker, startFloorReconciliationWorker
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { buildSecurityHeaders } from "./security-headers.mjs";
@@ -295,11 +295,16 @@ const stopInjectWorker = startScheduledInjectWorker(pool, oidc.organizationId, d
   telemetry.emit({ event: "inject.schedule_failed", severity: "error", outcome: "failed", correlationId: randomUUID(),
     category: code, ...(sessionId === undefined ? {} : { sessionId }) });
 });
+const stopFloorWorker = startFloorReconciliationWorker(pool, oidc.organizationId, deploymentId, mediaAdapter, () => {
+  telemetry.emit({ event: "media_provider.unavailable", severity: "error", outcome: "failed",
+    correlationId: randomUUID(), category: "floor_reconciliation" });
+});
 let closing = false;
 async function close() {
   if (closing) return; closing = true;
   clearTimeout(retentionStart); clearInterval(retentionInterval);
   await stopInjectWorker();
+  await stopFloorWorker();
   await collaboration.close();
   server.closeAllConnections();
   metricsServer.closeAllConnections();

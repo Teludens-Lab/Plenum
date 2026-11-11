@@ -31,6 +31,7 @@ export interface MediaProviderAdapter {
   readonly version: string;
   readonly digest: string;
   issueCredential(input: IssueMediaCredentialInput): Promise<MediaCredentialV1>;
+  /** Resolve only after provider acknowledgement; reject uncertain outcomes. Callers persist retries. */
   setTransmit(input: MediaParticipantInput, enabled: boolean): Promise<void>;
   removeParticipant(input: MediaParticipantInput): Promise<void>;
   closeChannel(input: Omit<MediaParticipantInput, "participantId">): Promise<void>;
@@ -85,7 +86,7 @@ export class LiveKitLocalMediaProviderAdapter implements MediaProviderAdapter {
     this.#apiKey = options.apiKey;
     this.#apiSecret = options.apiSecret;
     this.#adapterDigest = options.adapterDigest;
-    this.#rooms = new RoomServiceClient(apiUrl.toString(), options.apiKey, options.apiSecret);
+    this.#rooms = new RoomServiceClient(apiUrl.toString(), options.apiKey, options.apiSecret, { requestTimeout: 5, failover: false });
   }
 
   get digest(): string { return this.#adapterDigest; }
@@ -125,14 +126,17 @@ export class LiveKitLocalMediaProviderAdapter implements MediaProviderAdapter {
   }
 
   async setTransmit(input: MediaParticipantInput, enabled: boolean): Promise<void> {
-    await this.#rooms.updateParticipant(roomName(input), participantIdentity(input), {
+    try { await this.#rooms.updateParticipant(roomName(input), participantIdentity(input), {
       permission: {
         canSubscribe: true,
         canPublish: enabled,
         canPublishData: false,
         canPublishSources: enabled ? [TrackSource.MICROPHONE] : []
       }
-    });
+    }); } catch (error) {
+      // An absent radio participant cannot publish; enabling an absent participant still fails.
+      if (enabled || !(error instanceof ServerError) || error.status !== 404) throw error;
+    }
   }
 
   async removeParticipant(input: MediaParticipantInput): Promise<void> {

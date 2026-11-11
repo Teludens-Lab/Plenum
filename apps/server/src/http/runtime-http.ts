@@ -107,7 +107,7 @@ import { acceptPluginLicense, approvePluginArtifact, getPluginCatalog, importPlu
   installPluginArtifact, provisionPluginTrustRoot, registerPluginPublisher, revokePluginArtifact,
   submitPluginArtifact } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
-import { issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
+import { enforceVoiceChannelChange, issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
 import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport, importOrganizationArchive,
@@ -2011,12 +2011,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           command.operationType === "participant.reassign";
         if(options.mediaAdapter!==undefined && receipt.status==="accepted" && requiresMediaEnforcement) {
           try {
-            if(command.operationType==="voice_channel.leave") await options.mediaAdapter.removeParticipant({organizationId:context.organizationId,sessionId,
-              channelId:command.aggregateId,participantId:context.participantId});
-            if(command.operationType==="voice_channel.close") await options.mediaAdapter.closeChannel({organizationId:context.organizationId,sessionId,channelId:command.aggregateId});
-            if(command.operationType==="voice_channel.moderate"&&typeof command.payload.targetParticipantId==="string") {
-              const target={organizationId:context.organizationId,sessionId,channelId:command.aggregateId,participantId:command.payload.targetParticipantId};
-              if(command.payload.action==="remove") await options.mediaAdapter.removeParticipant(target); else await options.mediaAdapter.setTransmit(target,false);
+            if(["voice_channel.leave","voice_channel.close","voice_channel.moderate"].includes(command.operationType)) {
+              await enforceVoiceChannelChange(options.pool,context,command.aggregateId,options.deploymentId,options.mediaAdapter,
+                command.operationType==="voice_channel.leave"?context.participantId:
+                  typeof command.payload.targetParticipantId==="string"?command.payload.targetParticipantId:undefined);
             }
             if(command.operationType.startsWith("stage.")||command.operationType==="participant.reassign") {
               await reconcileRevokedVoiceParticipants(options.pool,context,options.mediaAdapter);

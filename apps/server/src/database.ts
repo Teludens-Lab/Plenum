@@ -10,12 +10,12 @@ export function createDatabasePool(connectionString: string): Pool {
 }
 
 export async function withOrganizationTransaction<T>(
-  pool: Pool,
+  pool: Pool | PoolClient,
   organizationId: string,
   operation: (client: PoolClient) => Promise<T>,
   isolation: "read committed" | "repeatable read" = "read committed"
 ): Promise<T> {
-  const client = await pool.connect();
+  const client = "release" in pool ? pool : await pool.connect();
   try {
     await client.query(isolation === "repeatable read" ? "BEGIN ISOLATION LEVEL REPEATABLE READ" : "BEGIN");
     await client.query(
@@ -33,7 +33,7 @@ export async function withOrganizationTransaction<T>(
     }
     throw error;
   } finally {
-    client.release();
+    if (client !== pool) client.release();
   }
 }
 

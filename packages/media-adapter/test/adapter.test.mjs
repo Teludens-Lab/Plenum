@@ -35,6 +35,8 @@ test("provider removal is idempotent when the participant or room is already gon
     const target = { organizationId: "org", sessionId: "session", channelId: "channel", participantId: "participant" };
     await assert.doesNotReject(adapter.removeParticipant(target));
     await assert.doesNotReject(adapter.closeChannel(target));
+    await assert.doesNotReject(adapter.setTransmit(target, false));
+    await assert.rejects(adapter.setTransmit(target, true));
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

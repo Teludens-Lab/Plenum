@@ -128,6 +128,7 @@ AWS object access is not a rotatable static key: the application receives tempor
 ## CI and release evidence
 
 - `.github/workflows/ci.yml` blocks on static, unit, integration, browser, accessibility, security, migration/package, and completeness gates.
+- Browser/accessibility jobs use the official Playwright Noble image pinned by amd64 digest; its version must match `@playwright/test` in the root lockfile. Update the image tag/digest together with Playwright. Browsers and OS libraries come from that image, so these jobs do not run apt or `playwright install`; `setup-node` still selects Node 24.22.1 and `npm ci` installs locked packages. PostgreSQL uses the job-network hostname `postgres`. Keep both suites blocking. [BA-05 CI follow-up](../acceptance/BA-05-tenant-jobs.md#ci-browser-setup-follow-up---2026-11-11) records the repeated runner DNS failure and replacement-environment checks.
 - `.github/workflows/security.yml` runs CodeQL and pull-request dependency review.
 - `.github/workflows/staging-dast.yml` accepts only the approved non-production staging origin. Its reviewed rules file classifies only the observed modern-application and intentional public-cache notices as informational; every new or unlisted alert remains a failing warning. The workflow passes that file explicitly to the pinned scanner because the action does not otherwise forward an INFO-only configuration.
 - `.github/workflows/release-provenance.yml` packages the built output and requests GitHub build and SBOM attestations.

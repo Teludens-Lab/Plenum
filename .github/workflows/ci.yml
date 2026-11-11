@@ -77,6 +77,10 @@ jobs:
 
   browser-accessibility:
     runs-on: ubuntu-latest
+    container:
+      # Keep browsers/system libraries aligned with the locked @playwright/test version; no apt bootstrap.
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:ee15712262f017b8157421b212b12099146645f44b1bc5c0514cbbe6a229b1d0
+      options: --ipc=host
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -96,7 +100,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      DATABASE_URL: postgres://postgres:plenum-ci@127.0.0.1:5432/plenum
+      DATABASE_URL: postgres://postgres:plenum-ci@postgres:5432/plenum
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.1.0
@@ -104,7 +108,6 @@ jobs:
           node-version: 24.22.1
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - if: matrix.suite == 'product'
         run: npm run test:e2e:product
       - if: matrix.suite == 'accessibility'

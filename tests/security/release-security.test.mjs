@@ -132,6 +132,13 @@ test("PS-810 CI and operational security controls fail closed without sensitive 
   ]);
   for (const gate of ["typecheck", "lint", "npm test", "test:integration", "test:e2e:product", "test:a11y",
     "test:security", "test:supply-chain", "test:deployment", "audit:product-completeness"]) assert.equal(ci.includes(gate), true);
+  const browserJob = ci.split("  browser-accessibility:")[1].split("  packaging-migrations:")[0];
+  const browserImage = browserJob.match(/image: mcr\.microsoft\.com\/playwright:v([^\s]+)-noble@sha256:[0-9a-f]{64}/u);
+  const lock = JSON.parse(await readFile(resolve(root, "package-lock.json"), "utf8"));
+  assert.equal(browserImage?.[1], lock.packages["node_modules/@playwright/test"].version,
+    "CI browser image must match the locked Playwright version");
+  assert.match(browserJob, /DATABASE_URL: postgres:\/\/[^\s]+@postgres:5432\/plenum/u);
+  assert.doesNotMatch(browserJob, /playwright install|apt-get|continue-on-error/u);
   assert.doesNotMatch(ci, /server -s3 -ip=0\.0\.0\.0(?:\s|$)/u);
   assert.match(ci, /server -s3 -ip=127\.0\.0\.1 -ip\.bind=0\.0\.0\.0 -s3\.ip\.bind=0\.0\.0\.0/u);
   assert.match(security, /codeql:\s+[\s\S]*?permissions:\s+[\s\S]*?actions: read[\s\S]*?contents: read/u);

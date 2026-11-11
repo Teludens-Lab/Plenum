@@ -10,7 +10,7 @@ import {
 
 export interface ObjectStore {
   putImmutable(key: string, bytes: Uint8Array, sha256: string): Promise<void>;
-  get(key: string): Promise<Uint8Array>;
+  get(key: string, signal?: AbortSignal): Promise<Uint8Array>;
   deleteIfDigest(key: string, sha256: string): Promise<boolean>;
 }
 
@@ -44,8 +44,8 @@ export class S3ObjectStore implements ObjectStore {
     return this.keyPrefix.length === 0 ? key : `${this.keyPrefix.replace(/\/$/u, "")}/${key}`;
   }
 
-  private async read(key: string): Promise<{ bytes: Uint8Array; etag?: string }> {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.objectKey(key) }));
+  private async read(key: string, signal?: AbortSignal): Promise<{ bytes: Uint8Array; etag?: string }> {
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.objectKey(key) }), signal ? { abortSignal: signal } : {});
     if (result.Body === undefined) throw new Error("S3 object body is missing");
     const bytes = await result.Body.transformToByteArray();
     if (result.Metadata?.sha256 !== undefined && result.Metadata.sha256 !== digest(bytes)) {
@@ -71,14 +71,15 @@ export class S3ObjectStore implements ObjectStore {
     }
   }
 
-  async get(key: string): Promise<Uint8Array> {
-    return (await this.read(key)).bytes;
+  async get(key: string, signal?: AbortSignal): Promise<Uint8Array> {
+    return (await this.read(key, signal)).bytes;
   }
 
   async deleteIfDigest(key: string, sha256: string): Promise<boolean> {
+    const signal = AbortSignal.timeout(10_000);
     let existing: { bytes: Uint8Array; etag?: string };
     try {
-      existing = await this.read(key);
+      existing = await this.read(key, signal);
     } catch (error) {
       if (statusCode(error) === 404) return false;
       throw error;
@@ -89,7 +90,7 @@ export class S3ObjectStore implements ObjectStore {
         Bucket: this.bucket,
         Key: this.objectKey(key),
         IfMatch: existing.etag
-      }));
+      }), { abortSignal: signal });
       return true;
     } catch (error) {
       if (statusCode(error) === 404 || statusCode(error) === 412) return false;

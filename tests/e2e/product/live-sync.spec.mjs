@@ -187,6 +187,13 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
     // Equivalent CSS viewport for a 1024x768 desktop at 200% zoom.
     await clients[0].page.setViewportSize({ width: 512, height: 384 });
     expect(await clients[0].page.evaluate(() => window.innerWidth)).toBe(512);
+    const beforeResponsiveCommit = await clients[0].page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+      sidebar: document.querySelector('.runtime-frame')?.getAttribute('data-sidebar'), wide: matchMedia('(min-width: 52.01rem)').matches }));
+    // Viewport resize completes before the matchMedia listener's React state update.
+    await expect(clients[0].page.locator('.runtime-frame')).toHaveAttribute('data-sidebar', 'closed');
+    await testInfo.attach('responsive-resize', { contentType: 'application/json', body: JSON.stringify({ before: beforeResponsiveCommit,
+      after: await clients[0].page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+        sidebar: document.querySelector('.runtime-frame')?.getAttribute('data-sidebar') })) }) });
     await expect(clients[0].page.getByRole("heading", { name: "Strategic Actions", exact: true, level: 1 })).toBeVisible();
     expect(await clients[0].page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await clients[0].page.screenshot({ path: testInfo.outputPath("ba06-desktop-200-percent.png") });

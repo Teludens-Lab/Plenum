@@ -1,6 +1,7 @@
 ﻿import assert from "node:assert/strict";
 import { UpdateParticipantRequest } from "@livekit/protocol";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { CreateBucketCommand, DeleteBucketCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -8,9 +9,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer as createHttpsServer } from "node:https";
 import { once } from "node:events";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
-import { discoverOrganizationJobs, withOrganizationTransaction, withRestrictedTransaction } from "../dist/index.js";
+import { discoverOrganizationJobs, S3ObjectStore, withOrganizationTransaction, withRestrictedTransaction } from "../dist/index.js";
 
 async function eventually(check, label, timeout = 20_000) {
   const deadline = Date.now() + timeout;
@@ -28,7 +29,13 @@ async function freePort() {
 }
 
 export async function verifyTenantJobs(owner, app) {
+  if (!process.env.S3_ENDPOINT) throw new Error('S3_ENDPOINT must target disposable storage for BA-07 production attachment tests');
   const deployment = randomUUID(), digest = `sha256:${"e".repeat(64)}`, children = [], calls = [];
+  const bucket = `plenum-ba07-${randomUUID()}`, keys = [], blockedDeletes = new Set();
+  const s3 = new S3Client({ endpoint: process.env.S3_ENDPOINT, region: "us-east-1", forcePathStyle: true,
+    credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "synthetic", secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "synthetic" } });
+  const store = new S3ObjectStore(s3, bucket);
+  await s3.send(new CreateBucketCommand({ Bucket: bucket }));
   let pendingDisable;
   const directory = await mkdtemp(join(tmpdir(), "plenum-ba05-tls-"));
   const cert = join(directory, "cert.pem"), key = join(directory, "key.pem");
@@ -42,6 +49,16 @@ export async function verifyTenantJobs(owner, app) {
       if (pendingDisable) { pendingDisable.entered.resolve(); await pendingDisable.resume.promise; }
     }
     if (!request.url.includes("/twirp/")) {
+      if (request.url.startsWith(`/${bucket}`)) {
+        if (request.method === 'DELETE' && blockedDeletes.has(request.url.split('?')[0])) {
+          response.writeHead(503, { 'content-type': 'application/xml' }); response.end('<Error><Code>ServiceUnavailable</Code></Error>'); return;
+        }
+        const forwarded = httpRequest(new URL(request.url, process.env.S3_ENDPOINT), { method: request.method, headers: request.headers }, upstream => {
+          response.writeHead(upstream.statusCode, upstream.headers); upstream.pipe(response);
+        });
+        forwarded.on('error', () => { response.writeHead(503); response.end(); });
+        forwarded.end(Buffer.concat(chunks)); return;
+      }
       response.writeHead(200, { "content-type": "application/xml" });
       response.end('<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>ba05</Name><IsTruncated>false</IsTruncated><KeyCount>0</KeyCount></ListBucketResult>'); return;
     }
@@ -99,6 +116,27 @@ export async function verifyTenantJobs(owner, app) {
     return id;
   };
   const delivered = async (id) => (await owner.query("SELECT state FROM runtime.inject_instances WHERE id=$1", [id])).rows[0].state !== 'scheduled';
+  const attachment = async (f, blocked = false, interrupted = false) => {
+    const id = randomUUID(), record = randomUUID(), policy = randomUUID(), bytes = Buffer.from('BA-07 synthetic attachment');
+    const sha256 = createHash('sha256').update(bytes).digest('hex'), key = `organizations/${f.org}/form-attachments/${id}/${sha256}`;
+    await owner.query(`INSERT INTO reporting.retention_policies(id,organization_id,policy_key,version,scope_type,scope_reference,period_days,legal_hold_behavior,expiry_action,archive_destination,approval_required,created_by)
+      VALUES ($1::uuid,$2,$1::text,1,'organization','*',1,'retain','delete','',false,$3)`, [policy, f.org, f.person]);
+    await owner.query(`INSERT INTO runtime.artifact_instances(id,organization_id,session_id,governing_release_id,artifact_type_key,workflow_key,form_version,creator_participant_id,state,payload,visible_role_ids,version)
+      VALUES ($1,$2,$3,$4,'synthetic','synthetic','1',$5,'draft','{}','{}',1)`, [record, f.org, f.session, f.release, f.participant]);
+    keys.push(key); await store.putImmutable(key, bytes, sha256);
+    if (blocked) blockedDeletes.add(`/${bucket}/${key}`);
+    if (interrupted) {
+      await owner.query(`CREATE FUNCTION runtime.ba07_interrupt_purge() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'BA-07 synthetic interrupted commit'; END $$`);
+      await owner.query(`CREATE TRIGGER ba07_interrupt_purge BEFORE UPDATE ON runtime.form_attachments FOR EACH ROW
+        WHEN (NEW.id='${id}'::uuid AND NEW.upload_state='purged') EXECUTE FUNCTION runtime.ba07_interrupt_purge()`);
+    }
+    await owner.query(`INSERT INTO runtime.form_attachments(id,organization_id,artifact_id,created_by,file_name,media_type,size_bytes,sha256,blob_key,retention_policy_id,scan_status,upload_state,attached_at,expires_at)
+      VALUES ($1,$2,$3,$4,'synthetic.txt','text/plain',$5,$6,$7,$8,'clean','attached',now(),now()-interval '1 second')`,
+    [id, f.org, record, f.person, bytes.length, sha256, key, policy]);
+    return { id, key, bytes, sha256 };
+  };
+  const attachmentState = async file => (await owner.query('SELECT upload_state FROM runtime.form_attachments WHERE id=$1', [file.id])).rows[0].upload_state;
+  const assertDeleted = file => assert.rejects(store.get(file.key), error => error.$metadata?.httpStatusCode === 404);
   const purged = async (id) => (await owner.query("SELECT bytes IS NULL AS purged FROM reporting.export_artifacts WHERE id=$1", [id])).rows[0].purged;
   const start = async (bootstrap) => {
     const port = await freePort(), metrics = await freePort(), publicUrl = `https://localhost:${port}`;
@@ -108,8 +146,8 @@ export async function verifyTenantJobs(owner, app) {
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_ENV: 'production', NODE_EXTRA_CA_CERTS: cert, PORT: String(port), METRICS_PORT: String(metrics),
         PLENUM_DEPLOYMENT_PROFILE: 'cloud', PLENUM_PUBLIC_BASE_URL: publicUrl, PLENUM_DEPLOYMENT_ID: deployment,
         PLENUM_RETENTION_ACTOR_PERSON_ID: bootstrap.person, OIDC_ISSUER: publicUrl, OIDC_PROVIDER_KEY: 'ba05', OIDC_ORGANIZATION_ID: bootstrap.org,
-        OIDC_CLIENT_ID: 'ba05', OIDC_REDIRECT_URI: `${publicUrl}/auth/callback`, S3_BUCKET: 'ba05', S3_ENDPOINT: providerUrl,
-        S3_ACCESS_KEY_ID: 'synthetic', S3_SECRET_ACCESS_KEY: 'synthetic', MEDIA_URL: 'wss://127.0.0.1', MEDIA_API_URL: providerUrl,
+        OIDC_CLIENT_ID: 'ba05', OIDC_REDIRECT_URI: `${publicUrl}/auth/callback`, S3_BUCKET: bucket, S3_ENDPOINT: providerUrl,
+        S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID ?? 'synthetic', S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY ?? 'synthetic', MEDIA_URL: 'wss://127.0.0.1', MEDIA_API_URL: providerUrl,
         MEDIA_API_KEY: 'synthetic', MEDIA_API_SECRET: 'synthetic-media-secret', MEDIA_ADAPTER_DIGEST: digest, FLOOR_TOKEN_SECRET: 'synthetic-floor-secret',
         INVITATION_DELIVERY_ENDPOINT: `${publicUrl}/delivery`, INVITATION_DELIVERY_BEARER_TOKEN: 'synthetic-delivery-token', INVITATION_DELIVERY_WEBHOOK_TOKEN: 'synthetic-webhook-token',
         CONTENT_SCANNER_HOST: '', NOTIFICATIONS_HOSTNAME: '' } });
@@ -132,13 +170,17 @@ export async function verifyTenantJobs(owner, app) {
   };
   try {
     const first = await seed(1), aInject = await schedule(first, 0), aArtifact = await artifact(first);
+    const aFile = await attachment(first);
     const service = await start(first);
     await eventually(async () => await delivered(aInject) && await purged(aArtifact), 'T01/T02 bootstrap scheduled work');
+    await eventually(async () => await attachmentState(aFile) === 'purged', 'BA-07-T02 bootstrap automatic attachment deletion');
+    await assertDeleted(aFile);
     await eventually(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE organization_id=$1 AND publication_status='pending'", [first.org])).rows[0].count) === 0,
       'BA-06-T02 production startup publishes pending Runtime deltas');
     service.child.send('advance');
     await eventually(async () => (await fetch(`${service.url}/healthz`)).status === 200, 'healthy completed discovery sweep');
     const second = await seed(20), bInject = await schedule(second, 0), bArtifact = await artifact(second), held = await artifact(second, true);
+    const bFile = await attachment(second);
     assert.equal(await delivered(bInject), false, 'unbound post-startup Organization is ineligible');
     assert.equal((await configure(service, second, 0, true, { actorPersonId: first.person })).status, 403, 'bootstrap principal cannot be reused across tenants');
     assert.equal((await configure(service, second, 0, true, { organizationId: first.org })).status, 422, 'caller cannot choose Organization');
@@ -146,6 +188,12 @@ export async function verifyTenantJobs(owner, app) {
     assert.equal((await configure(service, second)).status, 409, 'stale binding revision denied');
     const duplicate = await start(first);
     await eventually(async () => await delivered(bInject) && await purged(bArtifact), 'T01/T02 post-startup automatic jobs');
+    await eventually(async () => await attachmentState(bFile) === 'purged', 'BA-07-T02 second Organization automatic deletion');
+    await assertDeleted(bFile);
+    for (const [f, file] of [[first, aFile], [second, bFile]]) {
+      const audit = await owner.query("SELECT actor_person_id FROM evidence.audit_records WHERE organization_id=$1 AND action='retention.attachment_purged' AND target_ref=$2", [f.org, `attachment:${file.id}`]);
+      assert.deepEqual(audit.rows, [{ actor_person_id: f.person }], 'one purge audit under the tenant actor despite duplicate processes');
+    }
     await eventually(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE organization_id=$1 AND publication_status='pending'", [second.org])).rows[0].count) === 0,
       'BA-06-T02 additional Organization publishes automatically');
     assert.equal(await purged(held), false, 'legal hold preserves bytes');
@@ -165,7 +213,20 @@ export async function verifyTenantJobs(owner, app) {
     // Revoke before creating new work. Restart must not recreate a disabled legacy binding.
     assert.equal((await configure(service, first, 1, false)).status, 200);
     const denied = await schedule(first, 1);
+    const deniedFile = await attachment(first), failedFile = await attachment(second, true), interruptedFile = await attachment(second, false, true);
+    await eventually(async () => await attachmentState(failedFile) === 'purge_pending' && await attachmentState(interruptedFile) === 'purge_pending', 'BA-07-T03 durable journals survive storage and database failures');
+    await eventually(async () => { try { await store.get(interruptedFile.key); return false; } catch (error) { return error.$metadata?.httpStatusCode === 404; } }, 'bytes deleted before simulated commit failure');
+    await eventually(() => service.logs.concat(duplicate.logs).some(line => line.includes('organization_jobs_attachments')), 'attachment failure is observable');
+    assert.deepEqual(Buffer.from(await store.get(failedFile.key)), failedFile.bytes);
+    const attachmentHold = randomUUID();
+    await owner.query(`INSERT INTO reporting.legal_hold_events(id,organization_id,hold_id,action,scope_type,scope_reference,reason,recorded_by)
+      VALUES ($1,$2,$1,'placed','organization','*','BA-07 synthetic hold',$3)`, [attachmentHold, second.org, second.person]);
+    const heldFile = await attachment(second);
     await stop(duplicate); await stop(service);
+    assert.equal(await attachmentState(deniedFile), 'attached', 'disabled tenant retains bytes');
+    await owner.query('DROP TRIGGER ba07_interrupt_purge ON runtime.form_attachments');
+    await owner.query('DROP FUNCTION runtime.ba07_interrupt_purge()');
+    blockedDeletes.clear();
     const backlog = async (f, count) => {
       await owner.query(`WITH sequence AS (
         UPDATE evidence.session_sequences SET next_sequence=next_sequence+$3 WHERE organization_id=$1 AND session_id=$2
@@ -180,6 +241,18 @@ export async function verifyTenantJobs(owner, app) {
     await backlog(first, 1); await backlog(second, 205);
     await owner.query("UPDATE runtime.session_authorities SET status='fenced' WHERE session_id=$1", [second.session]);
     const restarted = await start(first);
+    await owner.query("UPDATE runtime.form_attachments SET retention_attempted_at=now()-interval '31 seconds' WHERE organization_id=$1", [second.org]);
+    await eventually(async () => (await owner.query('SELECT retention_attempted_at>now()-interval \'5 seconds\' AS attempted FROM runtime.form_attachments WHERE id=$1', [heldFile.id])).rows[0].attempted, 'held attachment visited automatically after restart');
+    assert.deepEqual(Buffer.from(await store.get(heldFile.key)), heldFile.bytes, 'hold preserves stored bytes');
+    assert.deepEqual(Buffer.from(await store.get(failedFile.key)), failedFile.bytes, 'hold also preserves a pending deletion');
+    await owner.query(`INSERT INTO reporting.legal_hold_events(id,organization_id,hold_id,action,scope_type,scope_reference,reason,recorded_by)
+      VALUES ($1,$2,$3,'released','organization','*','BA-07 synthetic hold release',$4)`, [randomUUID(), second.org, attachmentHold, second.person]);
+    await owner.query("UPDATE runtime.form_attachments SET retention_attempted_at=now()-interval '31 seconds' WHERE organization_id=$1", [second.org]);
+    await eventually(async () => (await Promise.all([heldFile, failedFile, interruptedFile].map(attachmentState))).every(state => state === 'purged'), 'BA-07-T03 restart recovers failed and interrupted deletions after hold release');
+    for (const file of [heldFile, failedFile, interruptedFile]) {
+      await assertDeleted(file);
+      assert.equal((await owner.query("SELECT count(*)::int AS n FROM evidence.audit_records WHERE action='retention.attachment_purged' AND target_ref=$1", [`attachment:${file.id}`])).rows[0].n, 1);
+    }
     assert.equal((await owner.query('SELECT enabled,revision FROM operations.organization_job_bindings WHERE organization_id=$1', [first.org])).rows[0].enabled, false);
     const advanced = once(restarted.child, 'message'); restarted.child.send('advance'); await advanced;
     await eventually(async () => (await fetch(`${restarted.url}/healthz`)).status === 200, 'BA-06 discovery completed with fenced Session');
@@ -256,6 +329,8 @@ export async function verifyTenantJobs(owner, app) {
     pendingDisable?.resume.resolve();
     for (const service of children) if (service.child.exitCode === null) { service.child.kill(); await once(service.child, 'exit'); }
     provider.closeAllConnections(); await new Promise(resolve => provider.close(resolve));
+    for (const key of keys) await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    await s3.send(new DeleteBucketCommand({ Bucket: bucket })); s3.destroy();
     assert.ok(directory.startsWith(join(tmpdir(), "plenum-ba05-tls-")));
     await rm(directory, { recursive: true, force: true });
   }

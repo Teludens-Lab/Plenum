@@ -13,6 +13,7 @@ import { canonicalizeJson } from "@plenum/event-contracts";
 import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
 import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
 import { verifyTenantJobs } from "./tenant-jobs.integration.mjs";
+import { availableFormAttachmentSql } from "../dist/reporting/form-retention.js";
 import { verifyFloorRevocation } from "./floor-revocation.integration.mjs";
 import { visibleClosedVoiceChannelIds } from "../dist/comms/voice.js";
 import { compileRelease } from "@plenum/release-compiler";
@@ -351,7 +352,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/042_inject_schedule_provenance.sql",
     "apps/server/migrations/043_oidc_browser_binding.sql",
     "apps/server/migrations/044_floor_provider_reconciliation.sql",
-    "apps/server/migrations/045_organization_job_bindings.sql"
+    "apps/server/migrations/045_organization_job_bindings.sql",
+    "apps/server/migrations/046_attachment_retention_retry.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -3296,6 +3298,45 @@ test("PS-830-T04/T05 bounded Forms and authoritative expressions publish, valida
   const downloadedAttachment = await downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore);
   assert.deepEqual(Array.from(downloadedAttachment.bytes), Array.from(upload.bytes));
   assert.equal(downloadedAttachment.fileName, "proof.txt");
+  const originalExpiry = (await owner.query("SELECT expires_at FROM runtime.form_attachments WHERE id=$1", [upload.attachmentId])).rows[0].expires_at;
+  const boundary = await owner.query(`SELECT ${availableFormAttachmentSql} AS available FROM
+    (SELECT 'attached' AS upload_state, statement_timestamp()+offset_us*interval '1 microsecond' AS expires_at
+      FROM unnest(ARRAY[-1,0,1]) offset_us) attachment`);
+  assert.deepEqual(boundary.rows.map(row => row.available), [false, false, true], 'BA-07-T03 exact expiry uses database time');
+  const handler = createRuntimeHttpHandler({ pool: app, deploymentId: ids.deploymentA, objectStore,
+    authenticate: async () => fileInput.principal, publicBaseUrl: 'https://plenum.example' });
+  const http = createServer((request, response) => void handler(request, response)).listen(0, '127.0.0.1');
+  await once(http, 'listening');
+  const downloadUrl = `http://127.0.0.1:${http.address().port}/v1/sessions/${fileInput.sessionId}/runtime-artifacts/${fileRecord}/attachments/${upload.attachmentId}?activeSessionRoleId=${fileInput.activeSessionRoleId}`;
+  try {
+    const response = await fetch(downloadUrl, { headers: { 'x-device-id': fileInput.deviceId } });
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store'); await response.arrayBuffer();
+    await owner.query("UPDATE runtime.form_attachments SET expires_at=clock_timestamp() WHERE id=$1", [upload.attachmentId]);
+    assert.deepEqual(await listFormAttachments(fileInput), [], "BA-07-T01 expired metadata is omitted before cleanup");
+    await assert.rejects(downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore),
+      (error) => error.envelope?.error?.code === "TARGET_NOT_FOUND");
+    assert.equal(JSON.parse(new TextDecoder().decode((await exportRuntimeArtifact({ ...fileInput, format: "json" })).bytes)).attachmentManifest, undefined);
+    const accessHold = await placeLegalHold(app, principalD, { scopeType: 'organization', scopeReference: '*', reason: 'BA-07 held access policy' }, randomUUID());
+    assert.deepEqual(await listFormAttachments(fileInput), [], 'a hold preserves bytes without restoring expired metadata');
+    await assert.rejects(downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore), error => error.envelope?.error?.code === 'TARGET_NOT_FOUND');
+    assert.equal(JSON.parse(new TextDecoder().decode((await exportRuntimeArtifact({ ...fileInput, format: 'json' })).bytes)).attachmentManifest, undefined);
+    await owner.query("UPDATE runtime.form_attachments SET expires_at=$2 WHERE id=$1", [upload.attachmentId, originalExpiry]);
+    assert.equal((await listFormAttachments(fileInput))[0].available, true, 'unexpired held clean files remain accessible');
+    assert.deepEqual(Array.from((await downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, objectStore)).bytes), Array.from(upload.bytes));
+    await releaseLegalHold(app, principalD, accessHold.holdId, 'BA-07 access policy proof complete', randomUUID());
+    await owner.query("UPDATE runtime.form_attachments SET expires_at=clock_timestamp() WHERE id=$1", [upload.attachmentId]);
+    const expired = await fetch(downloadUrl, { headers: { 'x-device-id': fileInput.deviceId } });
+    assert.equal(expired.status, 404, 'preexisting application URL rechecks expiry on every download'); await expired.arrayBuffer();
+  } finally { http.closeAllConnections(); await new Promise(resolve => http.close(resolve)); }
+  await owner.query("UPDATE runtime.form_attachments SET expires_at=$2 WHERE id=$1", [upload.attachmentId, originalExpiry]);
+  await assert.rejects(downloadFormAttachment({ ...fileInput, attachmentId: upload.attachmentId }, {
+    ...objectStore, async get(key) {
+      const bytes = await objectStore.get(key);
+      await owner.query("UPDATE runtime.form_attachments SET expires_at=clock_timestamp() WHERE id=$1", [upload.attachmentId]);
+      return bytes;
+    }
+  }), error => error.envelope?.error?.code === 'TARGET_NOT_FOUND', 'expiry during storage I/O prevents byte disclosure');
+  await owner.query("UPDATE runtime.form_attachments SET expires_at=$2 WHERE id=$1", [upload.attachmentId, originalExpiry]);
   await assert.rejects(uploadFormAttachment(fileInput, objectStore, cleanScanner, { ...upload, bytes: new TextEncoder().encode("Different content") }, ids.deploymentA),
     (error) => error.envelope?.error?.code === "IDEMPOTENCY_COLLISION");
   const unavailable = fileUpload();
@@ -3354,7 +3395,23 @@ test("PS-830-T04/T05 bounded Forms and authoritative expressions publish, valida
   assert.equal((await listFormAttachments(largeInput)).reduce((sum, file) => sum + file.sizeBytes, 0), 100_000_000);
   await assert.rejects(uploadFormAttachment(largeInput, objectStore, cleanScanner, { ...fileUpload(new Uint8Array([65])),
     command: { ...command("artifact.attach_file", largeRecord, {}, 6, accessIds.deviceE), activeSessionRoleId: id(2) } }, ids.deploymentA), (error) => error.envelope?.error?.code === "TOO_LARGE");
-  const held = await placeLegalHold(app, principalD, { scopeType: "organization", scopeReference: "*", reason: "Synthetic attachment retention proof" }, randomUUID());
+  const deleting = Promise.withResolvers(), finishDelete = Promise.withResolvers();
+  await owner.query("UPDATE runtime.form_attachments SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [upload.attachmentId]);
+  const deletingFile = enforceFormAttachmentRetention(app, principalD, {
+    async deleteIfDigest() { deleting.resolve(); await finishDelete.promise; throw new Error('Synthetic storage failure during hold race'); }
+  }, randomUUID());
+  await Promise.race([deleting.promise, deletingFile.then(() => { throw new Error('Hold-race fixture must reach deletion'); })]);
+  const placingHold = placeLegalHold(app, principalD, { scopeType: "organization", scopeReference: "*", reason: "Synthetic attachment retention proof" }, randomUUID());
+  try {
+    const deadline = Date.now() + 5_000;
+    while (!(await owner.query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted LIMIT 1")).rowCount) {
+      assert.ok(Date.now() < deadline, 'hold placement must serialize with in-flight deletion');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  } finally { finishDelete.resolve(); }
+  assert.equal((await deletingFile).failed, 1);
+  const held = await placingHold;
+  assert.deepEqual(Array.from(await objectStore.get((await owner.query('SELECT blob_key FROM runtime.form_attachments WHERE id=$1', [upload.attachmentId])).rows[0].blob_key)), Array.from(upload.bytes));
   const future = new Date(Date.now() + 2 * 86_400_000);
   assert.deepEqual(await enforceFormAttachmentRetention(app, principalD, objectStore, randomUUID(), future), { purged: 0, held: 10, failed: 0, batchFull: true });
   await releaseLegalHold(app, principalD, held.holdId, "Synthetic proof complete", randomUUID());
@@ -4537,4 +4594,4 @@ test("PS-810 stores immutable security evidence without granting application rea
   }
 });
 
- test("BA-05-T01/T02/T03 production startup discovers tenant authority and preserves scheduled work isolation", async () => { await verifyTenantJobs(owner, app); });
+ test("BA-05-T01/T02/T03 BA-07-T02/T03 production startup discovers tenant authority and recovers journaled attachment deletion", async () => { await verifyTenantJobs(owner, app); });

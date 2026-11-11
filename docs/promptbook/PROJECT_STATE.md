@@ -1,5 +1,9 @@
 # Project state
 
+## BA-07 automatic Form attachment expiry - 2026-11-11
+
+Finding 6 remediation connects the existing deletion journal to BA-05's authorized tenant worker and filters expired files at list/download/rescan/Form-export boundaries, including a second check after download I/O. Migration 046 adds durable bounded retry scheduling. [BA-07 evidence](../ps-520-verification.md#ba-07-automatic-form-attachment-expiry-2026-11-11) separates local database/S3/production-entrypoint proof from release approval. On 2026-11-11 the owner explicitly approved expiry blocking ordinary access even under a hold, while holds preserve bytes and metadata. PS-830 owner acceptance, PS-840 checkpoint exception, PS-842 decisions and PS-850 scope remain unchanged. No commit, push or deployment. Next implementation task: BA-08; BA-11 deployment coverage remains separate.
+
 ## BA-06 Runtime publication and idle synchronization - 2026-11-11
 
 Finding 4's two missing links are addressed separately: BA-05's authorized Organization worker publishes bounded ordered outbox batches, and Runtime consumes the existing authorized SSE/polling contract automatically. The focused production browser flow covers two idle recipients, a hidden recipient, reconnect, expired cursors, reassignment and delayed-response revocation. [BA-06 handoff](../acceptance/BA-06-live-sync.md) records current gates, bounds and evidence limits. No migration, dependency, commit, push or deployment. PS-830 owner acceptance, PS-840's checkpoint exception, PS-842 decisions and PS-850 approval scope remain unchanged. BA-11 deployed multi-Organization proof and BA-12 load/voice latency gates remain open. Next: BA-07; the latest user sequence assigns live synchronization to BA-06, superseding the older attachment/outbox numbering in the BA-05 record.

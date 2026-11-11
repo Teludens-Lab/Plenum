@@ -267,12 +267,12 @@ server.on("upgrade", (request, socket, head) => void (async () => {
 server.listen(Number(process.env.PORT ?? 8080), "0.0.0.0");
 metricsServer.listen(Number(process.env.METRICS_PORT ?? 9090), "0.0.0.0");
 const organizationJobs = startOrganizationJobs(jobPool, deploymentId,
-  { organizationId: oidc.organizationId, actorPersonId: retentionActorPersonId }, mediaAdapter, async (job) => {
+  { organizationId: oidc.organizationId, actorPersonId: retentionActorPersonId }, mediaAdapter, new S3ObjectStore(s3, s3Bucket), async (job) => {
     const correlationId = randomUUID();
-    const event = job === "retention" ? "retention.enforcement_failed" : job === "inject" ? "inject.schedule_failed"
+    const event = job === "retention" || job === "attachments" ? "retention.enforcement_failed" : job === "inject" ? "inject.schedule_failed"
       : job === "floor" ? "media_provider.unavailable" : "service.request_failed";
     telemetry.emit({ event, severity: "error", outcome: "failed", correlationId, category: "organization_jobs_" + job });
-    if (job === "retention") await recordOperationalSecurityEvent(jobPool, { deploymentId, eventType: event,
+    if (job === "retention" || job === "attachments") await recordOperationalSecurityEvent(jobPool, { deploymentId, eventType: event,
       severity: "error", outcome: "failed", correlationId, category: "scheduled_run" })
       .catch(() => telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
         correlationId, category: "retention_enforcement" }));

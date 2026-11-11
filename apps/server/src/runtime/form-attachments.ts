@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { CommandEnvelopeV1, FormAttachmentV1 } from "@plenum/event-contracts";
 import { FORM_LIMITS } from "@plenum/simulation-schema";
-import { formRetentionPolicy } from "../reporting/form-retention.js";
+import { activeOrganizationHoldSql, availableFormAttachmentSql, formRetentionPolicy } from "../reporting/form-retention.js";
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
@@ -13,6 +13,7 @@ import { processSessionCommand, validateCommandEnvelope } from "./commands/proce
 import { requireCurrentOrganizationRole } from "../research/evidence.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import type { Pool } from "pg";
+import { assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -34,7 +35,7 @@ export async function listFormAttachments(input: RuntimeProjectionInput & { arti
   return withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
     const context = await resolve(client, input);
     await authorizeArtifactFile(client, context, input.artifactId, input.correlationId);
-    const rows = await client.query<AttachmentRow>("SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND upload_state='attached' ORDER BY created_at,id",
+    const rows = await client.query<AttachmentRow>(`SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND ${availableFormAttachmentSql} ORDER BY created_at,id`,
       [context.organizationId, input.artifactId]);
     return rows.rows.map((row) => ({ id: row.id, fileName: row.file_name, mediaType: row.media_type, sizeBytes: row.size_bytes, sha256: row.sha256,
       scanStatus: row.scan_status, available: row.scan_status === "clean", canRetryScan: row.scan_status === "failed" && row.created_by === context.principalId,
@@ -46,7 +47,7 @@ export async function downloadFormAttachment(input: RuntimeProjectionInput & { a
   const row = await withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
     const context = await resolve(client, input);
     await authorizeArtifactFile(client, context, input.artifactId, input.correlationId);
-    const result = await client.query<AttachmentRow>(`SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND id=$3 AND upload_state='attached' AND scan_status='clean'`,
+    const result = await client.query<AttachmentRow>(`SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND id=$3 AND ${availableFormAttachmentSql} AND scan_status='clean'`,
       [context.organizationId, input.artifactId, input.attachmentId]);
     if (!result.rows[0]) throw authorizationError("TARGET_NOT_FOUND", "The clean attachment was not found.", input.correlationId);
     return result.rows[0];
@@ -57,7 +58,7 @@ export async function downloadFormAttachment(input: RuntimeProjectionInput & { a
   // Recheck after external I/O so revoked access cannot complete a slow download.
   await withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
     const context = await resolve(client, input); await authorizeArtifactFile(client, context, input.artifactId, input.correlationId);
-    const available = await client.query("SELECT 1 FROM runtime.form_attachments WHERE organization_id=$1 AND id=$2 AND upload_state='attached' AND scan_status='clean'", [context.organizationId, row.id]);
+    const available = await client.query(`SELECT 1 FROM runtime.form_attachments WHERE organization_id=$1 AND id=$2 AND ${availableFormAttachmentSql} AND scan_status='clean'`, [context.organizationId, row.id]);
     if (!available.rowCount) throw authorizationError("TARGET_NOT_FOUND", "The attachment is no longer available.", input.correlationId);
   });
   return { bytes, fileName: row.file_name, mediaType: row.media_type };
@@ -134,7 +135,7 @@ export async function rescanFormAttachment(input: RuntimeProjectionInput & { art
   if (command.operationType !== "artifact.rescan_file" || command.aggregateId !== input.artifactId) throw authorizationError("INVALID_COMMAND", "Choose the attachment rescan Command for this record.", input.correlationId);
   const row = await withOrganizationTransaction(input.pool, input.principal.organizationId, async (client) => {
     const context = await resolve(client, input); await authorizeArtifactFile(client, context, input.artifactId, input.correlationId);
-    const rows = await client.query<AttachmentRow>("SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND id=$3 AND created_by=$4 AND upload_state='attached'",
+    const rows = await client.query<AttachmentRow>(`SELECT * FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND id=$3 AND created_by=$4 AND ${availableFormAttachmentSql}`,
       [context.organizationId, input.artifactId, input.attachmentId, context.principalId]);
     if (!rows.rows[0]) throw authorizationError("TARGET_NOT_FOUND", "The attachment was not found.", input.correlationId);
     return rows.rows[0];
@@ -146,19 +147,29 @@ export async function rescanFormAttachment(input: RuntimeProjectionInput & { art
 }
 
 /** Ten rows per call. The durable purge journal allows recovery after storage deletion or database failure. */
-export async function enforceFormAttachmentRetention(pool: Pool, principal: AuthenticatedPrincipal, store: ObjectStore, correlationId: string, now = new Date()) {
+export async function enforceFormAttachmentRetention(pool: Pool, principal: AuthenticatedPrincipal | OrganizationJobAuthority, store: ObjectStore, correlationId: string, now = new Date(), signal?: AbortSignal) {
   if (!Number.isFinite(now.getTime())) throw authorizationError("VALIDATION_FAILED", "Retention needs a valid server time.", correlationId);
+  const scheduled = "deploymentId" in principal;
+  const actorPersonId = scheduled ? principal.actorPersonId : principal.principalId;
+  const authorize = (client: PoolClient) => scheduled ? assertOrganizationJobAuthority(client, principal)
+    : requireCurrentOrganizationRole(client, principal, "admin", correlationId);
   const ids = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
-    const rows = await client.query<{ id: string }>(`SELECT id FROM runtime.form_attachments WHERE organization_id=$1 AND upload_state<>'purged'
+    await authorize(client);
+    if (scheduled) now = (await client.query<{ now: Date }>("SELECT statement_timestamp() AS now")).rows[0]!.now;
+    const rows = await client.query<{ id: string }>(`WITH candidates AS (SELECT id FROM runtime.form_attachments WHERE organization_id=$1 AND upload_state<>'purged'
       AND (expires_at<=$2 OR upload_state='purge_pending' OR (upload_state IN ('pending','store_failed') AND created_at<$2::timestamptz-interval '24 hours'))
-      ORDER BY created_at,id LIMIT 10`, [principal.organizationId, now]);
+      AND (NOT $3 OR retention_attempted_at IS NULL OR retention_attempted_at<=$2::timestamptz-interval '30 seconds')
+      ORDER BY CASE WHEN $3 THEN retention_attempted_at END NULLS FIRST,created_at,id LIMIT 10 FOR UPDATE SKIP LOCKED)
+      UPDATE runtime.form_attachments attachment SET retention_attempted_at=$2 FROM candidates
+      WHERE attachment.organization_id=$1 AND attachment.id=candidates.id RETURNING attachment.id`, [principal.organizationId, now, scheduled]);
     return rows.rows.map(({ id }) => id);
   });
   let purged = 0, held = 0, failed = 0;
+  const deadline = Date.now() + 5_000;
   for (const id of ids) {
+    if (signal?.aborted || scheduled && Date.now() >= deadline) break;
     const prepared = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-      await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+      await authorize(client);
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`attachment-retention:${principal.organizationId}`]);
       if (await organizationHasHold(client, principal.organizationId)) return false;
       const result = await client.query("UPDATE runtime.form_attachments SET upload_state='purge_pending' WHERE organization_id=$1 AND id=$2 AND upload_state<>'purged' RETURNING id", [principal.organizationId, id]);
@@ -167,7 +178,7 @@ export async function enforceFormAttachmentRetention(pool: Pool, principal: Auth
     if (!prepared) { held++; continue; }
     try {
       const outcome = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-        await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
+        await authorize(client);
         // The object-store API has no transactional delete. Serialize with hold placement through deletion;
         // the previously committed purge_pending row survives any ambiguous storage/commit outcome.
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`attachment-retention:${principal.organizationId}`]);
@@ -176,7 +187,7 @@ export async function enforceFormAttachmentRetention(pool: Pool, principal: Auth
         const row = rows.rows[0]; if (!row) return "unchanged";
         const deleted = await store.deleteIfDigest(row.blob_key, row.sha256);
         if (!deleted) {
-          try { await store.get(row.blob_key); throw new Error("Attachment digest mismatch prevents deletion"); }
+          try { await store.get(row.blob_key, AbortSignal.timeout(10_000)); throw new Error("Attachment digest mismatch prevents deletion"); }
           catch (error) {
             const info = error as { code?: string; name?: string; $metadata?: { httpStatusCode?: number } };
             if (info.code !== "ENOENT" && info.name !== "NoSuchKey" && info.$metadata?.httpStatusCode !== 404) throw error;
@@ -184,17 +195,24 @@ export async function enforceFormAttachmentRetention(pool: Pool, principal: Auth
         }
         await client.query("UPDATE runtime.form_attachments SET upload_state='purged',purged_at=$1 WHERE organization_id=$2 AND id=$3", [now, principal.organizationId, id]);
         await client.query(`INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
-          VALUES ($1,$2,$3,'retention.attachment_purged',$4,$5::jsonb)`, [randomUUID(), principal.organizationId, principal.principalId, `attachment:${id}`, JSON.stringify({ correlationId, sha256: row.sha256, retentionPolicyId: row.retention_policy_id })]);
+          VALUES ($1,$2,$3,'retention.attachment_purged',$4,$5::jsonb)`, [randomUUID(), principal.organizationId, actorPersonId, `attachment:${id}`, JSON.stringify({ correlationId, sha256: row.sha256, retentionPolicyId: row.retention_policy_id })]);
         return "purged";
       });
       if (outcome === "purged") purged++; else if (outcome === "held") held++;
     } catch { failed++; }
   }
+  if (scheduled) {
+    const unresolved = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+      await authorize(client);
+      if (await organizationHasHold(client, principal.organizationId)) return false;
+      return (await client.query("SELECT 1 FROM runtime.form_attachments WHERE organization_id=$1 AND upload_state='purge_pending' LIMIT 1", [principal.organizationId])).rowCount === 1;
+    });
+    if (unresolved) failed = Math.max(failed, 1);
+  }
   return { purged, held, failed, batchFull: ids.length === 10 };
 }
 
 async function organizationHasHold(client: PoolClient, organizationId: string): Promise<boolean> {
-  const rows = await client.query(`SELECT 1 FROM reporting.legal_hold_events placed WHERE organization_id=$1 AND action='placed' AND scope_type='organization'
-    AND NOT EXISTS (SELECT 1 FROM reporting.legal_hold_events released WHERE released.organization_id=placed.organization_id AND released.hold_id=placed.hold_id AND released.action='released') LIMIT 1`, [organizationId]);
+  const rows = await client.query(`${activeOrganizationHoldSql} LIMIT 1`, [organizationId]);
   return rows.rowCount === 1;
 }

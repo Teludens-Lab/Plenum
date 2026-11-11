@@ -2,6 +2,14 @@ import type { PoolClient } from "pg";
 import type { CoreDesignV1 } from "@plenum/simulation-schema";
 import { authorizationError } from "../errors.js";
 
+export const activeOrganizationHoldSql = `SELECT 1 FROM reporting.legal_hold_events placed
+  WHERE placed.organization_id=$1 AND placed.action='placed' AND placed.scope_type='organization'
+  AND NOT EXISTS (SELECT 1 FROM reporting.legal_hold_events released
+    WHERE released.organization_id=placed.organization_id AND released.hold_id=placed.hold_id AND released.action='released')`;
+
+// Owner-approved BA-07 policy: a legal hold preserves bytes, not expired participant access.
+export const availableFormAttachmentSql = "upload_state='attached' AND expires_at>statement_timestamp()";
+
 export async function formRetentionPolicy(client: PoolClient, organizationId: string, projectId: string, artifactTypeId: string, policyId: string, correlationId: string) {
   const policy = await client.query<{ period_days: number }>(
     `SELECT period_days FROM reporting.retention_policies WHERE organization_id=$1 AND id=$2

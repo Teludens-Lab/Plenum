@@ -322,6 +322,8 @@ Disabling a concept preserves its draft content. Studio identifies affected elem
 
 Initial limits are **100 field definitions and 20 sections per Form**, **50 entries per repeating group**, **20 MB per attachment**, **10 attachments per record** and **100 MB total attachments per record**. An overall structured-submission size limit is also required; this approval does not invent its numeric value. Deployments may impose lower limits; increasing the platform ceiling requires performance and security verification. These are approved target limits, not measurements of the existing build. Precise byte interpretation and the submission-size bound must be made explicit in the implementing contract and tested before release.
 
+**BA-07 owner clarification, 2026-11-11:** At an attachment's `expiresAt`, ordinary attachment lists, downloads and Form export manifests omit the file even under a legal hold. A hold preserves stored bytes and audit metadata without extending participant access. Unexpired held files remain accessible under normal authorization and scan rules. This explicit owner approval clarifies availability versus disposal; it changes no retention period or hold scope.
+
 ### 7.3 OPEN-016 — operator-controlled authority transfer
 
 1. PostgreSQL stores the Session's owning Deployment, increasing Authority Epoch and transfer status.

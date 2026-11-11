@@ -1,3 +1,4 @@
+import { availableFormAttachmentSql } from "../reporting/form-retention.js";
 import {
   type CommandEnvelopeV1,
   type JsonObject,
@@ -1404,7 +1405,7 @@ export async function exportRuntimeArtifact(input: RuntimeProjectionInput & { ar
       payload: visibleArtifactPayload(artifact.payload, allows) };
     if (form.attachments) {
       const files = await client.query<{ id: string; file_name: string; media_type: string; size_bytes: number; sha256: string; scan_status: "clean" | "infected" | "failed"; retention_policy_id: string; expires_at: Date }>(
-        "SELECT id,file_name,media_type,size_bytes,sha256,scan_status,retention_policy_id,expires_at FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND upload_state='attached' ORDER BY created_at,id",
+        `SELECT id,file_name,media_type,size_bytes,sha256,scan_status,retention_policy_id,expires_at FROM runtime.form_attachments WHERE organization_id=$1 AND artifact_id=$2 AND ${availableFormAttachmentSql} ORDER BY created_at,id`,
         [context.organizationId, artifact.id]);
       if (files.rows.length) record.attachmentManifest = { bytesIncluded: false, files: files.rows.map((file) => ({ id: file.id, fileName: file.file_name,
         mediaType: file.media_type, sizeBytes: file.size_bytes, sha256: file.sha256, scanStatus: file.scan_status, retentionPolicyId: file.retention_policy_id, expiresAt: file.expires_at.toISOString() })) };

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
+import { createServer } from "node:http";
+import { once } from "node:events";
 import {
   CreateBucketCommand,
   DeleteBucketCommand,
@@ -24,6 +26,21 @@ const client = new S3Client({
   }
 });
 const store = new S3ObjectStore(client, bucket, "release-packages");
+
+test("BA-07 storage read deadline cancels a stalled body, including conditional deletion", async (t) => {
+  const controller = new AbortController(), entered = Promise.withResolvers();
+  t.mock.method(AbortSignal, 'timeout', milliseconds => { assert.equal(milliseconds, 10_000); return controller.signal; });
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-length': '100', etag: '"synthetic"' }); response.write('partial'); entered.resolve();
+  }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const stalledClient = new S3Client({ endpoint: `http://127.0.0.1:${server.address().port}`, region: 'us-east-1', forcePathStyle: true,
+    credentials: { accessKeyId: 'synthetic', secretAccessKey: 'synthetic' }, maxAttempts: 1 });
+  try {
+    const rejected = assert.rejects(new S3ObjectStore(stalledClient, 'synthetic').deleteIfDigest('file', 'a'.repeat(64)), /abort|reset|closed/i);
+    await entered.promise; controller.abort(); await rejected;
+  } finally { stalledClient.destroy(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
 
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");

@@ -6,13 +6,15 @@ import { reconcileFloorPermissions } from "../comms/voice.js";
 import { runScheduledInjects } from "../runtime/inject-scheduler.js";
 import { runRetentionEnforcement } from "../reporting/service.js";
 import { publishPendingRuntimeDeltas } from "../sync/runtime-sync.js";
+import { enforceFormAttachmentRetention } from "../runtime/form-attachments.js";
+import type { ObjectStore } from "../registry/object-store.js";
 import { assertOrganizationJobAuthority, discoverOrganizationJobs, ensureBootstrapJobBinding, type OrganizationJobAuthority } from "./job-authority.js";
 
-type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication";
+type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication" | "attachments";
 
 /** Ten bindings per page, two Organizations in flight, one sweep batch at a time. */
 export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstrap: { organizationId: string; actorPersonId: string },
-  media: MediaProviderAdapter, onFailure: (job: Job) => void | Promise<void>,
+  media: MediaProviderAdapter, store: ObjectStore, onFailure: (job: Job) => void | Promise<void>,
   onRetention: (held: boolean) => void): { stop: () => Promise<void>; healthy: () => boolean } {
   const cancellation = new AbortController();
   let initialized = false, running: Promise<void> | undefined, cursor: string | undefined;
@@ -29,6 +31,8 @@ export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstra
       if (!eligible || cancellation.signal.aborted) return;
     } catch { await fail("authority"); return; }
     const jobs = [
+      enforceFormAttachmentRetention(pool, authority, store, randomUUID(), undefined, cancellation.signal)
+        .then(({ failed }) => { if (failed) return fail("attachments"); }).catch(() => fail("attachments")),
       publishPendingRuntimeDeltas(pool, authority.organizationId, 100, authority).catch(() => fail("publication")),
       runScheduledInjects(pool, authority.organizationId, deploymentId, authority, cancellation.signal)
         .then(({ failures }) => { if (failures.length) return fail("inject"); }).catch(() => fail("inject")),

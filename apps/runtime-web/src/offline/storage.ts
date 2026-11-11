@@ -65,6 +65,8 @@ function isCache(value: unknown, sessionId: string, deviceId: string): value is 
 
 export class OfflineRuntimeStore {
   private readonly clearedDraftScopes = new Set<string>();
+  private readonly generations = new Map<string, number>();
+  private writing: Promise<unknown> = Promise.resolve();
   private readonly database = new Promise<IDBDatabase>((resolve, reject) => {
     const open = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     open.onupgradeneeded = () => {
@@ -106,29 +108,53 @@ export class OfflineRuntimeStore {
     }
   }
 
-  async save(cache: OfflineRuntimeCacheV1): Promise<void> {
-    const database = await this.database;
+  async save(cache: OfflineRuntimeCacheV1, projectionOnly = false): Promise<void> {
     const id = cacheId(cache.bootstrap.sessionId, cache.bootstrap.deviceId);
-    const sealed = await sealOfflineData(cache, await this.key(cache.bootstrap.deviceId), id);
-    const transaction = database.transaction("runtime", "readwrite");
-    transaction.objectStore("runtime").put({ id, sealed } satisfies StoredCache);
-    await transactionComplete(transaction);
-    this.clearedDraftScopes.delete(id);
+    const generation = this.generations.get(id);
+    const save = this.writing.then(async () => {
+      const database = await this.database;
+      const key = await this.key(cache.bootstrap.deviceId);
+      let next = cache;
+      if (projectionOnly) {
+        const stored = await request(database.transaction("runtime").objectStore("runtime").get(id)) as StoredCache | undefined;
+        const current = stored === undefined ? null : await openOfflineData(stored.sealed, key, id);
+        if (!isCache(current, cache.bootstrap.sessionId, cache.bootstrap.deviceId) ||
+            current.bootstrap.participantId !== cache.bootstrap.participantId ||
+            current.bootstrap.activeSessionRoleId !== cache.bootstrap.activeSessionRoleId ||
+            current.bootstrap.accessRevision !== cache.bootstrap.accessRevision) throw new DOMException("Runtime scope changed", "AbortError");
+        // A remote projection must never overwrite a concurrently queued Command or receipt.
+        next = { ...current, projection: cache.projection };
+      }
+      const sealed = await sealOfflineData(next, key, id);
+      if (this.generations.get(id) !== generation) throw new DOMException("Runtime scope was cleared", "AbortError");
+      const transaction = database.transaction("runtime", "readwrite");
+      transaction.objectStore("runtime").put({ id, sealed } satisfies StoredCache);
+      await transactionComplete(transaction);
+      this.clearedDraftScopes.delete(id);
+    });
+    this.writing = save.catch(() => {});
+    return save;
   }
 
   async clear(sessionId: string, deviceId: string): Promise<void> {
-    this.clearedDraftScopes.add(cacheId(sessionId, deviceId));
-    const database = await this.database;
-    const transaction = database.transaction("runtime", "readwrite");
-    transaction.objectStore("runtime").delete(cacheId(sessionId, deviceId));
-    const cursor = transaction.objectStore("runtime").openCursor();
-    cursor.onsuccess = () => {
-      const item = cursor.result;
-      if (item === null) return;
-      if (String(item.key).startsWith(`draft:${cacheId(sessionId, deviceId)}:`)) item.delete();
-      item.continue();
-    };
-    await transactionComplete(transaction);
+    const id = cacheId(sessionId, deviceId);
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
+    this.clearedDraftScopes.add(id);
+    const clear = this.writing.then(async () => {
+      const database = await this.database;
+      const transaction = database.transaction("runtime", "readwrite");
+      transaction.objectStore("runtime").delete(id);
+      const cursor = transaction.objectStore("runtime").openCursor();
+      cursor.onsuccess = () => {
+        const item = cursor.result;
+        if (item === null) return;
+        if (String(item.key).startsWith(`draft:${id}:`)) item.delete();
+        item.continue();
+      };
+      await transactionComplete(transaction);
+    });
+    this.writing = clear.catch(() => {});
+    return clear;
   }
 
   async loadDraft(sessionId: string, deviceId: string, scope: string): Promise<JsonObject | null> {

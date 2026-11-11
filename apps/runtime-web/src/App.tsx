@@ -31,7 +31,7 @@ import {
   type FloorLeaseV1,
   type ProductShellContextV1
 } from "@plenum/event-contracts";
-import type { OfflineCommandV1, OfflineOutboxV1, SyncBootstrapV1 } from "@plenum/event-contracts";
+import type { OfflineCommandV1, OfflineOutboxV1, SyncBootstrapV1, SyncSnapshotV1, SyncDeltasV1 } from "@plenum/event-contracts";
 import {
   canQueueOffline,
   createOfflineOutbox,
@@ -39,6 +39,8 @@ import {
   minimizeOfflineProjection,
   orderedOfflineCommands,
   recordOfflineReceipt,
+  subscribeRuntime,
+  decodeRuntimeSse,
   updateOfflineDraft
 } from "@plenum/sync-client";
 import { VoiceControls } from "./voice/VoiceControls.js";
@@ -74,7 +76,7 @@ import {
 } from "./runtime/RuntimeFrame.js";
 import { ToastRegion, useToasts } from "./runtime/Toasts.js";
 
-type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error";
+type ConnectionState = "loading" | "online" | "offline" | "unauthorized" | "error" | "reconnecting";
 
 const DEVICE_STORAGE_KEY = "plenum.runtime.deviceId";
 const offlineStore = new OfflineRuntimeStore();
@@ -118,6 +120,7 @@ function friendlyReference(value: string, fallback: string): string {
 
 function connectionLabel(state: ConnectionState): string {
   return state === "online" ? "Connected"
+    : state === "reconnecting" ? "Reconnecting"
     : state === "loading" ? "Connecting"
       : state === "offline" ? "Offline"
         : state === "unauthorized" ? "Sign-in required"
@@ -974,29 +977,34 @@ function RuntimeView() {
   const [activeNavigationItemId, setActiveNavigationItemId] = useState<string | null>(null);
   const main = useRef<HTMLElement>(null);
   const loadVersion = useRef(0);
+  const scopeVersion = useRef(0);
+  const latest = useRef({ bootstrap, outbox, projection });
+  latest.current = { bootstrap, outbox, projection };
   const pending = outbox?.entries.some(({ status }) => status === "local_pending" || status === "received") === true;
   const submitting = posting || (connection === "online" && pending);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     const version = ++loadVersion.current;
     if (id === null) { setConnection("error"); setError("A Session link is required."); return; }
     setConnection((current) => current === "online" ? current : "loading");
     setError(null);
     try {
-      const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}" }) : { deviceId };
-      if (version !== loadVersion.current) return;
+      const registered = deviceId === null ? await api<{ deviceId: string }>("/v1/devices", { method: "POST", body: "{}", signal: signal ?? null }) : { deviceId };
+      if (version !== loadVersion.current || signal?.aborted) return;
       setDeviceId(registered.deviceId);
       localStorage.setItem(DEVICE_STORAGE_KEY, registered.deviceId);
       const headers = { "x-device-id": registered.deviceId };
+      const request = { headers, signal: signal ?? null };
       const roleQuery = requestedRole === null ? "" : `?activeSessionRoleId=${encodeURIComponent(requestedRole)}`;
       const [nextBootstrap, initialProjection, proposalResponse, adjudicationResponse] = await Promise.all([
-        api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap${roleQuery}`, { headers }),
-        api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection${roleQuery}`, { headers }),
-        api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers }),
-        api<{ adjudications: AdjudicationRequestV1[]; options?: AdjudicationOptionV1[] }>(`/v1/sessions/${id}/adjudications${roleQuery}`, { headers })
+        api<SyncBootstrapV1>(`/v1/sessions/${id}/sync/bootstrap${roleQuery}`, request),
+        api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection${roleQuery}`, request),
+        api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, request),
+        api<{ adjudications: AdjudicationRequestV1[]; options?: AdjudicationOptionV1[] }>(`/v1/sessions/${id}/adjudications${roleQuery}`, request)
       ]);
-      if (version !== loadVersion.current) return;
+      if (version !== loadVersion.current || signal?.aborted) return;
       const previous = await offlineStore.load(id, registered.deviceId);
+      if (version !== loadVersion.current || signal?.aborted) return;
       const sameScope = previous !== null &&
         previous.bootstrap.participantId === nextBootstrap.participantId &&
         previous.bootstrap.activeSessionRoleId === nextBootstrap.activeSessionRoleId;
@@ -1022,12 +1030,13 @@ function RuntimeView() {
         if (outcomes.length > 0) setNotice(`Reconnect complete: ${outcomes}.`,
           reconciled.rejected > 0 || reconciled.reconciliation > 0 ? "caution" : "success");
       }
+      if (version !== loadVersion.current || signal?.aborted) return;
       await offlineStore.save({
         bootstrap: nextBootstrap,
         projection: minimizeOfflineProjection(nextProjection),
         outbox: nextOutbox
       });
-      if (version !== loadVersion.current) return;
+      if (version !== loadVersion.current || signal?.aborted) return;
       setBootstrap(nextBootstrap);
       setOutbox(nextOutbox);
       setProjection(nextProjection);
@@ -1036,9 +1045,11 @@ function RuntimeView() {
       setAdjudicationOptions(adjudicationResponse.options ?? []);
       setConnection("online");
     } catch (cause) {
-      if (version !== loadVersion.current) return;
+      if (version !== loadVersion.current || signal?.aborted) return;
+      if (signal) throw cause;
       if (cause instanceof ApiError && clearsOfflineData(cause) && deviceId !== null) {
         await offlineStore.clear(id, deviceId);
+        if (version !== loadVersion.current) return;
         setBootstrap(null);
         setOutbox(null);
         setProjection(null);
@@ -1055,12 +1066,15 @@ function RuntimeView() {
         try {
           cached = await offlineStore.load(id, deviceId);
         } catch (storageError) {
+          if (version !== loadVersion.current) return;
           setConnection("error");
           setError(storageError instanceof Error ? storageError.message : "Protected offline data could not be read.");
           return;
         }
+        if (version !== loadVersion.current) return;
         if (cached !== null && Date.parse(cached.bootstrap.credentialExpiresAt) <= Date.now()) {
           await offlineStore.save({ ...cached, projection: null });
+          if (version !== loadVersion.current) return;
           setBootstrap(cached.bootstrap);
           setOutbox(cached.outbox);
           setProjection(null);
@@ -1086,7 +1100,10 @@ function RuntimeView() {
     }
   }, [deviceId, id, requestedRole]);
 
-  useEffect(() => { void load(); }, []); // Initial load owns device registration.
+  useEffect(() => {
+    void load();
+    return () => { loadVersion.current++; scopeVersion.current++; };
+  }, [id, requestedRole]); // Initial load owns device registration.
   const stageClock = useStageClock(projection?.currentStageStatus ?? null, projection?.stageRemainingSeconds ?? null,
     projection?.stageDeadlineAt ?? null);
   useEffect(() => {
@@ -1094,16 +1111,91 @@ function RuntimeView() {
     setActiveNavigationItemId(projection.navigation.defaultItemId ?? projection.navigation.items[0]?.id ?? null);
   }, [projection?.interfaceProfileId, projection?.navigation.defaultItemId]);
   useEffect(() => {
-    const offline = () => setConnection("offline");
+    const offline = () => {
+      loadVersion.current++; scopeVersion.current++; setConnection("offline");
+    };
     const online = () => { setNotice("Connection restored. Refreshing authoritative state.", "success"); void load(); };
     window.addEventListener("offline", offline);
     window.addEventListener("online", online);
     return () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); };
   }, [load]);
 
+  useEffect(() => {
+    if (id === null || deviceId === null || bootstrap === null || connection === "offline") return;
+    const scope = scopeVersion.current;
+    const headers = { "x-device-id": deviceId };
+    const roleQuery = requestedRole === null ? "" : `activeSessionRoleId=${encodeURIComponent(requestedRole)}&`;
+    const current = (signal: AbortSignal, version: number) => !signal.aborted && scope === scopeVersion.current && version === loadVersion.current;
+    return subscribeRuntime({
+      snapshot: signal => api<SyncSnapshotV1>(`/v1/sessions/${id}/sync/snapshot?${roleQuery}`, { headers, signal }),
+      deltas: async (cursor, transport, signal) => {
+        const path = `/v1/sessions/${id}/sync/${transport === "sse" ? "stream" : "deltas"}?${roleQuery}cursor=${encodeURIComponent(cursor)}`;
+        if (transport === "polling") return api<SyncDeltasV1>(path, { headers, signal });
+        const response = await fetch(path, { headers, signal });
+        if (!response.ok) throw new ApiError(response.status, await response.json() as ErrorEnvelopeV1);
+        return decodeRuntimeSse(await response.text());
+      },
+      refresh: async (deltas, signal) => {
+        if (submissionInFlight.current) throw new Error("A Command is still being reconciled");
+        if (deltas === null) { await load(signal); return; }
+        if (deltas.some(delta => delta.eventType === "release.activated")) { await load(signal); return; }
+        const version = loadVersion.current;
+        const types = deltas.map(delta => delta.eventType);
+        const readRuntime = types.some(type => !type.startsWith("effect_proposal.") && !type.startsWith("adjudication.") ||
+          type === "effect_proposal.applied" || type === "adjudication.published");
+        const [view, proposals, adjudications] = await Promise.all([
+          readRuntime ? api<RuntimeProjectionV1>(`/v1/sessions/${id}/runtime-projection?${roleQuery}`, { headers, signal }) : null,
+          types.some(type => type.startsWith("effect_proposal.")) ? api<{ proposals: EffectProposalV1[] }>(`/v1/sessions/${id}/effect-proposals`, { headers, signal }) : null,
+          types.some(type => type.startsWith("adjudication.")) ? api<{ adjudications: AdjudicationRequestV1[]; options?: AdjudicationOptionV1[] }>(`/v1/sessions/${id}/adjudications?${roleQuery}`, { headers, signal }) : null
+        ]);
+        if (!current(signal, version) || submissionInFlight.current) throw new DOMException("Runtime refresh superseded", "AbortError");
+        const cache = latest.current;
+        if (view && cache.bootstrap && cache.outbox) {
+          await offlineStore.save({ bootstrap: cache.bootstrap, outbox: cache.outbox, projection: minimizeOfflineProjection(view) }, true);
+          if (!current(signal, version)) return;
+          setProjection(view);
+        }
+        if (proposals) setEffectProposals(proposals.proposals);
+        if (adjudications) { setAdjudications(adjudications.adjudications); setAdjudicationOptions(adjudications.options ?? []); }
+      },
+      error: cause => {
+        if (scope !== scopeVersion.current) return "stop";
+        if (cause instanceof ApiError && cause.envelope.error.code === "SYNC_CURSOR_EXPIRED") {
+          loadVersion.current++;
+          setProjection(null); setEffectProposals([]); setAdjudications([]); setAdjudicationOptions([]);
+          const cache = latest.current;
+          if (cache.bootstrap && cache.outbox) void offlineStore.save({ bootstrap: cache.bootstrap, outbox: cache.outbox, projection: null }, true)
+            .catch(() => setError("The protected offline projection could not be cleared."));
+          return "snapshot";
+        }
+        if (cause instanceof ApiError && (clearsOfflineData(cause) || ["AUTH_EXPIRED", "UNAUTHENTICATED"].includes(cause.envelope.error.code))) {
+          loadVersion.current++; scopeVersion.current++;
+          setBootstrap(null); setProjection(null); setEffectProposals([]); setAdjudications([]); setAdjudicationOptions([]);
+          const cache = latest.current;
+          if (clearsOfflineData(cause)) {
+            setOutbox(null);
+            void offlineStore.clear(id, deviceId).catch(() => setError("Protected device storage could not be cleared."));
+          } else if (cache.bootstrap && cache.outbox) {
+            void offlineStore.save({ bootstrap: cache.bootstrap, outbox: cache.outbox, projection: null }, true)
+              .catch(() => setError("The protected offline projection could not be cleared."));
+          }
+          setConnection("error"); setError(`${cause.message} Protected Session data was cleared.`);
+          return "stop";
+        }
+        return "retry";
+      },
+      connectivity: state => {
+        if (scope === scopeVersion.current) setConnection(state === "live" ? "online" : "reconnecting");
+      }
+    });
+  }, [id, deviceId, requestedRole, bootstrap?.participantId, connection === "offline"]);
+
   const post = async (command: CommandEnvelopeV1): Promise<CommandReceiptV1 | null> => {
     if (id === null || bootstrap === null || outbox === null || projection === null || submissionInFlight.current) return null;
     submissionInFlight.current = true;
+    const scope = scopeVersion.current;
+    const version = ++loadVersion.current;
+    const current = () => scope === scopeVersion.current && version === loadVersion.current;
     setPosting(true);
     try {
       const queueable = canQueueOffline(command, bootstrap);
@@ -1118,11 +1210,13 @@ function RuntimeView() {
         try {
           await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: storedOutbox });
         } catch (cause) {
+          if (!current()) return null;
           setNotice(cause instanceof Error
             ? `The Command was not queued because protected device storage failed: ${cause.message}`
             : "The Command was not queued because protected device storage failed.", "error");
           return null;
         }
+        if (!current()) return null;
         setOutbox(storedOutbox);
         setNotice("Saved on this device as local pending. It has not been submitted.", "info");
         if (!navigator.onLine) { setConnection("offline"); return null; }
@@ -1132,6 +1226,7 @@ function RuntimeView() {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command)
         });
         const body: unknown = await response.json();
+        if (!current()) return null;
         if (!isCommandReceipt(body)) {
           if (typeof body === "object" && body !== null && "error" in body) {
             throw new ApiError(response.status, body as ErrorEnvelopeV1);
@@ -1144,6 +1239,7 @@ function RuntimeView() {
             resolved = { ...resolved, entries: resolved.entries.filter(({ command: queued }) => queued.commandId !== body.commandId) };
           }
           await offlineStore.save({ bootstrap, projection: minimizeOfflineProjection(projection), outbox: resolved });
+          if (!current()) return null;
           setOutbox(resolved);
         }
         if (body.status === "accepted") setNotice(body.replayed ? "The original server receipt was recovered." : "The server accepted the Command.", "success");
@@ -1153,9 +1249,11 @@ function RuntimeView() {
         requestAnimationFrame(() => main.current?.focus());
         return body;
       } catch (cause) {
+        if (!current()) return null;
         if (cause instanceof ApiError) {
           if (clearsOfflineData(cause)) {
             await offlineStore.clear(id, bootstrap.deviceId);
+            if (!current()) return null;
             setBootstrap(null);
             setOutbox(null);
             setProjection(null);
@@ -1275,9 +1373,10 @@ function RuntimeView() {
   };
 
   if (projection === null) {
-    return <StatePage connection={connection} title={connection === "loading" ? "Loading Runtime" : connection === "offline" ? "Runtime offline" : "Runtime unavailable"}
-      message={connection === "loading" ? "Resolving your authorized Session view." : error ?? "Reconnect and try again."}
-      {...(connection === "loading" ? {} : { retry: () => void load() })} />;
+    const connecting = connection === "loading" || connection === "reconnecting";
+    return <StatePage connection={connection} title={connecting ? "Connecting to Runtime" : connection === "offline" ? "Runtime offline" : "Runtime unavailable"}
+      message={connecting ? "Resolving your authorized Session view." : error ?? "Reconnect and try again."}
+      {...(connecting ? {} : { retry: () => void load() })} />;
   }
   const roleContextLabel = projection.activeTeamLabel === null ? projection.activeSessionRoleLabel
     : `${projection.activeTeamLabel} · ${projection.activeSessionRoleLabel}`;

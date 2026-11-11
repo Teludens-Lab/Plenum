@@ -103,7 +103,7 @@ export async function verifyTenantJobs(owner, app) {
   const start = async (bootstrap) => {
     const port = await freePort(), metrics = await freePort(), publicUrl = `https://localhost:${port}`;
     // Test-only IPC drives the production SIGTERM handler; Date advances without sleeping a readiness window.
-    const shim = `const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance')offset+=61000});`;
+    const shim = `const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance'){offset+=61000;process.send('advanced')}});`;
     const child = spawn(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(shim)}`, "deploy/compose/profile-service.mjs"], {
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_ENV: 'production', NODE_EXTRA_CA_CERTS: cert, PORT: String(port), METRICS_PORT: String(metrics),
         PLENUM_DEPLOYMENT_PROFILE: 'cloud', PLENUM_PUBLIC_BASE_URL: publicUrl, PLENUM_DEPLOYMENT_ID: deployment,
@@ -134,6 +134,8 @@ export async function verifyTenantJobs(owner, app) {
     const first = await seed(1), aInject = await schedule(first, 0), aArtifact = await artifact(first);
     const service = await start(first);
     await eventually(async () => await delivered(aInject) && await purged(aArtifact), 'T01/T02 bootstrap scheduled work');
+    await eventually(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE organization_id=$1 AND publication_status='pending'", [first.org])).rows[0].count) === 0,
+      'BA-06-T02 production startup publishes pending Runtime deltas');
     service.child.send('advance');
     await eventually(async () => (await fetch(`${service.url}/healthz`)).status === 200, 'healthy completed discovery sweep');
     const second = await seed(20), bInject = await schedule(second, 0), bArtifact = await artifact(second), held = await artifact(second, true);
@@ -144,6 +146,8 @@ export async function verifyTenantJobs(owner, app) {
     assert.equal((await configure(service, second)).status, 409, 'stale binding revision denied');
     const duplicate = await start(first);
     await eventually(async () => await delivered(bInject) && await purged(bArtifact), 'T01/T02 post-startup automatic jobs');
+    await eventually(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE organization_id=$1 AND publication_status='pending'", [second.org])).rows[0].count) === 0,
+      'BA-06-T02 additional Organization publishes automatically');
     assert.equal(await purged(held), false, 'legal hold preserves bytes');
     for (const [f, id, bytes] of [[first, aInject, aArtifact], [second, bInject, bArtifact]]) {
       assert.equal((await owner.query("SELECT count(*)::int AS n FROM evidence.events WHERE aggregate_id=$1 AND event_type='inject.released'", [id])).rows[0].n, 1);
@@ -162,8 +166,38 @@ export async function verifyTenantJobs(owner, app) {
     assert.equal((await configure(service, first, 1, false)).status, 200);
     const denied = await schedule(first, 1);
     await stop(duplicate); await stop(service);
+    const backlog = async (f, count) => {
+      await owner.query(`WITH sequence AS (
+        UPDATE evidence.session_sequences SET next_sequence=next_sequence+$3 WHERE organization_id=$1 AND session_id=$2
+        RETURNING next_sequence-$3 AS first
+      ), events AS (
+        INSERT INTO evidence.events(id,organization_id,session_id,sequence,event_type,event_version,governing_release_id,authority_epoch,body,aggregate_id)
+        SELECT gen_random_uuid(),$1,$2,first+n,'command.rejected',1,$4,1,'{}',$2 FROM sequence,generate_series(0,$3-1) n
+        RETURNING id,sequence
+      ) INSERT INTO sync.session_delta_outbox(id,organization_id,session_id,event_id,created_at)
+        SELECT gen_random_uuid(),$1,$2,id,now()-sequence*interval '1 second' FROM events`, [f.org, f.session, count, f.release]);
+    };
+    await backlog(first, 1); await backlog(second, 205);
+    await owner.query("UPDATE runtime.session_authorities SET status='fenced' WHERE session_id=$1", [second.session]);
     const restarted = await start(first);
     assert.equal((await owner.query('SELECT enabled,revision FROM operations.organization_job_bindings WHERE organization_id=$1', [first.org])).rows[0].enabled, false);
+    const advanced = once(restarted.child, 'message'); restarted.child.send('advance'); await advanced;
+    await eventually(async () => (await fetch(`${restarted.url}/healthz`)).status === 200, 'BA-06 discovery completed with fenced Session');
+    assert.equal(Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND publication_status='pending'", [second.session])).rows[0].count), 205);
+    await owner.query("UPDATE runtime.session_authorities SET status='active',authority_epoch=authority_epoch+1 WHERE session_id=$1", [second.session]);
+    await eventually(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND publication_status='pending'", [second.session])).rows[0].count) === 0,
+      'BA-06-T02 restart recovers a multi-batch backlog under current authority');
+    const batches = await owner.query("SELECT count(*)::int AS size FROM sync.session_delta_outbox WHERE session_id=$1 GROUP BY published_at", [second.session]);
+    assert.ok(batches.rows.every(row => row.size <= 100), 'publication transactions retain the 100-row bound');
+    const order = await owner.query(`SELECT min(event.sequence)::int AS first,max(event.sequence)::int AS last
+      FROM sync.session_delta_outbox item JOIN evidence.events event ON event.id=item.event_id
+      WHERE item.session_id=$1 GROUP BY item.published_at ORDER BY item.published_at`, [second.session]);
+    assert.ok(order.rows.every((row, index) => index === 0 || row.first > order.rows[index-1].last),
+      'publication follows Evidence order even with reversed outbox timestamps');
+    assert.equal(Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND attempts<>1", [second.session])).rows[0].count), 0,
+      'duplicate processes and restart do not republish committed rows');
+    assert.equal(Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND publication_status='pending'", [first.session])).rows[0].count), 1,
+      'disabled tenant authority cannot publish');
     const live = await schedule(second, 1);
     await eventually(() => delivered(live), 'T03 restart continues another tenant');
     assert.equal(await delivered(denied), false);

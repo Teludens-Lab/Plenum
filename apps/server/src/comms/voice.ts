@@ -343,6 +343,26 @@ export function createVoiceCommandExecutor(adapter?: MediaProviderAdapter) {
   };
 }
 
+function voiceVisibility(release: VoiceDefinition, channel: ChannelRow, context: SessionAccessContextV1, active: ActiveAssignment, stageId: string | undefined) {
+  if (channel.definition.mode === "private_call" && !channel.invited_participant_ids.includes(context.participantId)) return undefined;
+  const definition = release.communications.voiceChannels.find(({ id }) => id === channel.definition_id) ?? channel.definition;
+  const canListen = selectorAllows(release, definition.canListen, context, active);
+  const canModerate = selectorAllows(release, definition.canModerate, context, active);
+  return (!canListen && !canModerate) || !stageAllows(definition, stageId) ? undefined : { definition, canListen, canModerate };
+}
+
+/** A closure notification must still be authorized after the channel leaves the active view. */
+export async function visibleClosedVoiceChannelIds(client: PoolClient, context: SessionAccessContextV1, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const release = await readDefinition(client, context.organizationId, context.activeReleaseId);
+  const active = await assignment(client, context);
+  if (!active) return [];
+  const stageId = await activeStageId(client, context);
+  const rows = await client.query<ChannelRow>("SELECT * FROM comms.voice_channels WHERE organization_id=$1 AND session_id=$2 AND id=ANY($3::uuid[]) AND status='closed'",
+    [context.organizationId, context.sessionId, ids]);
+  return rows.rows.filter(channel => voiceVisibility(release, channel, context, active, stageId)).map(channel => channel.id);
+}
+
 export async function getVoiceProjection(client: PoolClient, context: SessionAccessContextV1): Promise<RuntimeVoiceChannelV1[]> {
   const release = await readDefinition(client, context.organizationId, context.activeReleaseId);
   const active = await assignment(client, context);
@@ -355,12 +375,10 @@ export async function getVoiceProjection(client: PoolClient, context: SessionAcc
   const projection: RuntimeVoiceChannelV1[] = [];
   for (const channel of rows) {
     if (channel.status === "closed") continue;
-    if (channel.definition.mode === "private_call" && !channel.invited_participant_ids.includes(context.participantId)) continue;
     const status: RuntimeVoiceChannelV1["status"] = channel.status;
-    const definition = release.communications.voiceChannels.find(({ id }) => id === channel.definition_id) ?? channel.definition;
-    const canListen = selectorAllows(release, definition.canListen, context, active);
-    const canModerate = selectorAllows(release, definition.canModerate, context, active);
-    if ((!canListen && !canModerate) || !stageAllows(definition, stageId)) continue;
+    const visibility = voiceVisibility(release, channel, context, active, stageId);
+    if (!visibility) continue;
+    const { definition, canListen, canModerate } = visibility;
     const grant = await client.query<{ can_transmit: boolean }>(`SELECT can_transmit FROM comms.voice_grants WHERE organization_id=$1 AND channel_id=$2
       AND seat_assignment_id=$3 AND revoked_at IS NULL AND valid_until>transaction_timestamp()`, [context.organizationId, channel.id, active.id]);
     const floor = await client.query<{ expires_at: Date }>(`SELECT expires_at FROM comms.floor_leases WHERE organization_id=$1 AND channel_id=$2

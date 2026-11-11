@@ -332,7 +332,10 @@ export async function executeEffectProposalCommand({ client, context, command, a
 }
 
 export async function getEffectProposals(pool: Pool, context: SessionAccessContextV1): Promise<EffectProposalV1[]> {
-  return withOrganizationTransaction(pool, context.organizationId, async (client) => {
+  return withOrganizationTransaction(pool, context.organizationId, (client) => readEffectProposals(client, context));
+}
+
+export async function readEffectProposals(client: PoolClient, context: SessionAccessContextV1): Promise<EffectProposalV1[]> {
     const result = await client.query<{
       id: string; model_run_id: string; proposal_hash: string; target_aggregate_id: string; target_state_variable_id: string;
       scope_reference: string; operation: "set" | "adjust"; value: JsonValue; rationale: string; lifecycle_status: EffectProposalV1["status"];
@@ -354,7 +357,6 @@ export async function getEffectProposals(pool: Pool, context: SessionAccessConte
       authorityEpoch: Number(row.authority_epoch), pluginDigest: row.artifact_digest, configurationDigest: row.configuration_digest,
       inputDigest: row.input_digest, outputDigest: row.output_digest, version: Number(row.version)
     }));
-  });
 }
 
 export async function exportExtensionProvenance(

@@ -152,6 +152,7 @@
     }
   ],
   "overrides": [
+    { "dimension": "prd-requirement", "obligation": "REQ-044", "status": "IMPLEMENTED", "owner": "PS-140 / PS-780; BA-06", "evidenceTarget": "docs/acceptance/BA-06-live-sync.md; finding 4 server publication and automatic authorized Runtime refresh; production-entrypoint synthetic browser/database proof; BA-11 deployment, BA-12 load and PS-850 final acceptance remain separate" },
     { "dimension": "prd-requirement", "obligation": "REQ-030", "status": "IMPLEMENTED", "owner": "PS-210 / PS-520 / PS-810; BA-05", "evidenceTarget": "docs/acceptance/BA-05-tenant-jobs.md; audit finding 5; approved durable tenant job authority and production-entrypoint database evidence; BA-06/07/10 integration and BA-11 deployment rehearsal remain separate" },
     { "dimension": "prd-requirement", "obligation": "REQ-081", "status": "IMPLEMENTED", "owner": "PS-250 / PS-780; BA-04", "evidenceTarget": "docs/acceptance/BA-04-floor-revocation.md; audit finding 3; durable provider revocation and successor fencing; BA-05 production-entrypoint additional-Organization wiring is covered; BA-11 deployed rehearsal and BA-12 voice latency gate remain open; no final candidate acceptance" },
     { "dimension": "api-boundary", "obligation": "studio-authoring", "status": "IMPLEMENTED", "owner": "PS-300 / PS-810 / PS-815; BA-03", "evidenceTarget": "docs/acceptance/BA-03-browser-origins.md; audit finding 10; shared browser Origin and media-type boundaries; historical publication and final candidate acceptance remain separate" },

@@ -458,7 +458,10 @@ export async function getAdjudicationOptions(pool: Pool, context: SessionAccessC
 }
 
 export async function getAdjudications(pool: Pool, context: SessionAccessContextV1): Promise<AdjudicationRequestV1[]> {
-  return withOrganizationTransaction(pool, context.organizationId, async (client) => {
+  return withOrganizationTransaction(pool, context.organizationId, (client) => readAdjudications(client, context));
+}
+
+export async function readAdjudications(client: PoolClient, context: SessionAccessContextV1): Promise<AdjudicationRequestV1[]> {
     const definition = await releaseDefinition(client, context.organizationId, context.activeReleaseId);
     const activeAssignment = await client.query<{ team_id: string | null }>(
       `SELECT team_id FROM runtime.seat_assignments WHERE organization_id=$1 AND session_id=$2 AND participant_id=$3
@@ -545,5 +548,4 @@ export async function getAdjudications(pool: Pool, context: SessionAccessContext
         canReview: reviewer && request.status !== "published", canSynthesize: lead && request.status !== "published" });
     }
     return result;
-  });
 }

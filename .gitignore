@@ -65,6 +65,7 @@ docs/acceptance/*
 !docs/acceptance/BA-03-browser-origins.md
 !docs/acceptance/BA-04-floor-revocation.md
 !docs/acceptance/BA-05-tenant-jobs.md
+!docs/acceptance/BA-06-live-sync.md
 !docs/acceptance/PS-840-preflight.md
 !docs/acceptance/PS-840-UAT.md
 !docs/acceptance/PS-842-interface-consistency.md

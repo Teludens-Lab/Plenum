@@ -5,9 +5,10 @@ import { withOrganizationTransaction } from "../database.js";
 import { reconcileFloorPermissions } from "../comms/voice.js";
 import { runScheduledInjects } from "../runtime/inject-scheduler.js";
 import { runRetentionEnforcement } from "../reporting/service.js";
+import { publishPendingRuntimeDeltas } from "../sync/runtime-sync.js";
 import { assertOrganizationJobAuthority, discoverOrganizationJobs, ensureBootstrapJobBinding, type OrganizationJobAuthority } from "./job-authority.js";
 
-type Job = "discovery" | "authority" | "inject" | "floor" | "retention";
+type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication";
 
 /** Ten bindings per page, two Organizations in flight, one sweep batch at a time. */
 export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstrap: { organizationId: string; actorPersonId: string },
@@ -28,6 +29,7 @@ export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstra
       if (!eligible || cancellation.signal.aborted) return;
     } catch { await fail("authority"); return; }
     const jobs = [
+      publishPendingRuntimeDeltas(pool, authority.organizationId, 100, authority).catch(() => fail("publication")),
       runScheduledInjects(pool, authority.organizationId, deploymentId, authority, cancellation.signal)
         .then(({ failures }) => { if (failures.length) return fail("inject"); }).catch(() => fail("inject")),
       reconcileFloorPermissions(pool, authority.organizationId, deploymentId, media, authority, cancellation.signal)

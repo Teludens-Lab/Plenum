@@ -27,6 +27,11 @@ import {
   type SessionAccessContextV1
 } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
+import { readRuntimeProjection } from "../runtime/artifact-workflow.js";
+import { readEffectProposals } from "../extensions/runtime.js";
+import { readAdjudications } from "../adjudication/service.js";
+import { visibleClosedVoiceChannelIds } from "../comms/voice.js";
 
 export const RUNTIME_PROJECTION_VERSION = "runtime-projection-v1";
 export const RUNTIME_REPLAY_BATCH_LIMIT = 100;
@@ -167,6 +172,50 @@ function projectEvent(context: SessionAccessContextV1, event: EventRow): Omit<Ru
   return projectResource(toPolicyContext(context), resource).delta as Omit<RuntimeDeltaV1, "cursor"> | undefined;
 }
 
+/** Notification metadata is selected from the same authorized views as HTTP; raw event bodies never leave here. */
+async function projectionChanges(client: PoolClient, context: SessionAccessContextV1, events: EventRow[], input: RuntimeSyncInput) {
+  const changes = new Map<string, Omit<RuntimeDeltaV1, "cursor">>();
+  const runtimeEvents = events.filter((event) => /^(stage|session|release|artifact|message|inject|poll|ballot|voice_channel|voice_consent|voice_recording|voice_transcription|floor_lease)\./u.test(event.event_type));
+  if (runtimeEvents.length) {
+    const view = await readRuntimeProjection(client, context, input);
+    const ids = (items: Array<{ id: string }>) => new Set(items.map(({ id }) => id));
+    const visible = { artifact: ids(view.artifacts), message: ids(view.messages), inject: ids(view.injects), poll: ids(view.polls),
+      ballot: ids(view.polls), voice_channel: ids(view.voiceChannels) };
+    for (const id of await visibleClosedVoiceChannelIds(client, context, runtimeEvents
+      .filter(event => event.event_type === "voice_channel.closed" && event.aggregate_id !== null).map(event => event.aggregate_id!))) visible.voice_channel.add(id);
+    for (const event of runtimeEvents) {
+      const eventKind = event.event_type.split(".")[0]!;
+      const kind = /^(voice_|floor_lease)/u.test(eventKind) ? "voice_channel" : eventKind;
+      const body = isRecord(event.body) ? event.body : {};
+      const target = kind === "message" ? body.messageId : kind === "ballot" ? body.pollId
+        : kind === "voice_channel" ? body.channelId ?? event.aggregate_id : event.aggregate_id;
+      const publicSessionChange = target === context.sessionId && /^(stage\.(started|paused|resumed|extended|ended|reopened|advanced|returned)|session\.(opened|started|paused|resumed|completed|locked|archived|recovered)|release\.activated)$/u.test(event.event_type);
+      if (!publicSessionChange && !(kind in visible && typeof target === "string" && visible[kind as keyof typeof visible].has(target))) continue;
+      if ((kind === "ballot" || /^inject\.(acknowledged|responded)$/u.test(event.event_type)) && event.actor_participant_id !== context.participantId) continue;
+      if (["voice_consent", "floor_lease"].includes(eventKind) && event.actor_participant_id !== context.participantId) continue;
+      changes.set(event.event_id, { deltaId: event.event_id, eventType: event.event_type, aggregateId: target as string,
+        aggregateVersion: null, occurredAt: event.occurred_at.toISOString(), payload: {} });
+    }
+  }
+  if (events.some((event) => event.event_type.startsWith("effect_proposal."))) {
+    const visible = new Set((await readEffectProposals(client, context)).map(({ id }) => id));
+    for (const event of events.filter((item) => item.event_type.startsWith("effect_proposal."))) {
+      if (event.aggregate_id && visible.has(event.aggregate_id)) changes.set(event.event_id, {
+        deltaId: event.event_id, eventType: event.event_type, aggregateId: event.aggregate_id,
+        aggregateVersion: null, occurredAt: event.occurred_at.toISOString(), payload: {} });
+    }
+  }
+  if (events.some((event) => event.event_type.startsWith("adjudication."))) {
+    const visible = await readAdjudications(client, context);
+    for (const event of events.filter((item) => item.event_type.startsWith("adjudication."))) {
+      if (visible.some((item) => item.id === event.aggregate_id && (item.canReview || event.event_type === "adjudication.published"))) changes.set(event.event_id, {
+        deltaId: event.event_id, eventType: event.event_type, aggregateId: event.aggregate_id!,
+        aggregateVersion: null, occurredAt: event.occurred_at.toISOString(), payload: {} });
+    }
+  }
+  return changes;
+}
+
 async function currentContext(client: PoolClient, input: RuntimeSyncInput): Promise<SessionAccessContextV1> {
   if (!uuid.test(input.sessionId) || !uuid.test(input.deviceId)) {
     throw authorizationError("INVALID_ID", "The Session or Device identifier is invalid.", input.correlationId);
@@ -263,23 +312,35 @@ async function publishedPosition(client: PoolClient, context: SessionAccessConte
 export async function publishPendingRuntimeDeltas(
   pool: Pool,
   organizationId: string,
-  limit = RUNTIME_REPLAY_BATCH_LIMIT
+  limit = RUNTIME_REPLAY_BATCH_LIMIT,
+  authority?: OrganizationJobAuthority
 ): Promise<number> {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > RUNTIME_REPLAY_BATCH_LIMIT) {
     throw new Error(`Runtime delta publish limit must be between 1 and ${RUNTIME_REPLAY_BATCH_LIMIT}`);
   }
   return withOrganizationTransaction(pool, organizationId, async (client) => {
+    if (authority) {
+      if (authority.organizationId !== organizationId) throw new Error("Runtime publication authority mismatch");
+      await assertOrganizationJobAuthority(client, authority);
+    }
+    // Publishing a later batch first would let a reconnect cursor skip earlier rows.
+    const claim = await client.query<{ claimed: boolean }>(
+      "SELECT pg_try_advisory_xact_lock(hashtext($1),hashtext('runtime_delta_publication')) AS claimed", [organizationId]);
+    if (!claim.rows[0]?.claimed) return 0;
     const result = await client.query(
       `WITH pending AS (
-         SELECT id FROM sync.session_delta_outbox
-          WHERE organization_id=$1 AND publication_status='pending'
-          ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT $2
+         SELECT item.id FROM sync.session_delta_outbox item
+          JOIN evidence.events event ON event.organization_id=item.organization_id AND event.id=item.event_id
+          JOIN runtime.session_authorities authority ON authority.organization_id=item.organization_id AND authority.session_id=item.session_id
+          WHERE item.organization_id=$1 AND item.publication_status='pending'
+            AND ($3::uuid IS NULL OR (authority.deployment_id=$3 AND authority.status='active'))
+          ORDER BY event.sequence,item.id LIMIT $2 FOR UPDATE OF item FOR SHARE OF authority
        )
        UPDATE sync.session_delta_outbox item
           SET publication_status='published',attempts=attempts+1,published_at=transaction_timestamp()
          FROM pending WHERE item.id=pending.id
        RETURNING item.id`,
-      [organizationId, limit]
+      [organizationId, limit, authority?.deploymentId ?? null]
     );
     return result.rowCount ?? 0;
   });
@@ -327,8 +388,9 @@ export async function getRuntimeDeltas(input: RuntimeDeltaInput): Promise<SyncDe
       [context.organizationId, context.sessionId, position, RUNTIME_REPLAY_BATCH_LIMIT]
     );
     const deltas: RuntimeDeltaV1[] = [];
+    const changes = await projectionChanges(client, context, result.rows, input);
     for (const event of result.rows) {
-      const projected = projectEvent(context, event);
+      const projected = projectEvent(context, event) ?? changes.get(event.event_id);
       if (projected === undefined) continue;
       deltas.push({ ...projected, cursor: await createCursor(client, context, input.deviceId, Number(event.sequence)) });
     }

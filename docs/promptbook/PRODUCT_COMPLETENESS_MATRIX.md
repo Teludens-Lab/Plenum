@@ -1,5 +1,7 @@
 # Product completeness and user-test contract
 
+2026-11-11 BA-06: finding 4's production publisher and idle Runtime subscription are connected using existing tenant authority and synchronization contracts. [BA-06 evidence](../acceptance/BA-06-live-sync.md) separates automatic two-client delivery, server-side recipient filtering, reconnect/revocation and bounded backlog recovery from unrun deployment/load and human AT acceptance. Historical PS-830/840/842 evidence and PS-850 approval are not expanded.
+
 ## Purpose
 
 This ledger defines what “fully functional” means for the Plenum version-1 platform. It extends the P00-P06 engineering slices with a product-completion sequence that begins at `PS-700` and ends at `PS-850`. It is an acceptance contract, not evidence that the work is already complete.

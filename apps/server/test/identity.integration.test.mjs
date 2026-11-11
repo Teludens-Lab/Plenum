@@ -14,6 +14,7 @@ import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rat
 import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
 import { verifyTenantJobs } from "./tenant-jobs.integration.mjs";
 import { verifyFloorRevocation } from "./floor-revocation.integration.mjs";
+import { visibleClosedVoiceChannelIds } from "../dist/comms/voice.js";
 import { compileRelease } from "@plenum/release-compiler";
 
 import {
@@ -2999,6 +3000,11 @@ test("PS-545-T02 VOICE-01..05/09/11/13/14 enforce grants, consent, immediate wit
   assert.equal((await submit(high,{...broadcastCommand("25000000-0000-4000-8000-000000000036","voice_channel.join",1),
     deviceId:high.deviceId,activeSessionRoleId:high.activeSessionRoleId})).status,"accepted");
   assert.equal((await issueMediaCredential(app,high,broadcastChannelId,media,randomUUID())).permissions.includes("transmit"),false);
+  assert.equal((await submit(context, privateCommand(randomUUID(), "voice_channel.close", 1))).status, "accepted");
+  const closedVisible = () => withOrganizationTransaction(app, ids.orgA, client => visibleClosedVoiceChannelIds(client, high, [privateChannelId]));
+  assert.deepEqual(await closedVisible(), [privateChannelId]);
+  await owner.query("UPDATE comms.voice_channels SET invited_participant_ids=array_remove(invited_participant_ids,$2::uuid) WHERE id=$1", [privateChannelId, high.participantId]);
+  assert.deepEqual(await closedVisible(), [], "closed private channel invalidation retains recipient filtering");
   await owner.query("UPDATE runtime.seat_assignments SET valid_to=now() WHERE id=$1",[ids.assignmentC]);
   assert.equal((await owner.query("SELECT count(*) FROM comms.voice_grants WHERE seat_assignment_id=$1 AND revoked_at IS NULL",[ids.assignmentC])).rows[0].count,"0");
   assert.equal((await owner.query("SELECT count(*) FROM comms.floor_leases WHERE holder_seat_assignment_id=$1 AND active",[ids.assignmentC])).rows[0].count,"0");

@@ -248,7 +248,7 @@ export function requireRuntimeSnapshot(state: RuntimeSyncState): RuntimeSyncStat
 
 function applyDelta(state: RuntimeSyncState, delta: RuntimeDeltaV1): RuntimeSyncState {
   if (state.seenDeltaIds.includes(delta.deltaId)) return state;
-  const seenDeltaIds = [...state.seenDeltaIds, delta.deltaId].sort().slice(-MAX_SEEN_DELTA_IDS);
+  const seenDeltaIds = [...state.seenDeltaIds, delta.deltaId].slice(-MAX_SEEN_DELTA_IDS);
   if (delta.aggregateVersion === null) return { ...state, seenDeltaIds };
   const currentVersion = state.aggregateVersions[delta.aggregateId] ?? 0;
   if (delta.aggregateVersion <= currentVersion) return { ...state, seenDeltaIds };
@@ -309,4 +309,81 @@ export async function persistRuntimeSnapshot(
   await storage.saveProjection(next);
   await storage.saveCursor(snapshot.cursor);
   return { ...next, cursor: snapshot.cursor, connectivity: "live" };
+}
+
+/** The existing SSE endpoint returns a bounded batch and a final cursor frame. */
+export function decodeRuntimeSse(body: string): SyncDeltasV1 {
+  const deltas: RuntimeDeltaV1[] = [];
+  let result: SyncDeltasV1 | undefined;
+  for (const frame of body.trim().split(/\r?\n\r?\n/u)) {
+    if (result) throw new Error("Runtime SSE cursor must be the final frame");
+    const lines = frame.split(/\r?\n/u);
+    const kind = lines.find((line) => line.startsWith("event: "))?.slice(7);
+    const cursor = lines.find((line) => line.startsWith("id: "))?.slice(4);
+    const data = lines.filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
+    if (!cursor || !data) throw new Error("Incomplete Runtime SSE frame");
+    const value = JSON.parse(data) as RuntimeDeltaV1 & { projectionVersion: string; policyVersion: string };
+    if (kind === "delta" && value.cursor === cursor) deltas.push(value);
+    else if (kind === "cursor" && typeof value.projectionVersion === "string" && typeof value.policyVersion === "string") {
+      result = { projectionVersion: value.projectionVersion, policyVersion: value.policyVersion, nextCursor: cursor, deltas };
+    } else throw new Error("Invalid Runtime SSE frame");
+  }
+  if (!result) throw new Error("Runtime SSE batch lacks its final cursor");
+  return result;
+}
+
+export interface RuntimeSubscription {
+  snapshot(signal: AbortSignal): Promise<SyncSnapshotV1>;
+  deltas(cursor: string, transport: RuntimeSyncTransport, signal: AbortSignal): Promise<SyncDeltasV1>;
+  refresh(deltas: readonly RuntimeDeltaV1[] | null, signal: AbortSignal): Promise<void>;
+  error(error: unknown): "snapshot" | "retry" | "stop";
+  connectivity(state: RuntimeConnectivity): void;
+}
+
+/** One bounded request at a time; memory cursors are discarded on scope change or page restart. */
+export function subscribeRuntime(options: RuntimeSubscription): () => void {
+  let state = createRuntimeSyncState(), stopped = false, retry = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const lifetime = new AbortController();
+  const tick = async () => {
+    const request = new AbortController();
+    const abort = () => request.abort();
+    lifetime.signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, 10_000);
+    let delay = 1_000;
+    try {
+      const storage: RuntimeSyncStorage = { saveProjection: async () => {}, saveCursor: async () => {} };
+      if (state.cursor === null || state.connectivity === "snapshot_required") {
+        options.connectivity("catching_up");
+        const snapshot = await options.snapshot(request.signal);
+        if (request.signal.aborted) return;
+        await options.refresh(null, request.signal);
+        if (request.signal.aborted) return;
+        state = await persistRuntimeSnapshot(storage, state, snapshot);
+      } else {
+        const response = await options.deltas(state.cursor, state.transport, request.signal);
+        if (request.signal.aborted) return;
+        const fresh = response.deltas.filter((delta) => !state.seenDeltaIds.includes(delta.deltaId));
+        if (fresh.length) await options.refresh(fresh, request.signal);
+        if (request.signal.aborted) return;
+        state = await persistRuntimeDeltas(storage, state, response);
+      }
+      retry = 0;
+      options.connectivity(state.connectivity);
+    } catch (error) {
+      if (stopped) return;
+      const action = options.error(error);
+      if (action === "stop") { stopped = true; lifetime.abort(); return; }
+      if (action === "snapshot") state = requireRuntimeSnapshot(state);
+      else state = fallBackToRuntimePolling(state);
+      options.connectivity("connecting");
+      delay = Math.min(30_000, 1_000 * 2 ** Math.min(retry++, 5));
+    } finally {
+      clearTimeout(timeout);
+      lifetime.signal.removeEventListener("abort", abort);
+      if (!stopped) timer = setTimeout(() => { void tick(); }, delay);
+    }
+  };
+  void tick();
+  return () => { stopped = true; lifetime.abort(); clearTimeout(timer); };
 }

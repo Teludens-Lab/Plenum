@@ -1498,6 +1498,13 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       correlationId: input.correlationId,
       ...(input.activeSessionRoleId === undefined ? {} : { requestedActiveSessionRoleId: input.activeSessionRoleId })
     });
+    return readRuntimeProjection(client, context, input);
+  });
+}
+
+/** Shared authoritative projection for HTTP reads and authorized delta selection. */
+export async function readRuntimeProjection(client: PoolClient, context: SessionAccessContextV1,
+  input: Pick<RuntimeProjectionInput, "principal" | "correlationId" | "timelineBefore">): Promise<RuntimeProjectionV1> {
     const { definition, releaseLabel, simulationTitle } = await readRelease(
       client, context.organizationId, context.activeReleaseId, input.correlationId
     );
@@ -1675,7 +1682,6 @@ export async function getRuntimeProjection(input: RuntimeProjectionInput): Promi
       polls,
       voiceChannels
     };
-  });
 }
 
 export async function submitArtifactCommand(

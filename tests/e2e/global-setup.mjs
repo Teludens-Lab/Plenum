@@ -53,7 +53,8 @@ const migrations = [
   "apps/server/migrations/041_form_attachments.sql",
   "apps/server/migrations/042_inject_schedule_provenance.sql",
   "apps/server/migrations/043_oidc_browser_binding.sql",
-  "apps/server/migrations/044_floor_provider_reconciliation.sql"
+  "apps/server/migrations/044_floor_provider_reconciliation.sql",
+    "apps/server/migrations/045_organization_job_bindings.sql"
 ];
 
 export default async function globalSetup() {

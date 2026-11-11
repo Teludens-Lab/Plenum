@@ -7,10 +7,10 @@ import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import {
   AuthorizationError, authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
   oidcLoginCookie, readOidcLoginCookie, validateOidcReturnTo,
-  createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, runRetentionEnforcement, S3ObjectStore,
+  createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
-  startScheduledInjectWorker, startFloorReconciliationWorker
+  startOrganizationJobs
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { buildSecurityHeaders } from "./security-headers.mjs";
@@ -41,6 +41,7 @@ if (profile === "air_gapped" && (!s3Endpoint || [s3Endpoint, oidcIssuer, mediaUr
 }))) throw new Error("Air-gapped dependencies must use institution-local endpoints");
 
 const pool = createDatabasePool(databaseUrl);
+const jobPool = createDatabasePool(databaseUrl, { max: 4, connectionTimeoutMillis: 5_000, statement_timeout: 10_000, query_timeout: 12_000 });
 const s3 = new S3Client({
   ...(s3Endpoint ? { endpoint: s3Endpoint } : {}),
   region: process.env.S3_REGION ?? "us-east-1",
@@ -126,7 +127,7 @@ const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.m
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
 const securityHeaders = buildSecurityHeaders({ publicBaseUrl, mediaUrl });
 const serviceStartedAt = Date.now();
-let retentionLastSucceededAt;
+
 
 const server = createServer(async (request, response) => {
   const telemetryContext = telemetry.begin(request);
@@ -169,8 +170,8 @@ const server = createServer(async (request, response) => {
       if (await media.health() !== "available") throw new Error("Media unavailable");
       if (contentScanner !== undefined && await contentScanner.health() !== "available") throw new Error("Malware scanner unavailable");
       if (Date.now() - serviceStartedAt > 60_000 &&
-          (retentionLastSucceededAt === undefined || Date.now() - retentionLastSucceededAt > 26 * 60 * 60_000)) {
-        throw new Error("Retention enforcement unavailable");
+          !organizationJobs.healthy()) {
+        throw new Error("Organization scheduled work unavailable");
       }
       response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       response.end(`${JSON.stringify({ status: "ready", profile })}\n`); return;
@@ -265,46 +266,22 @@ server.on("upgrade", (request, socket, head) => void (async () => {
 })().catch(() => socket.destroy()));
 server.listen(Number(process.env.PORT ?? 8080), "0.0.0.0");
 metricsServer.listen(Number(process.env.METRICS_PORT ?? 9090), "0.0.0.0");
-let retentionRunning = false;
-async function enforceRetention() {
-  if (retentionRunning) return;
-  retentionRunning = true;
-  const correlationId = randomUUID();
-  try {
-    const result = await runRetentionEnforcement(pool, oidc.organizationId, retentionActorPersonId, correlationId);
-    retentionLastSucceededAt = Date.now();
-    telemetry.emit({ event: "retention.enforcement_completed", severity: "info", outcome: "succeeded",
-      correlationId, category: result.heldArtifacts > 0 ? "legal_holds_present" : "standard" });
-  } catch {
-    telemetry.emit({ event: "retention.enforcement_failed", severity: "error", outcome: "failed",
-      correlationId, category: "scheduled_run" });
-    await recordOperationalSecurityEvent(pool, { deploymentId, eventType: "retention.enforcement_failed",
+const organizationJobs = startOrganizationJobs(jobPool, deploymentId,
+  { organizationId: oidc.organizationId, actorPersonId: retentionActorPersonId }, mediaAdapter, async (job) => {
+    const correlationId = randomUUID();
+    const event = job === "retention" ? "retention.enforcement_failed" : job === "inject" ? "inject.schedule_failed"
+      : job === "floor" ? "media_provider.unavailable" : "service.request_failed";
+    telemetry.emit({ event, severity: "error", outcome: "failed", correlationId, category: "organization_jobs_" + job });
+    if (job === "retention") await recordOperationalSecurityEvent(jobPool, { deploymentId, eventType: event,
       severity: "error", outcome: "failed", correlationId, category: "scheduled_run" })
       .catch(() => telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
         correlationId, category: "retention_enforcement" }));
-  } finally {
-    retentionRunning = false;
-  }
-}
-const retentionStart = setTimeout(() => void enforceRetention(), 30_000);
-const retentionInterval = setInterval(() => void enforceRetention(), 24 * 60 * 60_000);
-retentionStart.unref();
-retentionInterval.unref();
-const stopInjectWorker = startScheduledInjectWorker(pool, oidc.organizationId, deploymentId, (error, sessionId) => {
-  const code = typeof error?.code === "string" && /^[A-Z0-9]{5}$/u.test(error.code) ? error.code : "unexpected";
-  telemetry.emit({ event: "inject.schedule_failed", severity: "error", outcome: "failed", correlationId: randomUUID(),
-    category: code, ...(sessionId === undefined ? {} : { sessionId }) });
-});
-const stopFloorWorker = startFloorReconciliationWorker(pool, oidc.organizationId, deploymentId, mediaAdapter, () => {
-  telemetry.emit({ event: "media_provider.unavailable", severity: "error", outcome: "failed",
-    correlationId: randomUUID(), category: "floor_reconciliation" });
-});
+  }, (held) => telemetry.emit({ event: "retention.enforcement_completed", severity: "info", outcome: "succeeded",
+    correlationId: randomUUID(), category: held ? "legal_holds_present" : "standard" }));
 let closing = false;
 async function close() {
   if (closing) return; closing = true;
-  clearTimeout(retentionStart); clearInterval(retentionInterval);
-  await stopInjectWorker();
-  await stopFloorWorker();
+  await organizationJobs.stop();
   await collaboration.close();
   server.closeAllConnections();
   metricsServer.closeAllConnections();
@@ -312,6 +289,7 @@ async function close() {
     new Promise((resolve) => server.close(resolve)),
     new Promise((resolve) => metricsServer.close(resolve))
   ]);
+  await jobPool.end();
   await pool.end();
 }
 process.on("SIGTERM", () => void close());

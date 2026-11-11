@@ -12,6 +12,7 @@ import * as Y from "yjs";
 import { canonicalizeJson } from "@plenum/event-contracts";
 import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
 import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
+import { verifyTenantJobs } from "./tenant-jobs.integration.mjs";
 import { verifyFloorRevocation } from "./floor-revocation.integration.mjs";
 import { compileRelease } from "@plenum/release-compiler";
 
@@ -348,7 +349,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/041_form_attachments.sql",
     "apps/server/migrations/042_inject_schedule_provenance.sql",
     "apps/server/migrations/043_oidc_browser_binding.sql",
-    "apps/server/migrations/044_floor_provider_reconciliation.sql"
+    "apps/server/migrations/044_floor_provider_reconciliation.sql",
+    "apps/server/migrations/045_organization_job_bindings.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -3977,7 +3979,7 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   }, randomUUID());
   const retentionTime = new Date(Date.now() + 91 * 86_400_000);
   await assert.rejects(runRetentionEnforcement(app, ids.orgA, ids.personE, randomUUID(), retentionTime),
-    /service actor must be a current Organization Admin/u);
+    (error) => error?.envelope?.error?.code === "ACCESS_REVOKED");
   const held = await runRetentionEnforcement(app, ids.orgA, ids.personD, randomUUID(), retentionTime);
   assert.equal(held.heldArtifacts >= 1, true);
   assert.equal((await owner.query("SELECT bytes IS NOT NULL AS retained FROM reporting.export_artifacts WHERE id=$1",
@@ -4528,3 +4530,5 @@ test("PS-810 stores immutable security evidence without granting application rea
     operations.release();
   }
 });
+
+ test("BA-05-T01/T02/T03 production startup discovers tenant authority and preserves scheduled work isolation", async () => { await verifyTenantJobs(owner, app); });

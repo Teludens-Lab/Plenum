@@ -6,6 +6,8 @@ IDs are planned and unique in `tasks.json`. Exact SQL filenames are assigned by 
 
 PS-830 checkpoint B requires no SQL migration. The optional `methodologyContractId` lives in the existing versioned Draft/Core Design JSON. Publication retains the authored freeze and stores the compiler's execution snapshot in the new Definition Revision. Historical rows and Releases are not rewritten. Compiler `0.2.0` is required for the new contract; stop new publication and forward-fix after use rather than reinterpret those Releases with an older compiler.
 
+BA-05 adds `045_organization_job_bindings.sql` under the user-approved 2026-11-11 authority decision: one Organization/Deployment/dedicated Admin actor binding, revision, enabled flag, and durable retention deadline. Deployment discovery SELECT is limited to binding metadata; business RLS and audit read restrictions remain unchanged. No arbitrary Admin backfill; preserve bindings and evidence on rollback, drain old bootstrap-only writers and prefer forward-fix. Index creation is confined to the new table.
+
 | Planned ID | Owner task | Change | Pattern | Recovery / compatibility |
 |---|---|---|---|---|
 | 001-004 | Observed slice | Core, Runtime/sync/evidence, collaboration schema, security/RLS | Forward-only, per-file transaction | Historical PASS Pg16; PS-001 rehearses Pg18 |

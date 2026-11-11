@@ -4,6 +4,14 @@
   "retentionDays": 90,
   "alerts": [
     {
+      "id": "organization-jobs-stalled",
+      "signal": "log",
+      "condition": "category starts with organization_jobs_ and outcome equals failed at least once",
+      "action": "page",
+      "owner": "platform-operations",
+      "runbook": "docs/operations/PS-810-OBSERVABILITY-SECURITY.md#organization-scheduled-work"
+    },
+    {
       "id": "readiness-unavailable",
       "signal": "metric",
       "condition": "health probe receives non-2xx for 5 minutes",

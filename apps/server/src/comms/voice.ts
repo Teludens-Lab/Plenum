@@ -13,6 +13,7 @@ import type { MediaProviderAdapter, MediaPermission, MediaParticipantInput } fro
 import { audienceAllows, type FieldAudience } from "@plenum/policy-engine";
 import type { RuntimeActorSelectorV1, RuntimeVoiceChannelDefinitionV1 } from "@plenum/simulation-schema";
 import type { Pool, PoolClient } from "pg";
+import { assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
 
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
@@ -511,7 +512,7 @@ async function assertFloorAuthority(client: PoolClient, input: FloorOperationInp
   }
 }
 
-interface FloorScope { organizationId: string; sessionId: string; channelId: string; deploymentId: string }
+interface FloorScope { organizationId: string; sessionId: string; channelId: string; deploymentId: string; jobAuthority?: OrganizationJobAuthority; signal?: AbortSignal }
 
 // A session advisory lock orders provider calls across processes without an open SQL transaction.
 async function withFloorChannelLock<T>(pool: Pool, organizationId: string, channelId: string,
@@ -530,8 +531,10 @@ async function withFloorChannelLock<T>(pool: Pool, organizationId: string, chann
 
 async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adapter: MediaProviderAdapter,
   preserveRequestId?: string): Promise<boolean> {
+  if (scope.signal?.aborted) return false;
   const { organizationId, sessionId, channelId, deploymentId } = scope;
   const context = await withOrganizationTransaction(client, organizationId, async (tx) => {
+    if (scope.jobAuthority) await assertOrganizationJobAuthority(tx, scope.jobAuthority);
     const channel = (await tx.query<{ governing_release_id: string; provider_adapter_digest: string; authority_epoch: string }>(
       `SELECT channel.governing_release_id,channel.provider_adapter_digest,authority.authority_epoch
        FROM comms.voice_channels channel JOIN runtime.session_authorities authority
@@ -574,6 +577,8 @@ async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adap
          AND lease.provider_retry_at<=transaction_timestamp() ORDER BY lease.provider_retry_at,lease.id LIMIT 20`,
       [organizationId, channelId])).rows);
   for (const lease of pending) {
+    if (scope.signal?.aborted) return false;
+    if (scope.jobAuthority) await withOrganizationTransaction(client, organizationId, (tx) => assertOrganizationJobAuthority(tx, scope.jobAuthority!));
     try {
       await adapter.setTransmit({ organizationId, sessionId, channelId, participantId: lease.participant_id }, false);
     } catch {
@@ -599,7 +604,8 @@ async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adap
 
 /** One bounded batch for the configured Organization. Never grants provider rights. */
 export async function reconcileFloorPermissions(pool: Pool, organizationId: string, deploymentId: string,
-  adapter: MediaProviderAdapter): Promise<{ checked: number; unresolved: number }> {
+  adapter: MediaProviderAdapter, jobAuthority?: OrganizationJobAuthority, signal?: AbortSignal): Promise<{ checked: number; unresolved: number }> {
+  if (jobAuthority && (jobAuthority.organizationId !== organizationId || jobAuthority.deploymentId !== deploymentId)) throw new Error("Floor authority mismatch");
   const channels = await withOrganizationTransaction(pool, organizationId, async (client) =>
     (await client.query<{ channel_id: string; session_id: string }>(`SELECT lease.channel_id,lease.session_id
       FROM comms.floor_leases lease JOIN runtime.session_authorities authority
@@ -615,7 +621,8 @@ export async function reconcileFloorPermissions(pool: Pool, organizationId: stri
     [organizationId, deploymentId])).rows);
   const results = await Promise.allSettled(channels.map(({ channel_id: channelId, session_id: sessionId }) =>
     withFloorChannelLock(pool, organizationId, channelId, (client) =>
-      reconcileFloorChannel(client, { organizationId, sessionId, channelId, deploymentId }, adapter))));
+      reconcileFloorChannel(client, { organizationId, sessionId, channelId, deploymentId,
+        ...(jobAuthority ? { jobAuthority } : {}), ...(signal ? { signal } : {}) }, adapter))));
   return { checked: channels.length, unresolved: results.filter((result) => result.status === "rejected" || !result.value).length };
 }
 

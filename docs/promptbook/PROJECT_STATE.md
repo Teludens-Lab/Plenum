@@ -1,5 +1,9 @@
 # Project state
 
+## BA-05 Organization scheduled work - 2026-11-11
+
+The user approved durable Organization-Deployment bindings to explicitly designated active Admin actors. Additive migration 045 and the production composition now discover eligible Organizations in bounded pages; Injects, export retention and BA-04 Floor reconciliation retain feature ownership and tenant/Session authority checks. Post-startup enrollment, duplicate processes, legal holds, actor denial, failure isolation, pagination, restart, readiness recovery and in-flight provider drain are covered by the real entrypoint/database regression. [BA-05 handoff](../acceptance/BA-05-tenant-jobs.md) records final candidate gates and deployment assumptions. BA-06/07/10 integrations and BA-11 deployed rehearsal remain separate; BA-12 voice latency remains blocked. PS-830 owner acceptance, PS-840 checkpoint exception, PS-842 decisions and PS-850 approval scope are unchanged. No commit or deployment. Next: BA-06.
+
 ## BA-04 CI accessibility regression — 2026-11-11
 
 The PS-210 accessibility timeout on `ac4bc84b61f309be121c39099dc48be063614e72` was traced to post-`stage.start` media enforcement: converting a PostgreSQL revocation timestamp to JavaScript `Date` lost microseconds and prevented acknowledgement, repeating provider removal indefinitely. The narrow correction preserves the timestamp as database text while retaining the exact revision guard. A deterministic database regression covers acknowledgement, a newer revocation and concurrent rejoin; the [BA-04 follow-up evidence](../acceptance/BA-04-floor-revocation.md#ci-accessibility-timeout-follow-up--2026-11-11) records the reproduced failure and final gates. No schema, UI, timeout or authorization change; the BA-12 capacity blocker remains separate. No commit or deployment.

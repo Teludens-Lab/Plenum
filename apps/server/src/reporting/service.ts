@@ -16,6 +16,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
 import { requireCurrentOrganizationRole } from "../research/evidence.js";
+import { assertActiveJobActor, assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
 import { assertReportingTarget } from "./targets.js";
 import { createStoredZip, createTextPdf, csvCell, encodeJson, escapeHtml, sha256 } from "./formats.js";
 
@@ -23,7 +24,6 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const allowedFormats = new Set(["json", "jsonl", "csv", "html", "pdf", "zip"]);
 const excludedClasses = ["direct_identity", "secret_ballot_choices", "protected_voice_assets", "reconstructed_transcript"];
 const exportRetentionDays = 90;
-// shortcut: one daily batch covers 10,000 exports; move to queued batches if an Organization can exceed that daily volume.
 const retentionBatchSize = 10_000;
 
 export type ReportFormat = "json" | "jsonl" | "csv" | "html" | "pdf" | "zip";
@@ -291,6 +291,7 @@ export interface RetentionEnforcementResult {
   heldArtifacts: number;
   hasMore: boolean;
   cutoff: string;
+  skipped?: boolean;
 }
 
 export async function runRetentionEnforcement(
@@ -298,19 +299,26 @@ export async function runRetentionEnforcement(
   organizationId: string,
   actorPersonId: string,
   correlationId: string,
-  now = new Date()
+  now = new Date(),
+  jobAuthority?: OrganizationJobAuthority
 ): Promise<RetentionEnforcementResult> {
   if (!uuid.test(organizationId) || !uuid.test(actorPersonId) || correlationId.trim().length === 0 || !Number.isFinite(now.getTime())) {
     throw new Error("Retention enforcement requires an Organization, service actor, correlation ID, and valid time");
   }
   return withOrganizationTransaction(pool, organizationId, async (client) => {
-    const actor = await client.query(
-      `SELECT 1 FROM identity.memberships WHERE organization_id=$1 AND person_id=$2
-        AND organization_role='admin' LIMIT 1`, [organizationId, actorPersonId]
-    );
-    if (actor.rowCount !== 1) throw new Error("Retention service actor must be a current Organization Admin");
-
+    await assertActiveJobActor(client, organizationId, actorPersonId);
+    if (jobAuthority) {
+      if (jobAuthority.organizationId !== organizationId || jobAuthority.actorPersonId !== actorPersonId) throw new Error("Retention authority mismatch");
+      await assertOrganizationJobAuthority(client, jobAuthority);
+      now = (await client.query<{ now: Date }>("SELECT transaction_timestamp() AS now")).rows[0]!.now;
+    }
     const cutoff = new Date(now.getTime() - exportRetentionDays * 86_400_000);
+    if (jobAuthority) {
+      const claimed = (await client.query<{ claimed: boolean }>("SELECT pg_try_advisory_xact_lock(hashtext($1),hashtext('export_retention')) AS claimed", [organizationId])).rows[0]!.claimed;
+      const due = claimed && (await client.query<{ due: boolean }>(`SELECT retention_due_at<=transaction_timestamp() AS due
+        FROM operations.organization_job_bindings WHERE organization_id=$1`, [organizationId])).rows[0]!.due;
+      if (!claimed || !due) return { purgedArtifacts: 0, heldArtifacts: 0, hasMore: false, cutoff: cutoff.toISOString(), skipped: true };
+    }
     const purged = await client.query<{ id: string }>(
       `WITH active_holds AS (
          SELECT placed.hold_id,placed.scope_type,placed.scope_reference
@@ -370,6 +378,9 @@ export async function runRetentionEnforcement(
       hasMore: (status.rows[0]?.eligible ?? 0) > 0,
       cutoff: cutoff.toISOString()
     };
+    if (jobAuthority) await client.query(`UPDATE operations.organization_job_bindings
+      SET retention_due_at=transaction_timestamp()+CASE WHEN $2 THEN interval '0 seconds' ELSE interval '24 hours' END
+      WHERE organization_id=$1`, [organizationId, result.hasMore]);
     await client.query(
       `INSERT INTO evidence.audit_records(id,organization_id,actor_person_id,action,target_ref,details)
        VALUES ($1,$2,$3,'retention.enforcement_completed',$4,$5::jsonb)`,

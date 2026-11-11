@@ -1,12 +1,13 @@
-import { Pool, type PoolClient } from "pg";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 
 const databaseRole = process.env.PLENUM_DB_ROLE ?? "plenum_app";
 if (!/^[a-z_][a-z0-9_]*$/u.test(databaseRole)) {
   throw new Error("PLENUM_DB_ROLE must be a simple lower-case role name");
 }
 
-export function createDatabasePool(connectionString: string): Pool {
-  return new Pool({ connectionString });
+export function createDatabasePool(connectionString: string,
+  limits: Pick<PoolConfig, "max" | "connectionTimeoutMillis" | "statement_timeout" | "query_timeout"> = {}): Pool {
+  return new Pool({ connectionString, ...limits });
 }
 
 export async function withOrganizationTransaction<T>(

@@ -1,14 +1,16 @@
 import type { Pool } from "pg";
 import { withOrganizationTransaction } from "../database.js";
 import { releaseDueScheduledInjects } from "./information-flow.js";
+import { assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
 
 /** Bounded, retryable worker for one configured Organization and owning deployment.
  * A paused Session retains its UTC deadline; overdue work runs after resume.
  * No delivery occurs in a completed/locked Session or under another authority.
  */
-export async function runScheduledInjects(pool: Pool, organizationId: string, deploymentId: string): Promise<{
+export async function runScheduledInjects(pool: Pool, organizationId: string, deploymentId: string, jobAuthority?: OrganizationJobAuthority, signal?: AbortSignal): Promise<{
   released: number; failures: Array<{ sessionId: string; error: unknown }>;
 }> {
+  if (jobAuthority && (jobAuthority.organizationId !== organizationId || jobAuthority.deploymentId !== deploymentId)) throw new Error("Inject authority mismatch");
   const sessions = await withOrganizationTransaction(pool, organizationId, async (client) =>
     (await client.query<{ session_id: string }>(
       `SELECT instance.session_id FROM runtime.inject_instances instance
@@ -23,8 +25,10 @@ export async function runScheduledInjects(pool: Pool, organizationId: string, de
   let released = 0;
   const failures: Array<{ sessionId: string; error: unknown }> = [];
   for (const { session_id: sessionId } of sessions) {
+    if (signal?.aborted) break;
     try {
       released += await withOrganizationTransaction(pool, organizationId, async (client) => {
+        if (jobAuthority) await assertOrganizationJobAuthority(client, jobAuthority);
         // Same authority-before-lifecycle lock ordering as the Command processor.
         const authority = (await client.query<{ authority_epoch: string }>(
           `SELECT authority_epoch FROM runtime.session_authorities WHERE organization_id=$1 AND session_id=$2

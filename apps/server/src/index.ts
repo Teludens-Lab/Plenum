@@ -44,6 +44,8 @@ export * from "./extensions/registry.js";
 export * from "./extensions/runtime.js";
 export * from "./voting/polls.js";
 export * from "./comms/voice.js";
+export * from "./operations/job-authority.js";
+export * from "./operations/organization-jobs.js";
 export * from "./studio/collaboration/service.js";
 export * from "./studio/collaboration/gateway.js";
 export * from "./studio/portal.js";

@@ -108,6 +108,7 @@ import { acceptPluginLicense, approvePluginArtifact, getPluginCatalog, importPlu
   submitPluginArtifact } from "../extensions/registry.js";
 import { getMyReceipt, getPoll, getPollAudit, getPollResult, getPolls } from "../voting/polls.js";
 import { enforceVoiceChannelChange, issueMediaCredential, reconcileRevokedVoiceParticipants, releaseFloor, renewFloor, requestFloor, voiceReceipt } from "../comms/voice.js";
+import { configureOrganizationJobs, getOrganizationJobBinding } from "../operations/job-authority.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearchAccess, revokeResearchAccess } from "../research/evidence.js";
 import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport, importOrganizationArchive,
@@ -1235,6 +1236,20 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "GET" && url.pathname === "/v1/research/reportable-sessions") {
         send(response, 200, await listResearchReportableSessions(options.pool, principal, correlationId));
+        return true;
+      }
+      if (url.pathname === "/v1/operations/organization-jobs" && request.method === "GET") {
+        send(response, 200, { binding: await getOrganizationJobBinding(options.pool, principal, correlationId) });
+        return true;
+      }
+      if (url.pathname === "/v1/operations/organization-jobs" && request.method === "PUT") {
+        const body = await readBody(request, correlationId);
+        if (Object.keys(body).some((key) => !["actorPersonId", "enabled", "expectedRevision"].includes(key)) ||
+          typeof body.actorPersonId !== "string" || typeof body.enabled !== "boolean" || typeof body.expectedRevision !== "number") {
+          throw authorizationError("VALIDATION_FAILED", "The scheduled work authorization is invalid.", correlationId);
+        }
+        send(response, 200, { binding: await configureOrganizationJobs(options.pool, principal, options.deploymentId,
+          { actorPersonId: body.actorPersonId, enabled: body.enabled, expectedRevision: body.expectedRevision }, correlationId) });
         return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/retention/policies") {

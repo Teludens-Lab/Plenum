@@ -440,6 +440,36 @@ paths:
       security: [{ SessionCookie: [] }]
       responses:
         "200": { description: Sessions covered by active project-scoped Research Access Grants; identity mappings are omitted. }
+  /v1/operations/organization-jobs:
+    get:
+      operationId: getOrganizationJobBinding
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200": { description: Current Organization job binding or null. Includes organizationId, deploymentId, actorPersonId, enabled and revision. Requires active workforce access. }
+    put:
+      operationId: configureOrganizationJobs
+      x-contract-id: operations-admin-v1
+      x-authorized-organization-role: admin
+      security: [{ SessionCookie: [] }]
+      description: Authorizes or revokes this Organization's dedicated active Admin actor. Organization comes from authentication and Deployment from trusted server configuration. Existing JSON media-type and browser Origin protections apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [actorPersonId, enabled, expectedRevision]
+              properties:
+                actorPersonId: { type: string, format: uuid }
+                enabled: { type: boolean }
+                expectedRevision: { type: integer, minimum: 0, description: Zero creates a binding; subsequent updates require its current revision. }
+      responses:
+        "200": { description: Updated binding and immutable organization.jobs_configured Audit Record committed atomically. }
+        "403": { description: Current Organization Admin or designated actor authority denied. }
+        "409": { description: Stale binding revision; refresh before retry. }
   /v1/retention/policies:
     post:
       operationId: createRetentionPolicy

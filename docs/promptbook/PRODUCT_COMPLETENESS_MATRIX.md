@@ -8,6 +8,8 @@ The reference outcome is the complete Fractured Order lifecycle at a meta level:
 
 ## Zero-gap decision rule
 
+2026-11-11 BA-05: approved tenant job bindings now drive production Inject, report retention and Floor reconciliation for all eligible Organizations, including post-startup enrollment. [BA-05 evidence](../acceptance/BA-05-tenant-jobs.md) separates synthetic production-entrypoint/database proof from BA-11 deployed coverage. Migration 045 preserves tenant RLS; explicit actor revocation and legal holds deny disposal. BA-06/07/10 integration and BA-12 capacity remain open; no new human or release acceptance is inferred.
+
 2026-11-11 BA-04: Floor expiry/release now retain provider-disable work, retry durably and fence successor grants until revocation is confirmed. [BA-04 evidence](../acceptance/BA-04-floor-revocation.md) separates database/provider-injection tests from actual synthetic LiveKit browser enforcement and records migration 044. Additional Organization worker coverage remains BA-05/BA-11. Voice load correctness passed, but request p95 exceeded 500 ms; BA-12 capacity acceptance remains BLOCKED. Historical acceptance and PS-850 approval are unchanged.
 
 2026-11-10 BA-03: exact configured Origin checks now protect Studio upgrades/disclosure/updates and all common HTTP mutation families, with strict JSON media types and explicit cookie-free protocol clients. [BA-03 evidence](../acceptance/BA-03-browser-origins.md) distinguishes real Chromium cookie delivery from header-harness checks and records the conditional nature of audit finding 10. Historical acceptance and PS-850 approval are not expanded.

@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { Pool } from "pg";
-import { requestFloor, releaseFloor, renewFloor, reconcileFloorPermissions } from "../dist/index.js";
+import { requestFloor, releaseFloor, renewFloor, reconcileFloorPermissions, reconcileRevokedVoiceParticipants } from "../dist/index.js";
 
 export async function verifyFloorRevocation(owner, floor, first, second) {
   const publishing = new Set(), calls = [];
@@ -164,5 +164,36 @@ export async function verifyFloorRevocation(owner, floor, first, second) {
   assert.equal((await reconcileFloorPermissions(probe.pool, randomUUID(), probe.deploymentId, adapter)).checked, 0);
   const final = make(), finalLease = await requestFloor(final);
   await releaseFloor(tokenInput(final, finalLease));
+  // PostgreSQL revocations retain microseconds; acknowledgement must match that exact revision.
+  const grant = (await owner.query(`SELECT id,revoked_at::text,provider_revoked_at::text FROM comms.voice_grants
+    WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3`,
+  [first.organizationId, probe.channelId, first.participantId])).rows[0];
+  assert.ok(grant);
+  try {
+    for (const replacement of [undefined, "2040-01-01 00:00:00.123789+00", null]) {
+      await owner.query(`UPDATE comms.voice_grants SET revoked_at='2040-01-01 00:00:00.123456+00',
+        provider_revoked_at=NULL WHERE id=$1`, [grant.id]);
+      let removals = 0;
+      const expectedRemovals = typeof replacement === "string" ? 2 : 1;
+      const removing = { ...adapter, async removeParticipant() {
+        assert.ok(++removals <= expectedRemovals, "acknowledgement must drain instead of retrying the same revision forever");
+        assert.equal((await owner.query("SELECT provider_revoked_at FROM comms.voice_grants WHERE id=$1", [grant.id])).rows[0].provider_revoked_at,
+          null, "a stale acknowledgement must not mark a newer revocation complete");
+        if (removals === 1 && replacement !== undefined) {
+          await owner.query("UPDATE comms.voice_grants SET revoked_at=$2 WHERE id=$1", [grant.id, replacement]);
+        }
+      } };
+      await reconcileRevokedVoiceParticipants(probe.pool, first, removing);
+      assert.equal(removals, expectedRemovals);
+      const acknowledged = (await owner.query("SELECT provider_revoked_at FROM comms.voice_grants WHERE id=$1", [grant.id])).rows[0].provider_revoked_at;
+      assert.equal(acknowledged !== null, replacement !== null);
+      await reconcileRevokedVoiceParticipants(probe.pool, first, removing);
+      assert.equal(removals, expectedRemovals, "completed or superseded revocations are not replayed");
+    }
+  } finally {
+    await owner.query("UPDATE comms.voice_grants SET revoked_at=$2,provider_revoked_at=$3 WHERE id=$1",
+      [grant.id, grant.revoked_at, grant.provider_revoked_at]);
+  }
+  console.log("BA-04 revocation acknowledgement PASS: microseconds preserved, changed revision retried, rejoin not acknowledged as revoked");
   console.log("BA-04-T01/T02/T03 PASS: expiry, durable failed release, restart, ambiguous enable, renewal, delayed disable, authority fencing");
 }

@@ -417,8 +417,9 @@ export async function reconcileRevokedVoiceParticipants(pool: Pool, context: Ses
     if (participants.length === 0) return;
     const effects = await Promise.allSettled(participants.map(({id,channel_id,participant_id}) =>
       withFloorChannelLock(pool,context.organizationId,channel_id,async(connection)=>{
+        // Preserve PostgreSQL microseconds when comparing the acknowledgement's revocation revision.
         const revokedAt = await withOrganizationTransaction(connection,context.organizationId,async(client)=>
-          (await client.query<{revoked_at:Date}>("SELECT revoked_at FROM comms.voice_grants WHERE organization_id=$1 AND id=$2 AND revoked_at IS NOT NULL",
+          (await client.query<{revoked_at:string}>("SELECT revoked_at::text FROM comms.voice_grants WHERE organization_id=$1 AND id=$2 AND revoked_at IS NOT NULL",
             [context.organizationId,id])).rows[0]?.revoked_at);
         if(!revokedAt) return;
         await adapter.removeParticipant({organizationId:context.organizationId,sessionId:context.sessionId,channelId:channel_id,participantId:participant_id});

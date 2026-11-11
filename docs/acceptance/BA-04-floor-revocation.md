@@ -88,6 +88,23 @@ The load harness created and removed its own random databases and two successive
 
 Five initially clean tracked test artifacts were [archived with hashes](../../test-results/ba-04/generated-artifacts.json) under `test-results/ba-04/generated/`, then restored byte-for-byte from HEAD, preserving historical institutional evidence. Final source/test hashes match the candidate manifest; documentation continuity was rechecked with [CMD-GAP-AUDIT](../../test-results/ba-04/completeness-continuity.json). Failed-run logs, local measurements and the verified CLI remain in ignored `test-results/ba-04/`. No unrelated source changes were present or overwritten.
 
+## CI accessibility timeout follow-up — 2026-11-11
+
+Starting clean at `ac4bc84b61f309be121c39099dc48be063614e72`, the supplied Linux CI log showed 10/11 accessibility tests passing and PS-210 timing out while awaiting `stage.start`. Its post-command media enforcement calls `reconcileRevokedVoiceParticipants`. BA-04 had read `revoked_at` as a JavaScript `Date`, losing PostgreSQL microseconds; the exact acknowledgement comparison then affected zero rows and the reconciliation loop repeated indefinitely. This was a server regression, not an axe violation or a need for a longer test timeout.
+
+The narrow fix reads `revoked_at::text`, preserving the exact revision for the existing conditional acknowledgement. It changes no schema, API, provider behavior, authorization or test timeout. The registered database harness now covers a `.123456` revocation, replacement with `.123789` during provider removal, and a concurrent rejoin. A bounded fake-provider assertion makes the old loop fail promptly instead of hanging the test. The original implementation failed that regression; the corrected implementation drains it and retains stale-acknowledgement protection.
+
+Evidence is in `test-results/ba-04-a11y/`, separate from the original BA-04 candidate above. [Preflight](../../test-results/ba-04-a11y/preflight.json) records Node 24.22.1, clean source identity and 177,382,477,824 free bytes; [candidate hashes](../../test-results/ba-04-a11y/candidate.json) identify the two changed implementation/test files. All commands ran from the repository root against isolated PostgreSQL 18.6 with the root lockfile:
+
+| Command | Result | Evidence |
+|---|---|---|
+| CMD-PLATFORM-DB — original implementation plus regression | **FAIL / 1**, 145.35 s; reproduced repeated unacknowledged removal | [db-reproduction.json](../../test-results/ba-04-a11y/db-reproduction.json) |
+| CMD-PLATFORM-TYPECHECK — `npm run typecheck` | **PASS / 0**, 16.27 s | [typecheck.json](../../test-results/ba-04-a11y/typecheck.json) |
+| CMD-PLATFORM-DB — `npm run test:db` | **PASS / 0**, 43/43, 143.82 s | [db-fixed.json](../../test-results/ba-04-a11y/db-fixed.json) |
+| CMD-PLATFORM-A11Y — `npm run test:a11y` | **PASS / 0**, 11/11, 331.14 s; includes the reported PS-210 scenario | [a11y-fixed.json](../../test-results/ba-04-a11y/a11y-fixed.json) |
+
+The browser rerun was local Windows Chromium, not a rerun of the hosted Linux CI job. The regression deliberately supplies PostgreSQL sub-millisecond timestamps, independent of host-clock precision. No test was skipped or its timeout increased. The [task fixture](../../test-results/ba-04-a11y/resources.txt) `plenum-ba04-a11y-pg`, ID `1e2fa8620cf470a91b7b42535474261168ab996334aa4c4fda69a94c54a516b3`, used loopback port 55454 and tmpfs only. Its three databases (`ba04_ack_repro`, `ba04_ack_fixed`, `ba04_a11y_fixed`) were removed with the verified container after validation: [cleanup](../../test-results/ba-04-a11y/cleanup.log). Eight initially clean generated artifacts were [archived with hashes](../../test-results/ba-04-a11y/generated-artifacts.json) and restored from HEAD. No commit or deployment. This follow-up does not close the separate BA-12 capacity gate or broaden prior human/provider acceptance.
+
 ## Remaining scope and continuation
 
 Representative institutional network/provider acceptance, deployed failover and additional-Organization worker coverage remain **NOT RUN** for this candidate. Expiry enforcement requires a running owning worker and reachable provider; arbitrary control-plane downtime or loss of a database advisory-lock connection during an in-flight provider RPC is not a proven failover boundary here. Poll/retry bounds are policy; measured capacity is recorded separately. The failed burst latency target remains a release blocker for BA-12. PS-830 owner-reported product/desktop AT acceptance, PS-840's signed-checkpoint exception and PS-842 decisions retain their original scope and grant no PS-850 approval.

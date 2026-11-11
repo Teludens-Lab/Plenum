@@ -1,5 +1,9 @@
 # Project state
 
+## BA-04 CI accessibility regression — 2026-11-11
+
+The PS-210 accessibility timeout on `ac4bc84b61f309be121c39099dc48be063614e72` was traced to post-`stage.start` media enforcement: converting a PostgreSQL revocation timestamp to JavaScript `Date` lost microseconds and prevented acknowledgement, repeating provider removal indefinitely. The narrow correction preserves the timestamp as database text while retaining the exact revision guard. A deterministic database regression covers acknowledgement, a newer revocation and concurrent rejoin; the [BA-04 follow-up evidence](../acceptance/BA-04-floor-revocation.md#ci-accessibility-timeout-follow-up--2026-11-11) records the reproduced failure and final gates. No schema, UI, timeout or authorization change; the BA-12 capacity blocker remains separate. No commit or deployment.
+
 ## BA-04 radio Floor provider revocation — 2026-11-11
 
 Audit finding 3 was reproduced on clean `45b25c36f40fb9dd945abd2b95a074b314abd46a` (BA-01/02/03 included). Floor Lease rows now retain durable provider obligations; serialized effects prevent successor grants before confirmed revocation. Additive migration 044 and the production expiry/retry worker require draining old writers. [BA-04 handoff](../acceptance/BA-04-floor-revocation.md) records T01–T03, exact provider/browser evidence, failed attempts and current gates. BA-05/BA-11 must prove worker coverage for additional Organizations. The isolated 5,000-request voice load had no request errors but p95 1,085.43 ms exceeds 500 ms; capacity acceptance remains BLOCKED for BA-12. Historical PS-830 acceptance, PS-840 checkpoint exception, PS-842 decisions and PS-850 release obligations retain their scope. No commit or deployment. Next: BA-05.

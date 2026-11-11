@@ -207,7 +207,7 @@ const api = createRuntimeHttpHandler({
   invitationDeliveryWebhookToken: "synthetic-invitation-delivery-webhook-token",
   authenticate
 });
-const collaboration = createStudioCollaborationGateway({ pool, authenticate });
+const collaboration = createStudioCollaborationGateway({ pool, authenticate, publicBaseUrl: `http://127.0.0.1:${runtimePort}` });
 
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));

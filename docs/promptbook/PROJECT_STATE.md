@@ -1,5 +1,9 @@
 # Project state
 
+## BA-03 browser trust boundary — 2026-11-10
+
+Audit finding 10 is addressed at the shared HTTP mutation and Studio WebSocket boundaries, using the configured public origin before reads/edits and retaining per-operation authorization. JSON media types and the existing machine/protocol exceptions are explicit. Starting clean HEAD: `45960d872281dd07de7c91e904a6b0c826562ffa`, including BA-01/02. [BA-03 handoff](../acceptance/BA-03-browser-origins.md) records the route inventory, T01–T03, browser-versus-header evidence, failed attempts and final validation. No schema migration, commit or deployment. PS-830 owner-reported acceptance, PS-840's checkpoint exception, PS-842 decisions and PS-850 release obligations retain their scope. Next: BA-04.
+
 ## BA-02 Command allowance isolation — 2026-11-10
 
 Audit finding 2 was reproduced against clean `9d32a9e14a2cd731098901cc580675a769549ddc` using a disposable PostgreSQL database. Command ingress now has a bounded address allowance before authentication; trusted principal and separate Session allowances follow Session access checks. The reference 500-participant × 10-Session profile supplies the sizing rationale. [BA-02 handoff](../acceptance/BA-02-command-limits.md) records T01–T03, exact candidate identity, command evidence, proxy/NAT assumptions and BA-12 load gates. This is pre-production security remediation, not PS-850 approval. No migration, dependency, commit or deployment. Existing PS-830 owner-reported acceptance, PS-840 checkpoint exception and PS-842 decisions retain their scope. Next: BA-03.

@@ -2,6 +2,16 @@ openapi: 3.1.0
 info:
   title: Plenum platform API
   version: 0.1.0
+  description: >-
+    Browser mutations require an exact Origin matching the configured public application origin.
+    Cookie-bearing POST/PUT/PATCH/DELETE requests without Origin are denied, including bodyless actions.
+    Cookie-free machine requests may omit Origin but retain the endpoint's explicit credential or invitation-token validation.
+    Any supplied unapproved, null or malformed Origin is denied. Generic JSON readers require application/json;
+    SCIM also accepts application/scim+json. Release, Plugin and archive imports retain their declared media types.
+    Text/plain, form and multipart mutation bodies are not accepted. No credentialed cross-origin CORS access is provided.
+    Studio WebSocket handshakes enforce the same Origin policy before authentication, upgrade or Draft disclosure;
+    cookie-free Authorization clients may omit Origin but still require valid authentication and project access.
+    The browser-bound OIDC GET callback is a separate protocol endpoint and retains state, nonce, PKCE and transaction-cookie validation.
 paths:
   /v1/platform/administrators:
     get:

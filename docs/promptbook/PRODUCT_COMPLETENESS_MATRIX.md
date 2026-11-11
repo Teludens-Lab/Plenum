@@ -8,6 +8,8 @@ The reference outcome is the complete Fractured Order lifecycle at a meta level:
 
 ## Zero-gap decision rule
 
+2026-11-10 BA-03: exact configured Origin checks now protect Studio upgrades/disclosure/updates and all common HTTP mutation families, with strict JSON media types and explicit cookie-free protocol clients. [BA-03 evidence](../acceptance/BA-03-browser-origins.md) distinguishes real Chromium cookie delivery from header-harness checks and records the conditional nature of audit finding 10. Historical acceptance and PS-850 approval are not expanded.
+
 2026-11-10 BA-02: audit finding 2 is addressed by address-only Command ingress, authenticated principal quotas after Session access checks, and a distinct workload-sized Session aggregate. [BA-02 evidence](../acceptance/BA-02-command-limits.md) separates local policy/concurrency/HTTP proof from unrun BA-12 capacity gates and deployed-proxy acceptance. Historical acceptance and final PS-850 obligations are unchanged.
 
 2026-11-10 BA-01: audit findings 1/9 are addressed by browser-bound OIDC transactions and normalized same-origin return paths. See [BA-01 identity evidence](../acceptance/BA-01-login.md) for local T01–T03 checks, migration 043, candidate identity and remaining real-provider/human gates. Historical PS-815 internal acceptance is preserved; it does not accept this new candidate or grant PS-850 approval.

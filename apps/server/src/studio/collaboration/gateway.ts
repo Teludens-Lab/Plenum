@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket, type RawData } from "ws";
 
 import { AuthorizationError } from "../../errors.js";
 import type { AuthenticatedPrincipal } from "../../identity/login.js";
+import { assertBrowserOrigin, configuredBrowserOrigin } from "../../security/browser-origin.js";
 import { applyStudioUpdate, assertStudioReadAccess, getCollaborativeDraft, studioSyncEnvelope } from "./service.js";
 
 const MAX_SOCKET_MESSAGE_BYTES = 384 * 1024;
@@ -23,6 +24,7 @@ interface Peer {
 
 export interface StudioCollaborationGatewayOptions {
   pool: Pool;
+  publicBaseUrl: string;
   authenticate(request: IncomingMessage, correlationId: string): Promise<AuthenticatedPrincipal>;
 }
 
@@ -30,8 +32,8 @@ function send(socket: WebSocket, message: StudioCrdtV1): void {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
-function rejectUpgrade(socket: Duplex, status: 401 | 404): void {
-  socket.write(`HTTP/1.1 ${status} ${status === 401 ? "Unauthorized" : "Not Found"}\r\nConnection: close\r\n\r\n`);
+function rejectUpgrade(socket: Duplex, status: 401 | 403 | 404): void {
+  socket.write(`HTTP/1.1 ${status} ${status === 401 ? "Unauthorized" : status === 403 ? "Forbidden" : "Not Found"}\r\nConnection: close\r\n\r\n`);
   socket.destroy();
 }
 
@@ -45,6 +47,7 @@ function updateMessage(value: RawData): { updateId: string; generation: number; 
 }
 
 export function createStudioCollaborationGateway(options: StudioCollaborationGatewayOptions) {
+  const approvedOrigin = configuredBrowserOrigin(options.publicBaseUrl);
   const webSockets = new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE_BYTES, perMessageDeflate: false });
   const peers = new Map<string, Set<Peer>>();
 
@@ -106,6 +109,12 @@ export function createStudioCollaborationGateway(options: StudioCollaborationGat
       const projectId = match[1];
       if (projectId === undefined) { rejectUpgrade(socket, 404); return true; }
       const correlationId = randomUUID();
+      try {
+        assertBrowserOrigin(request, approvedOrigin, correlationId);
+      } catch {
+        rejectUpgrade(socket, 403);
+        return true;
+      }
       try {
         const principal = await options.authenticate(request, correlationId);
         await assertStudioReadAccess(options.pool, principal, projectId, correlationId);

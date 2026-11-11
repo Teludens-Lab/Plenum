@@ -11,6 +11,7 @@ import { Pool } from "pg";
 import * as Y from "yjs";
 import { canonicalizeJson } from "@plenum/event-contracts";
 import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
+import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
 import { compileRelease } from "@plenum/release-compiler";
 
 import {
@@ -593,6 +594,10 @@ test("DB-01 keeps pooled real-app-role reads and writes tenant isolated", async 
     withOrganizationTransaction(app, ids.orgA, (client) => client.query("SELECT * FROM evidence.audit_records")),
     /permission denied/
   );
+});
+
+test("BA-03-T01/T02/T03 real gateway and HTTP reject hostile Origins and preserve collaboration, revocation and machine clients", async () => {
+  await verifyBrowserOriginBoundary(app, owner, ids, principalD, principalE);
 });
 
 test("PS-790-T01 administration is tenant-scoped, least-privilege, auditable, and concurrency safe", async () => {

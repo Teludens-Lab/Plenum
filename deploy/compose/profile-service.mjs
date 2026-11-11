@@ -120,7 +120,7 @@ const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
         correlationId: event.correlationId, category: event.category });
     }
   } });
-const collaboration = createStudioCollaborationGateway({ pool, authenticate });
+const collaboration = createStudioCollaborationGateway({ pool, authenticate, publicBaseUrl });
 const webRoot = fileURLToPath(new URL("../../apps/runtime-web/dist/web/", import.meta.url));
 const studioRoot = fileURLToPath(new URL("../../apps/studio/dist/web/", import.meta.url));
 const contentTypes = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".html": "text/html; charset=utf-8", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };

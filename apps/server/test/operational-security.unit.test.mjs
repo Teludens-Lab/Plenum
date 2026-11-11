@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import test from "node:test";
+import { assertBrowserOrigin, configuredBrowserOrigin } from "../dist/security/browser-origin.js";
 
 import { ClamAvContentScanner, OperationalTelemetry, classifyDeploymentRequest, sessionCommandRateLimits } from "../dist/index.js";
 import {
@@ -10,6 +11,22 @@ import {
 import { parseOperationsSecretBundle } from "../../../deploy/compose/operations-secrets.mjs";
 
 const deploymentId = "10000000-0000-4000-8000-000000000001";
+
+test("BA-03-T02 exact Origin gate fails closed for cookie requests and preserves cookie-free machine authentication", () => {
+  const approved = configuredBrowserOrigin("https://app.plenum.test");
+  for (const origin of [undefined, "null", "https://sibling.plenum.test", "http://app.plenum.test", "https://app.plenum.test:444",
+    "https://app.plenum.test/", "https://app.plenum.test/path", "https://app.plenum.test@evil.test", "https://app.plenum.test.evil.test",
+    "https://app.plenum.test https://evil.test", [approved, approved], "malformed"]) {
+    assert.throws(() => assertBrowserOrigin({ headers: { cookie: "plenum_session=synthetic", ...(origin === undefined ? {} : { origin }),
+      host: "app.plenum.test", "x-forwarded-host": "app.plenum.test", authorization: "Bearer synthetic" } }, approved, deploymentId),
+    (error) => error.envelope?.error.code === "PERMISSION_DENIED");
+  }
+  assert.doesNotThrow(() => assertBrowserOrigin({ headers: { cookie: "plenum_session=synthetic", origin: approved } }, approved, deploymentId));
+  assert.doesNotThrow(() => assertBrowserOrigin({ headers: { authorization: "Bearer synthetic" } }, approved, deploymentId));
+  assert.throws(() => assertBrowserOrigin({ headers: { origin: "null", authorization: "Bearer synthetic" } }, approved, deploymentId));
+  assert.throws(() => assertBrowserOrigin({ headers: { cookie: "synthetic", origin: approved } }, undefined, deploymentId));
+  for (const url of ["null", "file:///tmp", "https://user:password@app.plenum.test"]) assert.throws(() => configuredBrowserOrigin(url));
+});
 
 test("BA-02-T03 Command ingress ignores spoofed identities, tokens and untrusted forwarded addresses", () => {
   const request = { method: "POST", url: "/v1/sessions/known/commands", headers: {}, socket: { remoteAddress: "192.0.2.1" } };

@@ -22,6 +22,7 @@ import { withOrganizationTransaction } from "../database.js";
 import { AuthorizationError, authorizationError } from "../errors.js";
 import { resolveSessionAccessContext } from "../identity/context.js";
 import { consumeDeploymentRateLimit, sessionCommandRateLimits } from "../security/rate-limit.js";
+import { assertBrowserOrigin, configuredBrowserOrigin } from "../security/browser-origin.js";
 import { oidcLoginCookie, revokeAuthenticationSession, type AuthenticatedPrincipal } from "../identity/login.js";
 import {
   acceptOrganizationWorkforceInvitation,
@@ -390,7 +391,12 @@ function sendParticipantRuntimeResource(
   response.end(Buffer.from(asset.bytes));
 }
 
-async function readBody(request: IncomingMessage, correlationId: string, maximumBytes = MAX_BODY_BYTES): Promise<JsonObject> {
+async function readBody(request: IncomingMessage, correlationId: string, maximumBytes = MAX_BODY_BYTES,
+  additionalMediaType = "application/json"): Promise<JsonObject> {
+  const mediaType = request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/json" && mediaType !== additionalMediaType) {
+    throw authorizationError("VALIDATION_FAILED", "A supported JSON content type is required.", correlationId);
+  }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -638,6 +644,7 @@ async function receiptFor(
 }
 
 export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
+  const approvedOrigin = configuredBrowserOrigin(options.publicBaseUrl);
   return async (request: IncomingMessage, response: ServerResponse, requestCorrelationId?: string): Promise<boolean> => {
     const correlationId = requestCorrelationId !== undefined && uuid.test(requestCorrelationId)
       ? requestCorrelationId : randomUUID();
@@ -646,6 +653,14 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       const url = new URL(request.url ?? "/", "http://localhost");
       scimRequest = url.pathname.startsWith("/scim/v2/");
       if (!url.pathname.startsWith("/v1/") && !scimRequest) return false;
+      if (!["GET", "HEAD", "OPTIONS"].includes(request.method ?? "")) {
+        assertBrowserOrigin(request, approvedOrigin, correlationId);
+        const mediaType = request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+        if (mediaType !== undefined && !["application/json", "application/scim+json", "application/vnd.plenum.release+json",
+          "application/vnd.plenum.plugin+json", "application/gzip"].includes(mediaType)) {
+          throw authorizationError("VALIDATION_FAILED", "The request content type is not supported.", correlationId);
+        }
+      }
       let match: RegExpMatchArray | null;
       const notificationRoute = url.pathname === "/v1/messages" || url.pathname === "/v1/events/postmark";
       if (notificationRoute) {
@@ -730,17 +745,17 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           }, correlationId)); return true;
         }
         if (request.method === "POST" && url.pathname === "/scim/v2/Users") {
-          const body = await readBody(request, correlationId);
+          const body = await readBody(request, correlationId, MAX_BODY_BYTES, "application/scim+json");
           sendScim(response, 201, await withScimOperation(options, request, context, "create_user", "scim:Users",
             correlationId, () => createScimUser(options.pool, context, body, correlationId))); return true;
         }
         if ((match = url.pathname.match(/^\/scim\/v2\/Users\/([^/]+)$/u))) {
           const personId = pathId(match[1], correlationId);
           if (request.method === "GET") sendScim(response, 200, await getScimUser(options.pool, context, personId, correlationId));
-          else if (request.method === "PUT") { const body = await readBody(request, correlationId); sendScim(response, 200,
+          else if (request.method === "PUT") { const body = await readBody(request, correlationId, MAX_BODY_BYTES, "application/scim+json"); sendScim(response, 200,
             await withScimOperation(options, request, context, "replace_user", `person:${personId}`, correlationId,
               () => replaceScimUser(options.pool, context, personId, body, correlationId))); }
-          else if (request.method === "PATCH") { const body = await readBody(request, correlationId); sendScim(response, 200,
+          else if (request.method === "PATCH") { const body = await readBody(request, correlationId, MAX_BODY_BYTES, "application/scim+json"); sendScim(response, 200,
             await withScimOperation(options, request, context, "patch_user", `person:${personId}`, correlationId,
               () => patchScimUser(options.pool, context, personId, body, correlationId))); }
           else if (request.method === "DELETE") { await withScimOperation(options, request, context, "deprovision_user",
@@ -753,7 +768,7 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           sendScim(response, 200, await listScimGroups(options.pool, context)); return true;
         }
         if (request.method === "PATCH" && (match = url.pathname.match(/^\/scim\/v2\/Groups\/([^/]+)$/u))) {
-          const mappingId = pathId(match[1], correlationId); const body = await readBody(request, correlationId);
+          const mappingId = pathId(match[1], correlationId); const body = await readBody(request, correlationId, MAX_BODY_BYTES, "application/scim+json");
           sendScim(response, 200, await withScimOperation(options, request, context, "patch_group", `group_role_mapping:${mappingId}`,
             correlationId, () => patchScimGroup(options.pool, context, mappingId, body, correlationId))); return true;
         }

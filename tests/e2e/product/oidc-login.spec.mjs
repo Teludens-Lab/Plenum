@@ -169,7 +169,7 @@ test("BA-01-T01/T02/T03 production callback binds isolated browsers and preserve
       expect(reply.status()).toBe(503);
       expect(reply.headers().location).toBeUndefined();
     }
-    const signedOut = await a.request.post(`${origin}/v1/auth/logout`);
+    const signedOut = await a.request.post(`${origin}/v1/auth/logout`, { headers: { origin } });
     expect(signedOut.status()).toBe(200);
     expect((await a.request.get(`${origin}/v1/me`)).status()).toBe(401);
   } finally {

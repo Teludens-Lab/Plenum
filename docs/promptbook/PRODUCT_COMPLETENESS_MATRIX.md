@@ -1,5 +1,7 @@
 # Product completeness and user-test contract
 
+2026-11-11 BA-08: finding 7 remains **OPEN**. The owner-approved implementation connects Release-derived plans, signed artifact custody, constrained Unix-socket execution and bounded tenant workers. [Evidence](../ps-230-verification.md#ba-08-governed-production-model-runs--2026-11-11) distinguishes HTTP/database/S3 harness PASS from qualifying-rootless production execution NOT RUN. The supervisor rejects the local rootless lab's missing resource controls. UI availability remains accurate; implementation/harness results do not complete REQ-038 or authorize production activation.
+
 2026-11-11 BA-07: automatic Form attachment cleanup uses existing tenant bindings and a bounded durable retry journal; read checks deny expired files before cleanup, including held files under the owner's explicit 2026-11-11 approval. [Evidence and policy decision](../ps-520-verification.md#ba-07-automatic-form-attachment-expiry-2026-11-11) distinguish byte deletion, journal recovery and held-byte preservation. Historical acceptance and deployment gates are unchanged.
 
 2026-11-11 BA-06: finding 4's production publisher and idle Runtime subscription are connected using existing tenant authority and synchronization contracts. [BA-06 evidence](../acceptance/BA-06-live-sync.md) separates automatic two-client delivery, server-side recipient filtering, reconnect/revocation and bounded backlog recovery from unrun deployment/load and human AT acceptance. Historical PS-830/840/842 evidence and PS-850 approval are not expanded.

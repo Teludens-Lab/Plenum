@@ -88,6 +88,9 @@ export async function verifyTenantJobs(owner, app) {
       VALUES ($1,$2,$3,$4,1,'BA-05 synthetic','1','1',repeat('a',64),'ba05',$5)`, [f.release, f.org, f.project, f.revision, f.person]);
     await owner.query("INSERT INTO runtime.sessions(id,organization_id,project_id,initial_release_id,status,created_by) VALUES ($1,$2,$3,$4,'active',$5)", [f.session, f.org, f.project, f.release, f.person]);
     await owner.query("INSERT INTO runtime.session_authorities(session_id,organization_id,deployment_id,authority_epoch,status) VALUES ($1,$2,$3,1,'active')", [f.session, f.org, deployment]);
+    await owner.query(`INSERT INTO runtime.release_activations
+      (id,organization_id,project_id,session_id,release_id,activation_sequence,compatibility_policy,approved_by)
+      VALUES ($1,$2,$3,$4,$5,1,'{}',$6)`, [randomUUID(), f.org, f.project, f.session, f.release, f.person]);
     await owner.query("INSERT INTO evidence.session_sequences(session_id,organization_id) VALUES ($1,$2)", [f.session, f.org]);
     await owner.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4)", [f.participant, f.org, f.session, f.person]);
     await owner.query(`INSERT INTO runtime.seat_assignments(id,organization_id,session_id,participant_id,session_role_id,seat_id,assigned_by)
@@ -138,13 +141,13 @@ export async function verifyTenantJobs(owner, app) {
   const attachmentState = async file => (await owner.query('SELECT upload_state FROM runtime.form_attachments WHERE id=$1', [file.id])).rows[0].upload_state;
   const assertDeleted = file => assert.rejects(store.get(file.key), error => error.$metadata?.httpStatusCode === 404);
   const purged = async (id) => (await owner.query("SELECT bytes IS NULL AS purged FROM reporting.export_artifacts WHERE id=$1", [id])).rows[0].purged;
-  const start = async (bootstrap) => {
+  const start = async (bootstrap, executorSocket = '') => {
     const port = await freePort(), metrics = await freePort(), publicUrl = `https://localhost:${port}`;
     // Test-only IPC drives the production SIGTERM handler; Date advances without sleeping a readiness window.
     const shim = `const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance'){offset+=61000;process.send('advanced')}});`;
     const child = spawn(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(shim)}`, "deploy/compose/profile-service.mjs"], {
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_ENV: 'production', NODE_EXTRA_CA_CERTS: cert, PORT: String(port), METRICS_PORT: String(metrics),
-        PLENUM_DEPLOYMENT_PROFILE: 'cloud', PLENUM_PUBLIC_BASE_URL: publicUrl, PLENUM_DEPLOYMENT_ID: deployment,
+        PLENUM_DEPLOYMENT_PROFILE: 'cloud', PLENUM_PUBLIC_BASE_URL: publicUrl, PLENUM_DEPLOYMENT_ID: deployment, PLENUM_EXTENSION_SOCKET: executorSocket,
         PLENUM_RETENTION_ACTOR_PERSON_ID: bootstrap.person, OIDC_ISSUER: publicUrl, OIDC_PROVIDER_KEY: 'ba05', OIDC_ORGANIZATION_ID: bootstrap.org,
         OIDC_CLIENT_ID: 'ba05', OIDC_REDIRECT_URI: `${publicUrl}/auth/callback`, S3_BUCKET: bucket, S3_ENDPOINT: providerUrl,
         S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID ?? 'synthetic', S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY ?? 'synthetic', MEDIA_URL: 'wss://127.0.0.1', MEDIA_API_URL: providerUrl,
@@ -168,10 +171,42 @@ export async function verifyTenantJobs(owner, app) {
       authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ actorPersonId: f.person, enabled, expectedRevision: revision, ...extra }) });
     return { status: response.status, body: await response.json() };
   };
+  const unavailableModelRun = async (service, f, command = {
+    commandId: randomUUID(), deviceId: f.device, operationType: 'composition_run.start', aggregateId: randomUUID(),
+    expectedAggregateVersion: 0, governingReleaseId: f.release, activeSessionRoleId: 'role', payload: { planId: 'ba08-synthetic-plan' }
+  }) => {
+    const headers = { authorization: `Bearer ${f.token}`, 'content-type': 'application/json' };
+    const operations = await fetch(`${service.url}/v1/operations/plugins`, { headers });
+    assert.equal(operations.status, 200);
+    assert.equal((await operations.json()).modelRuns.reason, 'executor_not_configured');
+    const denied = await fetch(`${service.url}/v1/operations/plugins`);
+    assert.equal(denied.status, 401, 'capability metadata retains authentication');
+    const receipts = await Promise.all([0, 1].map(async () => {
+      const response = await fetch(`${service.url}/v1/sessions/${f.session}/commands`, { method: 'POST', headers, body: JSON.stringify(command) });
+      const receipt = await response.json();
+      assert.equal(response.status, 409, JSON.stringify(receipt));
+      return receipt;
+    }));
+    for (const receipt of receipts) {
+      assert.equal(receipt.status, 'rejected');
+      assert.equal(receipt.errorCode, 'CAPABILITY_UNAVAILABLE');
+    }
+    assert.equal(receipts[0].commandId, command.commandId);
+    assert.equal(receipts[1].commandId, command.commandId);
+    assert.ok(receipts.some(receipt => receipt.replayed), 'unavailable retries replay the receipt');
+    assert.equal((await owner.query('SELECT count(*)::int AS n FROM sync.command_receipts WHERE organization_id=$1 AND command_id=$2',
+      [f.org, command.commandId])).rows[0].n, 1);
+    for (const table of ['composition_runs', 'model_runs', 'effect_proposals']) {
+      assert.equal((await owner.query(`SELECT count(*)::int AS n FROM extension.${table} WHERE organization_id=$1`, [f.org])).rows[0].n, 0,
+        'BA-08-T03 missing executor creates no run, result or effect');
+    }
+    return command;
+  };
   try {
     const first = await seed(1), aInject = await schedule(first, 0), aArtifact = await artifact(first);
     const aFile = await attachment(first);
     const service = await start(first);
+    const unavailableCommand = await unavailableModelRun(service, first);
     await eventually(async () => await delivered(aInject) && await purged(aArtifact), 'T01/T02 bootstrap scheduled work');
     await eventually(async () => await attachmentState(aFile) === 'purged', 'BA-07-T02 bootstrap automatic attachment deletion');
     await assertDeleted(aFile);
@@ -241,6 +276,7 @@ export async function verifyTenantJobs(owner, app) {
     await backlog(first, 1); await backlog(second, 205);
     await owner.query("UPDATE runtime.session_authorities SET status='fenced' WHERE session_id=$1", [second.session]);
     const restarted = await start(first);
+    await unavailableModelRun(restarted, first, unavailableCommand);
     await owner.query("UPDATE runtime.form_attachments SET retention_attempted_at=now()-interval '31 seconds' WHERE organization_id=$1", [second.org]);
     await eventually(async () => (await owner.query('SELECT retention_attempted_at>now()-interval \'5 seconds\' AS attempted FROM runtime.form_attachments WHERE id=$1', [heldFile.id])).rows[0].attempted, 'held attachment visited automatically after restart');
     assert.deepEqual(Buffer.from(await store.get(heldFile.key)), heldFile.bytes, 'hold preserves stored bytes');
@@ -325,6 +361,10 @@ export async function verifyTenantJobs(owner, app) {
     assert.equal(calls.length, 1, 'overlapping ticks do not duplicate the in-flight provider effect');
     const afterStop = await schedule(third, 3);
     assert.equal(await delivered(afterStop), false);
+    const missingExecutor = await start(second, '/ba08-not-configured/host.sock');
+    const capability = await fetch(`${missingExecutor.url}/v1/operations/plugins`, { headers: { authorization: `Bearer ${second.token}` } });
+    assert.equal((await capability.json()).modelRuns.reason, 'executor_unavailable', 'configured but unreachable executor is unavailable');
+    await stop(missingExecutor);
   } finally {
     pendingDisable?.resume.resolve();
     for (const service of children) if (service.child.exitCode === null) { service.child.kill(); await once(service.child, 'exit'); }

@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import test from "node:test";
 import { assertBrowserOrigin, configuredBrowserOrigin } from "../dist/security/browser-origin.js";
 
-import { ClamAvContentScanner, OperationalTelemetry, classifyDeploymentRequest, sessionCommandRateLimits } from "../dist/index.js";
+import { ClamAvContentScanner, OperationalTelemetry, classifyDeploymentRequest, modelRunCapability, sessionCommandRateLimits } from "../dist/index.js";
 import {
   deliverOperationalAlert, evaluateSustainedCondition, metricWindow, parsePrometheusSnapshot,
   rehydrateSecurityEventCursor, securityEventCursor
@@ -11,6 +11,17 @@ import {
 import { parseOperationsSecretBundle } from "../../../deploy/compose/operations-secrets.mjs";
 
 const deploymentId = "10000000-0000-4000-8000-000000000001";
+
+test("BA-08-T03 Model Run configuration is explicit and never exposes plan identities or grants authority", () => {
+  assert.equal(modelRunCapability().reason, "executor_not_configured");
+  assert.equal(modelRunCapability({ plans: new Map() }, false).reason, "executor_unavailable");
+  assert.equal(modelRunCapability({ plans: new Map() }).reason, "plans_not_configured");
+  const configured = modelRunCapability({ plans: new Map([["protected-plan", { governingReleaseId: "protected-release" }]]) });
+  assert.equal(configured.status, "configured");
+  assert.equal(configured.reason, null);
+  assert.match(configured.message, /Session authorization/u);
+  assert.doesNotMatch(JSON.stringify(configured), /protected-/u);
+});
 
 test("BA-03-T02 exact Origin gate fails closed for cookie requests and preserves cookie-free machine authentication", () => {
   const approved = configuredBrowserOrigin("https://app.plenum.test");

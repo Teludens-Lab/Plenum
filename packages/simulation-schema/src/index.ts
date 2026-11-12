@@ -130,6 +130,7 @@ export interface PluginBindingV1 {
   inputMappings: Array<{
     target: string;
     source: string;
+    scopeReference?: string;
     maxClassification?: "public" | "internal" | "confidential" | "restricted";
   }>;
   timeoutSeconds: number;
@@ -192,6 +193,11 @@ export interface ModelCompositionV1 {
   fixtures: CompositionFixtureV1[];
   graphDigest?: string;
   dependencyClosure?: Array<{ pluginId: string; version: string; digest: string }>;
+  executionPolicy?: {
+    seed: number;
+    triggerSessionRoleIds: string[];
+    allowedEffects: Array<{ stateVariableId: string; scopeReference: string; operations: Array<"set" | "adjust"> }>;
+  };
 }
 
 export type RuntimeFieldTypeV1 = typeof import("./forms.js").BASIC_FIELD_TYPES[number];
@@ -877,6 +883,12 @@ export const compositionDefinitionV1Schema = {
     contractId: { const: COMPOSITION_DEFINITION_CONTRACT_ID }, id: { type: "string", format: "uuid" }, name: nonEmptyStringProperty,
     version: nonEmptyStringProperty, nodes: { type: "array", items: { type: "object" } },
     edges: { type: "array", items: { type: "object" } }, fixtures: { type: "array", items: { type: "object" } },
+    executionPolicy: { type: "object", additionalProperties: false, required: ["seed", "triggerSessionRoleIds", "allowedEffects"], properties: {
+      seed: { type: "integer", minimum: 0 }, triggerSessionRoleIds: { type: "array", minItems: 1, maxItems: 64, items: nonEmptyStringProperty },
+      allowedEffects: { type: "array", minItems: 1, maxItems: 32, items: { type: "object", additionalProperties: false,
+        required: ["stateVariableId", "scopeReference", "operations"], properties: { stateVariableId: nonEmptyStringProperty,
+          scopeReference: { type: "string", maxLength: 200 }, operations: { type: "array", minItems: 1, items: { enum: ["set", "adjust"] } } } } }
+    } },
     graphDigest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, dependencyClosure: { type: "array", items: { type: "object" } }
   }
 } as const;
@@ -1176,6 +1188,18 @@ export function assertModelComposition(
   bindings: readonly PluginBindingV1[],
   sessionRoleIds: ReadonlySet<string> = new Set()
 ): void {
+  if (composition.executionPolicy !== undefined) {
+    const policy = composition.executionPolicy;
+    if (!policy || !Number.isSafeInteger(policy.seed) || policy.seed < 0 || !Array.isArray(policy.triggerSessionRoleIds) ||
+        policy.triggerSessionRoleIds.length === 0 || policy.triggerSessionRoleIds.length > 64 ||
+        !Array.isArray(policy.allowedEffects) || policy.allowedEffects.length === 0 || policy.allowedEffects.length > 32 ||
+        policy.triggerSessionRoleIds.some(id => typeof id !== "string" || (sessionRoleIds.size > 0 && !sessionRoleIds.has(id))) ||
+        policy.allowedEffects.some(effect => !effect || typeof effect.stateVariableId !== "string" || !effect.stateVariableId ||
+          typeof effect.scopeReference !== "string" || effect.scopeReference.length > 200 || !Array.isArray(effect.operations) ||
+          effect.operations.length === 0 || effect.operations.some(operation => operation !== "set" && operation !== "adjust"))) {
+      throw new Error(`Model Composition ${composition.id} execution policy is invalid`);
+    }
+  }
   if (composition.contractId !== COMPOSITION_DEFINITION_CONTRACT_ID || composition.name.trim().length === 0 ||
       composition.version.trim().length === 0) throw new Error(`Model Composition ${composition.id} is incomplete`);
   const nodes = new Map(composition.nodes.map((node) => [node.id, node]));

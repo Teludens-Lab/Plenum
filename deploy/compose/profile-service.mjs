@@ -10,7 +10,7 @@ import {
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
-  startOrganizationJobs
+  startOrganizationJobs, createProductionExtensionRuntime, createModelRunWorker
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { buildSecurityHeaders } from "./security-headers.mjs";
@@ -95,6 +95,12 @@ const contentScanner = process.env.CONTENT_SCANNER_HOST?.trim() ? new ClamAvCont
   timeoutMs: Number(process.env.CONTENT_SCANNER_TIMEOUT_MS ?? 10_000)
 }) : undefined;
 const telemetry = new OperationalTelemetry({ deploymentId });
+const objectStore = new S3ObjectStore(s3, s3Bucket);
+const extensionRuntime = process.env.PLENUM_EXTENSION_SOCKET?.trim()
+  ? createProductionExtensionRuntime(jobPool, objectStore, deploymentId, profile, process.env.PLENUM_EXTENSION_SOCKET.trim()) : undefined;
+const modelWorker = extensionRuntime ? createModelRunWorker(jobPool, extensionRuntime, () => telemetry.emit({
+  event: "service.request_failed", severity: "error", outcome: "failed", correlationId: randomUUID(), category: "model_execution"
+})) : undefined;
 const firstAdminInvitationDelivery = new WebhookFirstAdminInvitationDelivery({
   endpoint: invitationDeliveryEndpoint,
   bearerToken: invitationDeliveryBearerToken
@@ -106,7 +112,8 @@ const postmarkInvitationAdapter = notificationsHostname ? new PostmarkInvitation
   messageStream: process.env.POSTMARK_MESSAGE_STREAM ?? "outbound"
 }) : undefined;
 const api = createRuntimeHttpHandler({ pool, deploymentId, authenticate,
-  objectStore: new S3ObjectStore(s3, s3Bucket), mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET"),
+  objectStore, mediaAdapter, floorTokenSecret: required("FLOOR_TOKEN_SECRET"),
+  ...(extensionRuntime ? { extensionRuntime } : {}),
   ...(contentScanner === undefined ? {} : { contentScanner }),
   firstAdminInvitationDelivery, invitationDeliveryBearerToken, invitationDeliveryWebhookToken,
   ...(notificationsHostname && postmarkInvitationAdapter ? { notificationsHostname, postmarkInvitationAdapter } : {}), publicBaseUrl,
@@ -267,7 +274,7 @@ server.on("upgrade", (request, socket, head) => void (async () => {
 server.listen(Number(process.env.PORT ?? 8080), "0.0.0.0");
 metricsServer.listen(Number(process.env.METRICS_PORT ?? 9090), "0.0.0.0");
 const organizationJobs = startOrganizationJobs(jobPool, deploymentId,
-  { organizationId: oidc.organizationId, actorPersonId: retentionActorPersonId }, mediaAdapter, new S3ObjectStore(s3, s3Bucket), async (job) => {
+  { organizationId: oidc.organizationId, actorPersonId: retentionActorPersonId }, mediaAdapter, objectStore, async (job) => {
     const correlationId = randomUUID();
     const event = job === "retention" || job === "attachments" ? "retention.enforcement_failed" : job === "inject" ? "inject.schedule_failed"
       : job === "floor" ? "media_provider.unavailable" : "service.request_failed";
@@ -277,7 +284,7 @@ const organizationJobs = startOrganizationJobs(jobPool, deploymentId,
       .catch(() => telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
         correlationId, category: "retention_enforcement" }));
   }, (held) => telemetry.emit({ event: "retention.enforcement_completed", severity: "info", outcome: "succeeded",
-    correlationId: randomUUID(), category: held ? "legal_holds_present" : "standard" }));
+    correlationId: randomUUID(), category: held ? "legal_holds_present" : "standard" }), modelWorker);
 let closing = false;
 async function close() {
   if (closing) return; closing = true;

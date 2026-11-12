@@ -1351,6 +1351,13 @@ export interface ModelRunV1 {
   failureCode: "timeout" | "output_invalid" | "execution_failed" | null;
 }
 
+/** Deployment configuration only; never grants permission to start a Model Run. */
+export interface ModelRunCapabilityV1 {
+  status: "unavailable" | "configured";
+  reason: "executor_not_configured" | "plans_not_configured" | "executor_unavailable" | null;
+  message: string;
+}
+
 export interface EffectProposalV1 {
   contractId: typeof EFFECT_PROPOSAL_CONTRACT_ID;
   id: string;

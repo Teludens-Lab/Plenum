@@ -1,6 +1,6 @@
 import { displayStatus } from "../../../../packages/design-system/src/presentation.mjs";
 import { useEffect, useMemo, useState } from "react";
-import { canonicalizeJson, type JsonValue } from "@plenum/event-contracts";
+import { canonicalizeJson, type JsonValue, type ModelRunCapabilityV1 } from "@plenum/event-contracts";
 import {
   PLUGIN_BINDING_CONTRACT_ID,
   type CompositionDataTypeV1,
@@ -115,16 +115,25 @@ function PortEditor({ binding, bindingIndex, direction, client }: {
 export function PluginCatalogEditor({ projectId, core, client }: { projectId: string; core: CoreDesignV1; client: StudioCollaborationClient }) {
   const bindings = coreArray(core, "pluginBindings");
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [executionMessage, setExecutionMessage] = useState("Checking Model Run availability.");
   const [message, setMessage] = useState("Loading the Organization Plugin catalog.");
   const [category, setCategory] = useState("all");
   const [connectivity, setConnectivity] = useState("all");
   useEffect(() => {
     let active = true;
+    setCatalog([]);
+    setExecutionMessage("Checking Model Run availability.");
     void fetch(`/v1/projects/${projectId}/plugin-catalog`).then(async (response) => {
-      const body = await response.json() as { plugins?: CatalogEntry[]; error?: { message?: string } };
+      const body = await response.json() as { plugins?: CatalogEntry[]; modelRuns?: ModelRunCapabilityV1; error?: { message?: string } };
       if (!response.ok || !Array.isArray(body.plugins)) throw new Error(body.error?.message ?? "Plugin catalog could not be loaded.");
-      if (active) { setCatalog(body.plugins); setMessage(`${body.plugins.length} approved installed Plugin${body.plugins.length === 1 ? "" : "s"} available.`); }
-    }).catch((error) => { if (active) setMessage(error instanceof Error ? error.message : "Plugin catalog could not be loaded."); });
+      if (active) {
+        setCatalog(body.plugins); setMessage(`${body.plugins.length} approved installed Plugin${body.plugins.length === 1 ? "" : "s"} available for binding.`);
+        setExecutionMessage(body.modelRuns?.message ?? "Model Run availability could not be verified. Ask a Platform Administrator to check this deployment.");
+      }
+    }).catch((error) => { if (active) {
+      setMessage(error instanceof Error ? error.message : "Plugin catalog could not be loaded.");
+      setExecutionMessage("Model Run availability could not be verified. Ask a Platform Administrator to check this deployment.");
+    } });
     return () => { active = false; };
   }, [projectId]);
   const categories = useMemo(() => [...new Set(catalog.flatMap(({ manifest }) => manifest.categories ?? []))].sort(), [catalog]);
@@ -145,6 +154,7 @@ export function PluginCatalogEditor({ projectId, core, client }: { projectId: st
   }
   return <Workspace id="plugins" title="Plugin catalog & bindings" intro="Discover approved installed Plugins for this Organization. Drafts store only non-secret configuration and immutable digests.">
     <p aria-live="polite">{message}</p>
+    <p role="status">{executionMessage}</p>
     <div className="catalog-filters">
       <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option>{categories.map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
       <label>Connectivity<select value={connectivity} onChange={(event) => setConnectivity(event.target.value)}><option value="all">All connectivity</option>{["offline_capable", "lan_required", "external_required"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>

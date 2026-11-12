@@ -1,6 +1,6 @@
 import { formatDate, displayStatus, plural, statusClass } from "../../../../packages/design-system/src/presentation.mjs";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { ErrorEnvelopeV1, JsonObject, OrganizationIdentityProviderV1, OrganizationWorkforceV1 } from "@plenum/event-contracts";
+import type { ErrorEnvelopeV1, JsonObject, ModelRunCapabilityV1, OrganizationIdentityProviderV1, OrganizationWorkforceV1 } from "@plenum/event-contracts";
 import { PlenumLoader } from "../PlenumLoader.js";
 import { SecondaryNavigation } from "./SecondaryNavigation.js";
 
@@ -21,6 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 type PluginOperations = {
+  modelRuns?: ModelRunCapabilityV1;
   permissions: { canSubmit: boolean; canApprove: boolean; canInstall: boolean; canRevoke: boolean };
   artifacts: Array<{ artifactId: string; pluginId: string; version: string; digest: string; bundleDigest: string;
     lifecycleStatus: string; publisherName: string; submittedAt: string; approvedAt: string | null;
@@ -212,8 +213,12 @@ function AccessReview({ model, pending, run }: { model: OrganizationWorkforceV1;
 
 function PluginsWorkspace({ organizationId, setNotice }: { organizationId: string; setNotice(message: string): void }) {
   const [model, setModel] = useState<PluginOperations | null>(null);
+  const [availabilityFailed, setAvailabilityFailed] = useState(false);
   const [pending, setPending] = useState(false);
-  const load = useCallback(async () => setModel(await request<PluginOperations>("/v1/operations/plugins")), []);
+  const load = useCallback(async () => {
+    try { setModel(await request<PluginOperations>("/v1/operations/plugins")); setAvailabilityFailed(false); }
+    catch (cause) { setAvailabilityFailed(true); throw cause; }
+  }, []);
   useEffect(() => { void load().catch((cause: unknown) => setNotice(cause instanceof Error ? cause.message : "Plugin operations did not load.")); }, [load, setNotice]);
   const transition = async (artifactId: string, action: "approve" | "revoke") => {
     setPending(true); setNotice(`${action === "approve" ? "Approving" : "Revoking"} the digest-pinned Plugin Artifact.`);
@@ -288,6 +293,8 @@ function PluginsWorkspace({ organizationId, setNotice }: { organizationId: strin
   return <section className="administration-workspace" aria-labelledby="plugins-title">
     <div className="workspace-heading"><h1 id="plugins-title">Plugin operations</h1>
       <p>Submission, approval, installation, binding, and Runtime execution remain separate authorities. Plugin output cannot directly change Session state.</p></div>
+    <p role="status">{availabilityFailed ? "Model Run availability could not be verified. Ask a Platform Administrator to check this deployment." : model === null ? "Checking Model Run availability." :
+      model.modelRuns?.message ?? "Model Run availability could not be verified. Ask a Platform Administrator to check this deployment."}</p>
     {model?.permissions.canApprove ? <section className="workspace-section operation-form" aria-labelledby="plugin-governance-title">
       <h2 id="plugin-governance-title">Publisher trust and license governance</h2>
       <p>Publisher registration, institution-provisioned trust, signed revocation data, and license acceptance remain separate recorded controls.</p>
@@ -502,7 +509,7 @@ function DeploymentWorkspace() {
     <h1 id="deployment-title">Deployment posture</h1>
     <p>Organization authority is reachable. Backup, restore, offline-bundle, and adapter health remain separately verified operational controls.</p></div>
     <dl className="card provenance-grid"><div><dt>Authority boundary</dt><dd>Server-authoritative and Organization-scoped</dd></div>
-      <div><dt>Plugin execution</dt><dd>Digest-pinned with staged Effect Proposals</dd></div><div><dt>Recovery posture</dt><dd>Compensating records preserve evidence history</dd></div>
+      <div><dt>Plugin execution</dt><dd><a href="/admin/plugins">Check Model Run availability in Plugin operations</a></dd></div><div><dt>Recovery posture</dt><dd>Compensating records preserve evidence history</dd></div>
       <div><dt>Current client state</dt><dd>Connected to the authenticated deployment</dd></div></dl></section>;
 }
 

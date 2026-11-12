@@ -206,6 +206,20 @@ test("EXT-12 sequential composition routes typed pinned fixture outputs without 
     [`sha256:${"a".repeat(64)}`, `sha256:${"d".repeat(64)}`, `sha256:${"e".repeat(64)}`]);
 });
 
+test("BA-08 execution authority is validated and included in the immutable graph digest", () => {
+  const source = sequentialComposition();
+  source.executionPolicy = { seed: 42, triggerSessionRoleIds: ["control"],
+    allowedEffects: [{ stateVariableId: "risk", scopeReference: "", operations: ["set"] }] };
+  const initial = compileModelComposition(source, compositionBindings, new Set(["control"])).graphDigest;
+  const changed = structuredClone(source); changed.executionPolicy.seed++;
+  assert.notEqual(compileModelComposition(changed, compositionBindings, new Set(["control"])).graphDigest, initial);
+  for (const policy of [null, { ...source.executionPolicy, triggerSessionRoleIds: ["unknown"] },
+    { ...source.executionPolicy, allowedEffects: [null] }, { ...source.executionPolicy, seed: -1 },
+    { ...source.executionPolicy, allowedEffects: [{ stateVariableId: "risk", scopeReference: "", operations: ["delete"] }] }]) {
+    assert.throws(() => compileModelComposition({ ...source, executionPolicy: policy }, compositionBindings, new Set(["control"])), /execution policy/);
+  }
+});
+
 test("EXT-13 parallel composition exposes a deterministic partial join", () => {
   const composition = {
     contractId: "composition-definition-v1", id: "composition-parallel", name: "Parallel proof", version: "1",

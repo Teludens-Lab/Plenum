@@ -1701,6 +1701,18 @@ test("PS-750-T02 advanced authoring is visual, explicit, fail-closed, and previe
   }
 
   const pluginsWorkspace = await openStudioWorkspace(page, "Plugin catalog & bindings");
+  await expect(pluginsWorkspace.getByRole("status")).toContainText("Model Runs are unavailable");
+  for (const viewport of [{ width: 1024, height: 768 }, { width: 512, height: 384 }]) {
+    await page.setViewportSize(viewport);
+    await pluginsWorkspace.getByRole("status").scrollIntoViewIfNeeded();
+    await expect(pluginsWorkspace.getByRole("status")).toBeInViewport();
+    expect((await horizontalOverflowState(page)).overflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `output/ba-08/studio-${viewport.width}.png` });
+  }
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await page.screenshot({ path: "output/ba-08/studio-forced-colors.png" });
+  await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const catalogCard = pluginsWorkspace.locator("article.catalog-card").first();
   await catalogCard.getByRole("button", { name: "Bind installed Plugin" }).click();
   const binding = pluginsWorkspace.locator("details.editor-item").last();
@@ -2050,11 +2062,48 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   await context.close();
 });
 
+test("BA-08-T03 Plugin execution unavailability and unverified states remain visible @a11y", async ({ browser }) => {
+  const admin = await actor(browser, fixture.tokens.operator);
+  const { page } = admin;
+  try {
+    await page.goto('/admin/plugins');
+    const status = page.getByText(/^Model Runs are unavailable:/u);
+    await expect(status).toBeVisible();
+    for (const viewport of [{ width: 1024, height: 768 }, { width: 512, height: 384 }]) {
+      await page.setViewportSize(viewport);
+      await status.scrollIntoViewIfNeeded();
+      await expect(status).toBeInViewport();
+      expect((await horizontalOverflowState(page)).overflow).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: `output/ba-08/plugins-${viewport.width}.png` });
+    }
+    await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+    await expect(status).toBeVisible();
+    await page.screenshot({ path: 'output/ba-08/plugins-forced-colors.png' });
+    await page.keyboard.press('Tab');
+    await expect(page.locator(':focus')).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('.administration-main').analyze()).violations).toEqual([]);
+    await page.route('**/v1/operations/plugins', async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      delete body.modelRuns;
+      await route.fulfill({ response, json: body });
+    });
+    await page.reload();
+    await expect(page.getByText(/^Model Run availability could not be verified/u)).toBeVisible();
+    await page.unroute('**/v1/operations/plugins');
+    await page.route('**/v1/operations/plugins', route => route.fulfill({ status: 503, contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'CAPABILITY_UNAVAILABLE', message: 'Synthetic unavailable service' } }) }));
+    await page.reload();
+    await expect(page.getByText(/^Model Run availability could not be verified/u)).toBeVisible();
+  } finally { await admin.context.close(); }
+});
+
 test("PS-790-T01 Admin and Publisher complete role, trust, Plugin, policy, and archive operations @a11y", async ({ browser }) => {
   test.setTimeout(360_000);
   const publisher = await actor(browser, fixture.tokens.publisher);
   await publisher.page.goto("/admin/plugins");
   await expect(publisher.page.getByRole("heading", { name: "Plugin operations" })).toBeVisible();
+  await expect(publisher.page.getByText(/^Model Runs are unavailable:/u)).toBeVisible();
   await publisher.page.getByLabel("Signed Plugin bundle").setInputFiles("output/user-test/ps-790/ps-790-synthetic-plugin.json");
   await publisher.page.getByRole("button", { name: "Verify and submit" }).click();
   await expect(publisher.page.locator(".administration-notice")).toContainText("Plugin bundle submitted");

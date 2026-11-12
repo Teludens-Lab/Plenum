@@ -34,7 +34,7 @@ import {
   type SessionAccessContextV1
 } from "../identity/context.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
-import { createCompositionRunExecutor, executeEffectProposalCommand, type ExtensionRunPlan } from "../extensions/runtime.js";
+import { createCompositionRunExecutor, executeEffectProposalCommand, type ExtensionPlanRegistry } from "../extensions/runtime.js";
 import { executeAdjudicationCommand } from "../adjudication/service.js";
 import {
   processSessionCommand,
@@ -1708,7 +1708,7 @@ export async function submitRuntimeCommand(
   command: CommandEnvelopeV1,
   correlationId: string,
   deploymentId: string,
-  extensionRunPlans: ReadonlyMap<string, ExtensionRunPlan> = new Map(),
+  extensionRunPlans: ExtensionPlanRegistry = new Map(),
   mediaAdapter?: MediaProviderAdapter
 ) {
   const execute = command.operationType.startsWith("stage.") || command.operationType.startsWith("timer.") ? executeStageCommand :

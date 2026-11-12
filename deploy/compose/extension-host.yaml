@@ -1,0 +1,15 @@
+# Opt-in only after Security Owner review and a qualifying host's acceptance run.
+# The application receives the constrained Unix socket, never Docker control.
+services:
+  application:
+    environment:
+      PLENUM_EXTENSION_SOCKET: /run/plenum-extension/host.sock
+    group_add: ["${PLENUM_EXTENSION_SOCKET_GID:?set the dedicated socket group id}"]
+    volumes:
+      - type: bind
+        source: ${PLENUM_EXTENSION_SOCKET_DIRECTORY:?set the pre-provisioned supervisor socket directory}
+        target: /run/plenum-extension
+        read_only: true
+        bind:
+          create_host_path: false
+    stop_grace_period: 7m

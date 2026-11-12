@@ -1,0 +1,22 @@
+# Install as a user service for the dedicated rootless Docker account; see PS-820.
+[Unit]
+Description=Plenum constrained Extension Host
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+RuntimeDirectory=plenum-extension
+RuntimeDirectoryMode=0750
+WorkingDirectory=/opt/plenum
+Environment=DOCKER_HOST=unix://%t/docker.sock
+Environment=PLENUM_EXTENSION_SOCKET=%t/plenum-extension/host.sock
+Environment=PLENUM_EXTENSION_STAGING=%h/.local/share/plenum-extension
+ExecStart=/usr/bin/node /opt/plenum/packages/extension-host/supervisor.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=420
+UMask=0007
+
+[Install]
+WantedBy=default.target

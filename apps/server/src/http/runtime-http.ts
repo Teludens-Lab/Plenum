@@ -102,7 +102,7 @@ import {
   submitJoinRequestByCode
 } from "../runtime/access/onboarding.js";
 import { getParticipantBrandingAsset, getParticipantEntry, getParticipantRuntimeResource } from "../runtime/access/participant-entry.js";
-import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, type ExtensionRuntime } from "../extensions/runtime.js";
+import { executePendingModelRun, exportExtensionProvenance, getEffectProposals, modelRunCapability, type ExtensionRuntime } from "../extensions/runtime.js";
 import { acceptPluginLicense, approvePluginArtifact, getPluginCatalog, importPluginRevocations,
   installPluginArtifact, provisionPluginTrustRoot, registerPluginPublisher, revokePluginArtifact,
   submitPluginArtifact } from "../extensions/registry.js";
@@ -1136,7 +1136,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         return true;
       }
       if (request.method === "GET" && url.pathname === "/v1/operations/plugins") {
-        send(response, 200, await listPluginOperations(options.pool, principal, correlationId));
+        send(response, 200, { ...await listPluginOperations(options.pool, principal, correlationId),
+          modelRuns: modelRunCapability(options.extensionRuntime, await options.extensionRuntime?.isAvailable?.()) });
         return true;
       }
       if (request.method === "POST" && url.pathname === "/v1/plugin-publishers") {
@@ -1436,7 +1437,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/plugin-catalog$/u))) {
         const projectId = pathId(match[1], correlationId);
-        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId, projectId) });
+        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId, projectId),
+          modelRuns: modelRunCapability(options.extensionRuntime, await options.extensionRuntime?.isAvailable?.()) });
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/compositions\/validate$/u))) {
@@ -1468,7 +1470,8 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         if (organizationId !== principal.organizationId) {
           throw authorizationError("PERMISSION_DENIED", "The Plugin catalog belongs to another Organization.", correlationId);
         }
-        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId) });
+        send(response, 200, { plugins: await getPluginCatalog(options.pool, principal, correlationId),
+          modelRuns: modelRunCapability(options.extensionRuntime, await options.extensionRuntime?.isAvailable?.()) });
         return true;
       }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/projects\/([^/]+)\/validate$/u))) {
@@ -2019,7 +2022,7 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         const receipt = await submitRuntimeCommand(
           options.pool, context, command, correlationId, options.deploymentId, options.extensionRuntime?.plans, options.mediaAdapter
         );
-        if (receipt.status === "accepted" && command.operationType === "composition_run.start" && options.extensionRuntime !== undefined) {
+        if (receipt.status === "accepted" && command.operationType === "composition_run.start" && options.extensionRuntime !== undefined && !options.extensionRuntime.deploymentId) {
           await executePendingModelRun(options.pool, principal.organizationId, command.aggregateId, options.extensionRuntime);
         }
         const requiresMediaEnforcement = command.operationType.startsWith("voice_") || command.operationType.startsWith("stage.") ||

@@ -1,5 +1,11 @@
 # Project state
 
+## BA-08 governed Model Run wiring — 2026-11-11
+
+Finding 7 remains **OPEN / production activation BLOCKED**. The owner approved constrained supervisor implementation and synthetic testing. Production now wires optional Unix-socket execution, immutable artifact custody, Release-derived plans and bounded BA-05 Model Run work. Current trust/access/Authority checks fence proposal staging; human approval and existing receipts govern effects. Migration 047 adds only a queue index. [BA-08 evidence](../ps-230-verification.md#ba-08-governed-production-model-runs--2026-11-11) distinguishes real HTTP/database/S3 harness results from actual isolated-profile proof. The disposable rootless daemon lacks cgroup resource enforcement and the actual supervisor refuses it. T01 remains explicitly NOT RUN until a qualifying Linux environment is available. No production activation, commit or push. Historical PS-830/840/842 acceptance and PS-850 scope remain unchanged; BA-09 is independently eligible.
+
+Current gate results, failed-attempt corrections, exact test boundaries, source hashes and UI review limits are in the handoff. Earlier containment-only results are retained as historical evidence. Standalone host load never proves deployed application throughput; formal Security Owner review, BA-11 activated-profile proof and BA-12 converged capacity remain open.
+
 ## BA-07 automatic Form attachment expiry - 2026-11-11
 
 Finding 6 remediation connects the existing deletion journal to BA-05's authorized tenant worker and filters expired files at list/download/rescan/Form-export boundaries, including a second check after download I/O. Migration 046 adds durable bounded retry scheduling. [BA-07 evidence](../ps-520-verification.md#ba-07-automatic-form-attachment-expiry-2026-11-11) separates local database/S3/production-entrypoint proof from release approval. On 2026-11-11 the owner explicitly approved expiry blocking ordinary access even under a hold, while holds preserve bytes and metadata. PS-830 owner acceptance, PS-840 checkpoint exception, PS-842 decisions and PS-850 scope remain unchanged. No commit, push or deployment. Next implementation task: BA-08; BA-11 deployment coverage remains separate.

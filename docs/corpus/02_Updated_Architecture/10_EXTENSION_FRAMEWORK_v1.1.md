@@ -246,6 +246,10 @@ Everything Organization-owned is tenant-scoped (ADR-015). Runs, proposals and de
 
 **Organization and Studio operations** (REST, Audit Records):
 
+BA-08 additive availability metadata (2026-11-11): the existing authorized `GET /v1/operations/plugins`, `GET /v1/projects/{projectId}/plugin-catalog` and Organization catalog responses include `modelRuns` (`ModelRunCapabilityV1`). `status` is `unavailable` or `configured`; `reason` is `executor_not_configured`, `executor_unavailable`, `plans_not_configured`, or null; `message` explains deployment configuration/health. This is not run authorization, Plugin approval or a plan inventory. Old clients may ignore the field; clients receiving no field must show availability as unverified. Default profiles remain unconfigured. The owner-approved constrained supervisor implementation is opt-in; finding 7 remains open until the actual supported-profile isolated workflow passes.
+
+BA-08 Release policy addition: `ModelCompositionV1.executionPolicy` is optional for existing authoring but required for execution by this adapter. It contains a nonnegative integer `seed`, 1–64 `triggerSessionRoleIds`, and 1–32 `allowedEffects` (`stateVariableId`, exact `scopeReference`, allowed `set`/`adjust` operations). The graph digest includes this policy; the approval gate supplies reviewer Roles. Plugin input mappings use existing state references with optional exact `scopeReference`. Unsupported graphs, dependencies, classifications or timeouts are unavailable rather than partially executed. Application profiles `cloud`, `institutional`, `air_gapped` map explicitly to registry profiles `connected`, `self_hosted`, `air_gapped`. These additions do not alter existing Command/receipt or human approval contracts.
+
 ```text
 POST /v1/plugins/submissions                               # restricted publishers (DEC-52)
 POST /v1/plugins/{artifactId}/approve                      # separation of duties

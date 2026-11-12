@@ -42,6 +42,7 @@ export * from "./observability/security-events.js";
 export * from "./replay/service.js";
 export * from "./extensions/registry.js";
 export * from "./extensions/runtime.js";
+export * from "./extensions/production.js";
 export * from "./voting/polls.js";
 export * from "./comms/voice.js";
 export * from "./operations/job-authority.js";

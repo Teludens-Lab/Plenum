@@ -10,12 +10,12 @@ import { enforceFormAttachmentRetention } from "../runtime/form-attachments.js";
 import type { ObjectStore } from "../registry/object-store.js";
 import { assertOrganizationJobAuthority, discoverOrganizationJobs, ensureBootstrapJobBinding, type OrganizationJobAuthority } from "./job-authority.js";
 
-type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication" | "attachments";
+type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication" | "attachments" | "models";
 
 /** Ten bindings per page, two Organizations in flight, one sweep batch at a time. */
 export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstrap: { organizationId: string; actorPersonId: string },
   media: MediaProviderAdapter, store: ObjectStore, onFailure: (job: Job) => void | Promise<void>,
-  onRetention: (held: boolean) => void): { stop: () => Promise<void>; healthy: () => boolean } {
+  onRetention: (held: boolean) => void, models?: { run(authority: OrganizationJobAuthority): Promise<void>; stop(): Promise<void> }): { stop: () => Promise<void>; healthy: () => boolean } {
   const cancellation = new AbortController();
   let initialized = false, running: Promise<void> | undefined, cursor: string | undefined;
   let sweepFailed = false, lastSweepAt = 0, lastSweepOk = false, retryAt = 0, bootstrapRetryAt = 0;
@@ -31,6 +31,7 @@ export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstra
       if (!eligible || cancellation.signal.aborted) return;
     } catch { await fail("authority"); return; }
     const jobs = [
+      ...(models ? [models.run(authority).catch(() => fail("models"))] : []),
       enforceFormAttachmentRetention(pool, authority, store, randomUUID(), undefined, cancellation.signal)
         .then(({ failed }) => { if (failed) return fail("attachments"); }).catch(() => fail("attachments")),
       publishPendingRuntimeDeltas(pool, authority.organizationId, 100, authority).catch(() => fail("publication")),
@@ -68,6 +69,6 @@ export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstra
   timer.unref(); tick();
   return {
     healthy: () => !cancellation.signal.aborted && lastSweepOk && Date.now() - lastSweepAt < 60_000,
-    stop: async () => { cancellation.abort(); clearInterval(timer); await running; }
+    stop: async () => { cancellation.abort(); clearInterval(timer); await running; await models?.stop(); }
   };
 }

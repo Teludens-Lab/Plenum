@@ -13,6 +13,7 @@ import { canonicalizeJson } from "@plenum/event-contracts";
 import { verifyCommandLimitHttp, verifyCommandLimitWindows } from "./command-rate-limit.integration.mjs";
 import { verifyBrowserOriginBoundary } from "./browser-origin.integration.mjs";
 import { verifyTenantJobs } from "./tenant-jobs.integration.mjs";
+import { verifyGovernedModelRuns } from "./model-runs.integration.mjs";
 import { availableFormAttachmentSql } from "../dist/reporting/form-retention.js";
 import { verifyFloorRevocation } from "./floor-revocation.integration.mjs";
 import { visibleClosedVoiceChannelIds } from "../dist/comms/voice.js";
@@ -353,7 +354,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/043_oidc_browser_binding.sql",
     "apps/server/migrations/044_floor_provider_reconciliation.sql",
     "apps/server/migrations/045_organization_job_bindings.sql",
-    "apps/server/migrations/046_attachment_retention_retry.sql"
+    "apps/server/migrations/046_attachment_retention_retry.sql",
+    "apps/server/migrations/047_model_run_work_queue.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -4594,4 +4596,8 @@ test("PS-810 stores immutable security evidence without granting application rea
   }
 });
 
- test("BA-05-T01/T02/T03 BA-07-T02/T03 production startup discovers tenant authority and recovers journaled attachment deletion", async () => { await verifyTenantJobs(owner, app); });
+ test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08-T03 production startup discovers tenant authority, recovers deletion and reports unavailable Model Runs", async () => { await verifyTenantJobs(owner, app); });
+test("BA-08 governed Model Run HTTP/database boundary and restart recovery (transport harness)", async () => { await verifyGovernedModelRuns(owner, app); });
+test("BA-08-T01 supported rootless production entrypoint executes and approves a governed effect", {
+  skip: !process.env.PLENUM_TEST_EXTENSION_SOCKET && "NOT RUN: qualifying Linux rootless supervisor socket unavailable"
+}, async () => { await verifyGovernedModelRuns(owner, app, true); });

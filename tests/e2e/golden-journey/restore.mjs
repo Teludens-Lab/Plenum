@@ -33,6 +33,9 @@ try {
     await expect(page.getByRole("region", { name: "Session control", exact: true })).toBeVisible();
     await expect(page.getByText("Session Archived", { exact: false })).toBeVisible();
     await page.goto(`/admin${sessionPath}/replay`);
+    const capability = await page.request.get(`/v1${sessionPath}/replay`);
+    expect(capability.status()).toBe(200);
+    expect((await capability.json()).available, "BA-09: restored-history reconstruction is unavailable; the restore Replay gate remains BLOCKED.").toBe(true);
     await page.getByRole("button", { name: "Run replay", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Matched" }).last()).toBeVisible();
     await expect(page.getByText("No differences were found between captured and replayed history.", { exact: true })).toBeVisible();

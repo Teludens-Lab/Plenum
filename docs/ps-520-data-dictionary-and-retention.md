@@ -2,6 +2,12 @@
 
 Updated: 2026-10-26.
 
+## BA-09 Replay operations (2026-11-12)
+
+Replay capability discovery is `GET /v1/sessions/{sessionId}/replay`, under the existing current Admin/Operator Organization-role and tenant-Session checks. All current production profiles return `available: false`, reason `adapter_not_configured`; authorized POST execution returns the existing `CAPABILITY_UNAVAILABLE` envelope. An authentication, role or tenant denial takes precedence. The Operator page displays unavailable or unverified status, offers a retry of the availability check, and links to captured-history Reports. It does not offer **Run replay** without a configured adapter.
+
+Availability alone is not reconstruction acceptance. Do not enable an echo adapter, call live Command handlers, or infer old versions from current state to make the action succeed. Use [the pinned-input inventory and open gates](ps-520-verification.md#ba-09-replay-availability-and-reconstruction-inventory-2026-11-12). A future adapter must independently derive supported history, reject missing/corrupt or unsupported pins, remain observational, and pass T01/T02 before activation. Current evidence loading uses a repeatable-read, read-only transaction; adapter input is isolated from the comparison baseline and current access is checked again before any result is disclosed. Reports and archive retention semantics are unchanged; a matching archive/plumbing comparison is not proof of reconstruction.
+
 ## Data dictionary
 
 All `reporting` rows are Organization-scoped and protected by forced row-level security. Records are append-only except for the one-way, trigger-guarded removal of expired export bytes; export identity, digest, manifest and purge provenance remain immutable.

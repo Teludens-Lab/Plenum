@@ -341,6 +341,10 @@ Bootstrap, Command submission, receipt lookup, delta catch-up, live push, snapsh
 
 ## 15. Open items
 
+### BA-09 Replay capability clarification (2026-11-12)
+
+`GET /v1/sessions/{sessionId}/replay` reports `{ available, reason, message }` after current Admin/Operator Organization-role and tenant-Session authorization. Without an adapter, `available` is false and `reason` is `adapter_not_configured`. `POST` retains the existing `replay-divergence-v1` response and canonical `CAPABILITY_UNAVAILABLE` denial; it authorizes before reporting unavailability and never accepts client-supplied history as authoritative. The current production profiles have no independent reconstruction adapter. A configured internal adapter is not acceptance proof: it must validate pinned historical inputs and independently derive results without live effects. Comparator/echo fixtures do not satisfy REQ-042 or REQ-060. This adds capability discovery without a schema migration or a change to the existing POST request contract.
+
 The cited OPEN items have recorded resolutions, including version-1 limitations; Decision Register §7 is authoritative. OPEN-016 was resolved on 2026-11-08. Contract implementation and verification, including the work in Decision Register §7.5, remain separate from approval; deferred production capabilities remain disabled.
 
 ## Change log

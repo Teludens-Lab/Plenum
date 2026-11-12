@@ -5,6 +5,7 @@ import {
   canonicalizeJson,
   type JsonObject,
   type JsonValue,
+  type ReplayCapabilityV1,
   type ReplayDivergenceV1
 } from "@plenum/event-contracts";
 import type { Pool, PoolClient } from "pg";
@@ -29,7 +30,30 @@ export interface SessionReplayInput {
 }
 
 export interface SessionReplayAdapter {
+  /** Reconstruct independently from supported pinned inputs; never invoke live effects or return captured history as proof. */
   replay(input: SessionReplayInput): Promise<{ manifest: JsonObject; events: ReplayEvent[] }>;
+}
+
+const unavailableMessage = "Deterministic Replay is unavailable on this deployment. A reconstruction adapter for pinned historical inputs has not been configured. Captured history remains available in Reports.";
+
+async function requireReplaySession(client: PoolClient, principal: AuthenticatedPrincipal, sessionId: string, correlationId: string) {
+  await requireReplayRole(client, principal, correlationId);
+  const session = await client.query<{ initial_release_id: string; project_id: string; status: string }>(
+    "SELECT initial_release_id,project_id,status FROM runtime.sessions WHERE organization_id=$1 AND id=$2",
+    [principal.organizationId, sessionId]);
+  if (!session.rows[0]) throw authorizationError("NOT_FOUND", "The Session was not found.", correlationId);
+  return session.rows[0];
+}
+
+export async function getSessionReplayCapability(pool: Pool, principal: AuthenticatedPrincipal, sessionId: string,
+  adapter: SessionReplayAdapter | undefined, correlationId: string): Promise<ReplayCapabilityV1> {
+  return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await client.query("SET TRANSACTION READ ONLY");
+    await requireReplaySession(client, principal, sessionId, correlationId);
+    return adapter === undefined
+      ? { available: false, reason: "adapter_not_configured", message: unavailableMessage }
+      : { available: true, reason: null, message: "A Replay adapter is configured. Reconstruction must validate the Session's historical inputs and pinned versions." };
+  });
 }
 
 const digest = (value: JsonValue): string => createHash("sha256").update(canonicalizeJson(value)).digest("hex");
@@ -94,17 +118,14 @@ export async function replaySession(
   pool: Pool,
   principal: AuthenticatedPrincipal,
   sessionId: string,
-  adapter: SessionReplayAdapter,
+  adapter: SessionReplayAdapter | undefined,
   correlationId: string,
   now = new Date()
 ): Promise<ReplayDivergenceV1> {
   const recorded = await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
-    await requireReplayRole(client, principal, correlationId);
-    const session = await client.query<{ initial_release_id: string; project_id: string; status: string }>(
-      `SELECT initial_release_id,project_id,status FROM runtime.sessions WHERE organization_id=$1 AND id=$2`,
-      [principal.organizationId, sessionId]
-    );
-    if (session.rows[0] === undefined) throw authorizationError("NOT_FOUND", "The Session was not found.", correlationId);
+    await client.query("SET TRANSACTION READ ONLY");
+    const session = await requireReplaySession(client, principal, sessionId, correlationId);
+    if (adapter === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", unavailableMessage, correlationId);
     const releases = await client.query<{ id: string; package_schema_version: string; compiler_version: string; package_sha256: string; snapshot: JsonObject }>(
       `SELECT release.id,release.package_schema_version,release.compiler_version,release.package_sha256,revision.snapshot
          FROM runtime.release_activations activation
@@ -129,9 +150,9 @@ export async function replaySession(
     );
     const manifest: JsonObject = {
       sessionId,
-      projectId: session.rows[0].project_id,
-      initialReleaseId: session.rows[0].initial_release_id,
-      sessionStatus: session.rows[0].status,
+      projectId: session.project_id,
+      initialReleaseId: session.initial_release_id,
+      sessionStatus: session.status,
       releases: releases.rows.map((release) => ({ releaseId: release.id, packageSchemaVersion: release.package_schema_version,
         compilerVersion: release.compiler_version, packageSha256: release.package_sha256,
         randomSeed: (release.snapshot.scenario as JsonObject | undefined)?.randomSeed ?? null })),
@@ -142,7 +163,13 @@ export async function replaySession(
       eventVersion: event.event_version, governingReleaseId: event.governing_release_id, aggregateId: event.aggregate_id,
       aggregateVersion: event.aggregate_version === null ? null : Number(event.aggregate_version), body: event.body }));
     return { manifest, events };
+  }, "repeatable read");
+  if (adapter === undefined) throw authorizationError("CAPABILITY_UNAVAILABLE", unavailableMessage, correlationId);
+  // An adapter must not be able to rewrite the comparator's recorded baseline.
+  const replayed = await adapter.replay(structuredClone(recorded));
+  await withOrganizationTransaction(pool, principal.organizationId, async (client) => {
+    await client.query("SET TRANSACTION READ ONLY");
+    await requireReplaySession(client, principal, sessionId, correlationId);
   });
-  const replayed = await adapter.replay(recorded);
   return compareReplay(sessionId, recorded, replayed, now);
 }

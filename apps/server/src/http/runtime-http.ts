@@ -114,7 +114,7 @@ import { exportResearchEvidenceBundle, exportResearchEvidenceIndex, grantResearc
 import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport, importOrganizationArchive,
   placeLegalHold, recordCorrection, recordResearchConsent, releaseLegalHold,
   type OrganizationArchive, type ReportFormat } from "../reporting/service.js";
-import { replaySession, type SessionReplayAdapter } from "../replay/service.js";
+import { getSessionReplayCapability, replaySession, type SessionReplayAdapter } from "../replay/service.js";
 import { getDataPolicyOperations, getReportArtifact, getSessionRetentionStatus, listOrganizationMemberAdministration,
   listPluginOperations, listResearchReportableSessions, listSessionReportArtifacts, replaceOrganizationMemberRoles } from "../operations/administration.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getProjectDemo, getPublicationReview, getRolePreview,
@@ -1632,10 +1632,12 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
         send(response, 201, await releaseLegalHold(options.pool, principal, pathId(match[1], correlationId), body.reason, correlationId));
         return true;
       }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/replay$/u))) {
+        send(response, 200, await getSessionReplayCapability(options.pool, principal, pathId(match[1], correlationId),
+          options.replayAdapter, correlationId));
+        return true;
+      }
       if (request.method === "POST" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/replay$/u))) {
-        if (options.replayAdapter === undefined) {
-          throw authorizationError("CAPABILITY_UNAVAILABLE", "A deterministic Session replay adapter is not configured.", correlationId);
-        }
         send(response, 200, await replaySession(options.pool, principal, pathId(match[1], correlationId),
           options.replayAdapter, correlationId));
         return true;

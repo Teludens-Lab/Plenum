@@ -809,7 +809,8 @@ test("PS-800-T04 Studio and the five remaining view families preserve bounded wo
   await replay.page.goto(`/admin/sessions/${fixture.operatorSessionId}/replay`);
   await expect(replay.page.getByRole("heading", { level: 1, name: "Replay" })).toBeVisible();
   await expect(replay.page.getByRole("heading", { name: "Replay Session evidence" })).toBeVisible();
-  await expect(replay.page.getByRole("button", { name: "Run replay" })).toBeVisible();
+  await expect(replay.page.getByText(/^Deterministic Replay is unavailable on this deployment/u)).toBeVisible();
+  await expect(replay.page.getByRole("button", { name: "Run replay" })).toHaveCount(0);
   await expect(replay.page.getByRole("heading", { level: 2, name: "Session control", exact: true })).toHaveCount(0);
   expect((await new AxeBuilder({ page: replay.page }).analyze()).violations).toEqual([]);
   await replay.page.screenshot({ path: `${familyEvidenceRoot}/replay-archive-1440x900.png` });
@@ -2062,6 +2063,43 @@ test("PS-780-T01/T02 AC-12/AC-13 Operator runs reasoned lifecycle and Stage cont
   await context.close();
 });
 
+test("BA-09-T03 Replay unavailable, checking, and retry states never promise reconstruction @a11y", async ({ browser }) => {
+  const operator = await actor(browser, fixture.tokens.operator);
+  const { page } = operator;
+  const path = `/v1/sessions/${fixture.sessionId}/replay`;
+  const checking = Promise.withResolvers();
+  try {
+    await page.route(`**${path}`, async route => { await checking.promise; await route.continue(); }, { times: 1 });
+    await page.goto(`/admin/sessions/${fixture.sessionId}/replay`);
+    await expect(page.getByText('Checking Replay availability.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run replay' })).toHaveCount(0);
+    checking.resolve();
+    const unavailable = page.getByText(/^Deterministic Replay is unavailable on this deployment/u);
+    await expect(unavailable).toBeVisible();
+    const response = await page.request.post(path, { data: {} });
+    expect((await response.json()).error.code).toBe('CAPABILITY_UNAVAILABLE');
+    await expect(page.getByText('Matched', { exact: true })).toHaveCount(0);
+    for (const viewport of [{ width: 1024, height: 768 }, { width: 512, height: 384 }]) {
+      await page.setViewportSize(viewport); await unavailable.scrollIntoViewIfNeeded();
+      await expect(unavailable).toBeInViewport();
+      expect((await horizontalOverflowState(page)).overflow).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: `output/ba-09/replay-${viewport.width}.png` });
+    }
+    await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+    await page.getByRole('link', { name: 'View captured history in Reports' }).focus();
+    await expect(page.getByRole('link', { name: 'View captured history in Reports' })).toBeFocused();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: 'output/ba-09/replay-forced-colors.png' });
+    await page.route(`**${path}`, route => route.fulfill({ status: 503, contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'CAPABILITY_UNAVAILABLE', message: 'Synthetic availability failure' } }) }), { times: 1 });
+    await page.reload();
+    await expect(page.getByText(/Replay availability could not be verified/u)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run replay' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check Replay availability again' }).click();
+    await expect(unavailable).toBeVisible();
+  } finally { checking.resolve(); await operator.context.close(); }
+});
+
 test("BA-08-T03 Plugin execution unavailability and unverified states remain visible @a11y", async ({ browser }) => {
   const admin = await actor(browser, fixture.tokens.operator);
   const { page } = admin;
@@ -2185,9 +2223,10 @@ test("PS-790-T02 reports, replay, retention consequences, research privacy, and 
   await expect(operator.page.getByRole("heading", { name: "Generated artifacts" }).locator("..")).toContainText("After action");
 
   await operator.page.goto(`/admin/sessions/${fixture.sessionId}/replay`);
-  await operator.page.getByRole("button", { name: "Run replay" }).click();
-  await expect(operator.page.getByText("Matched", { exact: true })).toBeVisible();
-  await expect(operator.page.getByText("No differences were found between captured and replayed history.")).toBeVisible();
+  await expect(operator.page.getByText(/^Deterministic Replay is unavailable on this deployment/u)).toBeVisible();
+  await expect(operator.page.getByRole("button", { name: "Run replay" })).toHaveCount(0);
+  await expect(operator.page.getByText("Matched", { exact: true })).toHaveCount(0);
+  await expect(operator.page.getByRole("link", { name: "View captured history in Reports" })).toBeVisible();
 
   await operator.page.goto(`/admin/sessions/${fixture.sessionId}/archive`);
   await expect(operator.page.getByText("Active legal hold:")).toBeVisible();

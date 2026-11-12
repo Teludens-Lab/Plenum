@@ -928,6 +928,27 @@ paths:
         "404": { description: The original generated artifact expired under the approved retention policy. }
         "409": { description: Idempotency key collision. }
   /v1/sessions/{sessionId}/replay:
+    get:
+      operationId: getSessionReplayCapability
+      x-authorized-organization-roles: [admin, operator]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Authorized Replay availability; configuration alone is not reconstruction acceptance evidence.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [available, reason, message]
+                properties:
+                  available: { type: boolean }
+                  reason: { type: [string, "null"], enum: [adapter_not_configured, null] }
+                  message: { type: string }
+        "403": { description: Current Admin or Operator Organization Role is required. }
+        "404": { description: Session is unavailable in this Organization. }
     post:
       operationId: replaySession
       x-contract-id: replay-divergence-v1

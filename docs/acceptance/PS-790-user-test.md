@@ -1,5 +1,7 @@
 # PS-790 user test — administration, reporting, replay, archive, and Plugin operations
 
+BA-09 clarification (2026-11-12): the historical owner acceptance below is retained for the exercised presentation/workflows. The Replay fixture then echoed captured records; it did not prove independent reconstruction. Current profiles must show Replay unavailable, without a runnable action, and link to captured-history Reports. That containment check does not satisfy required Replay: REQ-042/REQ-060 and BA-09-T01/T02 remain open. See `../ps-520-verification.md` for current evidence; the historical step 6 is not reconstruction acceptance for the current candidate.
+
 Status: **PASS** — the product owner completed all ten script points on 2026-11-02 and supplied visible product screenshots. Production approval remains separate.
 
 ## Start the isolated harness

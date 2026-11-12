@@ -75,8 +75,12 @@ async function completeSession(page, title, sessionPath, checkpoint, prefix) {
     await save(checkpoint);
     await page.screenshot({ path: `${root}/${prefix}-report-provenance.png` });
   }
-  if (!checkpoint[`${prefix}Replay`]) {
+  // Always reverify: historical checkpoints may record only an echo comparison.
+  {
     await page.goto(`/admin${sessionPath}/replay`);
+    const capability = await page.request.get(`/v1${sessionPath}/replay`);
+    expect(capability.status()).toBe(200);
+    expect((await capability.json()).available, "BA-09: required independent Replay is unavailable; the golden gate remains BLOCKED.").toBe(true);
     await page.getByRole("button", { name: "Run replay", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Matched" }).last()).toBeVisible();
     await expect(page.getByText("No differences were found between captured and replayed history.", { exact: true })).toBeVisible();

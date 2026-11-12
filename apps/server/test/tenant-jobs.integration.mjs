@@ -215,6 +215,44 @@ export async function verifyTenantJobs(owner, app) {
     service.child.send('advance');
     await eventually(async () => (await fetch(`${service.url}/healthz`)).status === 200, 'healthy completed discovery sweep');
     const second = await seed(20), bInject = await schedule(second, 0), bArtifact = await artifact(second), held = await artifact(second, true);
+    // BA-09-T03: use the real production entrypoint, without an injected Replay adapter.
+    const replayPath = `${service.url}/v1/sessions/${second.session}/replay`;
+    const replayHeaders = { authorization: `Bearer ${second.token}`, 'content-type': 'application/json' };
+    const replaySnapshot = async () => (await owner.query(`SELECT
+      (SELECT count(*) FROM evidence.events WHERE organization_id=$1) AS events,
+      (SELECT count(*) FROM sync.command_receipts WHERE organization_id=$1) AS receipts,
+      (SELECT row_to_json(session) FROM runtime.sessions session WHERE organization_id=$1 AND id=$2) AS session`,
+      [second.org, second.session])).rows[0];
+    const beforeReplay = await replaySnapshot();
+    const replayCapability = await fetch(replayPath, { headers: replayHeaders });
+    assert.equal(replayCapability.status, 200);
+    assert.equal((await replayCapability.json()).reason, 'adapter_not_configured');
+    for (const method of ['GET', 'POST']) {
+      const init = { method, ...(method === 'POST' ? { body: '{}' } : {}) };
+      const unavailable = await fetch(replayPath, { ...init, headers: replayHeaders });
+      if (method === 'POST') { assert.equal(unavailable.status, 409); assert.equal((await unavailable.json()).error.code, 'CAPABILITY_UNAVAILABLE'); }
+      else { assert.equal(unavailable.status, 200); await unavailable.arrayBuffer(); }
+      const anonymous = await fetch(replayPath, { ...init, headers: { 'content-type': 'application/json' } });
+      assert.equal(anonymous.status, 401); await anonymous.arrayBuffer();
+      const foreign = await fetch(replayPath, { ...init, headers: { ...replayHeaders, authorization: `Bearer ${first.token}` } });
+      assert.equal(foreign.status, 404); await foreign.arrayBuffer();
+    }
+    const forged = await fetch(replayPath, { method: 'POST', headers: replayHeaders, body: JSON.stringify({ events: [], manifest: {} }) });
+    assert.equal(forged.status, 409); assert.equal((await forged.json()).error.code, 'CAPABILITY_UNAVAILABLE', 'client-supplied history cannot activate reconstruction');
+    const deniedPerson = randomUUID(), deniedToken = randomUUID();
+    await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'BA-09 synthetic denied actor')", [deniedPerson]);
+    await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'designer')", [second.org, deniedPerson]);
+    await owner.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+      VALUES ($1,$2,$3,'https://ba09.invalid','denied','mfa',now()+interval '1 hour')`, [deniedToken, second.org, deniedPerson]);
+    for (const method of ['GET', 'POST']) {
+      const denied = await fetch(replayPath, { method, headers: { ...replayHeaders, authorization: `Bearer ${deniedToken}` },
+        ...(method === 'POST' ? { body: '{}' } : {}) });
+      assert.equal(denied.status, 403); await denied.arrayBuffer();
+    }
+    await owner.query('UPDATE identity.authentication_sessions SET revoked_at=now() WHERE id=$1', [deniedToken]);
+    const revokedReplay = await fetch(replayPath, { headers: { authorization: `Bearer ${deniedToken}` } });
+    assert.equal(revokedReplay.status, 401); await revokedReplay.arrayBuffer();
+    assert.deepEqual(await replaySnapshot(), beforeReplay, 'unavailable/denied Replay cannot change Session history or create Command Receipts');
     const bFile = await attachment(second);
     assert.equal(await delivered(bInject), false, 'unbound post-startup Organization is ineligible');
     assert.equal((await configure(service, second, 0, true, { actorPersonId: first.person })).status, 403, 'bootstrap principal cannot be reused across tenants');

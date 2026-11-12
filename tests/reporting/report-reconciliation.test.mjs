@@ -24,7 +24,7 @@ test("PS-520-T01 report, research, and replay contracts are registered", () => {
   assert.equal(replayDivergenceV1Schema.$id, REPLAY_DIVERGENCE_CONTRACT_ID);
 });
 
-test("PS-520-T02 replay matches identical pinned input and reports machine-readable divergence", () => {
+test("Replay comparator plumbing matches supplied records and reports divergence (not reconstruction proof)", () => {
   const matched = compareReplay(sessionId, { manifest, events: [event] }, { manifest: structuredClone(manifest), events: [structuredClone(event)] },
     new Date("2026-10-23T12:00:00.000Z"));
   assert.deepEqual({ matched: matched.matched, compared: matched.comparedEvents, divergences: matched.divergences },
@@ -33,6 +33,11 @@ test("PS-520-T02 replay matches identical pinned input and reports machine-reada
     new Date("2026-10-23T12:00:00.000Z"));
   assert.equal(changed.matched, false);
   assert.equal(changed.divergences[0].code, "event_mismatch");
+  const time = new Date("2026-10-23T12:00:00.000Z");
+  assert.deepEqual(compareReplay(sessionId, { manifest, events: [event] }, { manifest, events: [] }, time).divergences.map(({ code }) => code), ["missing_event"]);
+  assert.deepEqual(compareReplay(sessionId, { manifest, events: [] }, { manifest, events: [event] }, time).divergences.map(({ code }) => code), ["unexpected_event"]);
+  assert.equal(compareReplay(sessionId, { manifest, events: [event] }, { manifest, events: [{ ...event, sequence: 2 }] }, time).divergences[0].code, "event_reordered");
+  assert.equal(compareReplay(sessionId, { manifest, events: [] }, { manifest: { ...manifest, randomSeed: 7 }, events: [] }, time).divergences[0].code, "manifest_mismatch");
 });
 
 test("PS-520-T03 portable renderers produce deterministic PDF and ZIP containers", () => {

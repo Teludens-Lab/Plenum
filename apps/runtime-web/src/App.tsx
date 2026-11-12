@@ -20,6 +20,7 @@ import {
   type JsonObject,
   type OperatorProjectionV1,
   type ReadinessProjectionV1,
+  type ReplayCapabilityV1,
   type RuntimeActionV1,
   type RuntimeArtifactV1,
   type RuntimeInjectV1,
@@ -1691,6 +1692,22 @@ function OperatorView() {
     createdAt: string; purgedAt: string | null; manifest: JsonObject }>>([]);
   const [replayResult, setReplayResult] = useState<{ matched: boolean; comparedEvents: number; manifestDigest: string;
     divergences: Array<{ code?: string; sequence?: number | null; recordedDigest?: string | null; replayedDigest?: string | null }> } | null>(null);
+  const [replayCapability, setReplayCapability] = useState<ReplayCapabilityV1 | null>(null);
+  const [replayAvailabilityError, setReplayAvailabilityError] = useState<string | null>(null);
+  const [replayCheck, setReplayCheck] = useState(0);
+  const replayGeneration = useRef(0);
+  useEffect(() => {
+    const generation = ++replayGeneration.current;
+    setReplayCapability(null); setReplayAvailabilityError(null); setReplayResult(null);
+    if (id === null || operationView !== "replay") return;
+    const controller = new AbortController();
+    void api<ReplayCapabilityV1>(`/v1/sessions/${id}/replay`, { signal: controller.signal }).then((capability) => {
+      if (generation === replayGeneration.current) setReplayCapability(capability);
+    }).catch((cause: unknown) => {
+      if (generation === replayGeneration.current) setReplayAvailabilityError(cause instanceof Error ? cause.message : "The availability check failed.");
+    });
+    return () => { ++replayGeneration.current; controller.abort(); };
+  }, [id, operationView, replayCheck]);
   const [retentionStatus, setRetentionStatus] = useState<{ organizationLegalHoldActive: boolean;
     policies: Array<{ id: string; key: string; version: number; periodDays: number; expiryAction: string; scopeType: string }>;
     consequences: string[] } | null>(null);
@@ -1784,14 +1801,20 @@ function OperatorView() {
     finally { setPending(false); }
   };
   const runReplay = async () => {
-    if (id === null || pending) return;
-    setPending(true); setOperationNotice("Replaying authoritative Session evidence.");
+    if (id === null || pending || replayCapability?.available !== true) return;
+    const generation = replayGeneration.current;
+    setReplayResult(null); setPending(true); setOperationNotice("Reconstructing Session history from pinned inputs.");
     try {
       const result = await api<NonNullable<typeof replayResult>>(`/v1/sessions/${id}/replay`, { method: "POST", body: "{}" });
+      if (generation !== replayGeneration.current) return;
       setReplayResult(result);
       setOperationNotice(result.matched ? `Replay matched across ${result.comparedEvents} Evidence Events.` : `Replay completed with ${result.divergences.length} divergence${result.divergences.length === 1 ? "" : "s"}.`);
-    } catch (cause) { setOperationNotice(cause instanceof Error ? cause.message : "Replay is unavailable."); }
-    finally { setPending(false); }
+    } catch (cause) {
+      if (generation !== replayGeneration.current) return;
+      setOperationNotice(cause instanceof Error ? cause.message : "Replay is unavailable.");
+      if (cause instanceof ApiError && cause.envelope.error.code === "CAPABILITY_UNAVAILABLE") setReplayCheck(value => value + 1);
+    }
+    finally { if (generation === replayGeneration.current) setPending(false); }
   };
   const consoleBase = `/admin/sessions/${projection.sessionId}`;
   const operatorSidebarVisible = operatorSidebarPreference === "auto" ? operatorWideViewport : operatorSidebarPreference === "open";
@@ -1913,8 +1936,15 @@ function OperatorView() {
       {reports}
       {operationView === "replay" ? <section className="workspace-section operation-panel" aria-labelledby="replay-title">
         <h2 id="replay-title">Replay Session evidence</h2>
-        <p>Replay compares authoritative Evidence against the configured deterministic adapter without changing Session state.</p>
-        <button className="btn-primary" type="button" disabled={pending} onClick={() => void runReplay()}>Run replay</button>
+        <p>Deterministic Replay reconstructs history from pinned inputs and compares it with Captured History without changing Session state.</p>
+        {replayAvailabilityError !== null ? <div className="status-notice" role="status">
+          <p>Replay availability could not be verified. {replayAvailabilityError}</p>
+          <button className="btn-secondary" type="button" onClick={() => setReplayCheck(value => value + 1)}>Check Replay availability again</button>
+        </div> : replayCapability === null ? <p role="status">Checking Replay availability.</p> : <div className="status-notice" role="status">
+          <p>{replayCapability.message}</p>
+          {!replayCapability.available ? <a href={`${consoleBase}/reports`}>View captured history in Reports</a> : null}
+        </div>}
+        {replayCapability?.available === true ? <button className="btn-primary" type="button" disabled={pending} onClick={() => void runReplay()}>Run replay</button> : null}
         {replayResult === null ? null : <div className="replay-result">
           <div className={`status-notice ${replayResult.matched ? "status-success" : "status-warning"}`} role="status">
             <strong>{replayResult.matched ? "Matched" : "Divergence detected"}</strong> · {replayResult.comparedEvents} compared Evidence Events

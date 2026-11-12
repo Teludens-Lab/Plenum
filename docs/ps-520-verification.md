@@ -1,5 +1,61 @@
 # PS-520 verification
 
+## BA-09 Replay availability and reconstruction inventory (2026-11-12)
+
+Baseline `c9d9a87` is clean. Finding 8's misleading availability can be contained, but required deterministic Replay remains OPEN. Connected, institutional/self-hosted and air-gapped production profiles provide no reconstruction adapter. `replay/service.ts` currently loads Release/compiler/package/seed metadata and captured Evidence Events; it does not provide the pinned starting state and independently executable historical inputs. Command receipts retain payload hashes, not canonical Command payloads (`runtime/commands/processor.ts`). Definition revisions, Artifact versions, Control Interventions and Model Run input snapshots/proposal records preserve useful subsets, but no complete versioned, observational transition implementation consumes them across all operation families. Re-running live SQL handlers would mutate state and invoke current integrations, and is prohibited. Missing historical inputs cannot be recovered by returning the captured events.
+
+Compatibility decision before implementation: add an authorized `GET /v1/sessions/{sessionId}/replay` capability response; retain the existing POST divergence contract and `CAPABILITY_UNAVAILABLE` envelope. Both methods use the existing Admin/Operator Organization-role and tenant-Session boundary, including current membership/session validity. The UI checks capability before showing a runnable action. Existing adapter injection remains an internal seam; no environment toggle or production adapter is introduced. Echo adapters may remain only in explicitly named plumbing tests, never acceptance evidence. No migration or new trust boundary. T01 and full reconstruction-related T02 remain unfulfilled until independently derived, version-pinned reconstruction exists and rejects missing/corrupt history.
+
+### Input and transition inventory
+
+| Required material | Existing source | Remaining reconstruction gap |
+|---|---|---|
+| Governing Releases and definitions | `registry.releases`, `studio.definition_revisions`, ordered `runtime.release_activations` | Current adapter input carries metadata, not the complete definitions or a verified initial mutable-state snapshot. |
+| Decisions and ordering | `evidence.events`, `sync.command_receipts`, Artifact versions, Control Interventions | Receipts store canonical payload digests, not canonical payloads; captured outcome events are not independent execution inputs for every operation. Current Replay projection also omits recorded times, actors, causation and Authority Epoch. |
+| Deterministic external work | `extension.composition_runs.input_snapshot`, Model Run digests/seeds/environment and Effect Proposals | The loader supplies only selected pins. Complete external output and adapter/version support for reproducing all resulting events are not implemented. Replay must never dispatch the live Extension Host or provider effects. |
+| Versioned transition logic | `packages/workflow-engine` (`resolveWorkflowTransition`, `selectStageTransitions`, `rehearseStages`, clock helpers); `nextOperatorSessionStatus` | These are useful deterministic pieces, not a Session-wide historical interpreter. Other handlers combine current database reads, writes and effects. A Studio rehearsal is not full Session Replay. |
+| Comparison | `compareReplay` with canonical hashes and ordered event differences | Comparator tests independently assert difference codes, but supplied/echoed records are not independently reconstructed history. |
+
+All current profiles are unavailable for deterministic reconstruction. There is no safe backfill that invents missing historical inputs. Completion requires a versioned input/initial-state contract, complete supported transition coverage with pinned time/seed semantics, integrity/gap/version validation, independent expected-history fixtures, and production T01/T02 evidence. Existing immutable histories must remain unchanged. No new retention period, data store or event-sourcing platform is introduced by this containment patch.
+
+### Current acceptance and verification
+
+**Status: containment implemented; finding 8 and required Replay remain OPEN / BLOCKED.** Exact starting source: `c9d9a8738a02e57cdcbe21fe6669a297508dd5cd`, clean before BA-09. All three production profiles (`cloud`, `institutional`, `air_gapped`) remain unavailable; none supplies a valid reconstruction adapter. The real cloud entrypoint is exercised below; other profiles share that factory, but were not independently deployed in this task.
+
+| ID | Result | Evidence and limits |
+|---|---|---|
+| BA-09-T01 | BLOCKED / NOT RUN | No supported independent reconstruction exists. Comparator fixtures assert manifest, content, ordering, missing and unexpected event differences; they do not reconstruct history. |
+| BA-09-T02 | Partial PASS; reconstruction gate BLOCKED | Real production GET/POST reject anonymous, wrong-tenant, unauthorized-role and revoked callers. Session row, Evidence and receipt counts are unchanged. Adapter plumbing verifies a cloned comparison baseline and revocation before result disclosure. Missing/corrupt/pin-mismatched reconstruction cannot be verified without a real interpreter. |
+| BA-09-T03 | PASS | Real production startup returns authorized unavailable capability and POST `CAPABILITY_UNAVAILABLE`; supplied request history cannot activate Replay. Operator browser shows checking, unavailable and failed-check/retry states, no Run action or Matched claim, and a Reports link. Required Replay remains blocked in the completeness ledger. |
+
+The service reads a repeatable-read, read-only snapshot, passes a clone to the internal adapter, then rechecks current authorization before disclosing results. No database transaction spans the adapter call. These are service safeguards, not a sandbox or proof that an arbitrary adapter has no external effects. No adapter is activated. The shared browser fixture's echo adapter is removed. Archive integration echoes are explicitly scoped to plumbing. Golden completion and restore helpers now assert actual capability before running Replay, and completion rechecks it even when an old saved checkpoint says Replay passed; their full journeys remain BLOCKED, not accepted through UI containment.
+
+Commands ran from `C:\Users\ssnguna\Local Sites\Plenum`, Node 24.22.1/npm 11.19.1, root lockfile, local Windows Chromium, PostgreSQL 18.6 and SeaweedFS 4.48, synthetic data only. Evidence is under `output/ba-09/`; test-runner durations below exclude npm build/setup where the runner does not include it. Short static-command wall times are recorded separately in `static-checks.json`.
+
+| Command ID / command | Result / exit | Duration / evidence |
+|---|---|---|
+| CMD-PLATFORM-TYPECHECK / `npm run typecheck` | PASS / 0 | 10.27 s wall time; `static-typecheck.log` |
+| CMD-PLATFORM-TEST / `npm test` | PASS, 173 / 0 | 4.78 s tests; `unit-final.log` |
+| CMD-PLATFORM-INTEGRATION / `npm run test:integration` | PASS, 47; 1 explicit skip / 0 | 153.73 s tests; `integration-verify.log`. BA-08 real rootless execution remains skipped because no qualifying supervisor socket is configured. |
+| CMD-REPORT-RECONCILE / `npm run reconcile:reports` | PASS, 3 / 0 | 0.70 s tests; `report-reconcile.log` |
+| CMD-PRODUCT-E2E / `npm run test:e2e:product` | PASS, 42 / 0 | 9.0 min browser runner; `product-final.log` |
+| CMD-PLATFORM-A11Y / `npm run test:a11y` | PASS, 11 / 0 | 3.7 min browser runner; `a11y.log` |
+| `npm run lint`, `npm run audit:product-completeness`, `npm run validate:promptbook` | PASS / 0 each | 5.07 / 0.54 / 0.60 s wall time; `static-checks.json` and corresponding logs; completeness checks consistency, not Replay delivery |
+| Golden completion/restore helpers | Syntax PASS; full journeys BLOCKED / NOT RUN | `node --check` only; required reconstruction is unavailable |
+| Hosted CI, actual browser zoom, fresh human/desktop AT review | NOT RUN | Local automated screenshots use 1024x768 and a 512x384 effective viewport, not actual browser zoom; prior human acceptance does not transfer to these changed states |
+
+The new browser case checks overflow, focus and axe with forced colors/reduced motion. Screenshots `replay-1024.png`, `replay-512.png` and `replay-forced-colors.png` were visually inspected: explanatory content and Reports link remain readable, with visible keyboard focus and no horizontal clipping. The 512 viewport is a constrained-layout proxy for 200% zoom. The first product attempt was stopped after finding another obsolete PS-800 Run-button assertion; it is retained as `product.log`, not a passing run. The converged suite includes that corrected consumer.
+
+**Separate unresolved concurrency defect:** `integration-final.log` failed (46 PASS, 1 FAIL, 1 SKIP; exit 1; 144.83 s) before the BA-09 assertions: an unavailable Model Run returned 500 instead of 409. `database-deadlock.log` records a cycle between Command outcome Evidence-sequence allocation and a scheduled Inject's Session lock/FK check. The unchanged-source rerun passes, but does not fix or clear this defect. Command/scheduler lock-order reconciliation and concurrency proof remain required in BA-11/12 before release; no broad retry or out-of-scope lock rewrite was added here.
+
+### Recovery, resources and continuation
+
+No migration, dependency, new process, production configuration or data rewrite. The GET addition and service safeguards preserve the existing POST response/bodyless-call behavior. Rollback requires paired application/UI redeployment; it would restore misleading availability, so retaining the containment is preferred. No rollback exercise or production deployment was performed. Logical archive/report compatibility remains covered by the integration/report gates.
+
+Only `plenum-ba09-db` (`7ed51393573281db0bdcc4cde9d294f09c25e29c26be7edb6a03f70297d9ac19`, tmpfs `/var/lib/postgresql`) and `plenum-ba09-s3` (`e41fabc5ebdd67d82c70bcd9f48670db1be118a139e337c6ee5758bd182ffbca`, tmpfs `/data`) were created, on loopback ports 65439/6833 after a disk-capacity preflight. Disposable databases were `postgres`, `ba09_final`, `ba09_verify`, `ba09_product`, `ba09_product_final`, `ba09_a11y`, plus harness-owned restore databases. After all tests disconnected, exact container identities were verified and both containers removed. Unrelated containers were preserved; no broad prune. Generated tracked browser output is restored from the preflight backup; new local evidence remains under `output/ba-09/`. Final source paths/hashes are in `candidate-manifest.json`.
+
+No commit, push or deployment. Suggested subject remains `fix(replay): align production capability and reconstruction`; it must not be read as completion of reconstruction. PS-830 owner acceptance, PS-840 signed-checkpoint exception, PS-842 decisions and PS-850 release obligations retain their scope. Affected PS-830/840 golden Replay and restore gates must be rerun with a genuine adapter and independent history expectations; they cannot inherit earlier echo-based PASS claims. Next independent task: BA-10. Required Replay implementation and the separate concurrency defect remain open.
+
 ## BA-07 automatic Form attachment expiry (2026-11-11)
 
 **Status: implementation and local automated verification PASS; BA-07-T01–T03 PASS.** Baseline `cc3cc51` was clean on `main`; all new edits are BA-07 work and the narrow browser-gate synchronization correction described below. No commit, push or deployment is performed. Proposed branch `fix/build-audit-attachment-expiry`; subject `fix(retention): enforce automatic attachment expiry`.
@@ -55,7 +111,7 @@ Updated: 2026-10-23. Change mode: production/high-criticality implementation wit
 
 ## Outcome
 
-PS-520 is implemented and verified. The modular server now produces immutable provenance-bearing Session reports and consent-filtered research exports in JSON, JSONL, CSV, HTML, PDF, and ZIP; stores separate observations, versioned metrics, notes, and findings; records retention policy and compensating corrections; performs pinned deterministic replay with machine-readable divergence; and transactionally rehydrates digest-verified Organization archives into an empty same-Organization deployment.
+Historical PS-520 reporting/archive verification does not establish deterministic Replay; BA-09 corrects that earlier claim above. The modular server produces immutable provenance-bearing Session reports and consent-filtered research exports in JSON, JSONL, CSV, HTML, PDF, and ZIP; stores separate observations, versioned metrics, notes, and findings; records retention policy and compensating corrections; compares supplied Replay records with machine-readable divergence; and transactionally rehydrates digest-verified Organization archives into an empty same-Organization deployment. The original Replay adapters were plumbing fixtures, not independent reconstruction.
 
 Migration `024_reporting_research` adds forced-RLS, append-only reporting records. The HTTP surface adds research-consent and report-generation endpoints. A replay adapter is injected at deployment/runtime composition; the HTTP endpoint fails closed when no deterministic adapter is configured.
 
@@ -66,9 +122,9 @@ Migration `024_reporting_research` adds forced-RLS, append-only reporting record
 | Every report element traces to source | `PS-520-T01/T02/T03` and real-DB `AC-06` assert event/metric/analysis source references and reconciliation counts | PASS |
 | Research export contains no direct participant identifiers or raw bodies | Real-DB and aggregate HTTP/browser flow assert person/participant IDs and a synthetic direct name are absent | PASS |
 | Metric version changes do not rewrite history | Real-DB test generates v1, adds v2, generates again, and verifies the first artifact bytes are unchanged | PASS |
-| Replay matches or emits machine-readable divergence | Unit and real-DB adapter tests cover identical input, missing/reordered events, and manifest comparison | PASS |
+| Replay matches or emits machine-readable divergence | Unit and real-DB adapter tests cover supplied records, missing/reordered events, and manifest comparison only | Comparator plumbing PASS; deterministic reconstruction BLOCKED (BA-09) |
 | Exact idempotent retry and immutable regeneration | Real-DB and HTTP flow return identical bytes for one key, refuse key collision, and create a new artifact for a new key | PASS |
-| Portable Organization archive validates and reimports | Real-DB test creates a second fresh database, applies migrations 001-024, adds only the bootstrap Admin identity, imports every declared dataset, compares every table count, then successfully replays a Session and regenerates a report | PASS for logical operational-table hydration |
+| Portable Organization archive validates and reimports | Real-DB test creates a second fresh database, applies migrations 001-024, adds only the bootstrap Admin identity, imports every declared dataset, compares every table count, then checks Replay comparator plumbing and regenerates a report | PASS for logical operational-table hydration; not reconstruction proof |
 | Import boundary and atomicity | Import rejects digest, restore-contract, Organization-scope, identity, and non-empty-target mismatches before data insertion; all hydration and audit work share one transaction; the same digest replays without duplicate rows | PASS |
 | Required aggregate browser gate | The Windows fixture-server shutdown hang is fixed with a bounded global teardown. The exact clean `npm run test:e2e` aggregate completed with `21 passed`, `1` conditional real-media skip, and a normal final summary in 6.4 minutes. Loaded-host time budgets were widened without weakening assertions, and the timer extension proof now compares its durable deadline rather than a decaying wall-clock value. | PASS |
 

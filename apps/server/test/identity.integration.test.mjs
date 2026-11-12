@@ -3939,7 +3939,7 @@ test("DEC-61 Research Analyst exports only a granted, PII-free Evidence index", 
   );
 });
 
-test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered research, replay, and portable archives", async () => {
+test("AC-06 PS-520-T01/T03 reports, consent-filtered research, Replay comparator plumbing, and portable archives", async () => {
   const analyst = { ...principalC, organizationRoles: ["research_analyst"] };
   await grantResearchAccess(app, principalD, {
     projectId: ids.projectA, analystPersonId: ids.personC, protocolReference: "PS-520-SYNTHETIC",
@@ -4068,6 +4068,7 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   );
   assert.ok(retentionAudit.rows.some(({ action }) => action === "retention.enforcement_completed"));
 
+  // Echo adapters below prove service/archive plumbing only; BA-09 reconstruction acceptance remains open.
   const matchedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) { return structuredClone(input); } }, randomUUID());
   assert.deepEqual([matchedReplay.matched, matchedReplay.divergences.length], [true, 0]);
   const divergedReplay = await replaySession(app, principalD, ids.sessionA, { async replay(input) {
@@ -4075,6 +4076,18 @@ test("AC-06 PS-520-T01/T02/T03 generates traceable reports, consent-filtered res
   } }, randomUUID());
   assert.equal(divergedReplay.matched, false);
   assert.ok(divergedReplay.divergences.some(({ code }) => code === "event_reordered" || code === "missing_event"));
+  const mutatedBaseline = await replaySession(app, principalD, ids.sessionA, { async replay(input) {
+    input.manifest.initialReleaseId = randomUUID(); return input;
+  } }, randomUUID());
+  assert.equal(mutatedBaseline.matched, false, 'adapter mutation cannot replace the captured comparison baseline');
+  assert.equal(mutatedBaseline.divergences[0].code, 'manifest_mismatch');
+  const revokedToken = randomUUID();
+  await owner.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+    VALUES ($1,$2,$3,'https://ba09.invalid','synthetic-revocation','mfa',now()+interval '1 hour')`, [revokedToken, ids.orgA, ids.personD]);
+  await assert.rejects(replaySession(app, { ...principalD, authenticationSessionId: revokedToken }, ids.sessionA, { async replay(input) {
+    await owner.query('UPDATE identity.authentication_sessions SET revoked_at=now() WHERE id=$1', [revokedToken]);
+    return input;
+  } }, randomUUID()), error => error.envelope?.error?.code === 'ACCESS_REVOKED', 'in-flight access revocation prevents result disclosure');
 
   const archive = await exportOrganizationArchive(app, principalD, randomUUID(), new Date("2026-10-23T12:00:00.000Z"));
   assert.equal(archive.archiveVersion, 2);
@@ -4596,7 +4609,7 @@ test("PS-810 stores immutable security evidence without granting application rea
   }
 });
 
- test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08-T03 production startup discovers tenant authority, recovers deletion and reports unavailable Model Runs", async () => { await verifyTenantJobs(owner, app); });
+test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08/09-T03 production tenant work and unavailable Model Run/Replay boundaries", async () => { await verifyTenantJobs(owner, app); });
 test("BA-08 governed Model Run HTTP/database boundary and restart recovery (transport harness)", async () => { await verifyGovernedModelRuns(owner, app); });
 test("BA-08-T01 supported rootless production entrypoint executes and approves a governed effect", {
   skip: !process.env.PLENUM_TEST_EXTENSION_SOCKET && "NOT RUN: qualifying Linux rootless supervisor socket unavailable"

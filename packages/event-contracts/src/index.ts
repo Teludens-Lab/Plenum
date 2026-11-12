@@ -701,6 +701,12 @@ export interface ResearchExportV1 extends JsonObject {
   provenance: JsonObject;
 }
 
+export interface ReplayCapabilityV1 {
+  available: boolean;
+  reason: "adapter_not_configured" | null;
+  message: string;
+}
+
 export interface ReplayDivergenceV1 extends JsonObject {
   contractId: typeof REPLAY_DIVERGENCE_CONTRACT_ID;
   sessionId: string;

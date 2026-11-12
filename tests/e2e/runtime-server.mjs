@@ -187,7 +187,6 @@ const api = createRuntimeHttpHandler({
   deploymentId: fixture.deploymentId,
   mediaAdapter,
   objectStore,
-  replayAdapter: { async replay(input) { return input; } },
   contentScanner,
   floorTokenSecret: "synthetic-floor-token-secret-for-e2e-only",
   publicBaseUrl: `http://127.0.0.1:${runtimePort}`,

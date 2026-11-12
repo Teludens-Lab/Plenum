@@ -360,6 +360,7 @@ export default async function globalSetup() {
       writeFile(new URL("ps-790-license-terms.txt", userTestRoot), "Synthetic PS-790 fixture license terms. No production rights are implied.\n")
     ]);
     const catalogManifest = (pluginId, digest, capability) => ({
+      ...pluginManifest,
       pluginId, version: "1.0.0", digest, categories: ["world_and_simulation"], capabilities: [capability],
       connectivity: "offline_capable", contracts: { inputSchema: `${pluginId}.input.schema.json`, outputSchema: `${pluginId}.output.schema.json` },
       limits: { timeoutSeconds: 30, memoryMiB: 128, cpuMillis: 1000, outputBytes: 65536 },

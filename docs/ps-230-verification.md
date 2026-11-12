@@ -1,5 +1,17 @@
 # PS-230 isolated Plugin effects verification
 
+## CI browser regression follow-up — 2026-11-12
+
+Source baseline: `8f621c21ead57a49b005d899316e5d1b39a8d35b`; initially clean worktree. CI run `43132860806` failed two accessibility cases and the BA-06 zoom assertion. The accessibility failures reproduced locally: the pre-seeded approved catalog manifests omitted the publisher metadata now required by approval-time trust validation, yielding a canonical `PLUGIN_NOT_APPROVED` receipt; the catalog assertion also expected the previous “available” wording. The fixture now inherits the existing complete synthetic manifest, the approval test checks the actual Command Receipt before presentation, and the catalog assertion matches “available for binding.” Production trust checks are unchanged.
+
+The zoom failure did not reproduce in six focused runs using CI's exact Linux Chromium image. The assertion now waits at most five seconds for the measured document width after resizing, and reports overflowing element geometry on failure. This preserves failure for persistent overflow; the original intermittent layout cause is not proven. No CSS or application behavior changed. See [BA-06 evidence](acceptance/BA-06-live-sync.md).
+
+Evidence is under `output/ci-browser-fix/`: `a11y-before.log` and `approval-trace/` record the initial rejection; `linux-layout-before.log` and `linux-layout-repeat.log` record 1 + 5 focused passes; `a11y-after.log` records **11/11 PASS** (6.6 minutes), and `typecheck.log` records **PASS**, both exit 0. The runner is Node 24.22.1 on Windows, with a loopback Playwright connection to `mcr.microsoft.com/playwright@sha256:ee15712262f017b8157421b212b12099146645f44b1bc5c0514cbbe6a229b1d0`; PostgreSQL 18.6 uses only synthetic disposable databases. `environment.json` records container identities. Linux screenshots at 1024×768 and 512×384 were inspected; this is not native zoom or human assistive-technology evidence.
+
+The full remotely connected product command is **FAIL (verification transport), exit 1**: 24 cases passed, but the existing download tests call `Download.path()`, which Playwright prohibits for remote connections; the attempt was stopped and retained in `product-after.log`. This attempt does not establish full-product acceptance. Hosted CI rerun, production activation and the existing BA-08 isolation/owner-review gates remain separate.
+
+The standard local `npm run test:e2e:product` rerun on a fresh disposable database is **PASS, 41/41, exit 0** (13.0 minutes; `product-local.log`). This includes Release/attachment/Form/archive downloads, the bounded zoom assertion, and BA-08 unavailable/error UI. Both required browser commands rebuilt the candidate. Tracked generated fixtures/screenshots were restored from the pre-run backup; disposable infrastructure was removed after verification. No commit, push or deployment. The final patch is test/evidence-only and does not change the existing release-acceptance status.
+
 ## BA-08 governed production Model Runs — 2026-11-11
 
 **Current status: implementation authorized; production activation BLOCKED and finding 7 OPEN.** The owner explicitly approved the constrained Unix-socket supervisor proposal below for implementation and synthetic testing. This does not grant production activation, formal Security Owner approval, commit or push authority. Source baseline remains `cb5de97169dcabbeee1a364b8b003d5a13e1ca46`.

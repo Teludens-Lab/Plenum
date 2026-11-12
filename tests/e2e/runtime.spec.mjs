@@ -390,7 +390,10 @@ test.describe.serial("PS-150 configured Runtime shell", () => {
     await expect(proposal.getByText("in review")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Offline Outbox" })).toHaveCount(0);
     await context.setOffline(false);
+    const approvalResponse = page.waitForResponse((response) => response.url().endsWith(`/v1/sessions/${fixture.sessionId}/commands`) && response.request().method() === "POST");
     await proposal.getByRole("button", { name: "Approve effect" }).click();
+    const receipt = await (await approvalResponse).json();
+    expect(receipt.status, JSON.stringify(receipt)).toBe("accepted");
     await expect(page.getByRole("list", { name: "Session messages", exact: true })).toContainText("The server accepted the Command.", { timeout: commandTimeout });
     await expect(proposal.getByText("applied")).toBeVisible({ timeout: 20_000 });
     await expect(proposal.getByRole("button", { name: "Approve effect" })).toHaveCount(0);
@@ -1602,7 +1605,7 @@ test.describe.serial("PS-300 collaborative Studio", () => {
     await designer.page.goto(studioUrl());
     await expect(designer.page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 20_000 });
     const plugins = await openStudioWorkspace(designer.page, "Plugin catalog & bindings");
-    await expect(plugins.getByText("2 approved installed Plugins available.")).toBeVisible({ timeout: 20_000 });
+    await expect(plugins.getByText("2 approved installed Plugins available for binding.")).toBeVisible({ timeout: 20_000 });
     const catalogCards = plugins.locator(".catalog-card");
     await expect(catalogCards).toHaveCount(2);
     await catalogCards.nth(0).getByRole("button", { name: "Bind installed Plugin" }).click();

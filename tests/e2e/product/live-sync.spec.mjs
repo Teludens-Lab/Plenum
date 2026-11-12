@@ -195,7 +195,13 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
       after: await clients[0].page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
         sidebar: document.querySelector('.runtime-frame')?.getAttribute('data-sidebar') })) }) });
     await expect(clients[0].page.getByRole("heading", { name: "Strategic Actions", exact: true, level: 1 })).toBeVisible();
-    expect(await clients[0].page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The sidebar state and browser reflow settle independently after resizing.
+    await expect(async () => {
+      const overflow = await clients[0].page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+        elements: [...document.querySelectorAll("body *")].filter(element => element.getBoundingClientRect().right > innerWidth)
+          .map(element => ({ tag: element.tagName, className: element.className, right: element.getBoundingClientRect().right })) }));
+      expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width);
+    }).toPass({ timeout: 5_000, intervals: [50, 100, 250] });
     await clients[0].page.screenshot({ path: testInfo.outputPath("ba06-desktop-200-percent.png") });
     await clients[0].page.setViewportSize({ width: 1024, height: 768 });
     // Hold an older manual projection read while the independent subscription observes revocation.

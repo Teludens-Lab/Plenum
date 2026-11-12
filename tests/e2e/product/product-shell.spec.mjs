@@ -164,6 +164,13 @@ test("CONTROL-PLANE-E2E Platform Administrator completes Organization activation
   await page.getByLabel("Reason", { exact: true }).fill("Synthetic activation evidence complete");
   await page.getByRole("button", { name: "Activate Organization" }).click();
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+  await page.getByLabel("Add domain", { exact: true }).fill("synthetic-active-control.example");
+  await page.getByRole("button", { name: "Add domain", exact: true }).click();
+  await expect(page.getByText("_plenum-verification.synthetic-active-control.example", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("_plenum-verification.synthetic-active-control.example", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add domain", exact: true })).toBeVisible();
+  await page.getByRole("region", { name: "Organization domains", exact: true }).screenshot({ path: `${controlPlaneEvidenceRoot}/active-organization-domains.png` });
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: `${controlPlaneEvidenceRoot}/organization-active-1440x900.png`, fullPage: true });
   const activeUrl = page.url();

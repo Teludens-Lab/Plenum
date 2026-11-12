@@ -307,7 +307,7 @@ function OrganizationDetail({ detail, onChange, setNotice }: {
                   onClick={() => void mutate(`/v1/platform/organizations/${organization.id}/domains/${domain.id}/reissue`, {}, "DNS challenge reissued. Replace the previous TXT value.")}>Reissue challenge</button></div>
             </div> : domain.verifiedAt === null ? <span>Historical verification cannot satisfy the DNS gate.</span> : <StatusBadge status="verified" />}
           </li>)}</ul>}
-        {organization.lifecycleStatus === "pending" ? <form className="platform-inline-form" onSubmit={addDomain}>
+        {organization.lifecycleStatus !== "offboarded" ? <form className="platform-inline-form" onSubmit={addDomain}>
           <div className="field"><label htmlFor="platform-domain">Add domain</label><input id="platform-domain" name="domain" required placeholder="organization.example" /></div>
           <button className="btn-secondary" type="submit" disabled={pending}>Add domain</button></form> : null}
       </section>

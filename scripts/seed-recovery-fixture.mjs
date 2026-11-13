@@ -19,7 +19,9 @@ const migrations = [
     "030_template_review_governance", "032_operations_administration", "033_platform_control_plane",
     "034_platform_onboarding_operations", "035_platform_administrator_workforce",
     "036_organization_identity_providers", "037_organization_workforce", "038_identity_workforce_operations",
-    "039_operational_security_events"]
+    "039_operational_security_events", "040_operational_security_reader", "041_form_attachments", "042_inject_schedule_provenance",
+    "043_oidc_browser_binding", "044_floor_provider_reconciliation", "045_organization_job_bindings",
+    "046_attachment_retention_retry", "047_model_run_work_queue", "048_evidence_checkpoint_work"]
     .map((name) => `apps/server/migrations/${name}.sql`)
 ];
 const ids = {

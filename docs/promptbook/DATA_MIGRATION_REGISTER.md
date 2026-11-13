@@ -1,5 +1,7 @@
 # Data migration register
 
+BA-10 adds `048_evidence_checkpoint_work.sql`: a bounded per-Session operational journal containing only a frozen public checkpoint, public signature, retry state and fenced claim. Tenant RLS is forced; no Evidence or proof row is rewritten. Apply before scheduling and drain older checkpoint producers. Rollback preserves journal/proof data for forward recovery; no destructive down migration. Logical archives containing pending work carry schema marker `plenum-048`, preserving it through updated importers and causing older readers to reject rather than drop the obligation. Archives without pending work keep `plenum-042`; v1/v2 reading remains supported. Full PostgreSQL backups include the journal. [BA-10 evidence](../ps-510-verification.md#ba-10-scheduled-checkpoint-work-2026-11-12) separates local proof from unprovisioned real custody.
+
 PS-842 requires no database migration or backfill. Named selection projections and transactional target validation use existing tables. Corrected interface configuration is published as new immutable 1.0.1 Releases; no historical Release, Package or Session pin is rewritten. Local test databases are disposable synthetic resources, recorded in the [PS-842 evidence ledger](../acceptance/PS-842-interface-consistency.md). Recovery is a bounded code revert and continued use of earlier Releases, not a data rollback.
 
 IDs are planned and unique in `tasks.json`. Exact SQL filenames are assigned by the owning implementation task after inspecting the live migration sequence.

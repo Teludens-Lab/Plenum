@@ -152,6 +152,7 @@
     }
   ],
   "overrides": [
+    { "dimension": "prd-requirement", "obligation": "REQ-006", "status": "BLOCKED", "owner": "PS-510 / PS-830 / PS-850; BA-10", "evidenceTarget": "docs/ps-510-verification.md; scheduled checkpoint recovery and optional AWS adapters have synthetic evidence only; approved external custody and both live golden Session proofs remain open" },
     { "dimension": "prd-requirement", "obligation": "REQ-042", "status": "BLOCKED", "owner": "PS-520 / PS-790; BA-09", "evidenceTarget": "docs/ps-520-verification.md; no complete independent reconstruction from pinned historical inputs; truthful capability containment does not satisfy Session reconstruction" },
     { "dimension": "prd-requirement", "obligation": "REQ-060", "status": "BLOCKED", "owner": "PS-520 / PS-790; BA-09", "evidenceTarget": "docs/ps-520-verification.md; comparator/plumbing tests are not deterministic Replay proof; T01 and reconstruction-related T02 remain open in all production profiles" },
     { "dimension": "prd-requirement", "obligation": "REQ-038", "status": "BLOCKED", "owner": "PS-220 / PS-230 / PS-330 / PS-790; BA-08", "evidenceTarget": "docs/ps-230-verification.md; owner approved constrained implementation; Release resolver, signed custody, worker and local boundary harness implemented; qualifying-rootless production workflow NOT RUN, Security Owner review and activation remain open" },

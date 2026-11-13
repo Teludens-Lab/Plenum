@@ -34,6 +34,8 @@ export * from "./registry/publication.js";
 export * from "./registry/lifecycle-portal.js";
 export * from "./research/evidence.js";
 export * from "./evidence/checkpoints.js";
+export * from "./evidence/checkpoint-worker.js";
+export * from "./evidence/aws-checkpoints.js";
 export * from "./reporting/service.js";
 export * from "./security/rate-limit.js";
 export * from "./security/clamav-scanner.js";

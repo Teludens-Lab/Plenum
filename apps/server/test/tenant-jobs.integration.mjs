@@ -1,10 +1,10 @@
 ﻿import assert from "node:assert/strict";
 import { UpdateParticipantRequest } from "@livekit/protocol";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, randomUUID } from "node:crypto";
 import { CreateBucketCommand, DeleteBucketCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer as createHttpsServer } from "node:https";
@@ -12,6 +12,7 @@ import { once } from "node:events";
 import { createServer, request as httpRequest } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { discoverOrganizationJobs, S3ObjectStore, withOrganizationTransaction, withRestrictedTransaction } from "../dist/index.js";
+import { verifyCommandSchedulerLockOrder } from "./command-scheduler.integration.mjs";
 
 async function eventually(check, label, timeout = 20_000) {
   const deadline = Date.now() + timeout;
@@ -38,12 +39,41 @@ export async function verifyTenantJobs(owner, app) {
   await s3.send(new CreateBucketCommand({ Bucket: bucket }));
   let pendingDisable;
   const directory = await mkdtemp(join(tmpdir(), "plenum-ba05-tls-"));
+  const evidenceKey = generateKeyPairSync('ed25519'), keyArn = 'arn:aws:kms:us-east-1:123456789012:key/ba10-synthetic';
+  const trustFile = join(directory, 'public-evidence-keys.json'), anchors = new Map();
+  await writeFile(trustFile, JSON.stringify({ [keyArn]: evidenceKey.publicKey.export({ format: 'jwk' }) }));
+  let signingDown = false, anchoringDown = false, ambiguousAnchor = false, signatureCalls = 0;
   const cert = join(directory, "cert.pem"), key = join(directory, "key.pem");
   const openssl = process.env.PLENUM_TEST_OPENSSL ?? (process.platform === "win32" && existsSync("C:/Program Files/Git/usr/bin/openssl.exe") ? "C:/Program Files/Git/usr/bin/openssl.exe" : "openssl");
   assert.equal(spawnSync(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", key, "-out", cert,
     "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1"], { windowsHide: true, encoding: "utf8" }).status, 0);
   const provider = createHttpsServer({ key: await readFile(key), cert: await readFile(cert) }, async (request, response) => {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
+    if (request.headers['x-amz-target'] === 'TrentService.Sign') {
+      if (signingDown) { response.writeHead(503); response.end(); return; }
+      const input = JSON.parse(Buffer.concat(chunks).toString());
+      assert.equal(input.KeyId, keyArn); assert.equal(input.SigningAlgorithm, 'ED25519_SHA_512'); assert.equal(input.MessageType, 'RAW');
+      signatureCalls++;
+      response.writeHead(200, { 'content-type': 'application/x-amz-json-1.1' });
+      response.end(JSON.stringify({ KeyId: keyArn, SigningAlgorithm: 'ED25519_SHA_512', Signature: sign(null, Buffer.from(input.Message, 'base64'), evidenceKey.privateKey).toString('base64') })); return;
+    }
+    if (request.url.startsWith('/ba10-independent-fixture/')) {
+      const location = request.url.split('?')[0];
+      if (request.method === 'PUT') {
+        if (anchoringDown) { response.writeHead(503); response.end(); return; }
+        if (anchors.has(location)) { response.writeHead(412); response.end(); return; }
+        assert.equal(request.headers['if-none-match'], '*');
+        assert.equal(request.headers['x-amz-object-lock-mode'], 'COMPLIANCE');
+        anchors.set(location, { body: Buffer.concat(chunks), retention: request.headers['x-amz-object-lock-retain-until-date'], version: randomUUID() });
+        if (ambiguousAnchor) { ambiguousAnchor = false; response.writeHead(503); response.end(); return; }
+        response.writeHead(200); response.end(); return;
+      }
+      const record = anchors.get(location);
+      if (!record) { response.writeHead(404); response.end(); return; }
+      response.writeHead(200, { 'content-length': record.body.length, 'x-amz-version-id': record.version,
+        'x-amz-object-lock-mode': 'COMPLIANCE', 'x-amz-object-lock-retain-until-date': record.retention });
+      response.end(record.body); return;
+    }
     if (request.url.includes("UpdateParticipant")) {
       calls.push(UpdateParticipantRequest.fromJson(JSON.parse(Buffer.concat(chunks).toString())));
       if (pendingDisable) { pendingDisable.entered.resolve(); await pendingDisable.resume.promise; }
@@ -141,7 +171,7 @@ export async function verifyTenantJobs(owner, app) {
   const attachmentState = async file => (await owner.query('SELECT upload_state FROM runtime.form_attachments WHERE id=$1', [file.id])).rows[0].upload_state;
   const assertDeleted = file => assert.rejects(store.get(file.key), error => error.$metadata?.httpStatusCode === 404);
   const purged = async (id) => (await owner.query("SELECT bytes IS NULL AS purged FROM reporting.export_artifacts WHERE id=$1", [id])).rows[0].purged;
-  const start = async (bootstrap, executorSocket = '') => {
+  const start = async (bootstrap, executorSocket = '', evidenceConfigured = true) => {
     const port = await freePort(), metrics = await freePort(), publicUrl = `https://localhost:${port}`;
     // Test-only IPC drives the production SIGTERM handler; Date advances without sleeping a readiness window.
     const shim = `const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance'){offset+=61000;process.send('advanced')}});`;
@@ -153,7 +183,10 @@ export async function verifyTenantJobs(owner, app) {
         S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID ?? 'synthetic', S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY ?? 'synthetic', MEDIA_URL: 'wss://127.0.0.1', MEDIA_API_URL: providerUrl,
         MEDIA_API_KEY: 'synthetic', MEDIA_API_SECRET: 'synthetic-media-secret', MEDIA_ADAPTER_DIGEST: digest, FLOOR_TOKEN_SECRET: 'synthetic-floor-secret',
         INVITATION_DELIVERY_ENDPOINT: `${publicUrl}/delivery`, INVITATION_DELIVERY_BEARER_TOKEN: 'synthetic-delivery-token', INVITATION_DELIVERY_WEBHOOK_TOKEN: 'synthetic-webhook-token',
-        CONTENT_SCANNER_HOST: '', NOTIFICATIONS_HOSTNAME: '' } });
+        CONTENT_SCANNER_HOST: '', NOTIFICATIONS_HOSTNAME: '',
+        PLENUM_EVIDENCE_KEY_ARN: evidenceConfigured ? keyArn : '', PLENUM_TRUSTED_PUBLIC_KEYS_FILE: evidenceConfigured ? trustFile : '',
+        PLENUM_EVIDENCE_ANCHOR_BUCKET: evidenceConfigured ? 'ba10-independent-fixture' : '', PLENUM_EVIDENCE_ANCHOR_ACCOUNT: evidenceConfigured ? '123456789012' : '', PLENUM_EVIDENCE_REGION: evidenceConfigured ? 'us-east-1' : '',
+        AWS_ACCESS_KEY_ID: 'synthetic', AWS_SECRET_ACCESS_KEY: 'synthetic', AWS_ENDPOINT_URL_KMS: providerUrl, AWS_ENDPOINT_URL_S3: providerUrl } });
     const logs = []; child.stdout.on('data', b => logs.push(b.toString())); child.stderr.on('data', b => logs.push(b.toString()));
     const service = { child, logs, url: `http://127.0.0.1:${port}` }; children.push(service);
     await eventually(async () => { assert.equal(child.exitCode, null, logs.join('')); return fetch(service.url).then(r => r.ok).catch(() => false); }, 'production startup');
@@ -203,6 +236,7 @@ export async function verifyTenantJobs(owner, app) {
     return command;
   };
   try {
+    await verifyCommandSchedulerLockOrder(owner, app, await seed(90), deployment, schedule);
     const first = await seed(1), aInject = await schedule(first, 0), aArtifact = await artifact(first);
     const aFile = await attachment(first);
     const service = await start(first);
@@ -403,6 +437,70 @@ export async function verifyTenantJobs(owner, app) {
     const capability = await fetch(`${missingExecutor.url}/v1/operations/plugins`, { headers: { authorization: `Bearer ${second.token}` } });
     assert.equal((await capability.json()).modelRuns.reason, 'executor_unavailable', 'configured but unreachable executor is unavailable');
     await stop(missingExecutor);
+    // BA-10 production composition with synthetic AWS protocol endpoints, not real custody proof.
+    const alpha = await seed(60), beta = await seed(70);
+    await backlog(alpha, 1); await backlog(beta, 1);
+    await owner.query("UPDATE runtime.sessions SET status='completed' WHERE id=ANY($1::uuid[])", [[alpha.session, beta.session]]);
+    signingDown = true;
+    const evidenceService = await start(first);
+    assert.equal((await configure(evidenceService, alpha)).status, 200);
+    const work = async f => (await owner.query('SELECT * FROM operations.evidence_checkpoint_work WHERE organization_id=$1', [f.org])).rows[0];
+    await eventually(async () => (await work(alpha))?.last_failure === 'signing_failed', 'BA-10 signer outage remains pending');
+    assert.equal((await work(alpha)).signature, null);
+    signingDown = false; anchoringDown = true;
+    await owner.query("UPDATE operations.evidence_checkpoint_work SET retry_at=now() WHERE organization_id=$1", [alpha.org]);
+    await eventually(async () => (await work(alpha))?.last_failure === 'anchoring_failed', 'BA-10 signed but unanchored survives outage');
+    const pendingSignature = (await work(alpha)).signature;
+    assert.ok(pendingSignature.signature); const signedCalls = signatureCalls;
+    await stop(evidenceService);
+    anchoringDown = false; ambiguousAnchor = true;
+    await owner.query("UPDATE operations.evidence_checkpoint_work SET retry_at=now() WHERE organization_id=$1", [alpha.org]);
+    const ambiguousService = await start(first);
+    await eventually(async () => [...anchors.values()].some(record => JSON.parse(record.body).sessionId === alpha.session) &&
+      (await work(alpha))?.lease_token === null, 'BA-10 lost anchor acknowledgement remains recoverable');
+    await stop(ambiguousService);
+    await owner.query("UPDATE operations.evidence_checkpoint_work SET retry_at=now() WHERE organization_id=$1", [alpha.org]);
+    const evidenceRestart = await start(first), evidenceDuplicate = await start(first);
+    await eventually(async () => !(await work(alpha)), 'BA-10 restart resumes saved signature');
+    assert.equal(signatureCalls, signedCalls, 'anchor retry never re-signs');
+    await owner.query("UPDATE runtime.session_authorities SET status='fenced' WHERE session_id=$1", [beta.session]);
+    assert.equal((await configure(evidenceRestart, beta)).status, 200);
+    const hasCheckpoint = async f => Number((await owner.query('SELECT count(*) FROM evidence.checkpoint_batches WHERE session_id=$1', [f.session])).rows[0].count) === 1;
+    await eventually(async () => (await fetch(`${evidenceRestart.url}/healthz`)).status === 200, 'BA-10 sweep skips fenced Session');
+    assert.equal(await hasCheckpoint(beta), false);
+    await owner.query("UPDATE runtime.session_authorities SET status='active',authority_epoch=authority_epoch+1 WHERE session_id=$1", [beta.session]);
+    await eventually(() => hasCheckpoint(beta), 'BA-10 newly bound second tenant is checkpointed automatically');
+    for (const f of [alpha, beta]) {
+      assert.equal(await hasCheckpoint(f), true);
+      const response = await fetch(`${evidenceRestart.url}/v1/sessions/${f.session}/evidence/verification`, { headers: { authorization: `Bearer ${f.token}` } });
+      assert.equal(response.status, 200);
+      const exported = await response.json(), proof = exported.checkpoints[0];
+      assert.equal('body' in proof.events[0], false);
+      const independent = [...anchors.entries()].filter(([, record]) => JSON.parse(record.body).sessionId === f.session).map(([location, record]) => {
+        const value = JSON.parse(record.body);
+        return { endpoint: 'arn:aws:s3:::ba10-independent-fixture', reference: `${location.slice('/ba10-independent-fixture/'.length)}?versionId=${encodeURIComponent(record.version)}`,
+          anchoredDigest: value.checkpointDigest, keyId: value.keyId };
+      });
+      const exportedFile = join(directory, `${f.org}-export.json`), anchorFile = join(directory, `${f.org}-anchors.json`);
+      await writeFile(exportedFile, JSON.stringify(exported)); await writeFile(anchorFile, JSON.stringify(independent));
+      const verified = spawnSync(process.execPath, ['scripts/verify-evidence.mjs', exportedFile, trustFile, anchorFile], { windowsHide: true, encoding: 'utf8' });
+      assert.equal(verified.status, 0, verified.stderr + verified.stdout);
+      assert.equal(JSON.parse(verified.stdout).verified, true);
+    }
+    const deniedExport = await fetch(`${evidenceRestart.url}/v1/sessions/${alpha.session}/evidence/verification`, { headers: { authorization: `Bearer ${beta.token}` } });
+    assert.equal(deniedExport.status, 404);
+    await stop(evidenceDuplicate); await stop(evidenceRestart);
+    const unconfigured = await seed(80);
+    await backlog(unconfigured, 1);
+    await owner.query("UPDATE runtime.sessions SET status='completed' WHERE id=$1", [unconfigured.session]);
+    const noCustody = await start(first, '', false);
+    assert.equal((await configure(noCustody, unconfigured)).status, 200);
+    await eventually(async () => (await work(unconfigured))?.last_failure === 'signing_unavailable', 'BA-10 missing custody is explicit');
+    assert.equal((await work(unconfigured)).signature, null);
+    assert.equal(await hasCheckpoint(unconfigured), false);
+    noCustody.child.send('advance');
+    await eventually(async () => (await fetch(`${noCustody.url}/healthz`)).status === 503, 'BA-10 unavailable essential signing degrades readiness');
+    await stop(noCustody);
   } finally {
     pendingDisable?.resume.resolve();
     for (const service of children) if (service.child.exitCode === null) { service.child.kill(); await once(service.child, 'exit'); }

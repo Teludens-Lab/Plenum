@@ -8,14 +8,16 @@ import { runRetentionEnforcement } from "../reporting/service.js";
 import { publishPendingRuntimeDeltas } from "../sync/runtime-sync.js";
 import { enforceFormAttachmentRetention } from "../runtime/form-attachments.js";
 import type { ObjectStore } from "../registry/object-store.js";
+import { runEvidenceCheckpoints, type EvidenceCheckpointAdapters } from "../evidence/checkpoint-worker.js";
 import { assertOrganizationJobAuthority, discoverOrganizationJobs, ensureBootstrapJobBinding, type OrganizationJobAuthority } from "./job-authority.js";
 
-type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication" | "attachments" | "models";
+type Job = "discovery" | "authority" | "inject" | "floor" | "retention" | "publication" | "attachments" | "models" | "checkpoints";
 
 /** Ten bindings per page, two Organizations in flight, one sweep batch at a time. */
 export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstrap: { organizationId: string; actorPersonId: string },
   media: MediaProviderAdapter, store: ObjectStore, onFailure: (job: Job) => void | Promise<void>,
-  onRetention: (held: boolean) => void, models?: { run(authority: OrganizationJobAuthority): Promise<void>; stop(): Promise<void> }): { stop: () => Promise<void>; healthy: () => boolean } {
+  onRetention: (held: boolean) => void, models?: { run(authority: OrganizationJobAuthority): Promise<void>; stop(): Promise<void> },
+  checkpoints?: EvidenceCheckpointAdapters): { stop: () => Promise<void>; healthy: () => boolean } {
   const cancellation = new AbortController();
   let initialized = false, running: Promise<void> | undefined, cursor: string | undefined;
   let sweepFailed = false, lastSweepAt = 0, lastSweepOk = false, retryAt = 0, bootstrapRetryAt = 0;
@@ -31,6 +33,8 @@ export function startOrganizationJobs(pool: Pool, deploymentId: string, bootstra
       if (!eligible || cancellation.signal.aborted) return;
     } catch { await fail("authority"); return; }
     const jobs = [
+      runEvidenceCheckpoints(pool, authority, checkpoints, cancellation.signal)
+        .then(({ unresolved }) => { if (unresolved && !cancellation.signal.aborted) return fail("checkpoints"); }).catch(() => fail("checkpoints")),
       ...(models ? [models.run(authority).catch(() => fail("models"))] : []),
       enforceFormAttachmentRetention(pool, authority, store, randomUUID(), undefined, cancellation.signal)
         .then(({ failed }) => { if (failed) return fail("attachments"); }).catch(() => fail("attachments")),

@@ -35,8 +35,9 @@ export async function runScheduledInjects(pool: Pool, organizationId: string, de
              AND deployment_id=$3 AND status='active' FOR SHARE`, [organizationId, sessionId, deploymentId]
         )).rows[0];
         if (!authority) return 0;
+        // Exclude lifecycle writers without blocking Evidence FK checks behind the sequence lock.
         const session = (await client.query<{ status: string }>(
-          "SELECT status FROM runtime.sessions WHERE organization_id=$1 AND id=$2 FOR UPDATE SKIP LOCKED",
+          "SELECT status FROM runtime.sessions WHERE organization_id=$1 AND id=$2 FOR NO KEY UPDATE SKIP LOCKED",
           [organizationId, sessionId]
         )).rows[0];
         if (session?.status !== "active") return 0;

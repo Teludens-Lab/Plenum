@@ -355,7 +355,8 @@ async function applyMigrations(database = owner) {
     "apps/server/migrations/044_floor_provider_reconciliation.sql",
     "apps/server/migrations/045_organization_job_bindings.sql",
     "apps/server/migrations/046_attachment_retention_retry.sql",
-    "apps/server/migrations/047_model_run_work_queue.sql"
+    "apps/server/migrations/047_model_run_work_queue.sql",
+    "apps/server/migrations/048_evidence_checkpoint_work.sql"
   ]) {
     await database.query(await readFile(new URL(`../../../${path}`, import.meta.url), "utf8"));
   }
@@ -4147,6 +4148,30 @@ test("AC-06 PS-520-T01/T03 reports, consent-filtered research, Replay comparator
   } finally {
     await target.close();
   }
+  // BA-10: a portable archive must retain a signed, unanchored range, too.
+  const pendingKeys = generateKeyPairSync('ed25519');
+  await assert.rejects(createDueEvidenceCheckpoint(app, ids.orgA, ids.sessionA, { async signCheckpoint(input) {
+    return { keyId: 'synthetic-archive-key', algorithm: 'Ed25519', signature: signBytes(null, input.digestBytes, pendingKeys.privateKey),
+      publicKeyJwk: pendingKeys.publicKey.export({ format: 'jwk' }) };
+  } }, { async anchorCheckpoint() { throw new Error('synthetic archive anchor outage'); } }, new Date(Date.now()+360_000)), /anchor outage/);
+  const pendingArchive = await exportOrganizationArchive(app, principalD, randomUUID());
+  assert.equal(pendingArchive.databaseSchema, 'plenum-048');
+  assert.equal(pendingArchive.data.checkpointWork.length, 1);
+  const pendingTarget = await createCleanArchiveTarget(pendingArchive);
+  try {
+    await importOrganizationArchive(pendingTarget.app, principalD, pendingArchive, randomUUID());
+    const restoredWork = (await pendingTarget.owner.query('SELECT signature FROM operations.evidence_checkpoint_work WHERE session_id=$1', [ids.sessionA])).rows[0];
+    assert.deepEqual(restoredWork.signature, pendingArchive.data.checkpointWork[0].signature);
+    const resumed = await createDueEvidenceCheckpoint(pendingTarget.app, ids.orgA, ids.sessionA,
+      { async signCheckpoint() { throw new Error('Restored work must not re-sign'); } },
+      { async anchorCheckpoint(input) { return { endpoint: 'synthetic-archive-custodian', reference: input.checkpointId,
+        anchoredDigest: input.checkpointDigest, verificationResult: 'verified', recordedAt: new Date() }; } }, new Date(Date.now()+720_000));
+    assert.equal(resumed.checkpointDigest, pendingArchive.data.checkpointWork[0].checkpoint.checkpointDigest);
+  } finally {
+    await pendingTarget.close();
+    // Remove only this synthetic, never-anchored test obligation from the source fixture.
+    await owner.query('DELETE FROM operations.evidence_checkpoint_work WHERE organization_id=$1 AND session_id=$2', [ids.orgA, ids.sessionA]);
+  }
 });
 
 test("PS-830 archive v1 remains readable without fabricated v2 datasets", async () => {
@@ -4523,6 +4548,40 @@ test("SYNC-13 creates, anchors, exports, and independently verifies a due Eviden
     async anchorCheckpoint() { throw new Error("synthetic custodian outage"); }
   }, new Date(Date.now() + 6 * 60 * 1_000)), /custodian outage/iu);
   assert.equal((await owner.query("SELECT count(*) FROM evidence.checkpoint_batches WHERE session_id=$1", [ids.sessionB])).rows[0].count, "0");
+  const pending = (await owner.query("SELECT * FROM operations.evidence_checkpoint_work WHERE session_id=$1", [ids.sessionB])).rows[0];
+  assert.equal(pending.last_failure, 'anchoring_failed');
+  assert.ok(pending.signature.signature);
+  const noResign = { async signCheckpoint() { throw new Error('Persisted signature must be reused'); } };
+  const retryAnchor = { async anchorCheckpoint(input) { return { endpoint: 'integration-custodian', reference: input.checkpointId,
+    anchoredDigest: input.checkpointDigest, verificationResult: 'verified', recordedAt: new Date() }; } };
+  assert.equal(await createDueEvidenceCheckpoint(app, ids.orgB, ids.sessionB, noResign, retryAnchor,
+    new Date(pending.retry_at.getTime() - 1)), null, 'retry backoff is enforced with controlled time');
+  await owner.query(`INSERT INTO evidence.events
+    (id,organization_id,session_id,sequence,event_type,event_version,governing_release_id,authority_epoch,body)
+    VALUES (gen_random_uuid(),$1,$2,2,'checkpoint.tested',1,$3,1,'{}'::jsonb)`, [ids.orgB, ids.sessionB, ids.releaseB]);
+  await owner.query("UPDATE evidence.session_sequences SET next_sequence=3 WHERE session_id=$1", [ids.sessionB]);
+  const anchorEntered = Promise.withResolvers(), releaseAnchor = Promise.withResolvers(), otherClaims = Promise.withResolvers();
+  let skippedClaims = 0;
+  const claims = Array.from({ length: 4 }, () => createDueEvidenceCheckpoint(app, ids.orgB, ids.sessionB,
+    noResign, { async anchorCheckpoint(input) { anchorEntered.resolve(); await releaseAnchor.promise; return retryAnchor.anchorCheckpoint(input); } },
+    new Date(pending.retry_at)).then(result => { if (result === null && ++skippedClaims === 3) otherClaims.resolve(); return result; }));
+  await anchorEntered.promise; await otherClaims.promise; releaseAnchor.resolve();
+  const concurrent = await Promise.all(claims);
+  assert.equal(concurrent.filter(Boolean).length, 1);
+  assert.equal(concurrent.find(Boolean).lastSequence, 1, 'new events cannot change an in-flight range');
+  assert.equal((await owner.query("SELECT count(*) FROM operations.evidence_checkpoint_work WHERE session_id=$1", [ids.sessionB])).rows[0].count, '0');
+  await assert.rejects(createDueEvidenceCheckpoint(app, ids.orgB, ids.sessionB, { async signCheckpoint(input) {
+    await owner.query('UPDATE operations.evidence_checkpoint_work SET lease_token=$2 WHERE session_id=$1', [ids.sessionB, randomUUID()]);
+    return { keyId: 'synthetic-stale-claim', algorithm: 'Ed25519', signature: signBytes(null, input.digestBytes, pair.privateKey), publicKeyJwk };
+  } }, retryAnchor, new Date(Date.now()+720_000)), /claim expired/);
+  assert.equal((await owner.query('SELECT signature FROM operations.evidence_checkpoint_work WHERE session_id=$1', [ids.sessionB])).rows[0].signature, null,
+    'late signer output cannot commit under a superseded work claim');
+  await owner.query("UPDATE operations.evidence_checkpoint_work SET lease_until=now()-interval '1 second',retry_at=now() WHERE session_id=$1", [ids.sessionB]);
+  const recoveredClaim = await createDueEvidenceCheckpoint(app, ids.orgB, ids.sessionB, { async signCheckpoint(input) {
+    return { keyId: 'synthetic-recovered-claim', algorithm: 'Ed25519', signature: signBytes(null, input.digestBytes, pair.privateKey), publicKeyJwk };
+  } }, retryAnchor);
+  assert.equal(recoveredClaim.firstSequence, 2);
+  assert.equal(recoveredClaim.previousCheckpointDigest, concurrent.find(Boolean).checkpointDigest);
 });
 
 test("PS-830-T08 imports a portable Package as an atomic local Draft without foreign approval authority", async () => {
@@ -4609,7 +4668,7 @@ test("PS-810 stores immutable security evidence without granting application rea
   }
 });
 
-test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08/09-T03 production tenant work and unavailable Model Run/Replay boundaries", async () => { await verifyTenantJobs(owner, app); });
+test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08/09-T03 BA-11 lock ordering and production tenant work", async () => { await verifyTenantJobs(owner, app); });
 test("BA-08 governed Model Run HTTP/database boundary and restart recovery (transport harness)", async () => { await verifyGovernedModelRuns(owner, app); });
 test("BA-08-T01 supported rootless production entrypoint executes and approves a governed effect", {
   skip: !process.env.PLENUM_TEST_EXTENSION_SOCKET && "NOT RUN: qualifying Linux rootless supervisor socket unavailable"

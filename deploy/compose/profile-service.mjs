@@ -4,13 +4,14 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { KMSClient } from "@aws-sdk/client-kms";
 import {
   AuthorizationError, authorizationError, beginOidcLogin, classifyDeploymentRequest, completeOidcLogin, consumeDeploymentRateLimit,
   oidcLoginCookie, readOidcLoginCookie, validateOidcReturnTo,
   createDatabasePool, createRuntimeHttpHandler, createStudioCollaborationGateway, S3ObjectStore,
   PostmarkInvitationAdapter, WebhookFirstAdminInvitationDelivery, resolveIdentityProviderForLoginState, resolveOrganizationIdentityProvider,
   createSystemIdentityMetadataFetcher, ClamAvContentScanner, OperationalTelemetry, recordOperationalSecurityEvent,
-  startOrganizationJobs, createProductionExtensionRuntime, createModelRunWorker
+  startOrganizationJobs, createProductionExtensionRuntime, createModelRunWorker, createAwsEvidenceAdapters
 } from "../../apps/server/dist/index.js";
 import { LiveKitLocalMediaProviderAdapter } from "../../packages/media-adapter/dist/index.js";
 import { buildSecurityHeaders } from "./security-headers.mjs";
@@ -96,6 +97,20 @@ const contentScanner = process.env.CONTENT_SCANNER_HOST?.trim() ? new ClamAvCont
 }) : undefined;
 const telemetry = new OperationalTelemetry({ deploymentId });
 const objectStore = new S3ObjectStore(s3, s3Bucket);
+const evidenceConfiguration = ["PLENUM_EVIDENCE_KEY_ARN", "PLENUM_TRUSTED_PUBLIC_KEYS_FILE", "PLENUM_EVIDENCE_ANCHOR_BUCKET",
+  "PLENUM_EVIDENCE_ANCHOR_ACCOUNT", "PLENUM_EVIDENCE_REGION"];
+let evidenceAdapters, evidenceKms, evidenceS3;
+if (evidenceConfiguration.filter(name => name !== "PLENUM_TRUSTED_PUBLIC_KEYS_FILE").some(name => process.env[name]?.trim())) {
+  if (profile === "air_gapped") throw new Error("AWS Evidence custody is unavailable in the air-gapped profile");
+  const [keyArn, trustFile, bucket, bucketOwner, region] = evidenceConfiguration.map(required);
+  if (bucket === s3Bucket) throw new Error("Evidence anchors require separate custodian storage");
+  const trustedPublicKey = JSON.parse(await readFile(trustFile, "utf8"))[keyArn];
+  if (!trustedPublicKey) throw new Error("Evidence signing key is not in the approved trust file");
+  const sdk = { region, maxAttempts: 1, requestHandler: { connectionTimeout: 2_000, requestTimeout: 8_000 } };
+  evidenceKms = new KMSClient(sdk); evidenceS3 = new S3Client(sdk);
+  evidenceAdapters = createAwsEvidenceAdapters({ keyArn, trustedPublicKey, bucket, bucketOwner, prefix: "plenum-checkpoints",
+    kms: evidenceKms, s3: evidenceS3 });
+}
 const extensionRuntime = process.env.PLENUM_EXTENSION_SOCKET?.trim()
   ? createProductionExtensionRuntime(jobPool, objectStore, deploymentId, profile, process.env.PLENUM_EXTENSION_SOCKET.trim()) : undefined;
 const modelWorker = extensionRuntime ? createModelRunWorker(jobPool, extensionRuntime, () => telemetry.emit({
@@ -284,11 +299,12 @@ const organizationJobs = startOrganizationJobs(jobPool, deploymentId,
       .catch(() => telemetry.emit({ event: "security.evidence_failed", severity: "error", outcome: "failed",
         correlationId, category: "retention_enforcement" }));
   }, (held) => telemetry.emit({ event: "retention.enforcement_completed", severity: "info", outcome: "succeeded",
-    correlationId: randomUUID(), category: held ? "legal_holds_present" : "standard" }), modelWorker);
+    correlationId: randomUUID(), category: held ? "legal_holds_present" : "standard" }), modelWorker, evidenceAdapters);
 let closing = false;
 async function close() {
   if (closing) return; closing = true;
   await organizationJobs.stop();
+  evidenceKms?.destroy(); evidenceS3?.destroy();
   await collaboration.close();
   server.closeAllConnections();
   metricsServer.closeAllConnections();

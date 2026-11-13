@@ -927,6 +927,17 @@ paths:
         "403": { description: Current role, Research Access Grant, or consent scope is insufficient. }
         "404": { description: The original generated artifact expired under the approved retention policy. }
         "409": { description: Idempotency key collision. }
+  /v1/sessions/{sessionId}/evidence/verification:
+    get:
+      operationId: exportSessionEvidenceVerification
+      x-authorized-organization-roles: [admin]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Existing verification-export-v1; event bodies excluded. Separate trusted keys and independent anchors are required for verification." }
+        "403": { description: Current Organization Admin authority required }
+        "404": { description: Session not found in authorized Organization }
   /v1/sessions/{sessionId}/replay:
     get:
       operationId: getSessionReplayCapability

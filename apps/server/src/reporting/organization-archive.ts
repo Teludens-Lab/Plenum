@@ -10,7 +10,7 @@ import { sha256 } from "./formats.js";
 export interface OrganizationArchive extends JsonObject {
   archiveVersion: 1 | 2;
   restoreContract: "plenum-organization-logical-v1" | "plenum-organization-logical-v2";
-  databaseSchema?: "plenum-042";
+  databaseSchema?: "plenum-042" | "plenum-048";
   generatedAt: string;
   sourceOrganizationRef: string;
   data: JsonObject;
@@ -77,6 +77,7 @@ export async function exportOrganizationArchive(
   return withOrganizationTransaction(pool, principal.organizationId, async (client) => {
     await requireCurrentOrganizationRole(client, principal, "admin", correlationId);
     const query = async (sql: string): Promise<JsonObject[]> => (await client.query<{ value: JsonObject }>(sql, [principal.organizationId])).rows.map(({ value }) => value);
+    const checkpointWork = await query("SELECT to_jsonb(work) AS value FROM operations.evidence_checkpoint_work work WHERE organization_id=$1 ORDER BY session_id");
     const data: JsonObject = {
       organization: (await query("SELECT to_jsonb(organization) AS value FROM identity.organizations organization WHERE id=$1"))[0] ?? {},
       persons: await query(`SELECT to_jsonb(person) AS value FROM identity.persons person
@@ -133,7 +134,9 @@ export async function exportOrganizationArchive(
         : table.startsWith("voting.") ? " AND EXISTS (SELECT 1 FROM voting.polls poll WHERE poll.organization_id=$1 AND poll.id=item.poll_id AND poll.definition->>'secrecy'='open')" : "";
       data[key] = await query(`SELECT ${value} AS value FROM ${table} item WHERE item.organization_id=$1${privacy} ORDER BY ${order.split(",").map((column) => `item.${column}`).join(",")}`);
     }
-    return { archiveVersion: 2, restoreContract: "plenum-organization-logical-v2", databaseSchema: "plenum-042", generatedAt: now.toISOString(), sourceOrganizationRef: sha256(principal.organizationId).slice(0, 24),
+    // Older importers reject the newer schema marker instead of silently dropping signed, unanchored work.
+    if (checkpointWork.length) data.checkpointWork = checkpointWork;
+    return { archiveVersion: 2, restoreContract: "plenum-organization-logical-v2", databaseSchema: checkpointWork.length ? "plenum-048" : "plenum-042", generatedAt: now.toISOString(), sourceOrganizationRef: sha256(principal.organizationId).slice(0, 24),
       data, dataSha256: sha256(canonicalizeJson(data)),
       excludedDataClasses: ["authentication_credentials", "session_join_credentials", "live_media_grants_and_floor_tokens",
         "secret_ballot_choices", "non_open_poll_records", "protected_voice_assets", "audit_record_details", "object_store_blobs"] };
@@ -162,6 +165,7 @@ const logicalRestoreTables = [
   ["checkpointBatches", "evidence.checkpoint_batches"],
   ["checkpointSignatures", "evidence.checkpoint_signatures"],
   ["anchorReceipts", "evidence.anchor_receipts"],
+  ["checkpointWork", "operations.evidence_checkpoint_work"],
   ["reportDefinitions", "reporting.report_definitions"],
   ["measurementDefinitions", "reporting.measurement_definitions"],
   ["researchConsents", "reporting.research_consents"],
@@ -195,7 +199,8 @@ export async function importOrganizationArchive(
 ): Promise<{ importId: string; replayed: boolean; restoredRows: number }> {
   if (!archive || (archive.archiveVersion !== 1 && archive.archiveVersion !== 2) ||
       archive.restoreContract !== `plenum-organization-logical-v${archive.archiveVersion}` ||
-      (archive.archiveVersion === 2 && archive.databaseSchema !== "plenum-042") ||
+      (archive.archiveVersion === 2 && !["plenum-042", "plenum-048"].includes(archive.databaseSchema ?? "")) ||
+      (archive.data?.checkpointWork !== undefined && archive.databaseSchema !== "plenum-048") ||
       !archive.data || typeof archive.data !== "object" || Array.isArray(archive.data) ||
       !/^[0-9a-f]{64}$/u.test(archive.dataSha256) ||
       sha256(canonicalizeJson(archive.data)) !== archive.dataSha256) {
@@ -213,6 +218,7 @@ export async function importOrganizationArchive(
     : archiveRows(archive, "organizationWorkforceMembers", correlationId);
   const optionalDatasets = new Set(archive.archiveVersion === 1
     ? ["simulationTemplates", "templateLifecycleEvents", "projectCollaborators", "projectMutationReceipts", "legalHoldEvents", "formAttachments"] : []);
+  if (archive.databaseSchema !== "plenum-048") optionalDatasets.add("checkpointWork");
   if (archive.archiveVersion === 1) for (const [key] of historyTables) optionalDatasets.add(key);
   const datasets = logicalRestoreTables.map(([key, table]) => ({ key, table,
     rows: optionalDatasets.has(key) ? optionalArchiveRows(archive, key, correlationId) : archiveRows(archive, key, correlationId) }));

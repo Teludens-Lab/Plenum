@@ -7,9 +7,41 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { canonicalizeJson } from "../../packages/event-contracts/dist/index.js";
-import { buildEvidenceCheckpoint, evidenceCheckpointDue, verifyEvidenceExport } from "../../apps/server/dist/index.js";
+import { buildEvidenceCheckpoint, createAwsEvidenceAdapters, evidenceCheckpointDue, verifyEvidenceExport } from "../../apps/server/dist/index.js";
 
 const sessionId = "60000000-0000-4000-8000-000000000001";
+
+test('BA-10 AWS adapter pins signing identity and rejects mutable or conflicting anchor storage', async () => {
+  const pair = generateKeyPairSync('ed25519'), keyArn = 'arn:aws:kms:us-east-1:123456789012:key/synthetic';
+  const options = { keyArn, trustedPublicKey: pair.publicKey.export({ format: 'jwk' }), bucket: 'independent-fixture',
+    bucketOwner: '987654321098', prefix: 'checkpoints',
+    kms: { async send(command) {
+      assert.equal(command.input.MessageType, 'RAW'); assert.equal(command.input.SigningAlgorithm, 'ED25519_SHA_512');
+      return { KeyId: 'unexpected-key', SigningAlgorithm: 'ED25519_SHA_512', Signature: Buffer.alloc(64) };
+    } }, s3: null };
+  let storedBody, immutable = false, conflict = false;
+  options.s3 = { async send(command) {
+    assert.equal(command.input.ExpectedBucketOwner, options.bucketOwner);
+    if (command.constructor.name === 'PutObjectCommand') {
+      assert.equal(command.input.IfNoneMatch, '*'); assert.equal(command.input.ObjectLockMode, 'COMPLIANCE');
+      storedBody = command.input.Body;
+      throw Object.assign(new Error('already anchored'), { $metadata: { httpStatusCode: 412 } });
+    }
+    return { VersionId: 'immutable-version', ContentLength: storedBody.length,
+      ObjectLockMode: immutable ? 'COMPLIANCE' : 'GOVERNANCE', ObjectLockRetainUntilDate: new Date('2040-01-01'),
+      Body: { async transformToByteArray() { return Buffer.from(conflict ? '{}' : storedBody); }, destroy() {} } };
+  } };
+  const adapters = createAwsEvidenceAdapters(options);
+  await assert.rejects(adapters.signer.signCheckpoint({ checkpointId: sessionId, checkpointDigest: 'a'.repeat(64), digestBytes: Buffer.alloc(32) }), /signing key/);
+  const input = { idempotencyKey: sessionId, checkpointId: sessionId, sessionId, firstSequence: 1, lastSequence: 2,
+    checkpointDigest: 'a'.repeat(64), checkpointCreatedAt: '2026-01-01T00:00:00.000Z', keyId: keyArn };
+  await assert.rejects(adapters.anchor.anchorCheckpoint(input), /Unprotected/);
+  immutable = true; conflict = true;
+  await assert.rejects(adapters.anchor.anchorCheckpoint(input), /Conflicting/);
+  conflict = false;
+  assert.equal((await adapters.anchor.anchorCheckpoint(input)).verificationResult, 'verified');
+  assert.throws(() => createAwsEvidenceAdapters({ ...options, trustedPublicKey: pair.privateKey.export({ format: 'jwk' }) }), /Invalid approved/);
+});
 
 test("SYNC-13 applies the five-minute, 1,000-event, and Session-close cadence", () => {
   const oldest = new Date("2026-10-23T00:00:00.000Z");

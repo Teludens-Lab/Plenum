@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, verify as verifySignature, type JsonWebKey as CryptoJsonWebKey } from "node:crypto";
+import { createHash, createPublicKey, randomUUID, verify as verifySignature, type JsonWebKey as CryptoJsonWebKey } from "node:crypto";
 import {
   CHECKPOINT_CONTRACT_ID,
   VERIFICATION_EXPORT_CONTRACT_ID,
@@ -17,6 +17,7 @@ import type { Pool, PoolClient } from "pg";
 import { withOrganizationTransaction } from "../database.js";
 import { authorizationError } from "../errors.js";
 import type { AuthenticatedPrincipal } from "../identity/login.js";
+import { assertOrganizationJobAuthority, type OrganizationJobAuthority } from "../operations/job-authority.js";
 
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -47,7 +48,7 @@ export interface EvidenceSigner {
     checkpointId: string;
     checkpointDigest: string;
     digestBytes: Uint8Array;
-  }): Promise<{ keyId: string; algorithm: "Ed25519"; signature: Uint8Array; publicKeyJwk: JsonObject }>;
+  }, signal?: AbortSignal): Promise<{ keyId: string; algorithm: "Ed25519"; signature: Uint8Array; publicKeyJwk: JsonObject }>;
 }
 
 export interface EvidenceAnchor {
@@ -60,7 +61,7 @@ export interface EvidenceAnchor {
     checkpointDigest: string;
     checkpointCreatedAt: string;
     keyId: string;
-  }): Promise<{
+  }, signal?: AbortSignal): Promise<{
     endpoint: string;
     reference: string;
     anchoredDigest: string;
@@ -282,7 +283,8 @@ async function currentAdmin(client: PoolClient, principal: AuthenticatedPrincipa
          ON membership.organization_id=session.organization_id AND membership.person_id=session.person_id
       WHERE session.organization_id=$1 AND session.id=$2 AND session.person_id=$3
         AND session.revoked_at IS NULL AND session.expires_at>transaction_timestamp()
-        AND membership.organization_role='admin'`,
+        AND membership.organization_role='admin'
+        AND identity.person_has_active_organization_access($1,$3)`,
     [principal.organizationId, principal.authenticationSessionId, principal.principalId]
   );
   if (current.rowCount !== 1) throw authorizationError("ACCESS_REVOKED", "Organization access is no longer active.", correlationId);
@@ -291,110 +293,196 @@ async function currentAdmin(client: PoolClient, principal: AuthenticatedPrincipa
 const eventColumns = `id,sequence,event_type,event_version,command_id,actor_person_id,actor_participant_id,
   governing_release_id,authority_epoch,correlation_id,causation_id,aggregate_id,aggregate_version,occurred_at,recorded_at,body`;
 
+export interface CheckpointJobContext {
+  authority: OrganizationJobAuthority;
+  authorityEpoch: number;
+  signal?: AbortSignal;
+}
+
+async function checkpointAuthority(client: PoolClient, organizationId: string, sessionId: string, context?: CheckpointJobContext) {
+  if (!context) return;
+  context.signal?.throwIfAborted();
+  if (context.authority.organizationId !== organizationId) throw new Error("Checkpoint authority scope mismatch");
+  await assertOrganizationJobAuthority(client, context.authority);
+  const current = await client.query(`SELECT 1 FROM runtime.session_authorities
+    WHERE organization_id=$1 AND session_id=$2 AND deployment_id=$3 AND authority_epoch=$4 AND status='active' FOR SHARE`,
+  [organizationId, sessionId, context.authority.deploymentId, context.authorityEpoch]);
+  if (current.rowCount !== 1) throw new Error("Checkpoint Session Authority is no longer current");
+}
+
+async function checkpointEffect<T>(operation: (signal: AbortSignal) => Promise<T>, parent?: AbortSignal): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort(new Error("Checkpoint effect interrupted"));
+  const timer = setTimeout(abort, 10_000);
+  parent?.addEventListener("abort", abort, { once: true });
+  if (parent?.aborted) abort();
+  let rejectAbort: () => void = () => {};
+  try {
+    controller.signal.throwIfAborted();
+    return await Promise.race([operation(controller.signal), new Promise<never>((_, reject) => {
+      rejectAbort = () => reject(new Error("Checkpoint effect interrupted"));
+      controller.signal.addEventListener("abort", rejectAbort, { once: true });
+    })]);
+  } finally {
+    clearTimeout(timer); parent?.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", rejectAbort);
+  }
+}
+
 export async function createDueEvidenceCheckpoint(
   pool: Pool,
   organizationId: string,
   sessionId: string,
-  signer: EvidenceSigner,
-  anchor: EvidenceAnchor,
-  now = new Date()
+  signer: EvidenceSigner | undefined,
+  anchor: EvidenceAnchor | undefined,
+  now = new Date(),
+  context?: CheckpointJobContext
 ): Promise<EvidenceCheckpointV1 | null> {
   if (!uuidPattern.test(organizationId) || !uuidPattern.test(sessionId) || Number.isNaN(now.getTime())) {
     throw new Error("Valid Organization, Session, and checkpoint time values are required");
   }
-  const prepared = await withOrganizationTransaction(pool, organizationId, async (client) => {
+  const leaseToken = randomUUID();
+  const work = await withOrganizationTransaction(pool, organizationId, async (client) => {
+    await checkpointAuthority(client, organizationId, sessionId, context);
     const session = await client.query<{ status: string }>(
       "SELECT status FROM runtime.sessions WHERE organization_id=$1 AND id=$2 FOR UPDATE", [organizationId, sessionId]);
     if (session.rows[0] === undefined) throw new Error("Session not found");
+    const pending = (await client.query<{ checkpoint: EvidenceCheckpointV1; signature: EvidenceCheckpointSignatureV1 | null;
+      retry_at: Date; leased: boolean | null }>(`SELECT *,lease_until>transaction_timestamp() AS leased FROM operations.evidence_checkpoint_work
+      WHERE organization_id=$1 AND session_id=$2 FOR UPDATE`, [organizationId, sessionId])).rows[0];
+    if (pending && (pending.retry_at > now || pending.leased)) return null;
     const previous = await client.query<{ last_sequence: string; checkpoint_digest: string }>(
       `SELECT last_sequence,checkpoint_digest FROM evidence.checkpoint_batches
         WHERE organization_id=$1 AND session_id=$2 ORDER BY last_sequence DESC LIMIT 1`, [organizationId, sessionId]);
     const firstSequence = Number(previous.rows[0]?.last_sequence ?? 0) + 1;
+    const limit = pending ? pending.checkpoint.lastSequence - firstSequence + 1 : checkpointEventLimit;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > checkpointEventLimit) throw new Error("Invalid pending checkpoint range");
     const events = await client.query<EvidenceEventRow>(
       `SELECT ${eventColumns} FROM evidence.events
         WHERE organization_id=$1 AND session_id=$2 AND sequence>=$3 ORDER BY sequence LIMIT $4`,
-      [organizationId, sessionId, firstSequence, checkpointEventLimit]);
+      [organizationId, sessionId, firstSequence, limit]);
     const firstEvent = events.rows[0];
-    if (firstEvent === undefined) return null;
+    if (firstEvent === undefined) {
+      if (pending) throw new Error("Pending checkpoint Evidence is missing");
+      return null;
+    }
     const proofs = events.rows.map(evidenceProofEvent);
     if (proofs[0]?.sequence !== firstSequence || proofs.some((event, index) => event.sequence !== firstSequence + index)) {
       throw new Error(`Evidence sequence ${firstSequence} is missing or reordered`);
     }
-    if (!evidenceCheckpointDue(proofs.length, firstEvent.recorded_at, session.rows[0].status, now)) return null;
-    return buildEvidenceCheckpoint(sessionId, proofs, previous.rows[0]?.checkpoint_digest ?? null);
+    if (!pending && !evidenceCheckpointDue(proofs.length, firstEvent.recorded_at, session.rows[0].status, now)) return null;
+    const checkpoint = buildEvidenceCheckpoint(sessionId, proofs, previous.rows[0]?.checkpoint_digest ?? null);
+    if (pending && canonicalizeJson(pending.checkpoint) !== canonicalizeJson(checkpoint)) throw new Error("Pending checkpoint history changed");
+    await client.query(`INSERT INTO operations.evidence_checkpoint_work(organization_id,session_id,checkpoint,lease_token,lease_until,attempts)
+      VALUES ($1,$2,$3::jsonb,$4,transaction_timestamp()+interval '60 seconds',1) ON CONFLICT (session_id) DO UPDATE
+      SET lease_token=$4,lease_until=transaction_timestamp()+interval '60 seconds',attempts=operations.evidence_checkpoint_work.attempts+1`,
+    [organizationId, sessionId, JSON.stringify(checkpoint), leaseToken]);
+    return { checkpoint, signature: pending?.signature ?? null };
   });
-  if (prepared === null) return null;
-
-  const signed = await signer.signCheckpoint({
-    checkpointId: prepared.checkpointId,
-    checkpointDigest: prepared.checkpointDigest,
-    digestBytes: Buffer.from(prepared.checkpointDigest, "hex")
-  });
-  if (signed.algorithm !== "Ed25519" || signed.keyId.trim() === "" || signed.keyId.length > 512 ||
-      signed.signature.byteLength !== 64 || signed.publicKeyJwk.kty !== "OKP" ||
-      signed.publicKeyJwk.crv !== "Ed25519" || typeof signed.publicKeyJwk.x !== "string" ||
-      Object.hasOwn(signed.publicKeyJwk, "d") || Object.hasOwn(signed.publicKeyJwk, "k")) {
-    throw new Error("The Evidence signer returned an invalid signature response");
-  }
+  if (work === null) return null;
+  const prepared = work.checkpoint;
+  const assertClaim = async (client: PoolClient) => {
+    await checkpointAuthority(client, organizationId, sessionId, context);
+    const claim = await client.query(`SELECT 1 FROM operations.evidence_checkpoint_work
+      WHERE organization_id=$1 AND session_id=$2 AND lease_token=$3 AND lease_until>transaction_timestamp() FOR UPDATE`,
+    [organizationId, sessionId, leaseToken]);
+    if (claim.rowCount !== 1) throw new Error("Checkpoint work claim expired");
+  };
+  let failure = signer && anchor ? "signing_failed" : "signing_unavailable";
   try {
-    const signerKey = createPublicKey({ key: signed.publicKeyJwk as unknown as CryptoJsonWebKey, format: "jwk" });
-    if (!verifySignature(null, Buffer.from(prepared.checkpointDigest, "hex"), signerKey, signed.signature)) {
-      throw new Error("invalid signature");
-    }
-  } catch {
-    throw new Error("The Evidence signer returned an invalid signature response");
-  }
-  const anchored = await anchor.anchorCheckpoint({
-    idempotencyKey: prepared.checkpointId,
-    checkpointId: prepared.checkpointId,
-    sessionId,
-    firstSequence: prepared.firstSequence,
-    lastSequence: prepared.lastSequence,
-    checkpointDigest: prepared.checkpointDigest,
-    checkpointCreatedAt: prepared.createdAt,
-    keyId: signed.keyId
-  });
-  if (anchored.anchoredDigest !== prepared.checkpointDigest || anchored.endpoint.trim() === "" ||
-      anchored.reference.trim() === "" || anchored.verificationResult !== "verified") {
-    throw new Error("The independent anchor response does not match the checkpoint");
-  }
+    if (!signer || !anchor) throw new Error("Approved checkpoint signer and independent anchor are not configured");
 
-  return withOrganizationTransaction(pool, organizationId, async (client) => {
-    const inserted = await client.query(
-      `INSERT INTO evidence.checkpoint_batches
-        (id,organization_id,session_id,first_sequence,last_sequence,previous_checkpoint_digest,batch_merkle_root,canonicalization,algorithm,checkpoint_digest,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       ON CONFLICT (session_id,first_sequence) DO NOTHING RETURNING id`,
-      [prepared.checkpointId, organizationId, sessionId, prepared.firstSequence, prepared.lastSequence,
-        prepared.previousCheckpointDigest, prepared.batchMerkleRoot, prepared.canonicalization, prepared.algorithm,
-        prepared.checkpointDigest, prepared.createdAt]
-    );
-    if (inserted.rowCount === 0) {
-      const existing = await client.query<{ checkpoint_digest: string }>(
-        `SELECT checkpoint_digest FROM evidence.checkpoint_batches
-          WHERE organization_id=$1 AND session_id=$2 AND first_sequence=$3`,
-        [organizationId, sessionId, prepared.firstSequence]);
-      if (existing.rows[0]?.checkpoint_digest !== prepared.checkpointDigest) {
-        throw new Error("A conflicting checkpoint already covers this Evidence range");
-      }
-      return prepared;
+    const signed = work.signature ? { ...work.signature, signature: Buffer.from(work.signature.signature, "base64") }
+      : await checkpointEffect(signal => signer.signCheckpoint({
+      checkpointId: prepared.checkpointId,
+      checkpointDigest: prepared.checkpointDigest,
+      digestBytes: Buffer.from(prepared.checkpointDigest, "hex")
+    }, signal), context?.signal);
+    if (signed.algorithm !== "Ed25519" || signed.keyId.trim() === "" || signed.keyId.length > 512 ||
+        signed.signature.byteLength !== 64 || signed.publicKeyJwk.kty !== "OKP" ||
+        signed.publicKeyJwk.crv !== "Ed25519" || typeof signed.publicKeyJwk.x !== "string" ||
+        Object.hasOwn(signed.publicKeyJwk, "d") || Object.hasOwn(signed.publicKeyJwk, "k")) {
+      throw new Error("The Evidence signer returned an invalid signature response");
     }
-    await client.query(
-      `INSERT INTO evidence.checkpoint_signatures
-        (id,organization_id,checkpoint_id,signing_key_id,signature_algorithm,signature,public_key_jwk,signed_at)
-       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6::jsonb,$7)`,
-      [organizationId, prepared.checkpointId, signed.keyId, signed.algorithm, Buffer.from(signed.signature),
-        JSON.stringify(signed.publicKeyJwk), now]
-    );
-    await client.query(
-      `INSERT INTO evidence.anchor_receipts
-        (id,organization_id,checkpoint_id,anchor_endpoint,anchor_reference,anchored_digest,signing_key_id,verification_result,recorded_at)
-       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8)`,
-      [organizationId, prepared.checkpointId, anchored.endpoint, anchored.reference, anchored.anchoredDigest,
-        signed.keyId, anchored.verificationResult, anchored.recordedAt]
-    );
-    return prepared;
-  });
+    try {
+      const signerKey = createPublicKey({ key: signed.publicKeyJwk as unknown as CryptoJsonWebKey, format: "jwk" });
+      if (!verifySignature(null, Buffer.from(prepared.checkpointDigest, "hex"), signerKey, signed.signature)) {
+        throw new Error("invalid signature");
+      }
+    } catch {
+      throw new Error("The Evidence signer returned an invalid signature response");
+    }
+    const signedAt = work.signature?.signedAt ?? now.toISOString();
+    await withOrganizationTransaction(pool, organizationId, async client => {
+      await assertClaim(client);
+      await client.query(`UPDATE operations.evidence_checkpoint_work SET signature=$4::jsonb
+        WHERE organization_id=$1 AND session_id=$2 AND lease_token=$3`,
+      [organizationId, sessionId, leaseToken, JSON.stringify({ ...signed, signature: Buffer.from(signed.signature).toString("base64"), signedAt })]);
+    });
+    failure = "anchoring_failed";
+    const anchored = await checkpointEffect(signal => anchor.anchorCheckpoint({
+      idempotencyKey: prepared.checkpointId,
+      checkpointId: prepared.checkpointId,
+      sessionId,
+      firstSequence: prepared.firstSequence,
+      lastSequence: prepared.lastSequence,
+      checkpointDigest: prepared.checkpointDigest,
+      checkpointCreatedAt: prepared.createdAt,
+      keyId: signed.keyId
+    }, signal), context?.signal);
+    if (anchored.anchoredDigest !== prepared.checkpointDigest || anchored.endpoint.trim() === "" ||
+        anchored.reference.trim() === "" || anchored.verificationResult !== "verified" || !Number.isFinite(anchored.recordedAt.getTime())) {
+      throw new Error("The independent anchor response does not match the checkpoint");
+    }
+
+    failure = "interrupted";
+    return await withOrganizationTransaction(pool, organizationId, async (client) => {
+      await assertClaim(client);
+      const inserted = await client.query(
+        `INSERT INTO evidence.checkpoint_batches
+          (id,organization_id,session_id,first_sequence,last_sequence,previous_checkpoint_digest,batch_merkle_root,canonicalization,algorithm,checkpoint_digest,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (session_id,first_sequence) DO NOTHING RETURNING id`,
+        [prepared.checkpointId, organizationId, sessionId, prepared.firstSequence, prepared.lastSequence,
+          prepared.previousCheckpointDigest, prepared.batchMerkleRoot, prepared.canonicalization, prepared.algorithm,
+          prepared.checkpointDigest, prepared.createdAt]
+      );
+      if (inserted.rowCount === 0) {
+        const existing = await client.query<{ checkpoint_digest: string }>(
+          `SELECT checkpoint_digest FROM evidence.checkpoint_batches
+            WHERE organization_id=$1 AND session_id=$2 AND first_sequence=$3`,
+          [organizationId, sessionId, prepared.firstSequence]);
+        if (existing.rows[0]?.checkpoint_digest !== prepared.checkpointDigest) {
+          throw new Error("A conflicting checkpoint already covers this Evidence range");
+        }
+        await client.query("DELETE FROM operations.evidence_checkpoint_work WHERE organization_id=$1 AND session_id=$2 AND lease_token=$3", [organizationId, sessionId, leaseToken]);
+        return prepared;
+      }
+      await client.query(
+        `INSERT INTO evidence.checkpoint_signatures
+          (id,organization_id,checkpoint_id,signing_key_id,signature_algorithm,signature,public_key_jwk,signed_at)
+         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6::jsonb,$7)`,
+        [organizationId, prepared.checkpointId, signed.keyId, signed.algorithm, Buffer.from(signed.signature),
+          JSON.stringify(signed.publicKeyJwk), signedAt]
+      );
+      await client.query(
+        `INSERT INTO evidence.anchor_receipts
+          (id,organization_id,checkpoint_id,anchor_endpoint,anchor_reference,anchored_digest,signing_key_id,verification_result,recorded_at)
+         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8)`,
+        [organizationId, prepared.checkpointId, anchored.endpoint, anchored.reference, anchored.anchoredDigest,
+          signed.keyId, anchored.verificationResult, anchored.recordedAt]
+      );
+      await client.query("DELETE FROM operations.evidence_checkpoint_work WHERE organization_id=$1 AND session_id=$2 AND lease_token=$3", [organizationId, sessionId, leaseToken]);
+      return prepared;
+    });
+  } catch (error) {
+    await withOrganizationTransaction(pool, organizationId, client => client.query(`UPDATE operations.evidence_checkpoint_work
+      SET last_failure=$4,lease_token=NULL,lease_until=NULL,
+        retry_at=GREATEST($5::timestamptz,transaction_timestamp()) + make_interval(secs => LEAST(300,5*power(2,LEAST(attempts-1,6)))::double precision)
+      WHERE organization_id=$1 AND session_id=$2 AND lease_token=$3`,
+    [organizationId, sessionId, leaseToken, context?.signal?.aborted ? "interrupted" : failure, now]));
+    throw error;
+  }
 }
 
 export async function exportEvidenceVerification(

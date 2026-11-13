@@ -115,6 +115,7 @@ import { createRetentionPolicy, exportOrganizationArchive, generateSessionReport
   placeLegalHold, recordCorrection, recordResearchConsent, releaseLegalHold,
   type OrganizationArchive, type ReportFormat } from "../reporting/service.js";
 import { getSessionReplayCapability, replaySession, type SessionReplayAdapter } from "../replay/service.js";
+import { exportEvidenceVerification } from "../evidence/checkpoints.js";
 import { getDataPolicyOperations, getReportArtifact, getSessionRetentionStatus, listOrganizationMemberAdministration,
   listPluginOperations, listResearchReportableSessions, listSessionReportArtifacts, replaceOrganizationMemberRoles } from "../operations/administration.js";
 import { approvePublicationFreeze, freezeCollaborativeDraft, getCollaborativeDraft, getProjectDemo, getPublicationReview, getRolePreview,
@@ -1630,6 +1631,10 @@ export function createRuntimeHttpHandler(options: RuntimeHttpOptions) {
           throw authorizationError("VALIDATION_FAILED", "The legal hold release reason is required.", correlationId);
         }
         send(response, 201, await releaseLegalHold(options.pool, principal, pathId(match[1], correlationId), body.reason, correlationId));
+        return true;
+      }
+      if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/evidence\/verification$/u))) {
+        send(response, 200, await exportEvidenceVerification(options.pool, principal, pathId(match[1], correlationId), correlationId));
         return true;
       }
       if (request.method === "GET" && (match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/replay$/u))) {

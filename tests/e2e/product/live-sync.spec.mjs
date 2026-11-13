@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { fixture } from "../fixture.mjs";
 
 test.use({ trace: "off" });
@@ -23,11 +24,11 @@ async function freePort() {
   return port;
 }
 
-test("BA-06-T01/T03 production publication reaches idle authorized clients and clears revoked views", async ({ browser }, testInfo) => {
+test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle authorized clients and clear revoked views", async ({ browser }, testInfo) => {
   const directory = await mkdtemp(join(tmpdir(), "plenum-ba06-"));
   const owner = new Pool({ connectionString: process.env.DATABASE_URL });
   const sessionId = randomUUID(), projectId = randomUUID(), releaseId = randomUUID(), revisionId = randomUUID(), connections = new Set(), contexts = [], logs = [];
-  let service, tls, releaseOld;
+  let service, tls, releaseOld, providerId, previousProviders = [];
   try {
     const definition = (await owner.query("SELECT snapshot FROM studio.definition_revisions WHERE id=$1", [fixture.revisionId])).rows[0].snapshot;
     definition.scenario.injects.push({ ...definition.scenario.injects[0], id: "ba06-blue", title: "BA-06 blue-only update", releaseMode: "manual", recipients: { teamIds: ["blue"] } });
@@ -51,13 +52,11 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
       SELECT organization_id,$1,seat_id,session_role_ids,team_id,min_occupancy,max_occupancy,required,join_mode,'open' FROM runtime.session_seats WHERE session_id=$2`, [sessionId, fixture.sessionId]);
     await owner.query("INSERT INTO runtime.session_operators(organization_id,session_id,person_id,assigned_by) VALUES ($1,$2,$3,$3)",
       [fixture.organizationId, sessionId, fixture.people.operator]);
-    const participants = {}, tokens = {};
+    const participants = {}, people = { operator: fixture.people.operator };
     for (const key of ["author", "reviewer", "redAuthor"]) {
-      const participant = randomUUID(), person = randomUUID(), token = randomUUID(); participants[key] = participant; tokens[key] = token;
+      const participant = randomUUID(), person = randomUUID(); participants[key] = participant; people[key] = person;
       await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'BA-06 synthetic workforce participant')", [person]);
       await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'designer')", [fixture.organizationId, person]);
-      await owner.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
-        VALUES ($1,$2,$3::uuid,'https://ba06.invalid',$3::text,'mfa',now()+interval '1 day')`, [token, fixture.organizationId, person]);
       await owner.query("INSERT INTO runtime.participants(id,organization_id,session_id,person_id) VALUES ($1,$2,$3,$4)",
         [participant, fixture.organizationId, sessionId, person]);
       await owner.query("INSERT INTO runtime.participant_access_revisions(organization_id,session_id,participant_id) VALUES ($1,$2,$3)", [fixture.organizationId, sessionId, participant]);
@@ -71,7 +70,35 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
     assert.equal(spawnSync(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", key,
       "-out", cert, "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"], { windowsHide: true }).status, 0);
     const appPort = await freePort(), metricsPort = await freePort();
-    tls = createHttpsServer({ key: await readFile(key), cert: await readFile(cert) }, (request, response) => {
+    const signing = await generateKeyPair("RS256"), codes = new Map();
+    const jwk = { ...await exportJWK(signing.publicKey), kid: "ba11-synthetic" };
+    let origin;
+    tls = createHttpsServer({ key: await readFile(key), cert: await readFile(cert) }, async (request, response) => {
+      const url = new URL(request.url, origin);
+      if (url.pathname === "/protocol/openid-connect/auth") {
+        const links = Object.keys(people).map(subject => {
+          const code = randomUUID();
+          codes.set(code, { subject, nonce: url.searchParams.get("nonce"), challenge: url.searchParams.get("code_challenge") });
+          const callback = new URL("/auth/callback", origin);
+          callback.searchParams.set("code", code); callback.searchParams.set("state", url.searchParams.get("state"));
+          return `<a href="${callback.toString().replaceAll("&", "&amp;")}">Synthetic login ${subject}</a>`;
+        });
+        response.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" }); response.end(links.join(" ")); return;
+      }
+      if (url.pathname === "/protocol/openid-connect/certs") {
+        response.writeHead(200, { "content-type": "application/json" }); response.end(JSON.stringify({ keys: [jwk] })); return;
+      }
+      if (url.pathname === "/protocol/openid-connect/token") {
+        let body = ""; for await (const chunk of request) body += chunk;
+        const form = new URLSearchParams(body), code = form.get("code"), login = codes.get(code);
+        if (!login || login.challenge !== createHash("sha256").update(form.get("code_verifier") ?? "").digest("base64url")) {
+          response.writeHead(400); response.end(); return;
+        }
+        codes.delete(code);
+        const token = await new SignJWT({ nonce: login.nonce, acr: "mfa" }).setProtectedHeader({ alg: "RS256", kid: jwk.kid })
+          .setIssuer(origin).setAudience("ba06").setSubject(login.subject).setIssuedAt().setExpirationTime("10m").sign(signing.privateKey);
+        response.writeHead(200, { "content-type": "application/json" }); response.end(JSON.stringify({ id_token: token })); return;
+      }
       const upstream = httpRequest({ hostname: "127.0.0.1", port: appPort, method: request.method, path: request.url, headers: request.headers }, reply => {
         response.writeHead(reply.statusCode, reply.headers); reply.pipe(response);
       });
@@ -79,9 +106,21 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
     });
     tls.on("connection", socket => { connections.add(socket); socket.on("close", () => connections.delete(socket)); });
     tls.listen(0, "127.0.0.1"); await once(tls, "listening");
-    const origin = `https://127.0.0.1:${tls.address().port}`;
+    origin = `https://127.0.0.1:${tls.address().port}`;
+    // Approved identity configuration and federated mappings are synthetic setup; sessions are issued only by real browser login.
+    providerId = randomUUID();
+    previousProviders = (await owner.query("SELECT id FROM identity.organization_identity_provider_revisions WHERE organization_id=$1 AND status='active'", [fixture.organizationId])).rows.map(row => row.id);
+    await owner.query("UPDATE identity.organization_identity_provider_revisions SET status='superseded' WHERE organization_id=$1 AND status='active'", [fixture.organizationId]);
+    await owner.query(`INSERT INTO identity.organization_identity_provider_revisions
+      (id,organization_id,provider_key,version,protocol,display_name,status,discovery_url,client_id,audience,issuer,authorization_endpoint,token_endpoint,jwks_uri,staged_by)
+      SELECT $1,$2,'ba11-synthetic',coalesce(max(version),0)+1,'oidc','Synthetic BA-11 issuer','active',$3,'ba06','ba06',$3,
+        $3||'/protocol/openid-connect/auth',$3||'/protocol/openid-connect/token',$3||'/protocol/openid-connect/certs',$4
+      FROM identity.organization_identity_provider_revisions WHERE organization_id=$2`, [providerId, fixture.organizationId, origin, fixture.people.operator]);
+    for (const [subject, person] of Object.entries(people)) await owner.query(`INSERT INTO identity.federated_identities
+      (id,organization_id,person_id,issuer,subject,provider_type,identity_provider_id) VALUES ($1,$2,$3,$4,$5,'oidc',$6)`,
+      [randomUUID(), fixture.organizationId, person, origin, subject, providerId]);
     service = spawn(process.execPath, ["deploy/compose/profile-service.mjs"], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, NODE_ENV: "production", NODE_TLS_REJECT_UNAUTHORIZED: "1", PORT: String(appPort), METRICS_PORT: String(metricsPort),
+      env: { ...process.env, NODE_ENV: "production", NODE_EXTRA_CA_CERTS: cert, NODE_TLS_REJECT_UNAUTHORIZED: "1", PORT: String(appPort), METRICS_PORT: String(metricsPort),
         PLENUM_DEPLOYMENT_PROFILE: "cloud", PLENUM_PUBLIC_BASE_URL: origin, PLENUM_DEPLOYMENT_ID: fixture.deploymentId,
         PLENUM_RETENTION_ACTOR_PERSON_ID: fixture.people.operator, OIDC_ISSUER: origin, OIDC_PROVIDER_KEY: "ba06",
         OIDC_ORGANIZATION_ID: fixture.organizationId, OIDC_CLIENT_ID: "ba06", OIDC_REDIRECT_URI: `${origin}/auth/callback`,
@@ -91,7 +130,19 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
         INVITATION_DELIVERY_WEBHOOK_TOKEN: "synthetic-webhook", NOTIFICATIONS_HOSTNAME: "" } });
     service.stdout.on("data", chunk => logs.push(chunk.toString())); service.stderr.on("data", chunk => logs.push(chunk.toString()));
     await expect.poll(() => fetch(`http://127.0.0.1:${appPort}/`).then(r => r.status).catch(() => 0), { timeout: 20_000 }).toBe(200);
-    const operatorHeaders = { authorization: `Bearer ${fixture.authenticationSessions.operator}`, "content-type": "application/json" };
+    // Supported legacy provisioning reconciliation precedes Organization-routed login.
+    const reconciled = await fetch(`http://127.0.0.1:${appPort}/v1/platform/organizations`, {
+      headers: { authorization: `Bearer ${fixture.authenticationSessions.operator}` } });
+    expect(reconciled.status).toBe(200);
+    const slug = (await owner.query("SELECT slug FROM identity.organization_provisioning WHERE organization_id=$1", [fixture.organizationId])).rows[0].slug;
+    const operatorContext = await browser.newContext({ ignoreHTTPSErrors: true }); contexts.push(operatorContext);
+    const operatorPage = await operatorContext.newPage();
+    await operatorPage.goto(`${origin}/auth/login?organization=${encodeURIComponent(slug)}`);
+    await operatorPage.getByRole("link", { name: "Synthetic login operator", exact: true }).click();
+    await expect(operatorPage).toHaveURL(`${origin}/`);
+    const operatorSession = (await operatorContext.cookies(origin)).find(cookie => cookie.name === "plenum_session");
+    expect(operatorSession?.httpOnly).toBe(true);
+    const operatorHeaders = { authorization: `Bearer ${operatorSession.value}`, "content-type": "application/json" };
     let binding;
     await expect.poll(async () => {
       const response = await fetch(`http://127.0.0.1:${appPort}/v1/operations/organization-jobs`, { headers: operatorHeaders });
@@ -107,12 +158,14 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
     for (const key of ["author", "reviewer", "redAuthor"]) {
       const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1024, height: 768 }, reducedMotion: "reduce" });
       contexts.push(context);
-      await context.addCookies([{ name: "plenum_session", value: tokens[key], domain: "127.0.0.1", path: "/", httpOnly: true, secure: true, sameSite: "Lax" }]);
       const page = await context.newPage(), responses = [];
       page.on("pageerror", error => logs.push(`browser page error: ${error.message}\n`));
       page.on("requestfailed", request => logs.push(`browser request failed: ${new URL(request.url()).pathname}\n`));
       page.on("response", response => { if (/\/sync\/(stream|deltas)/u.test(response.url())) void response.text().then(body => responses.push(body)).catch(() => {}); });
-      await page.goto(`${origin}/sessions/${sessionId}/runtime`);
+      await page.goto(`${origin}/auth/login?organization=${encodeURIComponent(slug)}&returnTo=${encodeURIComponent(`/sessions/${sessionId}/runtime`)}`);
+      await page.getByRole("link", { name: `Synthetic login ${key}`, exact: true }).click();
+      const sessionCookie = (await context.cookies(origin)).find(cookie => cookie.name === "plenum_session");
+      expect(Boolean(sessionCookie?.secure && sessionCookie.httpOnly && sessionCookie.sameSite === "Lax")).toBe(true);
       await expect(page.locator(".runtime-frame")).toBeVisible();
       await expect.poll(() => responses.length, { timeout: 15_000 }).toBeGreaterThan(0);
       clients.push({ context, page, responses });
@@ -238,6 +291,8 @@ test("BA-06-T01/T03 production publication reaches idle authorized clients and c
     if (service && service.exitCode === null) { service.kill(); await once(service, "exit"); }
     for (const socket of connections) socket.destroy();
     if (tls) await new Promise(resolve => tls.close(resolve));
+    if (providerId) await owner.query("UPDATE identity.organization_identity_provider_revisions SET status='superseded' WHERE id=$1", [providerId]);
+    if (previousProviders.length) await owner.query("UPDATE identity.organization_identity_provider_revisions SET status='active' WHERE id=ANY($1::uuid[])", [previousProviders]);
     await owner.end(); await rm(directory, { recursive: true, force: true });
     await testInfo.attach("production-log", { body: logs.join(""), contentType: "text/plain" });
   }

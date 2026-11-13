@@ -42,13 +42,17 @@ export async function verifyTenantJobs(owner, app) {
   const evidenceKey = generateKeyPairSync('ed25519'), keyArn = 'arn:aws:kms:us-east-1:123456789012:key/ba10-synthetic';
   const trustFile = join(directory, 'public-evidence-keys.json'), anchors = new Map();
   await writeFile(trustFile, JSON.stringify({ [keyArn]: evidenceKey.publicKey.export({ format: 'jwk' }) }));
-  let signingDown = false, anchoringDown = false, ambiguousAnchor = false, signatureCalls = 0;
+  let signingDown = false, anchoringDown = false, ambiguousAnchor = false, signatureCalls = 0, deliveredInvitation;
   const cert = join(directory, "cert.pem"), key = join(directory, "key.pem");
   const openssl = process.env.PLENUM_TEST_OPENSSL ?? (process.platform === "win32" && existsSync("C:/Program Files/Git/usr/bin/openssl.exe") ? "C:/Program Files/Git/usr/bin/openssl.exe" : "openssl");
   assert.equal(spawnSync(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", key, "-out", cert,
     "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1"], { windowsHide: true, encoding: "utf8" }).status, 0);
   const provider = createHttpsServer({ key: await readFile(key), cert: await readFile(cert) }, async (request, response) => {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
+    if (request.url === '/delivery') {
+      const message = JSON.parse(Buffer.concat(chunks).toString()); deliveredInvitation = message.variables.invitationUrl;
+      response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify({ messageId: message.messageId })); return;
+    }
     if (request.headers['x-amz-target'] === 'TrentService.Sign') {
       if (signingDown) { response.writeHead(503); response.end(); return; }
       const input = JSON.parse(Buffer.concat(chunks).toString());
@@ -97,12 +101,15 @@ export async function verifyTenantJobs(owner, app) {
   }).listen(0, "127.0.0.1");
   await once(provider, "listening");
   const providerUrl = `https://127.0.0.1:${provider.address().port}`;
-  const seed = async (number, full = true) => {
+  const seed = async (number, full = true, provisioned) => {
     const f = { org: `50500000-0000-4000-8000-${String(number).padStart(12, "0")}`, person: randomUUID(), token: randomUUID(),
       project: randomUUID(), revision: randomUUID(), release: randomUUID(), session: randomUUID(), participant: randomUUID(), device: randomUUID(), seat: randomUUID(), definition: randomUUID() };
-    await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'BA-05 synthetic Organization')", [f.org]);
-    await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'BA-05 dedicated actor')", [f.person]);
-    await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'admin')", [f.org, f.person]);
+    if (provisioned) { f.org = provisioned.organizationId; f.person = provisioned.personId; }
+    else {
+      await owner.query("INSERT INTO identity.organizations(id,name) VALUES ($1,'BA-05 synthetic Organization')", [f.org]);
+      await owner.query("INSERT INTO identity.persons(id,display_name) VALUES ($1,'BA-05 dedicated actor')", [f.person]);
+      await owner.query("INSERT INTO identity.memberships(organization_id,person_id,organization_role) VALUES ($1,$2,'admin')", [f.org, f.person]);
+    }
     await owner.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
       VALUES ($1,$2,$3::uuid,'https://ba05.invalid',$3::text,'mfa',now()+interval '1 day')`, [f.token, f.org, f.person]);
     if (!full) return f;
@@ -171,24 +178,29 @@ export async function verifyTenantJobs(owner, app) {
   const attachmentState = async file => (await owner.query('SELECT upload_state FROM runtime.form_attachments WHERE id=$1', [file.id])).rows[0].upload_state;
   const assertDeleted = file => assert.rejects(store.get(file.key), error => error.$metadata?.httpStatusCode === 404);
   const purged = async (id) => (await owner.query("SELECT bytes IS NULL AS purged FROM reporting.export_artifacts WHERE id=$1", [id])).rows[0].purged;
-  const start = async (bootstrap, executorSocket = '', evidenceConfigured = true) => {
+  const start = async (bootstrap, executorSocket = '', evidenceConfigured = true, omission) => {
     const port = await freePort(), metrics = await freePort(), publicUrl = `https://localhost:${port}`;
     // Test-only IPC drives the production SIGTERM handler; Date advances without sleeping a readiness window.
-    const shim = `const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance'){offset+=61000;process.send('advanced')}});`;
-    const child = spawn(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(shim)}`, "deploy/compose/profile-service.mjs"], {
+    const shim = `import dns from 'node:dns/promises';import {syncBuiltinESMExports} from 'node:module';
+      const records=new Map();const lookup=dns.resolveTxt;dns.resolveTxt=async name=>records.has(name)?[[records.get(name)]]:lookup(name);syncBuiltinESMExports();
+      const original=Date.now;let offset=0;Date.now=()=>original()+offset;process.on('message',m=>{if(m?.dns){records.set(m.dns.name,m.dns.value);process.send('dns-ready')}else if(m==='stop'){process.emit('SIGTERM');process.send('stopping');process.disconnect()}else if(m==='advance'){offset+=61000;process.send('advanced')}});`;
+    const child = spawn(process.execPath, ["--import", `data:text/javascript,${encodeURIComponent(shim)}`,
+      ...(omission ? ["--import", "./apps/server/test/omit-production-wiring.mjs"] : []), "deploy/compose/profile-service.mjs"], {
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_ENV: 'production', NODE_EXTRA_CA_CERTS: cert, PORT: String(port), METRICS_PORT: String(metrics),
         PLENUM_DEPLOYMENT_PROFILE: 'cloud', PLENUM_PUBLIC_BASE_URL: publicUrl, PLENUM_DEPLOYMENT_ID: deployment, PLENUM_EXTENSION_SOCKET: executorSocket,
+        ...(omission ? { PLENUM_TEST_OMIT_WIRING: omission } : {}),
         PLENUM_RETENTION_ACTOR_PERSON_ID: bootstrap.person, OIDC_ISSUER: publicUrl, OIDC_PROVIDER_KEY: 'ba05', OIDC_ORGANIZATION_ID: bootstrap.org,
         OIDC_CLIENT_ID: 'ba05', OIDC_REDIRECT_URI: `${publicUrl}/auth/callback`, S3_BUCKET: bucket, S3_ENDPOINT: providerUrl,
         S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID ?? 'synthetic', S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY ?? 'synthetic', MEDIA_URL: 'wss://127.0.0.1', MEDIA_API_URL: providerUrl,
         MEDIA_API_KEY: 'synthetic', MEDIA_API_SECRET: 'synthetic-media-secret', MEDIA_ADAPTER_DIGEST: digest, FLOOR_TOKEN_SECRET: 'synthetic-floor-secret',
-        INVITATION_DELIVERY_ENDPOINT: `${publicUrl}/delivery`, INVITATION_DELIVERY_BEARER_TOKEN: 'synthetic-delivery-token', INVITATION_DELIVERY_WEBHOOK_TOKEN: 'synthetic-webhook-token',
+        INVITATION_DELIVERY_ENDPOINT: `${providerUrl}/delivery`, INVITATION_DELIVERY_BEARER_TOKEN: 'synthetic-delivery-token', INVITATION_DELIVERY_WEBHOOK_TOKEN: 'synthetic-webhook-token',
         CONTENT_SCANNER_HOST: '', NOTIFICATIONS_HOSTNAME: '',
         PLENUM_EVIDENCE_KEY_ARN: evidenceConfigured ? keyArn : '', PLENUM_TRUSTED_PUBLIC_KEYS_FILE: evidenceConfigured ? trustFile : '',
         PLENUM_EVIDENCE_ANCHOR_BUCKET: evidenceConfigured ? 'ba10-independent-fixture' : '', PLENUM_EVIDENCE_ANCHOR_ACCOUNT: evidenceConfigured ? '123456789012' : '', PLENUM_EVIDENCE_REGION: evidenceConfigured ? 'us-east-1' : '',
         AWS_ACCESS_KEY_ID: 'synthetic', AWS_SECRET_ACCESS_KEY: 'synthetic', AWS_ENDPOINT_URL_KMS: providerUrl, AWS_ENDPOINT_URL_S3: providerUrl } });
     const logs = []; child.stdout.on('data', b => logs.push(b.toString())); child.stderr.on('data', b => logs.push(b.toString()));
-    const service = { child, logs, url: `http://127.0.0.1:${port}` }; children.push(service);
+    const mutations = new Set(); child.on('message', message => mutations.add(message));
+    const service = { child, logs, mutations, url: `http://127.0.0.1:${port}` }; children.push(service);
     await eventually(async () => { assert.equal(child.exitCode, null, logs.join('')); return fetch(service.url).then(r => r.ok).catch(() => false); }, 'production startup');
     return service;
   };
@@ -203,6 +215,36 @@ export async function verifyTenantJobs(owner, app) {
     const response = await fetch(`${service.url}/v1/operations/organization-jobs`, { method: 'PUT', headers: {
       authorization: `Bearer ${f.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ actorPersonId: f.person, enabled, expectedRevision: revision, ...extra }) });
     return { status: response.status, body: await response.json() };
+  };
+  const provision = async service => {
+    // Reuse the suite's supported Platform Administrator bootstrap; the application still authenticates and authorizes every request.
+    const actor = (await owner.query("SELECT person_id,home_organization_id FROM identity.platform_role_assignments WHERE status='active' AND revoked_at IS NULL ORDER BY person_id LIMIT 1")).rows[0];
+    assert.ok(actor);
+    const token = randomUUID();
+    await owner.query(`INSERT INTO identity.authentication_sessions(id,organization_id,person_id,issuer,subject,authentication_strength,expires_at)
+      VALUES ($1,$2,$3::uuid,'https://ba11.invalid',$3::text,'mfa',now()+interval '1 hour')`, [token, actor.home_organization_id, actor.person_id]);
+    const post = async (path, body, status = 200, authenticated = true) => {
+      const response = await fetch(`${service.url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json',
+        ...(authenticated ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+      const result = await response.json(); assert.equal(response.status, status, JSON.stringify(result)); return result;
+    };
+    const slug = `ba11-${randomUUID()}`;
+    const created = await post('/v1/platform/organizations', { name: 'BA-11 provisioned Organization', slug,
+      legalName: 'Synthetic BA-11', countryCode: 'US', timeZone: 'UTC', deploymentProfile: 'cloud',
+      dataResidencyRegion: 'us-east-2', entitlements: ['runtime'], supportContact: 'support@ba11.example' }, 201);
+    const base = `/v1/platform/organizations/${created.organization.id}`;
+    const domain = `${slug}.example`;
+    const added = await post(`${base}/domains`, { domain, verificationMethod: 'dns_txt' }, 201);
+    service.child.send({ dns: added.domains[0].challenge });
+    await eventually(() => service.mutations.has('dns-ready'), 'synthetic external DNS ready');
+    await post(`${base}/domains/${added.domains[0].id}/verify`, {});
+    await post(`${base}/first-admin-invitations`, { email: `admin@${domain}` }, 201);
+    assert.ok(deliveredInvitation);
+    const accepted = await post(`/v1${new URL(deliveredInvitation).pathname}/accept`, { displayName: 'BA-11 tenant-owned Admin' }, 200, false);
+    const detail = await (await fetch(`${service.url}${base}`, { headers: { authorization: `Bearer ${token}` } })).json();
+    const activated = await post(`${base}/activate`, { expectedVersion: detail.organization.lifecycleVersion, reason: 'BA-11 disposable acceptance tenant' });
+    assert.equal(activated.organization.lifecycleStatus, 'active');
+    return accepted;
   };
   const unavailableModelRun = async (service, f, command = {
     commandId: randomUUID(), deviceId: f.device, operationType: 'composition_run.start', aggregateId: randomUUID(),
@@ -237,7 +279,30 @@ export async function verifyTenantJobs(owner, app) {
   };
   try {
     await verifyCommandSchedulerLockOrder(owner, app, await seed(90), deployment, schedule);
-    const first = await seed(1), aInject = await schedule(first, 0), aArtifact = await artifact(first);
+    // These are deliberately broken process-local copies, not application feature flags.
+    for (const omission of ['startup', 'inject', 'publication', 'attachments']) {
+      const f = await seed(100 + ['startup', 'inject', 'publication', 'attachments'].indexOf(omission));
+      const inject = await schedule(f, 0), file = await attachment(f);
+      const broken = await start(f, '', true, omission);
+      await eventually(() => broken.mutations.has(`omitted:${omission}`), `BA-11 mutation reached ${omission}`);
+      const observed = async () => omission === 'attachments' ? await attachmentState(file) === 'purged'
+        : omission === 'publication' ? Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND publication_status='published'", [f.session])).rows[0].count) > 0
+        : await delivered(inject);
+      if (omission === 'publication') await eventually(() => delivered(inject), 'publication omission still delivers the Inject');
+      await assert.rejects(eventually(observed, `BA-11 detects omitted ${omission}`, 1_000),
+        error => error.code === 'ERR_ASSERTION' && error.message.includes(`BA-11 detects omitted ${omission}`));
+      await stop(broken);
+      const restored = await start(f);
+      await eventually(observed, `BA-11 restored ${omission} drains pending work`);
+      await eventually(async () => await delivered(inject) && await attachmentState(file) === 'purged', 'restored automatic work completes');
+      assert.equal((await owner.query("SELECT count(*)::int AS n FROM evidence.events WHERE aggregate_id=$1 AND event_type='inject.released'", [inject])).rows[0].n, 1);
+      await stop(restored);
+      console.log(`BA-11-T02 PASS: omitted ${omission} is detected; restored production wiring recovers without duplicate delivery`);
+    }
+    const setup = await start(await seed(199, false));
+    const first = await seed(1, true, await provision(setup));
+    await stop(setup);
+    const aInject = await schedule(first, 0), aArtifact = await artifact(first);
     const aFile = await attachment(first);
     const service = await start(first);
     const unavailableCommand = await unavailableModelRun(service, first);
@@ -248,7 +313,8 @@ export async function verifyTenantJobs(owner, app) {
       'BA-06-T02 production startup publishes pending Runtime deltas');
     service.child.send('advance');
     await eventually(async () => (await fetch(`${service.url}/healthz`)).status === 200, 'healthy completed discovery sweep');
-    const second = await seed(20), bInject = await schedule(second, 0), bArtifact = await artifact(second), held = await artifact(second, true);
+    const second = await seed(20, true, await provision(service)), bInject = await schedule(second, 0), bArtifact = await artifact(second), held = await artifact(second, true);
+    console.log('BA-11-T01: second Organization provisioned, domain verified, first Admin accepted and Organization activated through production HTTP');
     // BA-09-T03: use the real production entrypoint, without an injected Replay adapter.
     const replayPath = `${service.url}/v1/sessions/${second.session}/replay`;
     const replayHeaders = { authorization: `Bearer ${second.token}`, 'content-type': 'application/json' };
@@ -386,7 +452,10 @@ export async function verifyTenantJobs(owner, app) {
     for (let i = 2; i <= 12; i++) { const f = await seed(i, false); assert.equal((await configure(restarted, f)).status, 200); }
     const page = await discoverOrganizationJobs(app, deployment);
     assert.equal(page.length, 10);
-    assert.ok((await discoverOrganizationJobs(app, deployment, page.at(-1).organizationId)).some(a => a.organizationId === second.org));
+    const nextPage = await discoverOrganizationJobs(app, deployment, page.at(-1).organizationId);
+    assert.ok(nextPage.length > 0);
+    assert.equal(new Set([...page, ...nextPage].map(a => a.organizationId)).size, page.length + nextPage.length);
+    assert.ok([...page, ...nextPage].some(a => a.organizationId === second.org));
     await owner.query("UPDATE identity.organization_workforce_members SET status='suspended',suspended_at=now() WHERE organization_id=$1 AND person_id=$2", [second.org, second.person]);
     const revoked = await schedule(second, 2), protectedBytes = await artifact(second);
     await owner.query("UPDATE operations.organization_job_bindings SET retention_due_at=now()-interval '1 second' WHERE organization_id=$1", [second.org]);

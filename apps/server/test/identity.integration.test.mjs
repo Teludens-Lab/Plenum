@@ -4668,7 +4668,7 @@ test("PS-810 stores immutable security evidence without granting application rea
   }
 });
 
-test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08/09-T03 BA-11 lock ordering and production tenant work", async () => { await verifyTenantJobs(owner, app); });
+test("BA-05-T01/T02/T03 BA-07-T02/T03 BA-08/09-T03 BA-11 production composition, omitted wiring and lock ordering", async () => { await verifyTenantJobs(owner, app); });
 test("BA-08 governed Model Run HTTP/database boundary and restart recovery (transport harness)", async () => { await verifyGovernedModelRuns(owner, app); });
 test("BA-08-T01 supported rootless production entrypoint executes and approves a governed effect", {
   skip: !process.env.PLENUM_TEST_EXTENSION_SOCKET && "NOT RUN: qualifying Linux rootless supervisor socket unavailable"

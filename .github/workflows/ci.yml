@@ -26,6 +26,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run test:statecraft
       - run: npm run test:security
       - run: npm run test:supply-chain
       - run: npm run validate:observability
@@ -74,6 +75,17 @@ jobs:
           chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
           server -s3 -ip=127.0.0.1 -ip.bind=0.0.0.0 -s3.ip.bind=0.0.0.0 -master.telemetry=false
       - run: npm run test:integration
+      - name: Statecraft bootstrap database regression
+        env:
+          STATECRAFT_TEST_DATABASE_URL: postgres://postgres:plenum-ci@127.0.0.1:5432/plenum_statecraft_test_ci
+        run: |
+          node --input-type=module <<'JS'
+          import { Pool } from 'pg';
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try { await pool.query('CREATE DATABASE plenum_statecraft_test_ci'); }
+          finally { await pool.end(); }
+          JS
+          npm run test:statecraft:db
 
   browser-accessibility:
     runs-on: ubuntu-latest

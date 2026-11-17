@@ -1,5 +1,23 @@
 # PS-820 verification index
 
+## BA-12 recovery remeasurement — 2026-11-13
+
+Source `941a51cde44a5e397c89a572307854d1686b16f5`, Node 24.22.1, test-only browser instrumentation diff; application source, lockfile and schema unchanged. [Current performance/coverage evidence](../performance/PS-545-optimization.md#ba-12-current-performance-and-recovery--2026-11-13) records failed Floor and projection-delay budgets separately from these recovery results. No deployment or release acceptance is implied.
+
+| Command | Actual current result | Scope |
+|---|---|---|
+| `CMD-CLEAN-INSTALL` | PASS, 59,484 ms | Cached prior staging image with 40 migrations, then additive 043–048; representative Organization retained; prior image still reaches shell; current cloud/institutional/air-gapped shells reach product |
+| `CMD-BACKUP-RESTORE` | PASS, RPO 1 s / measured RTO 7 s | Fresh source/restore databases and buckets, current schema through 048, one synthetic object and one signed Session independently checked by the fixture verifier |
+| `CMD-AUTHORITY-TRANSFER` | NOT RUN | PS-845 command remains Proposed and absent; registry text is not an implementation |
+
+Clean-install image: `sha256:088cf7e0ef9ff59f4e41e2491c08a348e5044a0d798b4883d182583ab8b837e5`. Its prior image was `ghcr.io/teludens-lab/plenum:staging-4eff8d5-org-edit-20261110`, ID `sha256:7977afabbfec6c9f6f947ccc07026657edb02841ff58cf14655fd8e7d009cf5a`. Backup/restore separately rebuilt the candidate as `sha256:70db2e01f33fcfe0b6db4c9fd44dbd931dad90a6f13b84a63e3c2a63eaf87dd8`; do not describe these two fixture builds as one identical image. Both use unchanged production source and pinned dependencies. The test-only browser diff is excluded from the image by `.dockerignore`.
+
+Task-owned services: PostgreSQL `plenum-ba12-db-20261113` on loopback 65439 and SeaweedFS `plenum-ba12-s3-20261113` on loopback 6833 (existing pinned 18.6/4.48 images). Recovery databases were `plenum_ps530_source_0f2a2c2ee2bf` and `plenum_ps530_restore_0f2a2c2ee2bf`; the harness removed its databases, buckets and temporary keys after verification. Raw current reports/logs and preflight backups are preserved under `output/ba-12-performance/`; generated primary paths are `test-results/clean-install/ps-820-clean-install.json` and `test-results/recovery/ps-530-restore.json`.
+
+This tiny fixture establishes current restore/verification mechanics, not large-volume or institutional operational RPO/RTO. It does not time human incident detection, replacement provisioning or independent custodian response; exercise pending worker journals at production volume; perform PS-845 fencing/transfer; or close BA-10 live golden/custody evidence. The six new migration boundaries are rehearsed without schema rollback. New product or migration changes, an immutable release-image selection, realistic dataset sizing, or PS-845 implementation require affected install/restore reruns. Earlier PS-830 human acceptance and PS-840/842 decisions retain their scope.
+
+Cleanup completed after explicit owner approval on 2026-11-13. The database had no remaining test clients and was stopped cleanly before deletion. Automatic approval review initially rejected deletion; the owner then approved removing only the two task containers, their synthetic-data volumes and candidate image. Removed resources: database volume `6900005e774de788b2c0ed0db75e09b403fb10d775ae50cd5ad27c424a717d7a`, object-store volume `b3efd8904698f24c42d91f27567cbecbbee4a05d60e254ecf8c72120d73792b8`, and image tag `plenum-ba12-performance:verification`. Exact identities, approval and before/after inventory verification are archived in `output/ba-12-performance/cleanup-before.json`, `cleanup-approved.json` and `cleanup-after-approved.txt`. Inventory comparison confirmed that only the two approved containers, two volumes and one image were removed; unrelated services and the prior staging image were preserved. Generated tracked fixtures were restored from preflight backups; current evidence is archived separately. No commit or deployment.
+
 ## BA-11 production composition acceptance — 2026-11-12
 
 Candidate starts at `898234d9fa039c9d6c51c236c2a854138d13fc4a`, clean worktree, Node 24.22.1/npm 11.19.1 on Windows. That HEAD already contains BA-10 and the earlier BA-11 deadlock fix; neither is overwritten. Changes are test-only: `apps/server/test/tenant-jobs.integration.mjs`, its existing `identity.integration.test.mjs` entry, child-only `omit-production-wiring.mjs`, and `tests/e2e/product/live-sync.spec.mjs`. No application behavior, dependency, migration, public contract or production configuration change. No commit, push or deployment is authorized.

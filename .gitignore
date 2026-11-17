@@ -18,6 +18,7 @@ deploy/oci/local/
 deploy/aws/.plans/
 deploy/aws/.tools/
 deploy/aws/local/
+deploy/statecraft/local/
 
 # Dependencies and virtual environments
 node_modules/

@@ -346,6 +346,7 @@ export function subscribeRuntime(options: RuntimeSubscription): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const lifetime = new AbortController();
   const tick = async () => {
+    const started = performance.now();
     const request = new AbortController();
     const abort = () => request.abort();
     lifetime.signal.addEventListener("abort", abort, { once: true });
@@ -370,6 +371,8 @@ export function subscribeRuntime(options: RuntimeSubscription): () => void {
       }
       retry = 0;
       options.connectivity(state.connectivity);
+      // Leave half of the one-second projection budget for publication and refresh; never overlap cycles.
+      delay = Math.max(0, 500 - (performance.now() - started));
     } catch (error) {
       if (stopped) return;
       const action = options.error(error);

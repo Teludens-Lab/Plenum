@@ -35,7 +35,8 @@ const fail = (errorCode: "VALIDATION_FAILED" | "PERMISSION_DENIED" | "TARGET_NOT
 
 async function readDefinition(client: PoolClient, organizationId: string, releaseId: string): Promise<VotingDefinition> {
   const result = await client.query<{ snapshot: unknown }>(
-    `SELECT revision.snapshot FROM registry.releases release JOIN studio.definition_revisions revision
+    `SELECT (revision.snapshot - 'resources') #- '{coreDesign,resources}' AS snapshot
+       FROM registry.releases release JOIN studio.definition_revisions revision
        ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
       WHERE release.organization_id=$1 AND release.id=$2`, [organizationId, releaseId]);
   const snapshot = result.rows[0]?.snapshot;

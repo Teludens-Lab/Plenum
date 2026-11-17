@@ -6,8 +6,9 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
@@ -29,6 +30,46 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
   const owner = new Pool({ connectionString: process.env.DATABASE_URL });
   const sessionId = randomUUID(), projectId = randomUUID(), releaseId = randomUUID(), revisionId = randomUUID(), connections = new Set(), contexts = [], logs = [];
   let service, tls, releaseOld, providerId, previousProviders = [];
+  const syncRequests = [];
+  const measurements = { navigation: [], interaction: [], delivery: [], browser: browser.version(),
+    profile: "local loopback HTTPS; no network/CPU throttling; synthetic OIDC; production profile-service",
+    limits: "Cache-cold is not OS/process cold. HTTP bytes cover completed resource timing entries; WebSocket bytes are received payloads without framing/TLS. Navigation and Inject checks include assertion polling; Stage pause uses animation-frame observation after receipt. No approved startup/byte budget." };
+  async function navigation(page, url, ready, surface) {
+    const cdp = await page.context().newCDPSession(page);
+    let webSocketReceivedPayloadBytes = 0;
+    const sockets = [];
+    const received = ({ payload }) => { webSocketReceivedPayloadBytes += Buffer.byteLength(payload); };
+    const opened = socket => { sockets.push(socket); socket.on("framereceived", received); };
+    page.on("websocket", opened);
+    try {
+      await cdp.send("Network.clearBrowserCache");
+      for (const cache of ["cold", "warm"]) {
+        webSocketReceivedPayloadBytes = 0;
+        const started = performance.now();
+        await page.goto(url);
+        await expect(ready).toBeVisible();
+        const visibleMs = performance.now() - started;
+        const timing = await page.evaluate(() => {
+          const navigation = performance.getEntriesByType("navigation")[0];
+          const resources = performance.getEntriesByType("resource");
+          const entries = [navigation, ...resources];
+          return { domContentLoadedMs: navigation.domContentLoadedEventEnd,
+            transferBytes: entries.reduce((sum, entry) => sum + entry.transferSize, 0),
+            encodedBodyBytes: entries.reduce((sum, entry) => sum + entry.encodedBodySize, 0),
+            resources: resources.map(entry => ({ path: new URL(entry.name).pathname,
+              transferBytes: entry.transferSize, encodedBodyBytes: entry.encodedBodySize })) };
+        });
+        expect(visibleMs).toBeGreaterThan(0);
+        expect(timing.resources.length).toBeGreaterThan(0);
+        if (surface === "Studio") expect(webSocketReceivedPayloadBytes).toBeGreaterThan(0);
+        measurements.navigation.push({ surface, cache, viewport: page.viewportSize(), visibleMs, webSocketReceivedPayloadBytes, ...timing });
+      }
+    } finally {
+      page.off("websocket", opened);
+      for (const socket of sockets) socket.off("framereceived", received);
+      await cdp.detach();
+    }
+  }
   try {
     const definition = (await owner.query("SELECT snapshot FROM studio.definition_revisions WHERE id=$1", [fixture.revisionId])).rows[0].snapshot;
     definition.scenario.injects.push({ ...definition.scenario.injects[0], id: "ba06-blue", title: "BA-06 blue-only update", releaseMode: "manual", recipients: { teamIds: ["blue"] } });
@@ -99,10 +140,36 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
           .setIssuer(origin).setAudience("ba06").setSubject(login.subject).setIssuedAt().setExpirationTime("10m").sign(signing.privateKey);
         response.writeHead(200, { "content-type": "application/json" }); response.end(JSON.stringify({ id_token: token })); return;
       }
+      const observed = url.pathname.startsWith(`/v1/sessions/${sessionId}/`) &&
+        (/\/sync\/(stream|deltas)$/u.test(url.pathname) || url.pathname.endsWith("/runtime-projection"));
+      const sample = observed ? { path: url.pathname, deviceId: request.headers["x-device-id"], startedAt: performance.now(), bytes: 0 } : null;
+      const chunks = [];
       const upstream = httpRequest({ hostname: "127.0.0.1", port: appPort, method: request.method, path: request.url, headers: request.headers }, reply => {
+        if (sample) {
+          reply.on("data", chunk => { sample.bytes += chunk.length; chunks.push(chunk); });
+          response.on("finish", () => {
+            const body = Buffer.concat(chunks).toString();
+            syncRequests.push({ ...sample, finishedAt: performance.now(), status: reply.statusCode,
+              pausedDelta: body.includes('"eventType":"stage.paused"'),
+              pausedProjection: body.includes('"currentStageStatus":"paused"') });
+          });
+        }
         response.writeHead(reply.statusCode, reply.headers); reply.pipe(response);
       });
       upstream.on("error", () => { response.writeHead(502); response.end(); }); request.pipe(upstream);
+    });
+    // Forward Studio upgrades with the browser's original Origin and cookie to the real gateway.
+    tls.on("upgrade", (request, socket, head) => {
+      const upstream = connect(appPort, "127.0.0.1", () => {
+        const headers = [];
+        for (let index = 0; index < request.rawHeaders.length; index += 2) headers.push(`${request.rawHeaders[index]}: ${request.rawHeaders[index + 1]}`);
+        upstream.write(`${request.method} ${request.url} HTTP/1.1\r\n${headers.join("\r\n")}\r\n\r\n`);
+        if (head.length) upstream.write(head);
+        socket.pipe(upstream).pipe(socket);
+      });
+      socket.on("error", () => upstream.destroy());
+      socket.on("close", () => upstream.destroy());
+      upstream.on("error", () => socket.destroy());
     });
     tls.on("connection", socket => { connections.add(socket); socket.on("close", () => connections.delete(socket)); });
     tls.listen(0, "127.0.0.1"); await once(tls, "listening");
@@ -113,7 +180,7 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
     await owner.query("UPDATE identity.organization_identity_provider_revisions SET status='superseded' WHERE organization_id=$1 AND status='active'", [fixture.organizationId]);
     await owner.query(`INSERT INTO identity.organization_identity_provider_revisions
       (id,organization_id,provider_key,version,protocol,display_name,status,discovery_url,client_id,audience,issuer,authorization_endpoint,token_endpoint,jwks_uri,staged_by)
-      SELECT $1,$2,'ba11-synthetic',coalesce(max(version),0)+1,'oidc','Synthetic BA-11 issuer','active',$3,'ba06','ba06',$3,
+      SELECT $1,$2,'ba11-synthetic-'||($1::uuid)::text,coalesce(max(version),0)+1,'oidc','Synthetic BA-11 issuer','active',$3,'ba06','ba06',$3,
         $3||'/protocol/openid-connect/auth',$3||'/protocol/openid-connect/token',$3||'/protocol/openid-connect/certs',$4
       FROM identity.organization_identity_provider_revisions WHERE organization_id=$2`, [providerId, fixture.organizationId, origin, fixture.people.operator]);
     for (const [subject, person] of Object.entries(people)) await owner.query(`INSERT INTO identity.federated_identities
@@ -167,9 +234,17 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
       const sessionCookie = (await context.cookies(origin)).find(cookie => cookie.name === "plenum_session");
       expect(Boolean(sessionCookie?.secure && sessionCookie.httpOnly && sessionCookie.sameSite === "Lax")).toBe(true);
       await expect(page.locator(".runtime-frame")).toBeVisible();
+      if (key === "author") await navigation(page, `${origin}/sessions/${sessionId}/runtime`, page.locator(".runtime-frame"), "Runtime");
       await expect.poll(() => responses.length, { timeout: 15_000 }).toBeGreaterThan(0);
-      clients.push({ context, page, responses });
+      clients.push({ context, page, responses, deviceId: await page.evaluate(() => localStorage.getItem("plenum.runtime.deviceId")) });
     }
+    await navigation(operatorPage, `${origin}/studio/projects/${fixture.projectId}`, operatorPage.locator(".visual-editor"), "Studio");
+    const workspaceStarted = performance.now();
+    const picker = operatorPage.getByRole("combobox", { name: "Design workspace", exact: true });
+    if (await picker.isVisible()) await picker.selectOption({ label: "Teams" });
+    else await operatorPage.getByRole("navigation", { name: "Design workspaces" }).getByRole("link", { name: "Teams", exact: true }).click();
+    await expect(operatorPage.getByRole("region", { name: "Teams", exact: true })).toBeVisible();
+    measurements.interaction.push({ operation: "Studio Teams workspace visible", milliseconds: performance.now() - workspaceStarted });
     const device = await (await fetch(`http://127.0.0.1:${appPort}/v1/devices`, { method: "POST", headers: operatorHeaders, body: "{}" })).json();
     const command = async (path, operationType, version, payload, aggregateId = sessionId) => {
       const result = await fetch(`http://127.0.0.1:${appPort}/v1/operator/sessions/${sessionId}/${path}`, { method: "POST", headers: operatorHeaders,
@@ -177,20 +252,71 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
           governingReleaseId: releaseId, payload: { reason: "Synthetic live synchronization proof", confirmed: true, ...payload } }) });
       const receipt = await result.json(); expect(receipt.status, JSON.stringify(receipt)).toBe("accepted"); return receipt;
     };
+    let deliveryStarted = performance.now();
     await command("stage", "stage.start", 0, {});
     await expect.poll(async () => Number((await owner.query("SELECT count(*) FROM sync.session_delta_outbox WHERE session_id=$1 AND publication_status='pending'", [sessionId])).rows[0].count), { timeout: 15_000 }).toBe(0);
+    measurements.delivery.push({ operation: "stage.start pending outbox drained", milliseconds: performance.now() - deliveryStarted });
     for (const { page, responses } of clients) {
       await expect.poll(() => responses.some(body => body.includes("stage.started")), { timeout: 15_000 }).toBe(true);
       await expect(page.locator(".runtime-frame")).toBeVisible();
     }
-    await command("stage", "stage.pause", 1, {});
-    for (const { page } of clients) await expect(page.getByText("Paused", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+    const clockStarted = performance.now();
+    const databaseNow = Number((await owner.query("SELECT extract(epoch FROM clock_timestamp())*1000 AS now")).rows[0].now);
+    const clockEnded = performance.now();
+    const databaseClockOffset = (clockStarted + clockEnded) / 2 - databaseNow;
+    const pauseReceipt = await command("stage", "stage.pause", 1, {});
+    const pauseAccepted = performance.now();
+    await Promise.all(clients.map(async ({ page }, client) => {
+      const visible = await page.waitForFunction(() => [...document.querySelectorAll(".runtime-frame *")]
+        .some(element => element.textContent === "Paused" && element.getClientRects().length > 0), undefined, { polling: "raf", timeout: 15_000 });
+      measurements.delivery.push({ operation: "stage.pause visible after accepted receipt", client, milliseconds: performance.now() - pauseAccepted });
+      await visible.dispose();
+      await expect(page.getByText("Paused", { exact: true }).first()).toBeVisible();
+    }));
+    const published = (await owner.query(`SELECT extract(epoch FROM item.published_at)*1000 AS published
+      FROM sync.session_delta_outbox item JOIN evidence.events event ON event.id=item.event_id
+      WHERE event.command_id=$1 AND event.event_type='stage.paused'`, [pauseReceipt.commandId])).rows[0];
+    expect(published?.published).not.toBeNull();
+    const publishedAt = Number(published.published) + databaseClockOffset;
+    measurements.phases = clients.map(({ deviceId }, client) => {
+      const delta = syncRequests.find(item => item.deviceId === deviceId && item.pausedDelta);
+      const projection = syncRequests.find(item => item.deviceId === deviceId && item.pausedProjection);
+      expect(delta).toBeDefined(); expect(projection).toBeDefined();
+      const visible = measurements.delivery.find(item => item.operation === "stage.pause visible after accepted receipt" && item.client === client);
+      return { client, clockUncertaintyMs: (clockEnded - clockStarted) / 2,
+        publicationAfterReceiptMs: publishedAt - pauseAccepted, publishedToSyncStartMs: delta.startedAt - publishedAt,
+        syncRequestMs: delta.finishedAt - delta.startedAt, syncToProjectionStartMs: projection.startedAt - delta.finishedAt,
+        projectionRequestMs: projection.finishedAt - projection.startedAt,
+        projectionToVisibleMs: pauseAccepted + visible.milliseconds - projection.finishedAt };
+    });
+    const cdp = await clients[0].context.newCDPSession(clients[0].page);
+    await cdp.send("Performance.enable");
+    const browserBefore = await cdp.send("Performance.getMetrics");
+    const databaseBefore = Number((await owner.query("SELECT xact_commit FROM pg_stat_database WHERE datname=current_database()")).rows[0].xact_commit);
+    const idleStarted = performance.now();
+    // A fixed observation window measures idle request/resource cost; it is not a readiness wait.
+    await new Promise(resolve => setTimeout(resolve, 10_000));
+    const idleEnded = performance.now();
+    const browserAfter = await cdp.send("Performance.getMetrics");
+    const databaseAfter = Number((await owner.query("SELECT xact_commit FROM pg_stat_database WHERE datname=current_database()")).rows[0].xact_commit);
+    const idle = syncRequests.filter(item => item.startedAt >= idleStarted && item.finishedAt <= idleEnded);
+    const metric = (sample, name) => sample.metrics.find(item => item.name === name).value;
+    measurements.idle = { milliseconds: idleEnded - idleStarted, clients: clients.length,
+      syncRequests: idle.filter(item => /\/sync\//u.test(item.path)).length,
+      projectionRequests: idle.filter(item => item.path.endsWith("/runtime-projection")).length,
+      responseBodyBytes: idle.reduce((sum, item) => sum + item.bytes, 0), databaseCommits: databaseAfter - databaseBefore,
+      browserTaskSeconds: metric(browserAfter, "TaskDuration") - metric(browserBefore, "TaskDuration"),
+      browserHeapBefore: metric(browserBefore, "JSHeapUsedSize"), browserHeapAfter: metric(browserAfter, "JSHeapUsedSize") };
+    expect(measurements.idle.projectionRequests).toBe(0);
+    await cdp.detach();
     const injectId = randomUUID();
+    deliveryStarted = performance.now();
     await command("inject", "inject.release", 0, { injectDefinitionId: "ba06-blue" }, injectId);
     for (const { page, responses } of clients.slice(0, 2)) {
       await expect.poll(() => responses.some(body => body.includes(injectId)), { timeout: 15_000 }).toBe(true);
       await expect(page.getByRole("button", { name: "Injects 2", exact: true })).toBeVisible();
     }
+    measurements.delivery.push({ operation: "inject.release visible to both recipients", milliseconds: performance.now() - deliveryStarted });
     expect(clients[2].responses.join("")).not.toContain(injectId);
     await expect(clients[2].page.getByRole("button", { name: "Injects 1", exact: true })).toBeVisible();
     const deviceId = await clients[1].page.evaluate(() => localStorage.getItem("plenum.runtime.deviceId"));
@@ -295,5 +421,6 @@ test("BA-11-T01 BA-06-T01/T03 production login and publication reach idle author
     if (previousProviders.length) await owner.query("UPDATE identity.organization_identity_provider_revisions SET status='active' WHERE id=ANY($1::uuid[])", [previousProviders]);
     await owner.end(); await rm(directory, { recursive: true, force: true });
     await testInfo.attach("production-log", { body: logs.join(""), contentType: "text/plain" });
+    await testInfo.attach("ba12-production-measurements", { body: JSON.stringify(measurements, null, 2), contentType: "application/json" });
   }
 });

@@ -27,6 +27,7 @@ jobs:
         run: >-
           tar --create --gzip --file "plenum-platform-${GITHUB_SHA}.tar.gz"
           package.json package-lock.json deploy apps/server/dist apps/runtime-web/dist apps/studio/dist packages/*/dist
+          definitions/fractured-order/fractured-order-release.json
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:

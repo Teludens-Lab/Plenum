@@ -1,0 +1,17 @@
+{
+  "id": "2e0db460-dafb-49e2-9867-cd60ec76b995",
+  "name": "Statecraft Simulations Group",
+  "slug": "statecraft-simulations-group",
+  "providerId": "864312ba-c7f2-46a8-92e8-d468711cb357",
+  "projectId": "ad9cd219-8a8a-4c52-b9ab-f1afc8c23c99",
+  "templateId": "d1c3d48c-60ec-46bf-88eb-94b2874bf0f6",
+  "scenarioId": "f24d1a27-d97e-4fdb-9949-0a9a1b24fea1",
+  "auditId": "81d951c7-da28-4b94-b09e-5fc011e47164",
+  "administrators": [
+    { "id": "4c8e248b-21cc-407a-a124-62f327bfa510", "username": "trenton.ford", "name": "Trenton Ford" },
+    { "id": "112f8b34-26ed-46c4-9877-b18a7ba565b2", "username": "chloe.carr", "name": "Chloe Carr" },
+    { "id": "c02ede5d-2af9-41e5-9a3b-762e166a4c3d", "username": "sethu.nguna", "name": "Sethu Nguna" },
+    { "id": "7f26421b-ea88-4280-b3bb-90762533b67b", "username": "ryan.paoloni", "name": "Ryan Paoloni" },
+    { "id": "409aa0a6-2cb2-4434-b7d5-a9b94e600839", "username": "ben.petrihos", "name": "Ben Petrihos" }
+  ]
+}

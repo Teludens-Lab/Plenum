@@ -114,6 +114,11 @@ export async function runVoiceProfile(pool) {
     (SELECT count(*)::int FROM comms.floor_requests WHERE organization_id=$1) AS requests,
     (SELECT count(*)::int FROM comms.floor_leases WHERE organization_id=$1 AND active) AS active_leases,
     (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='media_provider.unavailable') AS provider_failures,
+    (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='floor_lease.granted') AS grant_events,
+    (SELECT count(*)::int FROM evidence.events WHERE organization_id=$1 AND event_type='floor_lease.queued') AS queue_events,
+    (SELECT count(*)::int FROM sync.session_delta_outbox item JOIN evidence.events event
+      ON event.organization_id=item.organization_id AND event.id=item.event_id
+      WHERE event.organization_id=$1 AND event.event_type IN ('floor_lease.granted','floor_lease.queued')) AS request_outbox_rows,
     (SELECT count(*)::int FROM (SELECT session_id,causation_id FROM evidence.events
       WHERE organization_id=$1 AND event_type='floor_lease.queued' GROUP BY session_id,causation_id HAVING count(*)<>1) duplicates)
       AS duplicate_queue_events,
@@ -121,6 +126,10 @@ export async function runVoiceProfile(pool) {
       AND (body->>'queuePosition')::int<1) AS invalid_queue_positions`,
   [fixture.organizationId])).rows[0];
   assert.equal(integrity.grants, grants.length);
+  assert.equal(integrity.requests, floor.length);
+  assert.equal(integrity.grant_events, floor.filter(({ value }) => value.status === "granted").length);
+  assert.equal(integrity.queue_events, floor.filter(({ value }) => value.status === "queued").length);
+  assert.equal(integrity.request_outbox_rows, floor.length);
   assert.equal(integrity.active_leases, 0);
   assert.equal(integrity.provider_failures, 1);
   assert.equal(integrity.duplicate_queue_events, 0);
@@ -136,7 +145,9 @@ export async function runVoiceProfile(pool) {
       mediaListeners: config.voice.mediaRoom.listeners, activeSpeakers: config.voice.mediaRoom.activeSpeakers,
       mediaDurationSeconds: config.voice.mediaRoom.durationSeconds, mediaCli: media.cli, mediaImage: media.image,
       network: "local loopback; no TURN relay or WAN impairment" },
-    latencyMs: { floorRequest: latencyMetric(floor), mediaProfile: latencyMetric([media.primary]),
+    latencyMs: { floorRequest: latencyMetric(floor),
+      floorGranted: latencyMetric(floor.filter(({ value }) => value.status === "granted")),
+      floorQueued: latencyMetric(floor.filter(({ value }) => value.status === "queued")), mediaProfile: latencyMetric([media.primary]),
       mediaAfterRestart: latencyMetric([media.recovered]) },
     integrity: { ...integrity, mediaPacketLossPercent: media.primary.packetLossPercent,
       mediaAfterRestartPacketLossPercent: media.recovered.packetLossPercent, providerFailure,

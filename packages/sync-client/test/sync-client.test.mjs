@@ -73,6 +73,35 @@ test("BA-06 bounded subscription stores refreshed views before advancing, dedupl
   assert.equal(states.at(-1), "live");
 });
 
+test("BA-12 healthy cadence includes request time without overlapping or catching up missed ticks", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let now = 0, complete, refreshed;
+  t.mock.method(performance, "now", () => now);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  const advance = async milliseconds => { now += milliseconds; t.mock.timers.tick(milliseconds); await flush(); };
+  const snapshot = { projectionVersion: "v1", policyVersion: "v1", cursor, state: {}, aggregateVersions: {} };
+  const starts = [];
+  const stop = subscribeRuntime({
+    snapshot: async () => snapshot,
+    deltas: async () => { starts.push(now); return new Promise(resolve => { complete = () => resolve({ ...snapshot, deltas: starts.length === 1 ? [newer] : [], nextCursor: cursor }); }); },
+    refresh: async deltas => { if (deltas !== null) await new Promise(resolve => { refreshed = resolve; }); },
+    error: () => "retry", connectivity: () => {}
+  });
+  try {
+    await flush(); await advance(499); assert.deepEqual(starts, []);
+    await advance(1); assert.deepEqual(starts, [500]);
+    await advance(200); complete(); await flush();
+    await advance(100); assert.deepEqual(starts, [500]); refreshed(); await flush();
+    await advance(199); assert.deepEqual(starts, [500]);
+    await advance(1); assert.deepEqual(starts, [500, 1000]);
+    await advance(750); assert.deepEqual(starts, [500, 1000]);
+    complete(); await flush(); await advance(0);
+    assert.deepEqual(starts, [500, 1000, 1750]);
+    stop(); complete(); await flush(); await advance(10_000);
+    assert.deepEqual(starts, [500, 1000, 1750]);
+  } finally { stop(); }
+});
+
 test("BA-06 expired cursors reset, failed SSE falls back with bounded retry, revocation stops", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const flush = () => new Promise(resolve => setImmediate(resolve));

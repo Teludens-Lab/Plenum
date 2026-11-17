@@ -76,14 +76,18 @@ const fail = (errorCode: "VALIDATION_FAILED" | "PERMISSION_DENIED" | "TARGET_NOT
 message: string, reconcile = false): CommandDecision => ({ status: reconcile ? "needs_reconciliation" : "rejected", errorCode, message });
 
 async function readDefinition(client: PoolClient, organizationId: string, releaseId: string): Promise<VoiceDefinition> {
-  const result = await client.query<{ snapshot: unknown }>(`SELECT jsonb_build_object(
-      'communications',COALESCE(revision.snapshot->'coreDesign'->'communications',revision.snapshot->'communications'),
-      'sessionRoles',COALESCE(revision.snapshot->'coreDesign'->'sessionRoles',revision.snapshot->'sessionRoles'),
-      'seats',COALESCE(revision.snapshot->'coreDesign'->'seats',revision.snapshot->'seats'),
-      'platformAdapters',COALESCE(revision.snapshot->'coreDesign'->'platformAdapters',revision.snapshot->'platformAdapters')) AS snapshot
-    FROM registry.releases release
-    JOIN studio.definition_revisions revision ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
-    WHERE release.organization_id=$1 AND release.id=$2`, [organizationId, releaseId]);
+  // Materialize once so each field does not decompress the embedded resource bytes again.
+  const result = await client.query<{ snapshot: unknown }>(`WITH released AS MATERIALIZED (
+      SELECT (revision.snapshot - 'resources') #- '{coreDesign,resources}' AS snapshot
+      FROM registry.releases release
+      JOIN studio.definition_revisions revision ON revision.organization_id=release.organization_id AND revision.id=release.definition_revision_id
+      WHERE release.organization_id=$1 AND release.id=$2
+    ) SELECT jsonb_build_object(
+      'communications',COALESCE(snapshot->'coreDesign'->'communications',snapshot->'communications'),
+      'sessionRoles',COALESCE(snapshot->'coreDesign'->'sessionRoles',snapshot->'sessionRoles'),
+      'seats',COALESCE(snapshot->'coreDesign'->'seats',snapshot->'seats'),
+      'platformAdapters',COALESCE(snapshot->'coreDesign'->'platformAdapters',snapshot->'platformAdapters')) AS snapshot
+    FROM released`, [organizationId, releaseId]);
   const snapshot = result.rows[0]?.snapshot;
   const definition = isRecord(snapshot) && isRecord(snapshot.coreDesign) ? snapshot.coreDesign : snapshot;
   if (!isRecord(definition) || !isRecord(definition.communications) || !Array.isArray(definition.sessionRoles) || !Array.isArray(definition.seats)) {
@@ -564,6 +568,7 @@ async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adap
     if (channel.provider_adapter_digest !== adapter.digest) throw new Error("Pinned media adapter is unavailable");
     const eventContext: FloorEventContext = { organizationId, sessionId, activeReleaseId: channel.governing_release_id,
       authorityEpoch: Number(channel.authority_epoch), principalId: null, participantId: null };
+    // Independent existence checks avoid an all-grants/all-assignments join under fresh statistics.
     const expired = await tx.query<{ request_id: string }>(`UPDATE comms.floor_leases lease SET active=false,
         released_at=transaction_timestamp(),version=lease.version+1
       FROM comms.voice_channels channel WHERE lease.organization_id=$1 AND lease.channel_id=$2 AND lease.active
@@ -572,11 +577,13 @@ async function reconcileFloorChannel(client: PoolClient, scope: FloorScope, adap
           OR lease.provider_state='pending_disable'
           OR (lease.provider_state='pending_enable' AND lease.request_id IS DISTINCT FROM $4::uuid)
           OR NOT EXISTS (SELECT 1 FROM comms.voice_grants grant_row
-            JOIN runtime.seat_assignments assignment ON assignment.organization_id=grant_row.organization_id AND assignment.id=grant_row.seat_assignment_id
             WHERE grant_row.organization_id=lease.organization_id AND grant_row.channel_id=lease.channel_id
               AND grant_row.seat_assignment_id=lease.holder_seat_assignment_id AND grant_row.can_transmit
               AND grant_row.revoked_at IS NULL AND grant_row.valid_until>transaction_timestamp()
-              AND grant_row.authority_epoch=$3 AND assignment.valid_to IS NULL)) RETURNING lease.request_id`,
+              AND grant_row.authority_epoch=$3)
+          OR NOT EXISTS (SELECT 1 FROM runtime.seat_assignments assignment
+            WHERE assignment.organization_id=lease.organization_id AND assignment.id=lease.holder_seat_assignment_id
+              AND assignment.valid_to IS NULL)) RETURNING lease.request_id`,
     [organizationId, channelId, eventContext.authorityEpoch, preserveRequestId ?? null]);
     for (const { request_id: requestId } of expired.rows) {
       await tx.query("UPDATE comms.floor_requests SET status='expired',updated_at=transaction_timestamp() WHERE organization_id=$1 AND channel_id=$2 AND request_id=$3",
@@ -686,7 +693,7 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
   const scope = { ...input.context, channelId: input.channelId, deploymentId: input.deploymentId };
   const prepare = () => withOrganizationTransaction(connection, input.context.organizationId, async (client) => {
     await assertFloorAuthority(client, input);
-    let channel = await readChannel(client, input.context, input.channelId);
+    const channel = await readChannel(client, input.context, input.channelId, "update");
     const active = await assignment(client, input.context);
     if (channel === undefined || active === undefined || channel.status !== "open" || channel.definition.mode !== "radio_ptt") {
       throw authorizationError("TARGET_NOT_FOUND", "The push-to-talk Voice Channel was not found.", input.correlationId);
@@ -698,11 +705,6 @@ export async function requestFloor(input: FloorOperationInput): Promise<FloorLea
     if (grant.rows[0]?.can_transmit !== true) {
       throw authorizationError("PERMISSION_DENIED", "The Active Role Context cannot request this Floor.", input.correlationId);
     }
-    const lockedChannel = await readChannel(client, input.context, input.channelId, "update");
-    if (lockedChannel === undefined || lockedChannel.status !== "open" || lockedChannel.definition.mode !== "radio_ptt") {
-      throw authorizationError("TARGET_NOT_FOUND", "The push-to-talk Voice Channel was not found.", input.correlationId);
-    }
-    channel = lockedChannel;
     if (channel.provider_adapter_digest !== input.mediaAdapter.digest) {
       throw authorizationError("CAPABILITY_UNAVAILABLE", "The pinned media adapter is unavailable.", input.correlationId);
     }

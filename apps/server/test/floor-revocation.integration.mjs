@@ -8,6 +8,7 @@ import { requestFloor, releaseFloor, renewFloor, reconcileFloorPermissions, reco
 
 export async function verifyFloorRevocation(owner, floor, first, second) {
   const publishing = new Set(), calls = [];
+  let maximumPublishers = 0;
   let failDisable = false, uncertainEnable = false, uncertainDisable = false, blockedEnable, blockedDisable;
   const adapter = { ...floor(first).mediaAdapter,
     async setTransmit({ participantId }, enabled) {
@@ -16,6 +17,7 @@ export async function verifyFloorRevocation(owner, floor, first, second) {
       if (blocked) { blocked.entered.resolve(); await blocked.resume.promise; }
       if (!enabled && failDisable) throw new Error("Synthetic disable failure");
       if (enabled) publishing.add(participantId); else publishing.delete(participantId);
+      maximumPublishers = Math.max(maximumPublishers, publishing.size);
       calls.push([participantId, enabled, "done"]);
       if (enabled && uncertainEnable) throw new Error("Synthetic timeout after possible provider success");
       if (!enabled && uncertainDisable) throw new Error("Synthetic timeout after provider disable");
@@ -30,6 +32,22 @@ export async function verifyFloorRevocation(owner, floor, first, second) {
   const tokenInput = (input, lease) => ({ ...input, input: { ...input.input, floorToken: lease.floorToken } });
   const mediaUnavailable = (error) => error?.envelope?.error?.code === "MEDIA_UNAVAILABLE";
   const barrier = () => ({ entered: Promise.withResolvers(), resume: Promise.withResolvers() });
+
+  // A different holder's live grant must not keep this holder authorized during reconciliation.
+  const withdrawn = make(), withdrawnLease = await requestFloor(withdrawn);
+  assert.equal(withdrawnLease.status, "granted");
+  await owner.query(`UPDATE comms.voice_grants SET can_transmit=false
+    WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3`, [first.organizationId, probe.channelId, first.participantId]);
+  try {
+    assert.equal((await reconcile()).unresolved, 0);
+    assert.equal(publishing.size, 0);
+    assert.equal((await row(withdrawn)).provider_state, "disabled");
+    assert.equal((await row(withdrawn)).active, false);
+    await assert.rejects(requestFloor(withdrawn), error => error?.envelope?.error?.code === "PERMISSION_DENIED");
+  } finally {
+    await owner.query(`UPDATE comms.voice_grants SET can_transmit=true
+      WHERE organization_id=$1 AND channel_id=$2 AND participant_id=$3`, [first.organizationId, probe.channelId, first.participantId]);
+  }
 
   // T01: no subsequent Floor request or cooperative client mute.
   const expired = make();
@@ -194,6 +212,7 @@ export async function verifyFloorRevocation(owner, floor, first, second) {
     await owner.query("UPDATE comms.voice_grants SET revoked_at=$2,provider_revoked_at=$3 WHERE id=$1",
       [grant.id, grant.revoked_at, grant.provider_revoked_at]);
   }
+  assert.equal(maximumPublishers, 1, "provider permission never overlaps across holders, including ambiguous outcomes");
   console.log("BA-04 revocation acknowledgement PASS: microseconds preserved, changed revision retried, rejoin not acknowledged as revoked");
   console.log("BA-04-T01/T02/T03 PASS: expiry, durable failed release, restart, ambiguous enable, renewal, delayed disable, authority fencing");
 }

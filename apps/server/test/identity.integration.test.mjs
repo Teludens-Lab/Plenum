@@ -2772,6 +2772,7 @@ test("EXT-06/07/08/09/10/17/18/20 isolates runs and applies one approved effect 
 });
 
 test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, recount and certification invariants", async () => {
+  const resources = [{ id: "ba12-synthetic-resource", data: "x".repeat(512 * 1024) }];
   const pollId = "24000000-0000-4000-8000-000000000001";
   const secretPollId = "24000000-0000-4000-8000-000000000002";
   const voteRevisionId = "24000000-0000-4000-8000-000000000003";
@@ -2788,6 +2789,7 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
     resultVisibilityPolicyId: "results", certificationPolicy: { certifierSessionRoleIds: ["role-c"] }
   };
   const coreDesign = {
+    resources,
     polls: [pollDefinition, { ...pollDefinition, id: "secret-resolution", secrecy: "secret_ballot" }],
     informationPolicies: [
       { id: "voters", grants: [{ audience: { sessionRoleIds: ["role-c"] } }] },
@@ -2799,7 +2801,7 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
   await owner.query(`INSERT INTO studio.definition_revisions
     (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
     VALUES ($1,$2,$3,$4::jsonb,repeat('2',64),'v1',$5)`,
-    [voteRevisionId, ids.orgA, ids.projectA, JSON.stringify({ coreDesign }), ids.personA]);
+    [voteRevisionId, ids.orgA, ids.projectA, JSON.stringify({ coreDesign, resources }), ids.personA]);
   await owner.query(`INSERT INTO registry.releases
     (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
     VALUES ($1,$2,$3,$4,2,'Voting fixture','1','1',repeat('2',64),'voting-fixture',$5)`,
@@ -2822,7 +2824,25 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
   const opened = await submitRuntimeCommand(app, context, command("24000000-0000-4000-8000-000000000010", "poll.open", pollId, 0,
     { definitionId: "resolution-vote", definitionRevision: 1 }), "24000000-0000-4000-8000-000000000011", ids.deploymentA);
   assert.equal(opened.status, "accepted");
-  const participantPoll = (await withOrganizationTransaction(app, ids.orgA, (client) => getPollProjection(client, context)))[0];
+  const participantPoll = (await withOrganizationTransaction(app, ids.orgA, async (client) => {
+    const query = client.query;
+    let definitions = 0;
+    // Check bytes crossing the real database boundary, not only the already-filtered HTTP response.
+    client.query = async function (...args) {
+      const result = await query.apply(this, args);
+      for (const row of result.rows) if (row.snapshot) {
+        definitions++;
+        assert.equal(Object.hasOwn(row.snapshot, "resources"), false, "Voting must not load embedded resource bytes");
+        assert.equal(Object.hasOwn(row.snapshot.coreDesign ?? {}, "resources"), false);
+      }
+      return result;
+    };
+    try {
+      const projection = await getPollProjection(client, context);
+      assert.ok(definitions > 0);
+      return projection;
+    } finally { client.query = query; }
+  }))[0];
   assert.equal(participantPoll.eligible, true);
   assert.equal(typeof participantPoll.ballotCapability, "string");
   const observerPoll = (await withOrganizationTransaction(app, ids.orgA, (client) => getPollProjection(client, observer)))[0];
@@ -2882,6 +2902,7 @@ test("VOTE-01..10 preserve authoritative voting, privacy, replay, deadline, reco
 });
 
 test("PS-545-T02 VOICE-01..05/09/11/13/14 enforce grants, consent, immediate withdrawal, Floor and revocation", async () => {
+  const resources = [{ id: "ba12-voice-resource", data: "x".repeat(512 * 1024) }];
   const revisionId = "25000000-0000-4000-8000-000000000001";
   const releaseId = "25000000-0000-4000-8000-000000000002";
   const channelId = "25000000-0000-4000-8000-000000000003";
@@ -2907,14 +2928,14 @@ test("PS-545-T02 VOICE-01..05/09/11/13/14 enforce grants, consent, immediate wit
     canModerate: { sessionRoleIds: ["role-c"] }, recordingPolicy: "off", transcriptionPolicy: "off",
     mediaProviderAdapterBindingId: "adapter-1"
   };
-  const coreDesign = { communications: { voiceChannels: [definition, privateDefinition, broadcastDefinition] },
+  const coreDesign = { resources, communications: { voiceChannels: [definition, privateDefinition, broadcastDefinition] },
     platformAdapters: [{ id: "adapter-1", digest: "e".repeat(64) }],
     sessionRoles: [{ id: "role-c", isControlRole: true }, { id: "role-c-viewer" }],
     seats: [{ id: "seat-a" }, { id: "seat-c-viewer" }] };
   await owner.query(`INSERT INTO studio.definition_revisions
     (id,organization_id,project_id,snapshot,snapshot_sha256,methodology_version,author_id)
     VALUES ($1,$2,$3,$4::jsonb,repeat('5',64),'v1',$5)`,
-  [revisionId,ids.orgA,ids.projectA,JSON.stringify({coreDesign}),ids.personA]);
+  [revisionId,ids.orgA,ids.projectA,JSON.stringify({coreDesign,resources}),ids.personA]);
   await owner.query(`INSERT INTO registry.releases
     (id,organization_id,project_id,definition_revision_id,release_number,release_label,package_schema_version,compiler_version,package_sha256,blob_key,published_by)
     VALUES ($1,$2,$3,$4,3,'Voice fixture','1','1',repeat('5',64),'voice-fixture',$5)`,

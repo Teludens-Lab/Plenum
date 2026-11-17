@@ -18,6 +18,8 @@ superpowers
 deploy/oci/.plans
 deploy/oci/.tools
 deploy/oci/local
+deploy/aws/local
+deploy/statecraft/local
 node_modules/.cache
 test-results
 output
